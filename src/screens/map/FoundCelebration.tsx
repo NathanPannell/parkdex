@@ -76,15 +76,15 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
   }, []);
 
   return (
-    <motion.div className="screen claim found-done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }} role="dialog" aria-label={`You founded ${name}`}>
+    <motion.div className="screen claim found-done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }} role="dialog" aria-label={`You're the founder of ${name}`}>
       <motion.div className="claim__glow" style={{ opacity: landed ? 1 : 0.4, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }} />
 
       <div className="claim__head">
         <AnimatePresence mode="wait">
           {landed ? (
             <motion.div key="stamp" initial={{ scale: 2.4, rotate: -16, opacity: 0 }} animate={{ scale: 1, rotate: -3, opacity: 1 }} transition={{ type: "spring", stiffness: 520, damping: 15 }}>
-              <span className="claim__stamp plant__stamp">Founded!</span>
-              <h1 className="found-done__title">You founded {name}</h1>
+              <span className="claim__stamp plant__stamp">Founder!</span>
+              <h1 className="found-done__title">You're the founder of {name}</h1>
             </motion.div>
           ) : (
             <motion.div key="lead" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
@@ -112,7 +112,7 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
             <div className="polaroid__img">
               <img src={photo} alt={`Cover photo of ${name}`} />
             </div>
-            <span className="polaroid__caption">Founded by you</span>
+            <span className="polaroid__caption">Your founder photo</span>
           </motion.div>
           {landed && !reduce && (
             <motion.span className="found-done__ring" initial={{ scale: 0.3, opacity: 0.9 }} animate={{ scale: 2.4, opacity: 0 }} transition={{ duration: 0.7, ease: "easeOut" }} aria-hidden="true" />

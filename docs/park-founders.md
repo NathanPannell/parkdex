@@ -1,4 +1,4 @@
-# Found a park
+# Park founders
 
 A signed-in player with a handle, standing in a park, takes a photo. When the photo check approves it straight away, the player becomes the park's founder, the photo becomes the park's public cover, today's visit is recorded (planting or taking the flag) and the player earns a one-time 10 point founder bonus. Everything is online. Design: issue #126.
 
@@ -14,6 +14,10 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 - **Limits.** 20 photo checks an hour and 5 foundings a day per account.
 - **Account deletion** removes the founder row, the photo and the bonus. The park stays and can be founded again.
 - **Remove from map** (operator dashboard) takes a park off the map and unfounds it, but keeps its OpenStreetMap outline, so it can be founded again the same day ([below](#remove-from-map)).
+
+## Player copy
+
+Player-facing text never uses the verb "found" (found a park, founded, founding): it also reads as "discovered". It uses the noun instead: "Become the founder" on the park sheet, "Become a founder" in the map menu, "You're the founder of Beacon Hill Park" on success, "Founder: @robin" for someone else's park, and "@robin became the founder first" when a review loses the race. Identifiers such as `/api/parks/found`, `already_founded` and `park_founded` keep their names. `src/lib/founders.test.ts` and `src/lib/foundingReviews.test.ts` check the app's own messages for the verb.
 
 ## API
 
@@ -121,7 +125,7 @@ Public; signed-in callers also get their own count. `Cache-Control` is `public, 
 - `GET /api/game/flags` adds `founders: [{ parkId, handle, coverUrl }]` for every founded park.
 - `GET /api/game/me` adds `founderPoints`, the bonus already included in `score`, and `foundingReviews` (see [Manual review](#manual-review)).
 - `POST /api/parks/found` adds `reviewableUntil` to `rejected` and `unsure` answers (see [Manual review](#manual-review)).
-- `POST /api/park-proposals` answers 410 `proposals_retired` with "Update Parkdex to add parks. You can now found a park while you're standing in it." Installed builds show messages up to 200 characters as the error and never retry, so 410 is safe; reviewing stored proposals stays in the operator dashboard.
+- `POST /api/park-proposals` answers 410 `proposals_retired` with "Update Parkdex to add parks. Now you can become a park's founder while you're standing in it." Installed builds show messages up to 200 characters as the error and never retry, so 410 is safe; reviewing stored proposals stays in the operator dashboard.
 
 ## Manual review
 
@@ -215,7 +219,7 @@ Errors: 400 `invalid_request`, 401 `authentication_required`.
 ```
 
 - `pending[].parkId` is the catalogue park, or the ID an OpenStreetMap park gets when published (`osm-<type>-<id>`); `osm` is the outline for an OpenStreetMap target and `null` otherwise. Use either to show the pending badge on that park's sheet.
-- `decided[].status` is `approved` ("You founded X"), `rejected` ("Not approved: reason") or `superseded` (someone else founded it first; `founderHandle` names them).
+- `decided[].status` is `approved` ("You're the founder of X"), `rejected` ("Not approved: reason") or `superseded` (someone else became the founder first; `founderHandle` names them).
 - `parkId` of an approved request is the park it founded, which can differ from the pending `parkId` when the outline turned out to be a Parkdex park. `coverUrl` is the current cover, or `null` once the cover is gone. `founderHandle` is the park's current founder, or `null`.
 
 ### Operator dashboard

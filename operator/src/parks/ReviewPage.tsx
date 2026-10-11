@@ -218,7 +218,7 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
             {newPark && <li>The OpenStreetMap outline is published as a new Parkdex park in the same change, so every player's app gets it on its next sync.</li>}
             <li>No flag is planted and no visit is recorded. Flags still need a real visit.</li>
             {detail.otherPending > 0 && <li>{detail.otherPending} other pending {detail.otherPending === 1 ? "request" : "requests"} for this park close as superseded.</li>}
-            <li>The player sees "You founded {detail.parkName}" the next time they open the app.</li>
+            <li>The player sees "You're the founder of {detail.parkName}" the next time they open the app.</li>
           </ul>
         </>
       ),
