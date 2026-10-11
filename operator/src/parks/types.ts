@@ -56,6 +56,31 @@ export type ParkActivity = {
   history: ChangeRow[];
 };
 
+/** GET /api/parks/<id>/remove-from-map `plan` */
+export type RemovalPlan = {
+  parkId: string;
+  name: string;
+  source: ParkSource;
+  hidden: boolean;
+  founder: { handle: string | null; foundedAt: string; source: string } | null;
+  pendingReviews: number;
+  outline: { type: "way" | "relation"; id: number; name: string | null; areaM2: number; parkId: string } | null;
+  blocked: { code: string; message: string } | null;
+  audited: boolean;
+};
+
+/** POST /api/parks/<id>/remove-from-map */
+export type RemovalResult = {
+  ok: true;
+  parkId: string;
+  name: string;
+  revision: number | null;
+  founder: { handle: string | null } | null;
+  reviewsClosed: number;
+  outline: NonNullable<RemovalPlan["outline"]>;
+  audited: boolean;
+};
+
 /** GET /api/parks/outlines */
 export type ParkOutline = { id: string; category: string; hidden: boolean; geometry: MultiPolygon };
 
