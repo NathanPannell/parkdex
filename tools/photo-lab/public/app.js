@@ -5,7 +5,8 @@
 import { CATEGORIES, decideLab, exportSettings, productionSettings, summarize, yesProbability } from "/modules/tools/photo-lab/evaluate.ts";
 import { PHOTO_FLAGS } from "/modules/worker/founderPhoto.ts";
 
-const COST_PER_PHOTO = 0.00023;
+// What the flag-only check reported per photo in the lab (#160).
+const COST_PER_PHOTO = 0.0002;
 const FLAG_NAMES = {
   people: "People", lighting: "Dark or blurry", not_park: "Not a park", inappropriate: "Inappropriate",
   not_photo: "Not a photo", personal_info: "Personal info",
