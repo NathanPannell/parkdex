@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { EXIF_GPS_JPEG } from "../../worker/fixtures/exif-gps-jpeg.ts";
-import { DEFAULT_FLAG_THRESHOLDS, DEFAULT_PHOTO_APPROVE_THRESHOLD, PHOTO_FLAGS, type PhotoFlag } from "../../worker/founderPhoto.ts";
+import { DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS, type PhotoFlag } from "../../worker/founderPhoto.ts";
 import {
   CATEGORIES, decideLab, evaluatePhoto, exportSettings, productionSettings, summarize,
   type LabSettings, type Manifest, type ManifestPhoto, type RunFile,
@@ -13,15 +13,18 @@ import { classify, labDir, listRuns, loadManifest, readRun, retryingFetch, valid
 
 type Answers = NonNullable<RunFile["results"][string]["answers"]>;
 
-function answers(verdict: Record<string, number>, flags: Partial<Record<PhotoFlag, number>> = {}): Answers {
+/** Each flag's yes, 0.01 unless given. */
+function answers(flags: Partial<Record<PhotoFlag, number>> = {}): Answers {
+  return Object.fromEntries(PHOTO_FLAGS.map((flag) => {
+    const p = flags[flag] ?? 0.01;
+    return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
+  }));
+}
+
+/** Answers from a run made before the verdict question was dropped. */
+function olderAnswers(verdict: Record<string, number>, flags: Partial<Record<PhotoFlag, number>> = {}): Answers {
   const top = Object.entries(verdict).sort((a, b) => b[1] - a[1])[0][0];
-  return {
-    verdict: { choice: top, probabilities: verdict },
-    ...Object.fromEntries(PHOTO_FLAGS.map((flag) => {
-      const p = flags[flag] ?? 0.01;
-      return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
-    })),
-  };
+  return { verdict: { choice: top, probabilities: verdict }, ...answers(flags) };
 }
 
 function photo(id: string, outcome: ManifestPhoto["expected"]["outcome"], flags: PhotoFlag[] = [], optionalFlags: PhotoFlag[] = []): ManifestPhoto {
@@ -92,42 +95,42 @@ test("the data folder is outside the repository unless PHOTO_LAB_DIR says otherw
 
 // Decisions ------------------------------------------------------------------------------------
 
-test("production settings decide exactly as decidePhoto does in production", () => {
+test("production settings decide exactly as decidePhoto does in production: flags only", () => {
   const settings = productionSettings();
-  assert.equal(settings.approve, DEFAULT_PHOTO_APPROVE_THRESHOLD);
-  assert.deepEqual(settings.flags, { ...DEFAULT_FLAG_THRESHOLDS });
-  assert.deepEqual(decideLab(answers({ approve: 0.9, reject: 0.1 }), settings), { outcome: "approve", flags: [] });
-  assert.deepEqual(decideLab(answers({ approve: 0.79, reject: 0.21 }), settings), { outcome: "unsure", flags: [] });
-  assert.deepEqual(decideLab(answers({ approve: 0.1, reject: 0.9 }), settings), { outcome: "unsure", flags: [] });
-  assert.deepEqual(decideLab(answers({ approve: 0.95, reject: 0.05 }, { lighting: 0.64 }), settings), { outcome: "reject", flags: ["lighting"] });
+  assert.deepEqual(settings, { flags: { ...DEFAULT_FLAG_THRESHOLDS } });
+  assert.deepEqual(decideLab(answers(), settings), { outcome: "approve", flags: [] });
+  assert.deepEqual(decideLab(answers({ people: 0.8, not_park: 0.95 }), settings), { outcome: "approve", flags: [] }, "at a threshold does not count");
+  assert.deepEqual(decideLab(answers({ lighting: 0.81 }), settings), { outcome: "reject", flags: ["lighting"] });
+  assert.deepEqual(decideLab(answers({ not_photo: 0.99, people: 0.85 }), settings), { outcome: "reject", flags: ["not_photo", "people"] });
 });
 
-test("per-flag thresholds and the unsure rule change the decision", () => {
-  const settings: LabSettings = { ...productionSettings(), flags: { ...productionSettings().flags, lighting: 0.7 } };
-  assert.deepEqual(decideLab(answers({ approve: 0.95, reject: 0.05 }, { lighting: 0.64 }), settings), { outcome: "approve", flags: [] });
-  assert.deepEqual(decideLab(answers({ approve: 0.6, reject: 0.4 }), { ...settings, approve: 0.6 }), { outcome: "approve", flags: [] });
-  const rejecting: LabSettings = { ...settings, unsureMode: "reject_verdict", rejectVerdict: 0.7 };
-  assert.deepEqual(decideLab(answers({ approve: 0.2, reject: 0.8 }), rejecting), { outcome: "reject", flags: [] });
-  assert.deepEqual(decideLab(answers({ approve: 0.35, reject: 0.65 }), rejecting), { outcome: "unsure", flags: [] });
-  // A flag still wins over the verdict.
-  assert.deepEqual(decideLab(answers({ approve: 0.2, reject: 0.8 }, { people: 0.9 }), rejecting), { outcome: "reject", flags: ["people"] });
+test("older runs are scored with the flags only; their verdict is ignored", () => {
+  const settings = productionSettings();
+  assert.deepEqual(decideLab(olderAnswers({ approve: 0.1, reject: 0.9 }), settings), { outcome: "approve", flags: [] });
+  assert.deepEqual(decideLab(olderAnswers({ approve: 0.99, reject: 0.01 }, { people: 0.9 }), settings), { outcome: "reject", flags: ["people"] });
+  const good = evaluatePhoto(photo("good-01", "approve"), result(olderAnswers({ approve: 0.6, reject: 0.4 })), settings);
+  assert.equal(good.agreement, "agree");
 });
 
-test("agreement: a bad photo called unsure is safe, not a match", () => {
+test("per-flag thresholds change the decision", () => {
+  const settings: LabSettings = { flags: { ...productionSettings().flags, lighting: 0.6 } };
+  assert.deepEqual(decideLab(answers({ lighting: 0.64 }), productionSettings()), { outcome: "approve", flags: [] });
+  assert.deepEqual(decideLab(answers({ lighting: 0.64 }), settings), { outcome: "reject", flags: ["lighting"] });
+});
+
+test("agreement: approve or reject must match; borderline photos agree either way", () => {
   const settings = productionSettings();
-  assert.equal(evaluatePhoto(photo("good-01", "approve"), result(answers({ approve: 0.9, reject: 0.1 })), settings).agreement, "agree");
-  const unsureGood = evaluatePhoto(photo("good-01", "approve"), result(answers({ approve: 0.7, reject: 0.3 })), settings);
-  assert.equal(unsureGood.agreement, "disagree");
-  assert.equal(unsureGood.falseRejection, true);
-  const unsureBad = evaluatePhoto(photo("people-01", "reject", ["people"]), result(answers({ approve: 0.2, reject: 0.8 })), settings);
-  assert.equal(unsureBad.agreement, "safe");
-  assert.equal(unsureBad.falseApproval, false);
-  const approvedBad = evaluatePhoto(photo("people-01", "reject", ["people"]), result(answers({ approve: 0.95, reject: 0.05 })), settings);
+  assert.equal(evaluatePhoto(photo("good-01", "approve"), result(answers()), settings).agreement, "agree");
+  const rejectedGood = evaluatePhoto(photo("good-01", "approve"), result(answers({ people: 0.9 })), settings);
+  assert.equal(rejectedGood.agreement, "disagree");
+  assert.equal(rejectedGood.falseRejection, true);
+  const approvedBad = evaluatePhoto(photo("people-01", "reject", ["people"]), result(answers({ people: 0.7 })), settings);
+  assert.equal(approvedBad.agreement, "disagree");
   assert.equal(approvedBad.falseApproval, true);
-  const wrongReason = evaluatePhoto(photo("people-01", "reject", ["people"]), result(answers({ approve: 0.1, reject: 0.9 }, { lighting: 0.9 })), settings);
+  const wrongReason = evaluatePhoto(photo("people-01", "reject", ["people"]), result(answers({ lighting: 0.9 })), settings);
   assert.equal(wrongReason.agreement, "agree");
   assert.equal(wrongReason.rightReason, false);
-  assert.equal(evaluatePhoto(photo("borderline-01", "either"), result(answers({ approve: 0.1, reject: 0.9 })), settings).agreement, "agree");
+  assert.equal(evaluatePhoto(photo("borderline-01", "either"), result(answers({ people: 0.9 })), settings).agreement, "agree");
   assert.equal(evaluatePhoto(photo("good-01", "approve"), result(null), settings).agreement, "error");
 });
 
@@ -145,11 +148,11 @@ test("the summary counts accuracy, the confusion matrix and per-flag precision a
   };
   const run = {
     results: {
-      "good-01": result(answers({ approve: 0.95, reject: 0.05 })),
-      "good-02": result(answers({ approve: 0.95, reject: 0.05 }, { people: 0.6 })),
-      "people-01": result(answers({ approve: 0.01, reject: 0.99 }, { people: 0.99, lighting: 0.9 })),
-      "people-02": result(answers({ approve: 0.9, reject: 0.1 }, { not_park: 0.9 })),
-      "borderline-01": result(answers({ approve: 0.6, reject: 0.4 }, { lighting: 0.7 })),
+      "good-01": result(answers()),
+      "good-02": result(answers({ people: 0.85 })),
+      "people-01": result(answers({ people: 0.99, lighting: 0.9 })),
+      "people-02": result(answers({ not_park: 0.97 })),
+      "borderline-01": result(answers({ lighting: 0.85 })),
       "good-03": result(null),
     },
   };
@@ -159,10 +162,11 @@ test("the summary counts accuracy, the confusion matrix and per-flag precision a
   assert.equal(summary.correct, 3);
   assert.equal(summary.accuracy, 0.75);
   assert.deepEqual(summary.confusion, {
-    approve: { approve: 1, reject: 1, unsure: 0 },
-    reject: { approve: 0, reject: 2, unsure: 0 },
-    either: { approve: 0, reject: 1, unsure: 0 },
+    approve: { approve: 1, reject: 1 },
+    reject: { approve: 0, reject: 2 },
+    either: { approve: 0, reject: 1 },
   });
+  assert.deepEqual([summary.badBlocked, summary.badTotal, summary.goodApproved, summary.goodTotal], [2, 2, 1, 2]);
   assert.deepEqual(summary.falseApprovals, []);
   assert.deepEqual(summary.falseRejections, ["good-02"]);
   assert.equal(summary.rightReason, 1, "people-02 was rejected for not_park, which is only optional");
@@ -177,33 +181,27 @@ test("the summary counts accuracy, the confusion matrix and per-flag precision a
   assert.equal(inappropriate.covered, false);
   assert.equal(inappropriate.recall, null);
 
-  const tuned = summarize(small, run, { ...productionSettings(), flags: { ...productionSettings().flags, people: 0.7 } }).summary;
+  const tuned = summarize(small, run, { flags: { ...productionSettings().flags, people: 0.9 } }).summary;
   assert.deepEqual(tuned.falseRejections, []);
 });
 
-test("the export gives the thresholds as JSON and the change for worker/founderPhoto.ts", () => {
+test("the export gives the flag thresholds as JSON and the constant for worker/founderPhoto.ts", () => {
   const production = exportSettings(productionSettings());
-  assert.deepEqual(JSON.parse(production.json), { approve: 0.8, flags: { ...DEFAULT_FLAG_THRESHOLDS }, unsureMode: "production" });
-  const source = readFileSync(new URL("../../worker/founderPhoto.ts", import.meta.url), "utf8");
-  // The production export names the constants exactly as the worker defines them.
-  assert.ok(source.includes("export const DEFAULT_PHOTO_APPROVE_THRESHOLD = 0.8;"));
-  assert.match(production.code, /export const DEFAULT_PHOTO_APPROVE_THRESHOLD = 0\.8;/);
-  for (const flag of PHOTO_FLAGS) {
-    assert.ok(source.includes(`  ${flag}: FLAG_THRESHOLD,`), flag);
-    assert.ok(production.code.includes(`  ${flag}: FLAG_THRESHOLD,`), flag);
-  }
-  const tuned = exportSettings({ ...productionSettings(), approve: 0.6, flags: { ...productionSettings().flags, lighting: 0.7 }, unsureMode: "reject_verdict", rejectVerdict: 0.75 });
-  assert.match(tuned.code, /DEFAULT_PHOTO_APPROVE_THRESHOLD = 0\.6;/);
+  assert.deepEqual(JSON.parse(production.json), { flags: { ...DEFAULT_FLAG_THRESHOLDS } });
+  const source = readFileSync(new URL("../../worker/founderPhoto.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  // The production export is exactly the constant the worker defines.
+  assert.ok(source.includes(production.code.split("\n").slice(1).join("\n")), production.code);
+  assert.doesNotMatch(production.code, /APPROVE|unsure|verdict/i);
+  const tuned = exportSettings({ flags: { ...productionSettings().flags, lighting: 0.7 } });
   assert.match(tuned.code, /  lighting: 0\.7,/);
-  assert.match(tuned.code, /  people: FLAG_THRESHOLD,/);
-  assert.match(tuned.code, /reject \?\? 0\) >= 0\.75/);
-  assert.equal(JSON.parse(tuned.json).rejectVerdict, 0.75);
+  assert.match(tuned.code, /  people: 0\.8,/);
+  assert.equal(JSON.parse(tuned.json).flags.lighting, 0.7);
 });
 
 // Runs -----------------------------------------------------------------------------------------
 
 function decisionsReply(): Response {
-  const reply = answers({ approve: 0.9, reject: 0.1, unsure: 0 });
+  const reply = answers();
   return new Response(JSON.stringify({
     model: "openai/test-decisions",
     usage: { input_tokens: 10, output_tokens: 0, cost: 0.0002 },
@@ -245,7 +243,7 @@ test("classify sends stripped photos through the production checker and versions
         return new Response(JSON.stringify({ data: { usage: keyCalls === 1 ? 1 : 1.0006 } }));
       }
       const body = JSON.parse(String(init?.body)) as { model: string; state: [{ text: string }, { image_url: { url: string } }]; questions: Record<string, unknown> };
-      assert.deepEqual(Object.keys(body.questions), ["verdict", ...PHOTO_FLAGS]);
+      assert.deepEqual(Object.keys(body.questions), [...PHOTO_FLAGS], "a run asks only the flags, as production does");
       assert.match(body.state[0].text, /Beacon Hill Park \(leisure=park\)/);
       sent.push(body.state[1].image_url.url);
       if (sent.length === 2) return new Response("rate limited", { status: 429 });
@@ -271,7 +269,8 @@ test("classify sends stripped photos through the production checker and versions
     assert.equal(second.results["good-01"].queriedIn, first.id, "other photos are carried over");
     assert.equal(second.results["dark-01"].queriedIn, second.id);
     assert.deepEqual(listRuns(root).map((run) => run.id).sort(), [first.id, second.id].sort());
-    assert.equal(readRun(second.id, root).results["people-01"].answers?.verdict.choice, "approve");
+    assert.equal(readRun(second.id, root).results["people-01"].answers?.people.choice, "no");
+    assert.equal(readRun(second.id, root).results["people-01"].answers?.verdict, undefined);
     assert.throws(() => readRun("../secrets", root), /Unknown run/);
     await assert.rejects(classify({ root, ids: ["nope-01"], env: { OPENROUTER_API_KEY: "k" }, fetchImpl }), /Unknown photo ids/);
     await assert.rejects(classify({ root, ids, env: {}, fetchImpl }), /OPENROUTER_API_KEY/);

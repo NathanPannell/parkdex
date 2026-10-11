@@ -31,23 +31,8 @@
   <div class="layout">
     <aside class="controls" aria-label="Thresholds">
       <section>
-        <h2>Overall decision</h2>
-        <div class="control" data-key="approve">
-          <div class="control-head"><label for="t-approve">Approve at or above</label><input type="number" id="n-approve" min="0" max="1" step="0.01"></div>
-          <input type="range" id="t-approve" min="0" max="1" step="0.01">
-          <p class="hint">The verdict's approve probability needed, and approve must be its top answer. Production: 0.8.</p>
-        </div>
-        <div class="control">
-          <label for="unsure-mode">Not approved, no flag</label>
-          <select id="unsure-mode">
-            <option value="production">Unsure (production)</option>
-            <option value="reject_verdict">Reject when the verdict says reject</option>
-          </select>
-          <div class="control-sub" id="reject-verdict-wrap" hidden>
-            <div class="control-head"><label for="t-reject-verdict">Reject verdict at or above</label><input type="number" id="n-reject-verdict" min="0" max="1" step="0.01"></div>
-            <input type="range" id="t-reject-verdict" min="0" max="1" step="0.01">
-          </div>
-        </div>
+        <h2>Rule</h2>
+        <p class="hint">A photo is approved when no flag's yes is above that flag's threshold. Otherwise it is rejected, naming those flags. This is the production rule; there is no overall verdict.</p>
       </section>
       <section>
         <h2>Flags <span class="subtle">count when yes is above</span></h2>
@@ -93,7 +78,6 @@
             <option value="all">All</option>
             <option value="agree">Agree</option>
             <option value="disagree">Disagree</option>
-            <option value="safe">Bad photo called unsure</option>
             <option value="false-approval">False approvals</option>
             <option value="false-rejection">False rejections</option>
             <option value="changed">Changed from comparison</option>

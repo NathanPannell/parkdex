@@ -2,7 +2,12 @@
 
 A local tool for tuning the founder photo check (`worker/founderPhoto.ts`). It sends 100 labelled
 photos through the same check the API runs, saves the model's raw probabilities, and shows them in a
-dashboard where you can move every threshold and see the decisions change straight away.
+dashboard where you can move every flag threshold and see the decisions change straight away.
+
+The rule is the production one: a photo is approved when no flag's "yes" probability is above that
+flag's threshold, and rejected otherwise, naming those flags. There is no overall verdict and no
+unsure outcome. The defaults are production's `DEFAULT_FLAG_THRESHOLDS`: people 0.8, lighting 0.8,
+not_park 0.95, inappropriate 0.9, not_photo 0.95 and personal_info 0.9.
 
 ## Quick start
 
@@ -34,30 +39,34 @@ which is ignored by Git.
 - **Prepare** (`fetch.py`). Like `src/lib/photoEncode.ts`, each photo has its orientation applied, is
   fitted within 1,280 px and re-encoded as JPEG at quality 82, stepping down if it would pass 1.5 MB.
 - **Check** (`lab.ts`). The JPEG goes through `stripJpegMetadata` from `worker/jpeg.ts`, then
-  `createPhotoChecker` from `worker/founderPhoto.ts`. The questions, the context line and the
-  Decisions API call are the production ones. Every photo uses the same park context, Beacon Hill
+  `createPhotoChecker` from `worker/founderPhoto.ts`. The questions (the six flags), the context
+  line and the Decisions API call are the production ones. Every photo uses the same park context, Beacon Hill
   Park (leisure=park).
 - **Decide** (`evaluate.ts`). The dashboard loads `decidePhoto` from `worker/founderPhoto.ts` in the
   browser, so its decisions are the production decisions for the chosen thresholds.
+
+Runs saved before the verdict question was dropped still load. They are scored with the flags only,
+and their cards show the old verdict, which plays no part in the decision. Their
+`questionsSha256` differs from newer runs.
 
 Calls run four at a time and retry 429 and 5xx responses with backoff. Each run records the model,
 the per-photo cost the API reports, and the key's usage before and after (which can lag).
 
 ## The dashboard
 
-- **Thresholds.** One for approve, one per flag, and an "All flags" control that sets the six together.
-  "Not approved, no flag" chooses what happens to a photo that has no flag but is not approved:
-  unsure, as in production, or rejected when the verdict's reject probability reaches a threshold.
-  The page remembers your thresholds in this browser.
+- **Thresholds.** One per flag, and an "All flags" control that sets the six together. A flag counts
+  when its yes is above its threshold. "Production thresholds" puts them back. The page remembers
+  your thresholds in this browser.
 - **Summary.** Accuracy over photos labelled approve or reject, a matrix of expected against decided,
-  false approvals (bad photos approved), false rejections (good photos not approved), and precision
-  and recall per flag. A bad photo called unsure is counted as blocked but not as a match.
-- **Grid.** Filter by category or agreement, or click a matrix cell. Each card shows the verdict and
-  flag probabilities with the current thresholds marked. Click a photo to open it full size.
+  false approvals (bad photos approved), false rejections (good photos rejected), and precision and
+  recall per flag.
+- **Grid.** Filter by category or agreement, or click a matrix cell. Each card shows every flag's
+  probability with its current threshold marked. Click a photo to open it full size.
 - **Rerun.** Query the API again for all photos, the shown ones or the selected ones. A partial rerun
-  carries the other results over from the current run, so every run is complete. Pick an earlier run
-  under "Compare with" to see what changed.
-- **Export.** The thresholds as JSON, and the lines to change in `worker/founderPhoto.ts`.
+  carries the other results over from the current run, so every run is complete. A rerun asks only
+  the six flags, as production does. Pick an earlier run under "Compare with" to see what changed.
+- **Export.** The flag thresholds as JSON, and the `DEFAULT_FLAG_THRESHOLDS` constant to paste into
+  `worker/founderPhoto.ts`.
 
 Starting a run is refused unless the request comes from the dashboard's own page.
 
@@ -89,7 +98,7 @@ its main defect only, so its other flags are not scored either.
 All photos come from Wikimedia Commons under the licence recorded for each. Ten are generated from
 other Commons photos by `fetch.py` (blur, camera shake, darkening, overexposure, a pocket shot), and
 are marked as derived. Borderline photos include small, distant people: the people question asks
-about "small or distant figures", so production rejects them. The inappropriate flag is not covered:
+about "small or distant figures", so production may reject them. The inappropriate flag is not covered:
 the set has no explicit, violent or hateful content.
 
 ## Tests

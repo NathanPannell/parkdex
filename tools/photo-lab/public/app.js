@@ -1,5 +1,7 @@
 // The photo lab dashboard. Decisions come from the production decidePhoto through evaluate.ts,
-// recomputed in the browser from the saved probabilities whenever a threshold moves.
+// recomputed in the browser from the saved probabilities whenever a threshold moves. A photo is
+// approved when no flag is above its threshold. Runs made before the verdict question was dropped
+// still load; their verdict is shown on the cards but plays no part in the decision.
 import { CATEGORIES, decideLab, exportSettings, productionSettings, summarize, yesProbability } from "/modules/tools/photo-lab/evaluate.ts";
 import { PHOTO_FLAGS } from "/modules/worker/founderPhoto.ts";
 
@@ -8,7 +10,8 @@ const FLAG_NAMES = {
   people: "People", lighting: "Dark or blurry", not_park: "Not a park", inappropriate: "Inappropriate",
   not_photo: "Not a photo", personal_info: "Personal info",
 };
-const STORE_KEY = "photo-lab:settings";
+// Version 2 holds flag thresholds only; version 1 also had the approve threshold and unsure mode.
+const STORE_KEY = "photo-lab:settings:v2";
 
 const state = {
   manifest: null,
@@ -28,7 +31,7 @@ const $ = (id) => document.getElementById(id);
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) ?? "null");
-    if (saved && typeof saved.approve === "number" && saved.flags) return { ...productionSettings(), ...saved, flags: { ...productionSettings().flags, ...saved.flags } };
+    if (saved && typeof saved.flags === "object" && saved.flags) return { flags: { ...productionSettings().flags, ...saved.flags } };
   } catch {
     // Storage can be unavailable; the production thresholds are a fine start.
   }
@@ -105,18 +108,10 @@ function buildControls() {
       el("input", { type: "range", id: `t-${flag}`, min: 0, max: 1, step: 0.01 })));
     syncers.push(bindPair(`t-${flag}`, `n-${flag}`, () => state.settings.flags[flag], (value) => { state.settings.flags[flag] = value; }));
   }
-  syncers.push(bindPair("t-approve", "n-approve", () => state.settings.approve, (value) => { state.settings.approve = value; }));
-  syncers.push(bindPair("t-reject-verdict", "n-reject-verdict", () => state.settings.rejectVerdict, (value) => { state.settings.rejectVerdict = value; }));
   syncers.push(bindPair("t-all", "n-all", () => {
     const values = PHOTO_FLAGS.map((flag) => state.settings.flags[flag]);
     return values.reduce((a, b) => a + b, 0) / values.length;
   }, (value) => { for (const flag of PHOTO_FLAGS) state.settings.flags[flag] = value; }));
-  $("unsure-mode").addEventListener("change", (event) => {
-    state.settings.unsureMode = event.target.value;
-    saveSettings();
-    refreshControls();
-    recompute();
-  });
   $("reset").addEventListener("click", () => {
     state.settings = productionSettings();
     saveSettings();
@@ -141,9 +136,6 @@ function buildControls() {
 function refreshControls() {
   for (const sync of syncers) sync();
   const production = productionSettings();
-  $("unsure-mode").value = state.settings.unsureMode;
-  $("reject-verdict-wrap").hidden = state.settings.unsureMode !== "reject_verdict";
-  document.querySelector('[data-key="approve"]').classList.toggle("changed", state.settings.approve !== production.approve);
   for (const flag of PHOTO_FLAGS) {
     document.querySelector(`[data-flag="${flag}"]`).classList.toggle("changed", state.settings.flags[flag] !== production.flags[flag]);
   }
@@ -196,7 +188,7 @@ function buildCards() {
           chip(expected.outcome, expected.outcome), ...expected.flags.map((flag) => chip("", FLAG_NAMES[flag]))),
         decisionLine,
         compareLine,
-        el("div", { class: "verdict" }, verdictStack, verdictLegend),
+        el("div", { class: "verdict", hidden: true }, verdictStack, verdictLegend),
         bars));
     card.classList.toggle("selected", state.selected.has(photo.id));
     grid.append(card);
@@ -215,10 +207,10 @@ function updateCards() {
     const view = state.cards.get(photo.id);
     const evaluation = state.evaluations.get(photo.id);
     const answers = state.run?.results[photo.id]?.answers ?? null;
-    view.card.classList.remove("agree", "disagree", "safe");
+    view.card.classList.remove("agree", "disagree");
     if (evaluation && evaluation.agreement !== "error") view.card.classList.add(evaluation.agreement);
     const match = !evaluation || evaluation.agreement === "error" ? null
-      : evaluation.agreement === "agree" ? chip("approve", "agrees") : evaluation.agreement === "safe" ? chip("unsure", "blocked, unsure") : chip("reject", "disagrees");
+      : evaluation.agreement === "agree" ? chip("approve", "agrees") : chip("reject", "disagrees");
     view.decisionLine.replaceChildren(el("span", { class: "key", text: "Decided" }), ...describe(evaluation?.decision ?? null), match);
     const before = state.compareEvaluations.get(photo.id);
     if (state.compare && before) {
@@ -229,7 +221,9 @@ function updateCards() {
     } else {
       view.compareLine.hidden = true;
     }
+    const verdictBox = view.verdictStack.parentElement;
     if (!answers) {
+      verdictBox.hidden = false;
       view.verdictStack.replaceChildren();
       view.verdictLegend.textContent = state.run?.results[photo.id]?.error ?? "Not in this run";
       for (const row of view.flagRows.values()) {
@@ -238,16 +232,18 @@ function updateCards() {
       }
       continue;
     }
-    const verdict = answers.verdict?.probabilities ?? {};
-    const tick = el("div", { class: "tick", title: `Approve threshold ${settings.approve.toFixed(2)}` });
-    tick.style.left = `${settings.approve * 100}%`;
-    const parts = ["approve", "reject", "unsure"].map((label) => {
-      const part = el("span", { class: `s-${label}`, title: `${label} ${fmt(verdict[label] ?? 0)}` });
-      part.style.width = `${(verdict[label] ?? 0) * 100}%`;
-      return part;
-    });
-    view.verdictStack.replaceChildren(...parts, tick);
-    view.verdictLegend.textContent = `approve ${fmt(verdict.approve ?? 0)} · reject ${fmt(verdict.reject ?? 0)} · unsure ${fmt(verdict.unsure ?? 0)}`;
+    // Only runs made before the verdict question was dropped have one; it is shown, not used.
+    const verdict = answers.verdict?.probabilities;
+    verdictBox.hidden = !verdict;
+    if (verdict) {
+      const parts = ["approve", "reject", "unsure"].map((label) => {
+        const part = el("span", { class: `s-${label}`, title: `${label} ${fmt(verdict[label] ?? 0)}` });
+        part.style.width = `${(verdict[label] ?? 0) * 100}%`;
+        return part;
+      });
+      view.verdictStack.replaceChildren(...parts);
+      view.verdictLegend.textContent = `Old verdict, not used: approve ${fmt(verdict.approve ?? 0)} · reject ${fmt(verdict.reject ?? 0)} · unsure ${fmt(verdict.unsure ?? 0)}`;
+    }
     for (const flag of PHOTO_FLAGS) {
       const row = view.flagRows.get(flag);
       const p = yesProbability(answers, flag);
@@ -285,18 +281,18 @@ function renderSummary(summary, compareSummary) {
       c ? deltaNode(summary.falseApprovals.length, c.falseApprovals.length, false, String) : null),
     tile("False rejections", String(summary.falseRejections.length), `of ${summary.goodTotal} good photos`, summary.falseRejections.length ? "warn" : "",
       c ? deltaNode(summary.falseRejections.length, c.falseRejections.length, false, String) : null),
-    tile("Bad photos blocked", `${summary.badBlocked}/${summary.badTotal}`, `${summary.rejectedBad} rejected, ${summary.badBlocked - summary.rejectedBad} unsure`),
-    tile("Right reason", `${summary.rightReason}/${summary.rejectedBad}`, "rejections naming an expected flag"),
+    tile("Bad photos rejected", `${summary.badBlocked}/${summary.badTotal}`, `${summary.goodApproved}/${summary.goodTotal} good photos approved`),
+    tile("Right reason", `${summary.rightReason}/${summary.badBlocked}`, "rejections naming an expected flag"),
     tile("No answer", String(summary.errors), state.run ? `${state.run.model}` : ""),
   );
 
   const rows = ["approve", "reject", "either"];
-  const cols = ["approve", "reject", "unsure"];
+  const cols = ["approve", "reject"];
   const table = $("confusion");
   table.replaceChildren(el("tr", {}, el("th", { text: "Expected ↓ / decided →" }), ...cols.map((col) => el("th", { text: col }))));
   for (const row of rows) {
     table.append(el("tr", {}, el("th", { text: row }), ...cols.map((col) => {
-      const kind = row === "either" ? "" : row === col ? "hit" : row === "reject" && col === "unsure" ? "soft" : "miss";
+      const kind = row === "either" ? "" : row === col ? "hit" : "miss";
       const active = state.cell && state.cell.expected === row && state.cell.decided === col;
       return el("td", {
         class: `cell ${summary.confusion[row][col] ? kind : ""} ${active ? "active" : ""}`, text: String(summary.confusion[row][col]),
@@ -351,7 +347,6 @@ function visibleIds() {
     switch (agreement) {
       case "agree": return evaluation?.agreement === "agree";
       case "disagree": return evaluation?.agreement === "disagree";
-      case "safe": return evaluation?.agreement === "safe";
       case "false-approval": return Boolean(evaluation?.falseApproval);
       case "false-rejection": return Boolean(evaluation?.falseRejection);
       case "error": return evaluation?.agreement === "error";

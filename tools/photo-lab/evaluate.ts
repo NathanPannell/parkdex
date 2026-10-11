@@ -3,15 +3,12 @@
  * which loads it and worker/founderPhoto.ts as browser modules, so every decision the dashboard
  * shows comes from the production decidePhoto. Keep this file free of Node imports.
  */
-import {
-  decidePhoto, DEFAULT_FLAG_THRESHOLDS, DEFAULT_PHOTO_APPROVE_THRESHOLD, FLAG_THRESHOLD, PHOTO_FLAGS,
-  type PhotoAnswers, type PhotoFlag,
-} from "../../worker/founderPhoto.ts";
+import { decidePhoto, DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS, type PhotoAnswers, type PhotoFlag } from "../../worker/founderPhoto.ts";
 
 export const CATEGORIES = ["good", "people", "blurry", "dark", "not_park", "not_photo", "personal_info", "borderline"] as const;
 export type Category = (typeof CATEGORIES)[number];
 export type ExpectedOutcome = "approve" | "reject" | "either";
-export type Outcome = "approve" | "reject" | "unsure";
+export type Outcome = "approve" | "reject";
 
 export interface ManifestPhoto {
   id: string;
@@ -29,6 +26,7 @@ export interface Manifest {
 }
 
 export interface RunPhotoResult {
+  /** Runs made before the verdict question was dropped also have a `verdict` answer, which is ignored. */
   answers: PhotoAnswers["answers"] | null;
   model: string | null;
   error: string | null;
@@ -55,22 +53,13 @@ export interface RunFile {
   spend: { reportedCostUsd: number; keyUsageBeforeUsd: number | null; keyUsageAfterUsd: number | null };
 }
 
-/**
- * How a photo with no flag that is not approved is decided. Production calls all of them unsure;
- * `reject_verdict` turns a confident "reject" verdict into a rejection without a named flag.
- */
-export type UnsureMode = "production" | "reject_verdict";
-
+/** A photo is approved when no flag's "yes" is above that flag's threshold, as in production. */
 export interface LabSettings {
-  approve: number;
   flags: Record<PhotoFlag, number>;
-  unsureMode: UnsureMode;
-  /** Used by `reject_verdict`: the verdict's reject probability at or above which it rejects. */
-  rejectVerdict: number;
 }
 
 export function productionSettings(): LabSettings {
-  return { approve: DEFAULT_PHOTO_APPROVE_THRESHOLD, flags: { ...DEFAULT_FLAG_THRESHOLDS }, unsureMode: "production", rejectVerdict: 0.5 };
+  return { flags: { ...DEFAULT_FLAG_THRESHOLDS } };
 }
 
 export interface LabDecision {
@@ -79,11 +68,7 @@ export interface LabDecision {
 }
 
 export function decideLab(answers: PhotoAnswers["answers"], settings: LabSettings): LabDecision {
-  const decision = decidePhoto({ model: "", answers }, settings.approve, settings.flags);
-  if (decision.outcome === "unsure" && settings.unsureMode === "reject_verdict") {
-    const reject = answers.verdict?.probabilities.reject;
-    if (typeof reject === "number" && reject >= settings.rejectVerdict) return { outcome: "reject", flags: [] };
-  }
+  const decision = decidePhoto({ model: "", answers }, settings.flags);
   return { outcome: decision.outcome, flags: [...decision.flags] };
 }
 
@@ -95,8 +80,8 @@ export function yesProbability(answers: PhotoAnswers["answers"], flag: PhotoFlag
   return answer.choice === "yes" ? 1 : 0;
 }
 
-/** agree: the outcome matches. safe: a bad photo was not approved but was called unsure. */
-export type Agreement = "agree" | "disagree" | "safe" | "error";
+/** agree: the outcome matches, or the photo is borderline. */
+export type Agreement = "agree" | "disagree" | "error";
 
 export interface PhotoEvaluation {
   id: string;
@@ -128,12 +113,13 @@ export interface Summary {
   confusion: Record<ExpectedOutcome, Record<Outcome, number>>;
   falseApprovals: string[];
   falseRejections: string[];
+  /** Bad photos rejected. */
   badBlocked: number;
   badTotal: number;
   goodApproved: number;
   goodTotal: number;
+  /** Rejected bad photos with at least one expected flag. */
   rightReason: number;
-  rejectedBad: number;
   flags: FlagScore[];
 }
 
@@ -141,10 +127,7 @@ export function evaluatePhoto(photo: ManifestPhoto, result: RunPhotoResult | und
   if (!result?.answers) return { id: photo.id, decision: null, agreement: "error", falseApproval: false, falseRejection: false, rightReason: null };
   const decision = decideLab(result.answers, settings);
   const expected = photo.expected.outcome;
-  let agreement: Agreement = "agree";
-  if (expected === "approve" && decision.outcome !== "approve") agreement = "disagree";
-  if (expected === "reject" && decision.outcome === "approve") agreement = "disagree";
-  if (expected === "reject" && decision.outcome === "unsure") agreement = "safe";
+  const agreement: Agreement = expected === "either" || expected === decision.outcome ? "agree" : "disagree";
   const rightReason = expected === "reject" && decision.outcome === "reject"
     ? decision.flags.some((flag) => photo.expected.flags.includes(flag))
     : null;
@@ -153,7 +136,7 @@ export function evaluatePhoto(photo: ManifestPhoto, result: RunPhotoResult | und
     decision,
     agreement,
     falseApproval: expected === "reject" && decision.outcome === "approve",
-    falseRejection: expected === "approve" && decision.outcome !== "approve",
+    falseRejection: expected === "approve" && decision.outcome === "reject",
     rightReason,
   };
 }
@@ -164,14 +147,14 @@ function ratio(numerator: number, denominator: number): number | null {
 
 export function summarize(manifest: Manifest, run: Pick<RunFile, "results">, settings: LabSettings): { photos: PhotoEvaluation[]; summary: Summary } {
   const photos = manifest.photos.map((photo) => evaluatePhoto(photo, run.results[photo.id], settings));
-  const confusion = Object.fromEntries((["approve", "reject", "either"] as const).map((row) => [row, { approve: 0, reject: 0, unsure: 0 }])) as Summary["confusion"];
+  const confusion = Object.fromEntries((["approve", "reject", "either"] as const).map((row) => [row, { approve: 0, reject: 0 }])) as Summary["confusion"];
   const scores = new Map<PhotoFlag, FlagScore>(PHOTO_FLAGS.map((flag) => [flag, {
     flag, truePositive: 0, falsePositive: 0, falseNegative: 0, trueNegative: 0, precision: null, recall: null,
     covered: !manifest.notCovered.includes(flag),
   }]));
   const summary: Summary = {
     scored: 0, correct: 0, accuracy: null, errors: 0, confusion, falseApprovals: [], falseRejections: [],
-    badBlocked: 0, badTotal: 0, goodApproved: 0, goodTotal: 0, rightReason: 0, rejectedBad: 0, flags: [],
+    badBlocked: 0, badTotal: 0, goodApproved: 0, goodTotal: 0, rightReason: 0, flags: [],
   };
   manifest.photos.forEach((photo, index) => {
     const evaluation = photos[index];
@@ -188,8 +171,7 @@ export function summarize(manifest: Manifest, run: Pick<RunFile, "results">, set
     }
     if (expected === "reject") {
       summary.badTotal += 1;
-      if (evaluation.decision.outcome !== "approve") summary.badBlocked += 1;
-      if (evaluation.decision.outcome === "reject") summary.rejectedBad += 1;
+      if (evaluation.decision.outcome === "reject") summary.badBlocked += 1;
       if (evaluation.rightReason) summary.rightReason += 1;
     }
     if (expected === "approve") {
@@ -204,7 +186,7 @@ export function summarize(manifest: Manifest, run: Pick<RunFile, "results">, set
       if (photo.expected.optionalFlags.includes(flag)) continue;
       if (expected === "reject" && !photo.expected.flags.includes(flag)) continue;
       const score = scores.get(flag)!;
-      const predicted = yesProbability(answers, flag) > (settings.flags[flag] ?? FLAG_THRESHOLD);
+      const predicted = yesProbability(answers, flag) > (settings.flags[flag] ?? DEFAULT_FLAG_THRESHOLDS[flag]);
       const actual = photo.expected.flags.includes(flag);
       if (predicted && actual) score.truePositive += 1;
       else if (predicted) score.falsePositive += 1;
@@ -225,38 +207,15 @@ function number(value: number): string {
   return String(Math.round(value * 1000) / 1000);
 }
 
-/** The thresholds as JSON for sharing, and the change to make in worker/founderPhoto.ts. */
+/** The flag thresholds as JSON for sharing, and the constant to paste into worker/founderPhoto.ts. */
 export function exportSettings(settings: LabSettings): { json: string; code: string } {
-  const json = JSON.stringify({
-    approve: settings.approve,
-    flags: Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, settings.flags[flag]])),
-    unsureMode: settings.unsureMode,
-    ...(settings.unsureMode === "reject_verdict" ? { rejectVerdict: settings.rejectVerdict } : {}),
-  }, null, 2);
-  const lines = [
+  const flags = Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, Number(number(settings.flags[flag]))]));
+  const json = JSON.stringify({ flags }, null, 2);
+  const code = [
     "// worker/founderPhoto.ts",
-    `export const DEFAULT_PHOTO_APPROVE_THRESHOLD = ${number(settings.approve)};`,
-    "",
     "export const DEFAULT_FLAG_THRESHOLDS: FlagThresholds = Object.freeze({",
-    ...PHOTO_FLAGS.map((flag) => {
-      const value = settings.flags[flag];
-      return `  ${flag}: ${value === FLAG_THRESHOLD ? "FLAG_THRESHOLD" : number(value)},`;
-    }),
+    ...PHOTO_FLAGS.map((flag) => `  ${flag}: ${number(settings.flags[flag])},`),
     "});",
-  ];
-  if (settings.approve < 0.5 || settings.approve > 1) {
-    lines.push("", "// photoApproveThreshold() only accepts 0.5 to 1; widen its bounds for this value.");
-  }
-  lines.push("", `// FOUNDER_PHOTO_APPROVE_THRESHOLD, when set in the environment, overrides the approve default.`);
-  if (settings.unsureMode === "reject_verdict") {
-    lines.push(
-      "",
-      "// decidePhoto: a confident reject verdict with no flag becomes a rejection instead of unsure.",
-      "// Replace the final `return { outcome: \"unsure\", flags: [] };` with:",
-      `if ((verdict?.probabilities.reject ?? 0) >= ${number(settings.rejectVerdict)}) return { outcome: "reject", flags: [] };`,
-      "return { outcome: \"unsure\", flags: [] };",
-      "// The reject type then allows an empty flags list; founders.ts shows UNSURE_MESSAGE or a general message for it.",
-    );
-  }
-  return { json, code: lines.join("\n") };
+  ].join("\n");
+  return { json, code };
 }
