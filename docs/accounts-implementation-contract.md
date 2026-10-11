@@ -40,12 +40,24 @@ Android Google sign-in uses Credential Manager in a Capacitor bridge, with a ser
 | `GET /api/auth/me` | Authenticated | Account ID, email, verification state, display name, and linked providers. |
 | `POST /api/auth/sessions/renew`, `/api/auth/logout` | Authenticated | Rotated session or revocation. |
 | `POST /api/auth/verification/request`, `/api/auth/verification/confirm` | Authenticated request, then one-use link token | Generic request result and confirmation. |
-| `POST /api/auth/password-reset/request`, `/api/auth/password-reset/confirm` | Email, then one-use token and new password | Generic `202`, then confirmation and all-session revocation. |
+| `POST /api/auth/password-reset/request`, `/api/auth/password-reset/confirm` | Email, then one-use token and new password | Generic `202`, then confirmation and all-session revocation. See Account recovery below. |
 | `DELETE /api/account` | Freshly reauthenticated session and CSRF on web | Starts deletion, revokes sessions, removes personal rows and private objects, and returns a durable deletion receipt/status. |
 
 All auth responses are `Cache-Control: no-store`. JSON input has explicit size limits. Reject malformed or extra security-sensitive fields. Authentication and account deletion need per-action rate limits. Password reset never reveals whether an email exists. Deletion is idempotent: persist a deletion receipt and object inventory so a partial R2 failure can be completed by an explicit operator recovery command without a scheduled retry service. Mark an account as deleting before revocation and reject new writes. The UI cannot report deletion complete until personal Neon rows and private objects are removed. The operator receipt may retain opaque object keys only until cleanup is confirmed and must not retain email, photos, or credentials.
 
 Google challenge requests are `{purpose: 'sign_in' | 'reauth' | 'link'}` and return `{nonce, expiresAt}`. Token requests are `{idToken, nonce}` at `/api/auth/google` for web cookies or `/api/auth/google/native` for native bearer sessions. Store only a hash of the nonce, bind reauthentication and linking challenges to the current account/session and transport, expire them quickly, and consume once in a transaction. A link requires a current account and five-minute reauthentication. Auth's account deletion service invokes a progress/photo cleanup callback supplied by integration; partial cleanup leaves a durable pending receipt. An authenticated operator can explicitly resume it with a same-origin `POST /api/operator/account-deletions/:receiptId/resume`; pending work never creates a retry service.
+
+### Account recovery
+
+`POST /api/auth/password-reset/request` always answers `202 {"accepted":true}` with the same headers, and reserves the same email and IP rate limits, whatever the email belongs to. What it sends depends on the account:
+
+| Account | Email | Security event on delivery failure |
+| --- | --- | --- |
+| Active, has a password | "Reset your Parkdex password" with a one-use, one-hour reset link. | `password_reset_email` |
+| Active, Google sign-in only | "How to sign in to Parkdex": the account uses Google, so tap "Continue with Google" with this address; no password is needed. It links to the account page and issues no token. | `password_reset_google_email` |
+| Unknown or being deleted | Nothing. | none |
+
+The Google directions go only to the account's own inbox, so they reveal nothing to the requester. A Google-only account never receives a reset token and cannot gain a password through reset. Email goes out through `waitUntil`, so the response never waits on the provider. When email delivery is not configured (`emailDeliveryEnabled` is false in `/api/auth/config`), the route answers `503` and the app hides "Forgot password?".
 
 ## Durable local claims and account boundaries
 
