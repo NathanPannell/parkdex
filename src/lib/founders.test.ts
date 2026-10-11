@@ -10,7 +10,7 @@ vi.mock("./accounts/authClient", () => ({
 
 const {
   FounderError, checkFlags, foundBackAction, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
-  REVIEW_LABEL, markFoundingReviewsSeen, requestFoundingReview, reviewButton, reviewProblem,
+  REVIEW_LABEL, markFoundingReviewsSeen, requestFoundingReview, reviewButton, reviewProblem, founderLine, flagMessage, MESSAGES, REVIEW_HINT,
 } = await import("./founders");
 type ContainingPark = import("./founders").ContainingPark;
 
@@ -171,7 +171,7 @@ describe("foundPark", () => {
     expect(error).toMatchObject({ code: "unavailable", status: 503, retryable: true, message: "Try again in a moment." });
   });
 
-  it("says who founded a park that was founded first", async () => {
+  it("names the founder of a park that already has one", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(409, { code: "already_founded", message: "This park already has a founder.", founder: { handle: "sam" } }));
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "already_founded", founder: "sam", retryable: false });
   });
@@ -182,19 +182,19 @@ describe("foundPark", () => {
   });
 
   it("shows the server's reason for other refusals and limits", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "unnamed_park", message: "This park has no name on OpenStreetMap yet, so it can't be founded." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "refused", retryable: false, message: "This park has no name on OpenStreetMap yet, so it can't be founded." });
-    fetchAuthenticated.mockResolvedValueOnce(reply(429, { code: "rate_limited_founding", message: "You've founded a lot of parks today. Try again tomorrow." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "rate_limited", message: "You've founded a lot of parks today. Try again tomorrow." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "unnamed_park", message: "This park has no name on OpenStreetMap yet, so it can't have a founder." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "refused", retryable: false, message: "This park has no name on OpenStreetMap yet, so it can't have a founder." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(429, { code: "rate_limited_founding", message: "You've become the founder of 5 parks today. Try again tomorrow." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "rate_limited", message: "You've become the founder of 5 parks today. Try again tomorrow." });
     fetchAuthenticated.mockResolvedValueOnce(reply(401, { code: "authentication_required", message: "Sign in." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "unauthenticated", message: "Sign in again to found a park." });
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "unauthenticated", message: "Sign in again to become a founder." });
   });
 
   it("asks for a handle, and keeps the server's reason for being outside", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(409, { error: { code: "handle_required", message: "Pick a handle" }, code: "handle_required" }));
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "handle_required" });
-    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "not_in_park", message: "You need to be in the park to found it." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "not_inside", message: "You need to be in the park to found it." });
+    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "not_in_park", message: "You need to be in the park to become its founder." }));
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "not_inside", message: "You need to be in the park to become its founder." });
   });
 
   it("treats a lost connection as offline and retryable", async () => {
@@ -346,8 +346,8 @@ describe("review button and problems", () => {
 
   it("explains each error code plainly", () => {
     const problem = (code: ConstructorParameters<typeof FounderError>[0], founder: string | null = null) => reviewProblem(new FounderError(code, 400, "server", founder));
-    expect(problem("already_founded", "robin")).toEqual({ message: "@robin founded this park first.", canRetry: false });
-    expect(problem("already_founded")).toEqual({ message: "Someone else founded this park first.", canRetry: false });
+    expect(problem("already_founded", "robin")).toEqual({ message: "@robin became the founder first.", canRetry: false });
+    expect(problem("already_founded")).toEqual({ message: "Someone else became the founder first.", canRetry: false });
     expect(problem("review_pending")).toEqual({ message: "Your photo for this park is already waiting for review.", canRetry: false });
     expect(problem("review_rate_limited")).toEqual({ message: "You've asked for 3 reviews today. Try again tomorrow.", canRetry: false });
     expect(problem("rate_limited").canRetry).toBe(false);
@@ -358,5 +358,26 @@ describe("review button and problems", () => {
     expect(problem("unauthenticated")).toEqual({ message: "Sign in again to ask for a review.", canRetry: false });
     expect(problem("refused").canRetry).toBe(false);
     expect(reviewProblem(new Error("boom")).canRetry).toBe(true);
+  });
+});
+
+describe("founder copy", () => {
+  // "Found" also reads as "discovered", so player-facing text uses the noun "founder" only.
+  const VERB = /\bfound(ed|ing|s)?\b/i;
+
+  it("names the founder with the noun", () => {
+    expect(founderLine("robin")).toBe("Founder: @robin");
+    expect(founderLine(null)).toBe("This park already has a founder");
+  });
+
+  it("never uses the verb in the app's own messages", () => {
+    const codes = Object.keys(MESSAGES) as (keyof typeof MESSAGES)[];
+    const texts = [
+      ...Object.values(MESSAGES),
+      ...codes.flatMap((code) => [reviewProblem(new FounderError(code, 400, "server", "robin")).message, reviewProblem(new FounderError(code, 400, "server")).message]),
+      ...["people", "lighting", "not_park", "inappropriate", "not_photo", "personal_info", "unsure", "other"].map(flagMessage),
+      founderLine("robin"), founderLine(null), REVIEW_LABEL, REVIEW_HINT,
+    ];
+    for (const text of texts) expect(text).not.toMatch(VERB);
   });
 });

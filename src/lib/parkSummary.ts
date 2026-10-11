@@ -58,7 +58,7 @@ export function summaryStats(state: SummaryState, signedIn: boolean): SummarySta
     };
   }
   return {
-    founder: summary.founder ? (summary.founder.handle ? `Founded by @${summary.founder.handle}` : "Has a founder") : "No founder yet",
+    founder: summary.founder ? (summary.founder.handle ? `Founder: @${summary.founder.handle}` : "Has a founder") : "No founder yet",
     mine: summary.visits.mine === null ? (signedIn ? "–" : "Sign in") : String(summary.visits.mine),
     total: String(summary.visits.total),
     last30Days: String(summary.visits.last30Days),

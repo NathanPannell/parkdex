@@ -554,7 +554,7 @@ export function MapScreen() {
             </button>
             {isFeatureEnabled("parkProposals") && (
               <button role="menuitem" onClick={() => { select(null); startFounding(null); }}>
-                <Icon name="flagPlus" size={20} /> Found a park
+                <Icon name="flagPlus" size={20} /> Become a founder
               </button>
             )}
             {DEMO_TOOLS && (

@@ -84,12 +84,13 @@ export class FounderError extends Error {
   }
 }
 
-const MESSAGES: Record<FounderErrorCode, string> = {
-  offline: "You need a connection to found a park.",
-  unauthenticated: "Sign in again to found a park.",
-  handle_required: "Pick a handle before you found a park.",
+/** The app's own wording for each refusal; the server's message wins for most 4xx answers. */
+export const MESSAGES: Record<FounderErrorCode, string> = {
+  offline: "You need a connection to become a founder.",
+  unauthenticated: "Sign in again to become a founder.",
+  handle_required: "Pick a handle before you become a founder.",
   already_founded: "This park already has a founder.",
-  not_inside: "You need to be inside the park to found it.",
+  not_inside: "You need to be inside the park to become its founder.",
   location_imprecise: "Your location is not precise enough. Step into the open and try again.",
   rate_limited: "You've tried a lot of photos. Wait a little and try again.",
   park_not_found: "That park isn't on the map any more.",
@@ -97,7 +98,7 @@ const MESSAGES: Record<FounderErrorCode, string> = {
   review_pending: "Your photo for this park is already waiting for review.",
   review_rate_limited: "You've asked for 3 reviews today. Try again tomorrow.",
   review_unavailable: "This photo can't be sent for review any more. Retake it to try again.",
-  refused: "This park can't be founded right now.",
+  refused: "You can't become this park's founder right now.",
   unavailable: "Try again in a moment.",
 };
 
@@ -273,9 +274,9 @@ export function checkFlags(result: Extract<FoundResult, { outcome: "rejected" | 
   return [{ code: result.outcome === "unsure" ? "unsure" : "other", message: flagMessage(result.outcome === "unsure" ? "unsure" : "other") }];
 }
 
-/** "@robin founded this park", or a plain line when the founder has no handle. */
+/** "Founder: @robin", or a plain line when the founder has no handle. */
 export function founderLine(handle: string | null): string {
-  return handle ? `@${handle} founded this park` : "This park already has a founder";
+  return handle ? `Founder: @${handle}` : "This park already has a founder";
 }
 
 export const parkKey = (park: OsmRef) => `${park.type}/${park.id}`;
@@ -361,7 +362,7 @@ export function reviewProblem(error: unknown): { message: string; canRetry: bool
   switch (error.code) {
     case "offline": return { message: "You need a connection to ask for a review.", canRetry: true };
     case "unavailable": return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
-    case "already_founded": return { message: error.founder ? `@${error.founder} founded this park first.` : "Someone else founded this park first.", canRetry: false };
+    case "already_founded": return { message: error.founder ? `@${error.founder} became the founder first.` : "Someone else became the founder first.", canRetry: false };
     case "review_pending": return { message: MESSAGES.review_pending, canRetry: false };
     case "review_rate_limited":
     case "rate_limited": return { message: MESSAGES.review_rate_limited, canRetry: false };
