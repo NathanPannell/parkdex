@@ -132,3 +132,4 @@ Read the matching file before you change these areas. Format and how to add one:
 | Previews for PRs that add a migration | `docs/learnings/preview-new-migrations.md` |
 | Release dispatch provider errors | `docs/learnings/production-dispatch-transient-get.md` |
 | SQL QA scripts and their pools | `docs/learnings/sql-qa-pool-teardown.md` |
+| Merging several PRs into staging | `docs/learnings/staging-merge-sequence.md` |
