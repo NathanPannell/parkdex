@@ -1,0 +1,2362 @@
+{
+  "version": 1,
+  "notes": "Commons photos are fetched at 1280 px. Derived photos are generated from their parent with Pillow by fetch.py. The inappropriate flag is not covered: the set has no real explicit, violent or hateful content, so its precision and recall are not measured.",
+  "notCovered": [
+    "inappropriate"
+  ],
+  "photos": [
+    {
+      "id": "good-01",
+      "category": "good",
+      "description": "Lily pond and gardens, Stanley Park",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 29 (50296505997).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_29_(50296505997).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "3038686096d1c0c8d270d8d9ce80831064fbca81",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-02",
+      "category": "good",
+      "description": "Garden pond under trees, Queen Elizabeth Park",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 3 (50296340016).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_3_(50296340016).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "61289bbcad66492c5e677bf95a97d62d75b6f6d2",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-03",
+      "category": "good",
+      "description": "Forest garden with big firs",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 2 (50296339626).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_2_(50296339626).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "9f97f515866c2989d007f07c4691ca2c5684c1ec",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-04",
+      "category": "good",
+      "description": "Old-growth trunks on a forest path",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 1 (50295660838).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_1_(50295660838).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "33ad11ecbb62755ce9ee90de0957ae89b1763e70",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-05",
+      "category": "good",
+      "description": "Willows over a lagoon",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 32 (50296509022).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_32_(50296509022).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "3ad5a313ac1feb139c90cbc45535f189a2a7bec9",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-06",
+      "category": "good",
+      "description": "Lagoon with fallen logs, city behind",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Stanley Park Lake.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Stanley_Park_Lake.jpg",
+        "author": "Chenqie1gao87guifei4tong",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "sha1": "cdef4b9242b31e3bbbc37ce4a1e71bbe7e5c876a",
+        "mime": "image/jpeg",
+        "width": 2730,
+        "height": 4096
+      }
+    },
+    {
+      "id": "good-07",
+      "category": "good",
+      "description": "Forest trail past a mossy rock cut",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Abandoned gold mine in Goldstream park.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Abandoned_gold_mine_in_Goldstream_park.jpg",
+        "author": "Clint Lalonde",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "sha1": "29ded68630279c5626572fd4ce51bf48de094ad3",
+        "mime": "image/jpeg",
+        "width": 3264,
+        "height": 2448
+      }
+    },
+    {
+      "id": "good-08",
+      "category": "good",
+      "description": "Creek with a fallen log, Goldstream",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Goldstream IMG 1434 (8955580019).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Goldstream_IMG_1434_(8955580019).jpg",
+        "author": "Andy S",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "f5a2698f76f69618a39fb355f7686ed9296dff90",
+        "mime": "image/jpeg",
+        "width": 4272,
+        "height": 2848
+      }
+    },
+    {
+      "id": "good-09",
+      "category": "good",
+      "description": "Forest trail through ferns",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Goldstream IMG 1438 (8956784010).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Goldstream_IMG_1438_(8956784010).jpg",
+        "author": "Andy S",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "4f2d5be4a70c3802cffef9d34024343c4639babd",
+        "mime": "image/jpeg",
+        "width": 2848,
+        "height": 4272
+      }
+    },
+    {
+      "id": "good-10",
+      "category": "good",
+      "description": "Shallow river through summer forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Goldstream IMG 1436 (8956779816).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Goldstream_IMG_1436_(8956779816).jpg",
+        "author": "Andy S",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "f3761c9e60453bc5231c432bd63e497918188ffd",
+        "mime": "image/jpeg",
+        "width": 4272,
+        "height": 2848
+      }
+    },
+    {
+      "id": "good-11",
+      "category": "good",
+      "description": "Grey beach with rocks under clouds",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Discovery Park (5633836912).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Discovery_Park_(5633836912).jpg",
+        "author": "Leslie Seaton from Seattle, WA, USA",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "c3f2fd99cc55c1b841052c1773a410aa1bd844f6",
+        "mime": "image/jpeg",
+        "width": 667,
+        "height": 1000
+      }
+    },
+    {
+      "id": "good-12",
+      "category": "good",
+      "description": "Autumn trees on a park lawn",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Playground at Brentwood Park.JPG",
+        "page": "https://commons.wikimedia.org/wiki/File:Playground_at_Brentwood_Park.JPG",
+        "author": "User:Flying Penguin",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "sha1": "e1afd1b7063624f3f8c2fbeb4320a6bed30374df",
+        "mime": "image/jpeg",
+        "width": 800,
+        "height": 600
+      }
+    },
+    {
+      "id": "good-13",
+      "category": "good",
+      "description": "Snowy park avenue of trees",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Murdo-Fraser-Park-North-Vancouver-BC-2013-12-A-1.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Murdo-Fraser-Park-North-Vancouver-BC-2013-12-A-1.jpg",
+        "author": "RestfulC401",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sha1": "5e7bfc35505143951ce76aa7131c2aa84a67fb75",
+        "mime": "image/jpeg",
+        "width": 3879,
+        "height": 2577
+      }
+    },
+    {
+      "id": "good-14",
+      "category": "good",
+      "description": "Playground and picnic tables on grass",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Mt View Park. INFO IN PANORAMIO DESCRIPTION - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Mt_View_Park._INFO_IN_PANORAMIO_DESCRIPTION_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "7b2f370c0aef53b7ee28f1812c9ba3f4f263de02",
+        "mime": "image/jpeg",
+        "width": 3448,
+        "height": 2454
+      }
+    },
+    {
+      "id": "good-15",
+      "category": "good",
+      "description": "Park in snow with autumn trees",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Rotary Park, Kimberley.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Rotary_Park,_Kimberley.jpg",
+        "author": "Liamd967",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sha1": "6b22a8c42f45213b9c853eada2c2e6a9be91383b",
+        "mime": "image/jpeg",
+        "width": 4608,
+        "height": 3456
+      }
+    },
+    {
+      "id": "good-16",
+      "category": "good",
+      "description": "Wide gravel trail beside a big fir",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Connector short trail. READ INFO IN PANORAMIO-COMMENTS - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Connector_short_trail._READ_INFO_IN_PANORAMIO-COMMENTS_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "37ece0c399d9e38c24d2ffc7829703d06e1ce827",
+        "mime": "image/jpeg",
+        "width": 2736,
+        "height": 3648
+      }
+    },
+    {
+      "id": "good-17",
+      "category": "good",
+      "description": "Rocky creek bed in forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Douglas Creek in Summer.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Douglas_Creek_in_Summer.jpg",
+        "author": "MeadowLore",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "5b3191a27907e3da2ae671939845421517161ef4",
+        "mime": "image/jpeg",
+        "width": 3024,
+        "height": 4032
+      }
+    },
+    {
+      "id": "good-18",
+      "category": "good",
+      "description": "Paved trail through bare winter forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Elk-Beaver Lake Regional Park (8508502519).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Elk-Beaver_Lake_Regional_Park_(8508502519).jpg",
+        "author": "Andy Smith from Victoria, BC, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "c08cdabf4e7390f0f949343c975446114a668ddb",
+        "mime": "image/jpeg",
+        "width": 4272,
+        "height": 2848
+      }
+    },
+    {
+      "id": "good-19",
+      "category": "good",
+      "description": "Mossy stone bridge over a stream",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Old Dam Blown Up - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Old_Dam_Blown_Up_-_panoramio.jpg",
+        "author": "Kiwibirdman",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "b063de9efdd45a509b357b69f9fa6b89e5fce8f5",
+        "mime": "image/jpeg",
+        "width": 4000,
+        "height": 3000
+      }
+    },
+    {
+      "id": "good-20",
+      "category": "good",
+      "description": "Mossy rock arch over a creek",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Old Dam with Hole Blown in it - Colquitz Creek - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Old_Dam_with_Hole_Blown_in_it_-_Colquitz_Creek_-_panoramio.jpg",
+        "author": "Kiwibirdman",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "843508c01c06c5dc30d3bf14593a817686fa1979",
+        "mime": "image/jpeg",
+        "width": 4000,
+        "height": 3000
+      }
+    },
+    {
+      "id": "good-21",
+      "category": "good",
+      "description": "Wooden footbridge in forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Bridge over Colquitz River. VIEW IN PANORAMIO FOR DESCRIPTION - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Bridge_over_Colquitz_River._VIEW_IN_PANORAMIO_FOR_DESCRIPTION_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "9af05ff35b45a7b17abc2a17c328c3071079c372",
+        "mime": "image/jpeg",
+        "width": 2736,
+        "height": 3648
+      }
+    },
+    {
+      "id": "good-22",
+      "category": "good",
+      "description": "Pebble beach with a boulder and mountains",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Acadianorth.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Acadianorth.jpg",
+        "author": "Bartbraun (talk) (Uploads)",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "sha1": "76004b1a753d638aa870cb39f94720ad84697fc3",
+        "mime": "image/jpeg",
+        "width": 748,
+        "height": 561
+      }
+    },
+    {
+      "id": "good-23",
+      "category": "good",
+      "description": "Mossy forest floor in sunlight",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Bog and Moss.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Bog_and_Moss.jpg",
+        "author": "Los Paseos",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "c92c8c5e15b38775d837cebdb3736191c2cd6ee6",
+        "mime": "image/jpeg",
+        "width": 5341,
+        "height": 3561
+      }
+    },
+    {
+      "id": "good-24",
+      "category": "good",
+      "description": "Forest trail past a cedar stump",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Forest of Pacific Spirit Park, Vancouver.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Forest_of_Pacific_Spirit_Park,_Vancouver.jpg",
+        "author": "Los Paseos",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "12ea81d3626bbf18ca6cc9d2c5ff5345cf1b949e",
+        "mime": "image/jpeg",
+        "width": 6000,
+        "height": 4000
+      }
+    },
+    {
+      "id": "good-25",
+      "category": "good",
+      "description": "Forest stairs on a canyon trail",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:LoopTrail LynnCanyonPark.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:LoopTrail_LynnCanyonPark.jpg",
+        "author": "Lauraje",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sha1": "01de4cbec5bfea594442a0129d3aaf591c262cf6",
+        "mime": "image/jpeg",
+        "width": 2448,
+        "height": 3264
+      }
+    },
+    {
+      "id": "good-26",
+      "category": "good",
+      "description": "Green pool in a canyon river",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Lynn Canyon Park (4468540317).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lynn_Canyon_Park_(4468540317).jpg",
+        "author": "GoToVan",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "ac5fa0af3bc57fa7c0d650af660bc317a44bb7d8",
+        "mime": "image/jpeg",
+        "width": 2816,
+        "height": 2112
+      }
+    },
+    {
+      "id": "good-27",
+      "category": "good",
+      "description": "River trail with a fallen log",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Lynn Canyon Park (4468532641).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lynn_Canyon_Park_(4468532641).jpg",
+        "author": "GoToVan",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "e5a2ee9e5a6bf123b4f108e580c7a7b28df54b77",
+        "mime": "image/jpeg",
+        "width": 2816,
+        "height": 2112
+      }
+    },
+    {
+      "id": "good-28",
+      "category": "good",
+      "description": "Dirt trail through ferns",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Forest park intersection of wildwood and birch trails P2864.jpeg",
+        "page": "https://commons.wikimedia.org/wiki/File:Forest_park_intersection_of_wildwood_and_birch_trails_P2864.jpeg",
+        "author": "EncMstr",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sha1": "8653424960f2fcb27194dbe3f1e9b7f325f90748",
+        "mime": "image/jpeg",
+        "width": 2816,
+        "height": 2112
+      }
+    },
+    {
+      "id": "good-29",
+      "category": "good",
+      "description": "Meadow and forest under blue sky",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Cottle Lake Park (51159737135).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Cottle_Lake_Park_(51159737135).jpg",
+        "author": "David Stanley from Nanaimo, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "b0bddedb9ba248571de7e8b15289a49d6a6b4c1b",
+        "mime": "image/jpeg",
+        "width": 1024,
+        "height": 768
+      }
+    },
+    {
+      "id": "good-30",
+      "category": "good",
+      "description": "Boardwalk entrance into woods",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Bridge over Bowker Creek. READ INFO IN PANORAMIO-COMMENTS - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Bridge_over_Bowker_Creek._READ_INFO_IN_PANORAMIO-COMMENTS_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "ce5a363beb83dc06001dac1ff6f2de54bff81355",
+        "mime": "image/jpeg",
+        "width": 3648,
+        "height": 2736
+      }
+    },
+    {
+      "id": "good-31",
+      "category": "good",
+      "description": "Calm cove with wooded islets",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Banfield Park shoreline trail. READ INFO IN PANORAMIO-COMMENTS - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Banfield_Park_shoreline_trail._READ_INFO_IN_PANORAMIO-COMMENTS_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "5de580af5a35d109a082e63c02e78b4b2d3428e5",
+        "mime": "image/jpeg",
+        "width": 3290,
+        "height": 2193
+      }
+    },
+    {
+      "id": "good-32",
+      "category": "good",
+      "description": "Path through oaks on a lawn",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Micro park. READ INFO IN PANORAMIO-COMMENTS - panoramio.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Micro_park._READ_INFO_IN_PANORAMIO-COMMENTS_-_panoramio.jpg",
+        "author": "John Newcomb",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "0f64c0329f308ba1af050c4bf4c99c3fcf9f3b2e",
+        "mime": "image/jpeg",
+        "width": 2661,
+        "height": 3600
+      }
+    },
+    {
+      "id": "good-33",
+      "category": "good",
+      "description": "Lush young forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Beecher Park.JPG",
+        "page": "https://commons.wikimedia.org/wiki/File:Beecher_Park.JPG",
+        "author": "User:Flying Penguin",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "sha1": "9ea132ce5ad16df66dbef5e4a11fa0d0391ffe7d",
+        "mime": "image/jpeg",
+        "width": 800,
+        "height": 600
+      }
+    },
+    {
+      "id": "good-34",
+      "category": "good",
+      "description": "Granite outcrop in a fir forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Thetis Lake Regional Park (1359259355).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Thetis_Lake_Regional_Park_(1359259355).jpg",
+        "author": "Caitriana Nicholson from 北京 ~ Beijing, 中国 ~ China",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "ddebb13f55b9b64680df442505a78a9040001885",
+        "mime": "image/jpeg",
+        "width": 1920,
+        "height": 2560
+      }
+    },
+    {
+      "id": "good-35",
+      "category": "good",
+      "description": "Mossy maples in a rainforest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Forest pacific spirit.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Forest_pacific_spirit.jpg",
+        "author": "Jon Eben Field from Vancouver, BC, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "f59052ce296ff9e6ab24e8a8d94cbe0c17c7c92d",
+        "mime": "image/jpeg",
+        "width": 850,
+        "height": 1134
+      }
+    },
+    {
+      "id": "good-36",
+      "category": "good",
+      "description": "Tall second-growth forest",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Lynn Canyon forest.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lynn_Canyon_forest.jpg",
+        "author": "frostnova",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "088a945d37dc7b2b4340ae67b441d2f440e1f49c",
+        "mime": "image/jpeg",
+        "width": 4901,
+        "height": 2392
+      }
+    },
+    {
+      "id": "good-37",
+      "category": "good",
+      "description": "Forest trail after rain",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Lynn Canyon Park (4468524749).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Lynn_Canyon_Park_(4468524749).jpg",
+        "author": "GoToVan",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "68d49056420cecdb0ad8819b261b8c0663bf85e4",
+        "mime": "image/jpeg",
+        "width": 2816,
+        "height": 2112
+      }
+    },
+    {
+      "id": "good-38",
+      "category": "good",
+      "description": "Creek cascading through a ravine",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Balch Creek from Wildwood Trail, Portland, Oregon.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Balch_Creek_from_Wildwood_Trail,_Portland,_Oregon.jpg",
+        "author": "Slinkyo",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sha1": "b905e73bf8fe4507ee7850d8dfaf59e7a720905d",
+        "mime": "image/jpeg",
+        "width": 1536,
+        "height": 2048
+      }
+    },
+    {
+      "id": "good-39",
+      "category": "good",
+      "description": "Flowering broom above a driftwood beach",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Fairfield, Victoria, BC, Canada - panoramio (2).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Fairfield,_Victoria,_BC,_Canada_-_panoramio_(2).jpg",
+        "author": "bynyalcin",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "5ba38333a71ca69516fadb2146704fc8a8d5dd72",
+        "mime": "image/jpeg",
+        "width": 1868,
+        "height": 2505
+      }
+    },
+    {
+      "id": "good-40",
+      "category": "good",
+      "description": "Tall fir with mountains behind",
+      "expected": {
+        "outcome": "approve",
+        "flags": [],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Montecito Cathedral Mtn & Mt Seymour from Robert Burnaby Park.JPG",
+        "page": "https://commons.wikimedia.org/wiki/File:Montecito_Cathedral_Mtn_%26_Mt_Seymour_from_Robert_Burnaby_Park.JPG",
+        "author": "User:Flying Penguin",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+        "sha1": "abc2fe25225ef62746af97a17addf7f65e934f88",
+        "mime": "image/jpeg",
+        "width": 1400,
+        "height": 935
+      }
+    },
+    {
+      "id": "people-01",
+      "category": "people",
+      "description": "Indoor selfie, face fills the frame",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2011조한준.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2011%EC%A1%B0%ED%95%9C%EC%A4%80.jpg",
+        "author": "Han-Jun Cho",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "7686be62467a15e5ba003b736fd6acdf3b6f9703",
+        "mime": "image/jpeg",
+        "width": 640,
+        "height": 480
+      }
+    },
+    {
+      "id": "people-02",
+      "category": "people",
+      "description": "Group selfie at a party",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2022 - Night Summit @ Hub Criativo do Beato EN6 7977 (52471319817).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2022_-_Night_Summit_@_Hub_Criativo_do_Beato_EN6_7977_(52471319817).jpg",
+        "author": "Web Summit",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "ae77e177a59f3b492443785b9e117d9cddccce14",
+        "mime": "image/jpeg",
+        "width": 5176,
+        "height": 3451
+      }
+    },
+    {
+      "id": "people-03",
+      "category": "people",
+      "description": "Woman photographing herself outdoors",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:-i---i- (5211216475).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:-i---i-_(5211216475).jpg",
+        "author": "Logan Campbell",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "843207c4c0a0691ee24869792ea8934afd0e8860",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "people-04",
+      "category": "people",
+      "description": "Two people taking a selfie outdoors",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2 Lt Marsh (Miss America) at Daytona 500 8245232.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2_Lt_Marsh_(Miss_America)_at_Daytona_500_8245232.jpg",
+        "author": "Miriam Thurber",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "37e8f3d108d8cbf800c7a40a14a076945fe5a564",
+        "mime": "image/jpeg",
+        "width": 2048,
+        "height": 1363
+      }
+    },
+    {
+      "id": "people-05",
+      "category": "people",
+      "description": "Low-angle selfie of two friends against the sky",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:\"VONTRIHY \" 01.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:%22VONTRIHY_%22_01.jpg",
+        "author": "Adansonia rayanne2",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sha1": "9c51731ca7c1d564e3c8d1399039b8e67ce76e47",
+        "mime": "image/jpeg",
+        "width": 640,
+        "height": 480
+      }
+    },
+    {
+      "id": "people-06",
+      "category": "people",
+      "description": "Dance group posing on a park lawn",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:AMED Janam Bash.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:AMED_Janam_Bash.jpg",
+        "author": "AMED Dance Academy",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "c61fcf04e436219638e3c0c23af8c0f7f1ae8312",
+        "mime": "image/jpeg",
+        "width": 4032,
+        "height": 3024
+      }
+    },
+    {
+      "id": "people-07",
+      "category": "people",
+      "description": "Man posing on a waterfront",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Discovery Park (7995653338).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Discovery_Park_(7995653338).jpg",
+        "author": "Aleem Yousaf",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "fdc1daedfe30635105b804e244c7e4b4681a927c",
+        "mime": "image/jpeg",
+        "width": 3456,
+        "height": 2304
+      }
+    },
+    {
+      "id": "people-08",
+      "category": "people",
+      "description": "Boy riding a bike on a tidal flat",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Calum riding on the beach (1308637154).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Calum_riding_on_the_beach_(1308637154).jpg",
+        "author": "Scott Leslie from Victoria, B.C., Canada",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "57250c059f8016f82d8c6402026c5b4034495ff5",
+        "mime": "image/jpeg",
+        "width": 1728,
+        "height": 2304
+      }
+    },
+    {
+      "id": "people-09",
+      "category": "people",
+      "description": "Child's head and back on a beach",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Kaya Girl on the Beach (1308629370).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Kaya_Girl_on_the_Beach_(1308629370).jpg",
+        "author": "Scott Leslie from Victoria, B.C., Canada",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "11ca249bbbf2f61f36a66b801b2251cdff27624f",
+        "mime": "image/jpeg",
+        "width": 1728,
+        "height": 2304
+      }
+    },
+    {
+      "id": "people-10",
+      "category": "people",
+      "description": "Family group hiking in forest",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Children's nature walk in Discovery Park, Seattle, 1978.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Children%27s_nature_walk_in_Discovery_Park,_Seattle,_1978.jpg",
+        "author": "Seattle Municipal Archives",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "09c8d132d60056184096bbb69fe6b316ffc7f25f",
+        "mime": "image/jpeg",
+        "width": 2990,
+        "height": 2006
+      }
+    },
+    {
+      "id": "people-11",
+      "category": "people",
+      "description": "Children climbing a log playground",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Terra-Nova-log-pile.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Terra-Nova-log-pile.jpg",
+        "author": "Lindsay Follet",
+        "licence": "CC BY 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+        "sha1": "711fbc3a00d4424839ac9d1947aecf8b68146cd2",
+        "mime": "image/jpeg",
+        "width": 640,
+        "height": 480
+      }
+    },
+    {
+      "id": "people-12",
+      "category": "people",
+      "description": "Man making a giant soap bubble in a park",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "people"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Bubbleman bubble formation (318568504).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Bubbleman_bubble_formation_(318568504).jpg",
+        "author": "brewbooks from near Seattle, USA",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "664f738561b2597580552a21eaecf3b913e270c2",
+        "mime": "image/jpeg",
+        "width": 2201,
+        "height": 1944
+      }
+    },
+    {
+      "id": "blurry-01",
+      "category": "blurry",
+      "description": "Zoom-blurred forest path with a dog",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:10908612473 - Flickr - flintman45.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:10908612473_-_Flickr_-_flintman45.jpg",
+        "author": "lee roberts from Eastbourne, England",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "c8440285dc69b17423ac55d07d383a3599d9e7a2",
+        "mime": "image/jpeg",
+        "width": 4815,
+        "height": 2287
+      }
+    },
+    {
+      "id": "blurry-02",
+      "category": "blurry",
+      "description": "Motion-blurred rooftops from a train",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Greater Anglia Tottenham Hale to Liverpool Street looking out window 17.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Greater_Anglia_Tottenham_Hale_to_Liverpool_Street_looking_out_window_17.jpg",
+        "author": "Acabashi",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "f532139f9d81fd94f4c81d8e30c7094c1fdfe64f",
+        "mime": "image/jpeg",
+        "width": 4608,
+        "height": 3456
+      }
+    },
+    {
+      "id": "blurry-03",
+      "category": "blurry",
+      "description": "Motion-blurred railway wall",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Greater Anglia Tottenham Hale to Liverpool Street looking out window 07.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Greater_Anglia_Tottenham_Hale_to_Liverpool_Street_looking_out_window_07.jpg",
+        "author": "Acabashi",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "7b2a8e644f7d5fd1f64358bbeb18bacb0cc022ab",
+        "mime": "image/jpeg",
+        "width": 7910,
+        "height": 4450
+      }
+    },
+    {
+      "id": "dark-01",
+      "category": "dark",
+      "description": "Street at night under lamps",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:22nd St 11th 12th Avs td (2018-11-23) 14 - Chelsea Piers Bus Stop.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:22nd_St_11th_12th_Avs_td_(2018-11-23)_14_-_Chelsea_Piers_Bus_Stop.jpg",
+        "author": "Tdorante10",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "d8a8175c4601776b05302b4838a79ea1cf3969b7",
+        "mime": "image/jpeg",
+        "width": 5472,
+        "height": 3648
+      }
+    },
+    {
+      "id": "dark-02",
+      "category": "dark",
+      "description": "Desert park trees as night silhouettes",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Night sky Joshua Tree National Park 2019.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Night_sky_Joshua_Tree_National_Park_2019.jpg",
+        "author": "Steven Lek",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "97c99d3dacb2f0a8c1bca7af7d65bae33b8e4d31",
+        "mime": "image/jpeg",
+        "width": 4928,
+        "height": 3264
+      }
+    },
+    {
+      "id": "dark-03",
+      "category": "dark",
+      "description": "Single tree silhouette under stars",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Night Sky and Joshua tree (49623124503).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Night_Sky_and_Joshua_tree_(49623124503).jpg",
+        "author": "Joshua Tree National Park",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "3b0134a02f725fc672e624726a0e9861025e894a",
+        "mime": "image/jpeg",
+        "width": 2048,
+        "height": 1365
+      }
+    },
+    {
+      "id": "dark-04",
+      "category": "dark",
+      "description": "Plaza tree at night",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:A dark tree.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:A_dark_tree.jpg",
+        "author": "SakoIas",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "a178bebff4b26826eb01250dabe85ec4383b4771",
+        "mime": "image/jpeg",
+        "width": 1200,
+        "height": 1600
+      }
+    },
+    {
+      "id": "dark-05",
+      "category": "dark",
+      "description": "Milky Way over a desert park",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Joshua Tree Night Sky (130205899).jpeg",
+        "page": "https://commons.wikimedia.org/wiki/File:Joshua_Tree_Night_Sky_(130205899).jpeg",
+        "author": "Daniel Griffith",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "d02aee1015d24b1bc15b006750378fad01661605",
+        "mime": "image/jpeg",
+        "width": 2048,
+        "height": 1365
+      }
+    },
+    {
+      "id": "not-park-01",
+      "category": "not_park",
+      "description": "Parking lot beside a mall",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "personal_info",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Aberdeen Centre, Richmond.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Aberdeen_Centre,_Richmond.jpg",
+        "author": "Teefanyy",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sha1": "43441f3f9641991a107cf39735cb4eea772b78c3",
+        "mime": "image/jpeg",
+        "width": 3456,
+        "height": 2592
+      }
+    },
+    {
+      "id": "not-park-02",
+      "category": "not_park",
+      "description": "Chinatown street with cars",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "personal_info",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Chinatown Victoria 2018.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Chinatown_Victoria_2018.jpg",
+        "author": "Wpcpey",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "37e31f32ff93b3c6d4616aa91c0f854621ddd78f",
+        "mime": "image/jpeg",
+        "width": 2736,
+        "height": 1824
+      }
+    },
+    {
+      "id": "not-park-03",
+      "category": "not_park",
+      "description": "Downtown street intersection",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "personal_info",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Victoria (7716320468).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Victoria_(7716320468).jpg",
+        "author": "Guilhem Vellut from Annecy, France",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "65e7fc1b2f07bf38e09e4aa6eab72ae7eddf6829",
+        "mime": "image/jpeg",
+        "width": 3648,
+        "height": 2736
+      }
+    },
+    {
+      "id": "not-park-04",
+      "category": "not_park",
+      "description": "Flint and brick wall close up",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2019-07-08 - Appareillage de briques et de galets.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2019-07-08_-_Appareillage_de_briques_et_de_galets.jpg",
+        "author": "Paul.schrepfer",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "6d69f051da49f35e5ee20062d41bc79d3c2265eb",
+        "mime": "image/jpeg",
+        "width": 4608,
+        "height": 3072
+      }
+    },
+    {
+      "id": "not-park-05",
+      "category": "not_park",
+      "description": "Brick wall at an angle",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:092 Palau del Marquès de Llió, c. Montcada (Barcelona), mur i volta de maó.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:092_Palau_del_Marqu%C3%A8s_de_Lli%C3%B3,_c._Montcada_(Barcelona),_mur_i_volta_de_ma%C3%B3.jpg",
+        "author": "Enric",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "fe7ac7ed22b399e53531499c2a60e9d7ad56f852",
+        "mime": "image/jpeg",
+        "width": 2816,
+        "height": 2112
+      }
+    },
+    {
+      "id": "not-park-06",
+      "category": "not_park",
+      "description": "Furnished living room with framed portraits",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:19th century Victorian living room, Auckland - 0816.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:19th_century_Victorian_living_room,_Auckland_-_0816.jpg",
+        "author": "Jorge Royan",
+        "licence": "CC BY-SA 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+        "sha1": "04ab386ff7ae48077ff51f1a681e4bdf3428dfc4",
+        "mime": "image/jpeg",
+        "width": 4262,
+        "height": 2781
+      }
+    },
+    {
+      "id": "not-park-07",
+      "category": "not_park",
+      "description": "Teacup and saucer close up",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:1960s cup.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:1960s_cup.jpg",
+        "author": "Attila Brunner",
+        "licence": "Attribution",
+        "licenceUrl": null,
+        "sha1": "948e51b044c8bc01d78212c04ad74c43e22a64f7",
+        "mime": "image/jpeg",
+        "width": 293,
+        "height": 224
+      }
+    },
+    {
+      "id": "not-park-08",
+      "category": "not_park",
+      "description": "Indoor floor being laid",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Halfway to done.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Halfway_to_done.jpg",
+        "author": "Suzcp6",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "58e605e11ef7d11537dc3cb52cfdbeb099ed7753",
+        "mime": "image/jpeg",
+        "width": 3072,
+        "height": 2304
+      }
+    },
+    {
+      "id": "not-park-09",
+      "category": "not_park",
+      "description": "Asphalt ground close up",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Asphalt frisch.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Asphalt_frisch.jpg",
+        "author": "Mailtosap",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "4382a8ca3b4b14b7c829ff3125615e620541b574",
+        "mime": "image/jpeg",
+        "width": 1024,
+        "height": 768
+      }
+    },
+    {
+      "id": "not-park-10",
+      "category": "not_park",
+      "description": "Plate of sweets",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:L'Isle-sur-la-Sorgue Nougat rose.JPG",
+        "page": "https://commons.wikimedia.org/wiki/File:L%27Isle-sur-la-Sorgue_Nougat_rose.JPG",
+        "author": "Marianne Casamance",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "9c11dac846d96d42b789e0c94989a40e99c3f44e",
+        "mime": "image/jpeg",
+        "width": 3456,
+        "height": 2653
+      }
+    },
+    {
+      "id": "not-photo-01",
+      "category": "not_photo",
+      "description": "Meme with caption text over a painting",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Goethe (Stieler 1828)-Meme.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Goethe_(Stieler_1828)-Meme.jpg",
+        "author": "Ursprungswerk: File:Goethe (Stieler 1828).jpg/Textzugabe von PantheraLeo1359531",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "8632aa437dc14028cdacf6b84de58efef706fa56",
+        "mime": "image/jpeg",
+        "width": 1972,
+        "height": 2432
+      }
+    },
+    {
+      "id": "not-photo-02",
+      "category": "not_photo",
+      "description": "Quote text over a foggy field",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Dont-let-your-dreams-be-memes-by-belgian-for-charlie.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Dont-let-your-dreams-be-memes-by-belgian-for-charlie.jpg",
+        "author": "BelgianTeheh",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "b0ff91d65213f87ad42537fcc374d409935e2d7f",
+        "mime": "image/jpeg",
+        "width": 650,
+        "height": 650
+      }
+    },
+    {
+      "id": "not-photo-03",
+      "category": "not_photo",
+      "description": "Street map screenshot",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:116 John Street relative to Burling Slip.png",
+        "page": "https://commons.wikimedia.org/wiki/File:116_John_Street_relative_to_Burling_Slip.png",
+        "author": "OpenStreetMap contributors",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "d08759a9e7d615622a28b885a5eddd13aba1a62c",
+        "mime": "image/png",
+        "width": 1844,
+        "height": 1710
+      }
+    },
+    {
+      "id": "not-photo-04",
+      "category": "not_photo",
+      "description": "Painting of a park path",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Raimund Antonín Wolf - V parku (kol. 1900).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Raimund_Anton%C3%ADn_Wolf_-_V_parku_(kol._1900).jpg",
+        "author": "Raimund Anton Wolf",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "76437bab7b72fcf125f66a4dea33ae4d5e3b65d3",
+        "mime": "image/jpeg",
+        "width": 1024,
+        "height": 684
+      }
+    },
+    {
+      "id": "not-photo-05",
+      "category": "not_photo",
+      "description": "Phone screenshot of upload rules",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Commons app tutorial page 3.png",
+        "page": "https://commons.wikimedia.org/wiki/File:Commons_app_tutorial_page_3.png",
+        "author": "Misaochan",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "f5dfee653e3fa703067fd2615de6bf00aae04cd4",
+        "mime": "image/png",
+        "width": 480,
+        "height": 800
+      }
+    },
+    {
+      "id": "not-photo-06",
+      "category": "not_photo",
+      "description": "Old coloured postcard of a park",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_photo"
+        ],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Children's playground in Volunteer Park, ca. 1910 - DPLA - 45ff0e123691cee0ed3685a4b0406002 (page 1).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Children%27s_playground_in_Volunteer_Park,_ca._1910_-_DPLA_-_45ff0e123691cee0ed3685a4b0406002_(page_1).jpg",
+        "author": "Toles, F.L",
+        "licence": "Public domain",
+        "licenceUrl": null,
+        "sha1": "309c10b96ac388b5786d093145426372838ec4cb",
+        "mime": "image/jpeg",
+        "width": 3298,
+        "height": 2104
+      }
+    },
+    {
+      "id": "personal-info-01",
+      "category": "personal_info",
+      "description": "Car rear with a readable BC licence plate",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "personal_info"
+        ],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Canadá, vehículos 1996 11.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Canad%C3%A1,_veh%C3%ADculos_1996_11.jpg",
+        "author": "LBM1948",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "cfca838f3670ab06ab1e88cc4ccf6b99543552ae",
+        "mime": "image/jpeg",
+        "width": 1051,
+        "height": 701
+      }
+    },
+    {
+      "id": "personal-info-02",
+      "category": "personal_info",
+      "description": "Specimen national identity card",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "personal_info"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "not_photo",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Dutch identity card front specimen issued 9 March 2014.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Dutch_identity_card_front_specimen_issued_9_March_2014.jpg",
+        "author": "Rijksdienst voor Identiteitsgegevens (RvIG)",
+        "licence": "CC0",
+        "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+        "sha1": "ecc20fa96a10f55a9df6fce393697ee594ed7fe1",
+        "mime": "image/jpeg",
+        "width": 1572,
+        "height": 1029
+      }
+    },
+    {
+      "id": "personal-info-03",
+      "category": "personal_info",
+      "description": "House number on a mailbox",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "personal_info"
+        ],
+        "optionalFlags": [
+          "not_park",
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2016-10 Montreal 38.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2016-10_Montreal_38.jpg",
+        "author": "0x010C",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "b88236b6c5c701b6a7618a2a43b0484cd52d80f4",
+        "mime": "image/jpeg",
+        "width": 5575,
+        "height": 3717
+      }
+    },
+    {
+      "id": "personal-info-04",
+      "category": "personal_info",
+      "description": "Guitar mailbox with owners' names",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "personal_info"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Buz & Lin's mailbox (7347106436).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Buz_%26_Lin%27s_mailbox_(7347106436).jpg",
+        "author": "Nicole Bratt from Seattle, WA, USA",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "1a19064c5b63a24031373066c565fd3202283ffa",
+        "mime": "image/jpeg",
+        "width": 4912,
+        "height": 3264
+      }
+    },
+    {
+      "id": "borderline-01",
+      "category": "borderline",
+      "description": "Marina at dusk, ducks on the water",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting",
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Stanley Park (23761667).jpeg",
+        "page": "https://commons.wikimedia.org/wiki/File:Stanley_Park_(23761667).jpeg",
+        "author": "Harrystyle",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "9323dfec603cb77266074be285b0b6f2d7809700",
+        "mime": "image/jpeg",
+        "width": 2048,
+        "height": 1365
+      }
+    },
+    {
+      "id": "borderline-02",
+      "category": "borderline",
+      "description": "Park name sign carved in concrete, close up",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Brownsville Bar Park (6088900948).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Brownsville_Bar_Park_(6088900948).jpg",
+        "author": "waferboard",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "90dca3921b4b5c8cd14d7ea11b249323c3f5ddbf",
+        "mime": "image/jpeg",
+        "width": 1000,
+        "height": 706
+      }
+    },
+    {
+      "id": "borderline-03",
+      "category": "borderline",
+      "description": "Trail kilometre marker on a tree, close up",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:BC Parks Mile (Kilometre) Marker.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:BC_Parks_Mile_(Kilometre)_Marker.jpg",
+        "author": "Cjstepney",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "e51a34729485c8edda88f4364747f0c3499ac967",
+        "mime": "image/jpeg",
+        "width": 3024,
+        "height": 4032
+      }
+    },
+    {
+      "id": "borderline-04",
+      "category": "borderline",
+      "description": "Misty river in autumn",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Flow, Goldstream Provincial Park.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Flow,_Goldstream_Provincial_Park.jpg",
+        "author": "Mike",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "157eef41c9a0c0ec0ebe7137d142830bdaaf62fb",
+        "mime": "image/jpeg",
+        "width": 1200,
+        "height": 1600
+      }
+    },
+    {
+      "id": "borderline-05",
+      "category": "borderline",
+      "description": "Foggy park at night with lights",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Devonian Harbour Park, foggy (10370335194).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Devonian_Harbour_Park,_foggy_(10370335194).jpg",
+        "author": "Colin Knowles from Vancouver",
+        "licence": "CC BY-SA 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+        "sha1": "02a999b95ce1dce27b8c962b8aa8455227722fd9",
+        "mime": "image/jpeg",
+        "width": 3591,
+        "height": 2475
+      }
+    },
+    {
+      "id": "borderline-06",
+      "category": "borderline",
+      "description": "Pond with ferns, small figures on a far dock",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:2020 06 25 Beacon Hill Park 14 (50295665798).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:2020_06_25_Beacon_Hill_Park_14_(50295665798).jpg",
+        "author": "Blake Handley from Victoria, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "505d8c8b0953365be0a140272f892b3822280a9d",
+        "mime": "image/jpeg",
+        "width": 5184,
+        "height": 3456
+      }
+    },
+    {
+      "id": "borderline-07",
+      "category": "borderline",
+      "description": "Seaside path, tiny figures on the beach",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Victoria beach Vancouver island (43814620615).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Victoria_beach_Vancouver_island_(43814620615).jpg",
+        "author": "dronepicr",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "df0d05a8462b344dd5c95d494349d2160131a4ba",
+        "mime": "image/jpeg",
+        "width": 6066,
+        "height": 4044
+      }
+    },
+    {
+      "id": "borderline-08",
+      "category": "borderline",
+      "description": "Waterfall pool, a tiny climber on the rock",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Ammonite Falls (9648648063).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Ammonite_Falls_(9648648063).jpg",
+        "author": "David Stanley from Nanaimo, Canada",
+        "licence": "CC BY 2.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+        "sha1": "71e249186eddf00bcf7663b91c20de4f4d79ac09",
+        "mime": "image/jpeg",
+        "width": 1024,
+        "height": 768
+      }
+    },
+    {
+      "id": "borderline-09",
+      "category": "borderline",
+      "description": "Rhododendrons, a person on a far bench",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "people"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Victoria BC, Canada - panoramio (11).jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Victoria_BC,_Canada_-_panoramio_(11).jpg",
+        "author": "MARELBU",
+        "licence": "CC BY 3.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+        "sha1": "73f52c6a0e815be6041cf80cfc1f965293aa3132",
+        "mime": "image/jpeg",
+        "width": 1639,
+        "height": 2298
+      }
+    },
+    {
+      "id": "borderline-10",
+      "category": "borderline",
+      "description": "Branches and rooftops through a train window, partly blurred",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting",
+          "not_park"
+        ]
+      },
+      "source": {
+        "type": "commons",
+        "title": "File:Greater Anglia Tottenham Hale to Liverpool Street looking out window 04.jpg",
+        "page": "https://commons.wikimedia.org/wiki/File:Greater_Anglia_Tottenham_Hale_to_Liverpool_Street_looking_out_window_04.jpg",
+        "author": "Acabashi",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "sha1": "f80e69912ae4c5e56e345119707913d3b9a58c36",
+        "mime": "image/jpeg",
+        "width": 7837,
+        "height": 5877
+      }
+    },
+    {
+      "id": "blurry-04",
+      "category": "blurry",
+      "description": "Forest trail, heavy Gaussian blur",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "gaussian_blur",
+          "radius": 14
+        },
+        "from": "good-09"
+      }
+    },
+    {
+      "id": "blurry-05",
+      "category": "blurry",
+      "description": "Meadow, horizontal camera shake",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "motion_blur",
+          "length": 61,
+          "angle": 0
+        },
+        "from": "good-29"
+      }
+    },
+    {
+      "id": "blurry-06",
+      "category": "blurry",
+      "description": "Playground, out of focus",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "gaussian_blur",
+          "radius": 9
+        },
+        "from": "good-14"
+      }
+    },
+    {
+      "id": "blurry-07",
+      "category": "blurry",
+      "description": "Footbridge, diagonal shake",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "motion_blur",
+          "length": 45,
+          "angle": 60
+        },
+        "from": "good-21"
+      }
+    },
+    {
+      "id": "dark-06",
+      "category": "dark",
+      "description": "Willow lagoon, underexposed",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "gamma_darken",
+          "gamma": 3.2,
+          "scale": 0.35
+        },
+        "from": "good-05"
+      }
+    },
+    {
+      "id": "dark-07",
+      "category": "dark",
+      "description": "Oak path, near black",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "gamma_darken",
+          "gamma": 3.8,
+          "scale": 0.25
+        },
+        "from": "good-32"
+      }
+    },
+    {
+      "id": "dark-08",
+      "category": "dark",
+      "description": "Pebble beach, very dark",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "lighting"
+        ],
+        "optionalFlags": []
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "gamma_darken",
+          "gamma": 3.0,
+          "scale": 0.4
+        },
+        "from": "good-22"
+      }
+    },
+    {
+      "id": "not-park-11",
+      "category": "not_park",
+      "description": "Pocket shot: dark blurred fabric",
+      "expected": {
+        "outcome": "reject",
+        "flags": [
+          "not_park"
+        ],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "pocket",
+          "radius": 6,
+          "gamma": 2.6,
+          "scale": 0.3
+        },
+        "fromCommons": {
+          "type": "commons",
+          "title": "File:Jeansfabric (cropped).jpg",
+          "page": "https://commons.wikimedia.org/wiki/File:Jeansfabric_(cropped).jpg",
+          "author": "Thegreenj",
+          "licence": "CC BY-SA 3.0",
+          "licenceUrl": "http://creativecommons.org/licenses/by-sa/3.0/",
+          "sha1": "e15ed01a1188a5d26202f5bc0336953847c137b9",
+          "mime": "image/jpeg",
+          "width": 2228,
+          "height": 2022
+        }
+      }
+    },
+    {
+      "id": "borderline-11",
+      "category": "borderline",
+      "description": "Calm cove, overexposed",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "overexpose",
+          "gain": 2.1
+        },
+        "from": "good-31"
+      }
+    },
+    {
+      "id": "borderline-12",
+      "category": "borderline",
+      "description": "Forest trail, left half blurred",
+      "expected": {
+        "outcome": "either",
+        "flags": [],
+        "optionalFlags": [
+          "lighting"
+        ]
+      },
+      "source": {
+        "type": "derived",
+        "transform": {
+          "op": "partial_blur",
+          "radius": 12,
+          "side": "left"
+        },
+        "from": "good-24"
+      }
+    }
+  ]
+}

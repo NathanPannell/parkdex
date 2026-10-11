@@ -30,13 +30,15 @@ function setup() {
   manager.founders.set("cattle-point", { handle: "tidepool_t", foundedAt: "2026-10-09T10:00:00.000Z", source: "existing", photo: demoPhoto(0, "plain"), width: 1280, height: 840 });
   const base: Omit<MemoryReview, "id" | "accountId" | "handle" | "parkId" | "parkName" | "feature" | "createdAt"> = {
     status: "pending", outcome: "reject", flags: ["people"], position: { lat: 48.452, lng: -123.398, accuracyM: 9 }, photo: demoPhoto(1, "people"),
-    width: 1280, height: 840, moderation: demoModeration({ verdict: 0.08, people: 0.91 }), checkedAt: "2026-10-10T09:58:00.000Z",
+    width: 1280, height: 840, moderation: demoModeration({ people: 0.91 }), checkedAt: "2026-10-10T09:58:00.000Z",
     decidedAt: null, reasonCode: null, reason: null, foundedParkId: null, seenAt: null,
   };
   reviews.requests.push(
     { ...base, id: IDS.meadowRival, accountId: "b", handle: "rival", parkId: "osm-way-4242", parkName: "Review Meadow", feature: MEADOW, createdAt: "2026-10-10T11:00:00.000Z" },
     { ...base, id: IDS.meadow, accountId: "a", handle: "trail_tia", parkId: "osm-way-4242", parkName: "Review Meadow", feature: MEADOW, createdAt: "2026-10-10T10:00:00.000Z" },
-    { ...base, id: IDS.beacon, accountId: "c", handle: "fern_gully", parkId: "beacon-hill", parkName: "Beacon Hill Park", feature: null, outcome: "unsure", flags: [], createdAt: "2026-10-10T12:00:00.000Z" },
+    { ...base, id: IDS.beacon, accountId: "c", handle: "fern_gully", parkId: "beacon-hill", parkName: "Beacon Hill Park", feature: null, outcome: "unsure", flags: [], createdAt: "2026-10-10T12:00:00.000Z",
+      // An unsure check stored before the verdict question was dropped.
+      moderation: demoModeration({ verdict: 0.62 }) },
     { ...base, id: IDS.founded, accountId: "d", handle: "owl_eyes", parkId: "cattle-point", parkName: "Cattle Point", feature: null, createdAt: "2026-10-10T13:00:00.000Z" },
   );
   const api = createDashboardApi({ ...dependencies, now: () => Date.parse(AT) });
@@ -79,13 +81,18 @@ test("a request shows its photo, the check's answers, the position and the outli
   assert.deepEqual(request.geometry, MEADOW.geometry);
   assert.deepEqual(request.osm, { type: "way", id: 4242 });
   assert.equal(request.moderation.answers.people.probabilities.yes, 0.91);
+  assert.equal(request.moderation.answers.verdict, undefined, "new checks ask only the flags");
+  assert.deepEqual(request.moderation.flagThresholds, { people: 0.8, lighting: 0.8, not_park: 0.95, inappropriate: 0.9, not_photo: 0.95, personal_info: 0.9 });
   assert.deepEqual(request.park, { inParkdex: false, hidden: false, founder: null });
   assert.equal(request.otherPending, 1);
   const photo = await call(`/api/parks/review/${IDS.meadow}/photo`);
   assert.equal(photo.status, 200);
   assert.equal(photo.headers.get("cache-control"), "private, no-store");
   assert.match(photo.headers.get("content-security-policy") ?? "", /default-src 'none'/);
-  assert.equal((await call(`/api/parks/review/${IDS.beacon}`).then(json)).request.geometry.type, "MultiPolygon", "a catalogue park shows its boundary");
+  const older = (await call(`/api/parks/review/${IDS.beacon}`).then(json)).request;
+  assert.equal(older.geometry.type, "MultiPolygon", "a catalogue park shows its boundary");
+  assert.equal(older.moderation.answers.verdict.probabilities.approve, 0.62, "an older check still has its verdict");
+  assert.equal(older.moderation.threshold, 0.8);
   assert.equal((await call("/api/parks/review/not-a-uuid")).status, 404);
   assert.equal((await call("/api/parks/review/55555555-5555-4555-8555-555555555555")).status, 404);
 });

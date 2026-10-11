@@ -244,7 +244,8 @@
 .rv-bars { display: grid; gap: 4px; }
 .rv-bar { display: grid; grid-template-columns: 118px minmax(0, 1fr) 40px; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
 .rv-bar strong { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
-.rv-bar__track { height: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.rv-bar__track { position: relative; height: 8px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.rv-bar__tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); opacity: 0.45; }
 .rv-bar__track span { display: block; height: 100%; border-radius: inherit; background: #8a978f; }
 .rv-bar--verdict .rv-bar__track span { background: var(--moss); }
 .rv-bar.is-flagged { color: var(--ink); }

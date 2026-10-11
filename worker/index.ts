@@ -17,7 +17,7 @@ import { handleFoundersRequest } from "./founders.js";
 import { createNeonFoundersStore, type FoundersStore } from "./founders-store.js";
 import { purgeFoundingPhotos, type FoundingPurgeResult } from "./founding-reviews.js";
 import { database } from "./db.js";
-import { createPhotoChecker, photoApproveThreshold, type PhotoChecker } from "./founderPhoto.js";
+import { createPhotoChecker, type PhotoChecker } from "./founderPhoto.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
 import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
@@ -49,8 +49,6 @@ export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, Prog
   POSTHOG_PROJECT_KEY?: string;
   POSTHOG_HOST?: string;
   ASSETS?: { fetch(request: Request): Promise<Response> };
-  /** Founder photos: the verdict probability needed to approve (default 0.8). */
-  FOUNDER_PHOTO_APPROVE_THRESHOLD?: string;
   /** OpenStreetMap services behind the park outline search. */
   OVERPASS_URLS?: string;
   OVERPASS_URL?: string;
@@ -378,7 +376,6 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     photoChecker: () => dependencies.photoChecker === undefined
       ? (env.OPENROUTER_API_KEY?.trim() ? createPhotoChecker(env, dependencies.fetch) : null)
       : dependencies.photoChecker,
-    threshold: photoApproveThreshold(env.FOUNDER_PHOTO_APPROVE_THRESHOLD),
     mutation: () => requireAccountMutation(request, env, authDependencies),
     optionalAccount: async () => {
       try {

@@ -1,20 +1,34 @@
 import { moderate, type ModerationAnswer, type ModerationEnv, type ModerationFetch, type ModerationQuestion } from "./moderation.js";
 
 /**
- * The founder photo check: one Decisions API call with an overall verdict and six yes/no flags,
- * each with a message the player sees. The wording was tuned with live probes (#126): a night
- * photo needs "too dark to see the place clearly, at night or in deep shade" to be flagged, and
- * "judge only the light" stops walls and screenshots from also being flagged as too dark.
+ * The founder photo check: one Decisions API call with six yes/no flags, each with a message the
+ * player sees. A photo is approved when no flag's "yes" is above that flag's threshold. The wording
+ * was tuned with live probes (#126): a night photo needs "too dark to see the place clearly, at
+ * night or in deep shade" to be flagged, and "judge only the light" stops walls and screenshots
+ * from also being flagged as too dark. There is no overall verdict question: in the photo lab
+ * (tools/photo-lab) the flags alone decided as well, and one question fewer costs less.
  */
 
-export const DEFAULT_PHOTO_APPROVE_THRESHOLD = 0.8;
-/** A flag counts when its "yes" is above this. */
-export const FLAG_THRESHOLD = 0.5;
 /** Photos are larger than the text checks; a 1,280 px JPEG answered in under a second in probes. */
 export const PHOTO_MODERATION_TIMEOUT_MS = 8_000;
 
 export const PHOTO_FLAGS = ["people", "lighting", "not_park", "inappropriate", "not_photo", "personal_info"] as const;
 export type PhotoFlag = (typeof PHOTO_FLAGS)[number];
+
+export type FlagThresholds = Readonly<Record<PhotoFlag, number>>;
+/**
+ * Each flag counts when its "yes" is above its own threshold. Chosen by the operator in the photo
+ * lab (tools/photo-lab) against 100 labelled photos: the model is often fairly sure of a flag on a
+ * good photo, so a flag has to be very likely before it turns a photo down.
+ */
+export const DEFAULT_FLAG_THRESHOLDS: FlagThresholds = Object.freeze({
+  people: 0.8,
+  lighting: 0.8,
+  not_park: 0.95,
+  inappropriate: 0.9,
+  not_photo: 0.95,
+  personal_info: 0.9,
+});
 
 export const FLAG_MESSAGES: Record<PhotoFlag, string> = {
   people: "We spotted people. Take one without anyone in it.",
@@ -25,6 +39,7 @@ export const FLAG_MESSAGES: Record<PhotoFlag, string> = {
   personal_info: "We can read personal details, like a licence plate or a house number. Take one without them.",
 };
 
+/** For `unsure` checks stored before the verdict question was dropped; new checks are never unsure. */
 export const UNSURE_MESSAGE = "We couldn't tell. Try another angle.";
 export const UNAVAILABLE_MESSAGE = "We couldn't check your photo. Try again in a moment.";
 
@@ -32,16 +47,7 @@ function flagQuestion(instructions: string, yes: string, no: string): Moderation
   return { type: "choice", instructions, criteria: { yes, no } };
 }
 
-export const PHOTO_QUESTIONS: Record<"verdict" | PhotoFlag, ModerationQuestion> = {
-  verdict: {
-    type: "choice",
-    instructions: "Can this photo be used as the public cover photo of a park in a family-friendly game?",
-    criteria: {
-      approve: "A clear, well-lit, ordinary outdoor photo of the park itself (grass, trees, paths, water, play areas or views) with nobody in it and nothing personal or offensive.",
-      reject: "It is not a usable public cover photo of a park.",
-      unsure: "It is not possible to tell.",
-    },
-  },
+export const PHOTO_QUESTIONS: Record<PhotoFlag, ModerationQuestion> = {
   people: flagQuestion(
     "Are any people visible anywhere in the photo, including small or distant figures, faces, body parts such as hands, or people in reflections?",
     "At least one person, face or body part is visible.",
@@ -74,11 +80,6 @@ export const PHOTO_QUESTIONS: Record<"verdict" | PhotoFlag, ModerationQuestion> 
   ),
 };
 
-export function photoApproveThreshold(value: string | undefined): number {
-  const number = value === undefined || value.trim() === "" ? NaN : Number(value);
-  return Number.isFinite(number) && number >= 0.5 && number <= 1 ? number : DEFAULT_PHOTO_APPROVE_THRESHOLD;
-}
-
 export interface PhotoAnswers {
   model: string;
   /** Per question, the probability of each label. */
@@ -87,8 +88,7 @@ export interface PhotoAnswers {
 
 export type PhotoDecision =
   | { outcome: "approve"; flags: [] }
-  | { outcome: "reject"; flags: PhotoFlag[] }
-  | { outcome: "unsure"; flags: [] };
+  | { outcome: "reject"; flags: PhotoFlag[] };
 
 function probability(answer: PhotoAnswers["answers"][string] | undefined, label: string): number {
   if (!answer) return 0;
@@ -98,20 +98,18 @@ function probability(answer: PhotoAnswers["answers"][string] | undefined, label:
 }
 
 /**
- * Approve only when the verdict is `approve` with at least the threshold and no flag is yes.
- * Any flag gives a rejection naming those flags, most likely first. Anything else is unsure.
+ * Approve when no flag's "yes" is above its threshold; otherwise reject, naming the flags that
+ * are, most likely first. A flag missing from `flagThresholds` uses its default. Any `verdict` in
+ * older stored answers is ignored. The answers must be complete: createPhotoChecker returns null
+ * when a flag is missing, so a partial answer is "unavailable", never an approval.
  */
-export function decidePhoto(result: PhotoAnswers, threshold: number): PhotoDecision {
+export function decidePhoto(result: PhotoAnswers, flagThresholds: Partial<FlagThresholds> = DEFAULT_FLAG_THRESHOLDS): PhotoDecision {
   const flags = PHOTO_FLAGS
     .map((flag) => ({ flag, p: probability(result.answers[flag], "yes") }))
-    .filter((item) => item.p > FLAG_THRESHOLD)
+    .filter((item) => item.p > (flagThresholds[item.flag] ?? DEFAULT_FLAG_THRESHOLDS[item.flag]))
     .sort((a, b) => b.p - a.p)
     .map((item) => item.flag);
-  if (flags.length) return { outcome: "reject", flags };
-  const verdict = result.answers.verdict;
-  const top = verdict ? Object.entries(verdict.probabilities).sort((a, b) => b[1] - a[1])[0]?.[0] ?? verdict.choice : null;
-  if (top === "approve" && probability(verdict, "approve") >= threshold) return { outcome: "approve", flags: [] };
-  return { outcome: "unsure", flags: [] };
+  return flags.length ? { outcome: "reject", flags } : { outcome: "approve", flags: [] };
 }
 
 export interface PhotoCheckInput {
@@ -148,6 +146,8 @@ export function createPhotoChecker(env: ModerationEnv, fetcher?: ModerationFetch
       if (answer.type !== "choice") return null;
       answers[name] = { choice: answer.choice, probabilities: answer.probabilities };
     }
+    // moderate() already requires every question; checked again because a missing flag would approve.
+    if (PHOTO_FLAGS.some((flag) => !answers[flag])) return null;
     return { model: result.model, answers };
   };
 }

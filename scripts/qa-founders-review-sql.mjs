@@ -24,7 +24,7 @@ const { createFeedbackWorker } = await import('../worker/index.ts');
 const { publishStatements } = await import('../operator/server/drafts.ts');
 const { createDashboardApi } = await import('../operator/server/api.ts');
 const { EXIF_GPS_JPEG } = await import('../worker/fixtures/exif-gps-jpeg.ts');
-const { PHOTO_FLAGS } = await import('../worker/founderPhoto.ts');
+const { DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS } = await import('../worker/founderPhoto.ts');
 const { createSqlFoundingReviewStore, purgeFoundingPhotos } = await import('../worker/founding-reviews.ts');
 const { databaseSqlRunner } = await import('../worker/proposalReview.ts');
 const { database } = await import('../worker/db.ts');
@@ -47,14 +47,12 @@ const IN_GREEN = { lat: 49.1015, lng: -123.0975, accuracyM: 12 };
 const RACE = 'municipal-qa-review-race';
 const IN_RACE = { lat: 49.1115, lng: -123.0975, accuracyM: 6 };
 
-const answers = (approve, flags = {}) => ({
+// The model's answers: each flag's yes, 0.01 unless given.
+const answers = (flags = {}) => ({
   model: 'qa-model',
-  answers: {
-    verdict: { choice: approve >= 0.5 ? 'approve' : 'reject', probabilities: { approve, reject: 1 - approve } },
-    ...Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: (flags[flag] ?? 0.01) > 0.5 ? 'yes' : 'no', probabilities: { yes: flags[flag] ?? 0.01, no: 1 - (flags[flag] ?? 0.01) } }])),
-  },
+  answers: Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: (flags[flag] ?? 0.01) > 0.5 ? 'yes' : 'no', probabilities: { yes: flags[flag] ?? 0.01, no: 1 - (flags[flag] ?? 0.01) } }])),
 });
-let verdict = answers(0.03, { people: 0.97 });
+let photoAnswers = answers({ people: 0.97 });
 
 const players = new Map();
 const authStore = {
@@ -73,7 +71,7 @@ const pending = [];
 const worker = createFeedbackWorker({
   auth: { createStore: () => authStore },
   osmClient: { async search() { return []; }, async feature(ref) { return ref.type === MEADOW.type && ref.id === MEADOW.id ? MEADOW : null; } },
-  photoChecker: async () => verdict,
+  photoChecker: async () => photoAnswers,
   now: () => clock,
 });
 const env = {
@@ -195,6 +193,8 @@ try {
     [a.id, attemptId, `osm-way-${MEADOW.id}`, 'way', MEADOW.id, 'reject', ['people'], 'pending']);
   assert.equal(stored.photo_sha256, hash((await pool.query('SELECT photo_bytes FROM kip_founders.review_requests WHERE id = $1', [meadow.requestId])).rows[0].photo_bytes));
   assert.equal(stored.moderation.answers.people.probabilities.yes, 0.97);
+  assert.equal(stored.moderation.answers.verdict, undefined, 'only the flags are asked');
+  assert.deepEqual(stored.moderation.flagThresholds, { ...DEFAULT_FLAG_THRESHOLDS });
   assert.equal(await count('SELECT count(*) FROM kip_founders.check_photos WHERE attempt_id = $1', [attemptId]), 0, 'the request holds the only copy');
   assert.deepEqual(await json(await review(a.token, attemptId)), meadow, 'the same attempt answers the same request');
   log('a rejected photo is kept for a day and a review request moves it, with the position, target and answers');
@@ -224,6 +224,14 @@ try {
   assert.deepEqual(detail.position, IN_MEADOW);
   assert.deepEqual(detail.geometry, MEADOW.geometry);
   assert.equal(detail.otherPending, 1);
+  assert.deepEqual([detail.moderation.threshold, detail.moderation.flagThresholds], [null, { ...DEFAULT_FLAG_THRESHOLDS }]);
+  // A request stored before the verdict question was dropped still reads, with its verdict and threshold.
+  await pool.query(
+    `UPDATE kip_founders.review_requests SET moderation = $2::jsonb WHERE id = $1`,
+    [rival.requestId, JSON.stringify({ version: 1, model: 'qa-model', threshold: 0.8, answers: { verdict: { choice: 'reject', probabilities: { approve: 0.1, reject: 0.9 } }, ...answers({ people: 0.97 }).answers }, flags: ['people'] })],
+  );
+  const olderDetail = (await json(await operator('GET', `/api/parks/review/${rival.requestId}`))).request;
+  assert.deepEqual([olderDetail.moderation.threshold, olderDetail.moderation.flagThresholds, olderDetail.moderation.answers.verdict.probabilities.approve], [0.8, null, 0.1]);
   const operatorPhoto = await operator('GET', `/api/parks/review/${meadow.requestId}/photo`);
   assert.equal(operatorPhoto.status, 200);
   assert.equal(hash(Buffer.from(await operatorPhoto.arrayBuffer())), stored.photo_sha256);
@@ -289,9 +297,9 @@ try {
 
   // The supersede race: an instant founding closes a pending request in its own transaction,
   // and an approval racing an instant founding leaves exactly one founder.
-  verdict = answers(0.03, { lighting: 0.9 });
+  photoAnswers = answers({ lighting: 0.9 });
   const raced = await rejectedRequest(c, { parkId: GREEN }, IN_GREEN);
-  verdict = answers(0.95);
+  photoAnswers = answers();
   const instant = await found(b.token, { parkId: GREEN }, IN_GREEN);
   assert.equal(instant.status, 200, await instant.clone().text());
   assert.equal((await requestRow(raced.requestId)).status, 'superseded');
@@ -300,10 +308,10 @@ try {
   assert.equal(late.status, 409);
   assert.equal((await json(late)).error.code, 'review_decided');
 
-  verdict = answers(0.03, { people: 0.9 });
+  photoAnswers = answers({ people: 0.9 });
   const racers = await Promise.all([account('r1'), account('r2')]);
   const contested = await rejectedRequest(racers[0], { parkId: RACE }, IN_RACE);
-  verdict = answers(0.95);
+  photoAnswers = answers();
   const [operatorResponse, instantResponse] = await Promise.all([
     operator('POST', `/api/parks/review/${contested.requestId}/approve`),
     found(racers[1].token, { parkId: RACE }, IN_RACE),
@@ -316,14 +324,14 @@ try {
   log('an instant founding supersedes pending requests in its transaction, and a race leaves one founder');
 
   // Three requests a Victoria day.
-  verdict = answers(0.4);
+  photoAnswers = answers({ lighting: 0.9 });
   const limiter = await account('limit');
   for (const name of ['QA Limit One', 'QA Limit Two', 'QA Limit Three', 'QA Limit Four']) {
     const id = `municipal-qa-review-${name.toLowerCase().replace(/\s+/g, '-')}`;
     const index = ['QA Limit One', 'QA Limit Two', 'QA Limit Three', 'QA Limit Four'].indexOf(name);
     await publishPark(id, name, box(-123.2, 49.2 + index * 0.01, -123.195, 49.203 + index * 0.01));
     const attempt = randomUUID();
-    assert.equal((await json(await found(limiter.token, { parkId: id }, { lat: 49.2015 + index * 0.01, lng: -123.1975, accuracyM: 5 }, attempt))).outcome, 'unsure');
+    assert.equal((await json(await found(limiter.token, { parkId: id }, { lat: 49.2015 + index * 0.01, lng: -123.1975, accuracyM: 5 }, attempt))).outcome, 'rejected');
     const response = await review(limiter.token, attempt);
     if (index < 3) assert.equal(response.status, 200, name);
     else {
@@ -339,7 +347,7 @@ try {
   log('3 requests a Victoria day, and founding_review_requested is stored');
 
   // Retention: kept check photos after a day, decided requests' photos after 90 days.
-  verdict = answers(0.03, { people: 0.97 });
+  photoAnswers = answers({ people: 0.97 });
   const stale = randomUUID();
   await found(c.token, { osm: { type: 'way', id: MEADOW.id } }, IN_MEADOW, stale);
   assert.equal(await count('SELECT count(*) FROM kip_founders.check_photos WHERE attempt_id = $1', [stale]), 0, 'a founded park keeps nothing for review');

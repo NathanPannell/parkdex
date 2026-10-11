@@ -46,10 +46,7 @@ const IN_HIDDEN = { lat: 49.1215, lng: -123.0975, accuracyM: 12 };
 
 const approve = {
   model: 'qa-model',
-  answers: {
-    verdict: { choice: 'approve', probabilities: { approve: 0.94, reject: 0.04, unsure: 0.02 } },
-    ...Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: 'no', probabilities: { yes: 0.01, no: 0.99 } }])),
-  },
+  answers: Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: 'no', probabilities: { yes: 0.01, no: 0.99 } }])),
 };
 
 // Sign-in is a stand-in keyed by bearer token; everything else reads and writes the database.

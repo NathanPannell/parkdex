@@ -1,6 +1,6 @@
 import { catalogueMatch } from "./catalogueMatch.js";
 import {
-  decidePhoto, FLAG_MESSAGES, UNAVAILABLE_MESSAGE, UNSURE_MESSAGE,
+  decidePhoto, DEFAULT_FLAG_THRESHOLDS, FLAG_MESSAGES, UNAVAILABLE_MESSAGE, UNSURE_MESSAGE,
   type PhotoAnswers, type PhotoChecker, type PhotoFlag,
 } from "./founderPhoto.js";
 import type { FoundedRecord, FoundersStore, FoundResult, KeptAttempt } from "./founders-store.js";
@@ -17,7 +17,7 @@ import { HttpError, readJsonBody } from "./validation.js";
  * A signed-in player with a handle, standing in the park, sends one photo. When the model
  * approves it, one transaction publishes the OpenStreetMap park (or confirms the catalogue
  * park), stores the photo as the cover, records today's visit and awards the founder bonus.
- * A rejected or unsure photo is kept for a day, so the player can ask the operator for a manual
+ * A rejected photo is kept for a day, so the player can ask the operator for a manual
  * review of it (#153, `POST /api/parks/found/review`).
  */
 
@@ -48,7 +48,6 @@ export interface FoundersHandlers {
   osm(): OsmClient;
   /** Null when the photo model is not configured: every check is "unavailable". */
   photoChecker(): PhotoChecker | null;
-  threshold: number;
   mutation(): Promise<{ accountId: string }>;
   /** The signed-in account, or null for anyone else. Never throws for a missing session. */
   optionalAccount(): Promise<{ accountId: string } | null>;
@@ -157,7 +156,10 @@ function flagList(flags: readonly string[]) {
   return flags.filter((flag): flag is PhotoFlag => flag in FLAG_MESSAGES).map((code) => ({ code, message: FLAG_MESSAGES[code] }));
 }
 
-/** `reviewableUntil` is when the kept photo goes, or null once it is gone. */
+/**
+ * `reviewableUntil` is when the kept photo goes, or null once it is gone. New checks are never
+ * unsure; an `unsure` here is a retry of a check stored before the verdict question was dropped.
+ */
 function checkResponse(outcome: "reject" | "unsure", flags: readonly string[], keptAt: string | null): Response {
   const list = outcome === "reject" ? flagList(flags) : [];
   return json({
@@ -212,8 +214,9 @@ async function resolveTarget(handlers: FoundersHandlers, store: FoundersStore, t
   return { kind: "osm", parkId: publishedId, feature, nearby };
 }
 
-function moderationRecord(answers: PhotoAnswers | null, threshold: number, at: string, flags: string[]) {
-  return { version: 1, checkedAt: at, model: answers?.model ?? null, threshold, answers: answers?.answers ?? null, flags };
+/** Version 1 records also have `threshold` (the old verdict's approve threshold) and a `verdict` answer. */
+function moderationRecord(answers: PhotoAnswers | null, at: string, flags: string[]) {
+  return { version: 2, checkedAt: at, model: answers?.model ?? null, flagThresholds: DEFAULT_FLAG_THRESHOLDS, answers: answers?.answers ?? null, flags };
 }
 
 async function postFound(request: Request, handlers: FoundersHandlers): Promise<Response> {
@@ -255,7 +258,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
       parkKind: resolved.kind === "osm" ? resolved.feature.kind : resolved.label,
     }).catch(() => null)
     : null;
-  const decision = answers ? decidePhoto(answers, handlers.threshold) : null;
+  const decision = answers ? decidePhoto(answers) : null;
   const outcome = decision?.outcome ?? "unavailable";
   const flags: string[] = decision?.flags ?? [];
   const photo = { sha256: photoSha256, base64: Buffer.from(input.photo.bytes).toString("base64"), width: input.photo.width, height: input.photo.height };
@@ -268,14 +271,14 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   } : null;
   await store.recordCheck({
     id: handlers.uuid(), accountId, attemptId: input.attemptId, parkId: resolved.parkId, osm, at, outcome, flags, photoSha256,
-    moderation: answers ? moderationRecord(answers, handlers.threshold, at, flags) : null,
+    moderation: answers ? moderationRecord(answers, at, flags) : null,
     keep,
   });
   handlers.emit("founder_photo_checked", { parkId: resolved.parkId, outcome, flags: flags.join(","), source: resolved.kind === "osm" ? "osm_new" : "existing" });
   if (!decision) throw new HttpError(503, "photo_check_unavailable", UNAVAILABLE_MESSAGE);
   if (decision.outcome !== "approve") return checkResponse(decision.outcome, decision.flags, at);
 
-  const common = { accountId, attemptId: input.attemptId, visitId, at, photo, moderation: moderationRecord(answers, handlers.threshold, at, []) };
+  const common = { accountId, attemptId: input.attemptId, visitId, at, photo, moderation: moderationRecord(answers, at, []) };
   let result: FoundResult;
   let source: "osm_new" | "existing" = resolved.kind === "osm" ? "osm_new" : "existing";
   if (resolved.kind === "osm") {
@@ -293,7 +296,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
         id: proposalId,
         // The shape the operator dashboard shows for proposals.
         moderation: {
-          version: 1, checkedAt: at, model: answers?.model ?? null, threshold: handlers.threshold,
+          version: 2, checkedAt: at, model: answers?.model ?? null, flagThresholds: DEFAULT_FLAG_THRESHOLDS,
           answers: answers?.answers ?? null, reasons: ["Founded by a signed-in player standing in the park, with an approved photo."],
           osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, areaM2: feature.areaM2, distanceM, containsPin: distanceM === 0 },
           nearby: [],
