@@ -16,6 +16,20 @@ export const PHOTO_MODERATION_TIMEOUT_MS = 8_000;
 export const PHOTO_FLAGS = ["people", "lighting", "not_park", "inappropriate", "not_photo", "personal_info"] as const;
 export type PhotoFlag = (typeof PHOTO_FLAGS)[number];
 
+export type FlagThresholds = Readonly<Record<PhotoFlag, number>>;
+/**
+ * Each flag counts when its "yes" is above its own threshold. Production uses the same value for
+ * every flag; the photo lab (tools/photo-lab) tunes them one by one against labelled photos.
+ */
+export const DEFAULT_FLAG_THRESHOLDS: FlagThresholds = Object.freeze({
+  people: FLAG_THRESHOLD,
+  lighting: FLAG_THRESHOLD,
+  not_park: FLAG_THRESHOLD,
+  inappropriate: FLAG_THRESHOLD,
+  not_photo: FLAG_THRESHOLD,
+  personal_info: FLAG_THRESHOLD,
+});
+
 export const FLAG_MESSAGES: Record<PhotoFlag, string> = {
   people: "We spotted people. Take one without anyone in it.",
   lighting: "It's too dark or blurry. Take one in good light and hold the phone steady.",
@@ -100,11 +114,12 @@ function probability(answer: PhotoAnswers["answers"][string] | undefined, label:
 /**
  * Approve only when the verdict is `approve` with at least the threshold and no flag is yes.
  * Any flag gives a rejection naming those flags, most likely first. Anything else is unsure.
+ * A flag missing from `flagThresholds` uses FLAG_THRESHOLD.
  */
-export function decidePhoto(result: PhotoAnswers, threshold: number): PhotoDecision {
+export function decidePhoto(result: PhotoAnswers, threshold: number, flagThresholds: Partial<FlagThresholds> = DEFAULT_FLAG_THRESHOLDS): PhotoDecision {
   const flags = PHOTO_FLAGS
     .map((flag) => ({ flag, p: probability(result.answers[flag], "yes") }))
-    .filter((item) => item.p > FLAG_THRESHOLD)
+    .filter((item) => item.p > (flagThresholds[item.flag] ?? FLAG_THRESHOLD))
     .sort((a, b) => b.p - a.p)
     .map((item) => item.flag);
   if (flags.length) return { outcome: "reject", flags };

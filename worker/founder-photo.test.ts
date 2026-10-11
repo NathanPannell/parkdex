@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  createPhotoChecker, decidePhoto, FLAG_MESSAGES, PHOTO_FLAGS, PHOTO_MODERATION_TIMEOUT_MS, PHOTO_QUESTIONS, photoApproveThreshold, photoState,
+  createPhotoChecker, decidePhoto, DEFAULT_FLAG_THRESHOLDS, FLAG_MESSAGES, FLAG_THRESHOLD, PHOTO_FLAGS, PHOTO_MODERATION_TIMEOUT_MS, PHOTO_QUESTIONS, photoApproveThreshold, photoState,
   type PhotoAnswers,
 } from "./founderPhoto.ts";
 
@@ -39,6 +39,41 @@ test("each flag rejects the photo and names itself, most likely first", () => {
 test("a rejecting verdict with no flag, or an unsure one, asks for another photo", () => {
   assert.deepEqual(decidePhoto(answers({ approve: 0.25, reject: 0.7, unsure: 0.05 }), 0.8), { outcome: "unsure", flags: [] });
   assert.deepEqual(decidePhoto(answers({ approve: 0.3, reject: 0.2, unsure: 0.5 }), 0.8), { outcome: "unsure", flags: [] });
+});
+
+test("the default flag thresholds are the shared production threshold", () => {
+  assert.deepEqual(Object.keys(DEFAULT_FLAG_THRESHOLDS), [...PHOTO_FLAGS]);
+  for (const flag of PHOTO_FLAGS) assert.equal(DEFAULT_FLAG_THRESHOLDS[flag], FLAG_THRESHOLD, flag);
+  assert.ok(Object.isFrozen(DEFAULT_FLAG_THRESHOLDS));
+});
+
+test("passing the defaults, or nothing, decides exactly as before", () => {
+  // A grid of verdicts and flag probabilities around both thresholds.
+  const levels = [0, 0.3, 0.49, 0.5, 0.51, 0.7, 0.79, 0.8, 0.81, 0.95, 1];
+  for (const approve of levels) {
+    for (const flagP of levels) {
+      for (const flag of PHOTO_FLAGS) {
+        const result = answers({ approve, reject: (1 - approve) * 0.7, unsure: (1 - approve) * 0.3 }, { [flag]: flagP });
+        const before = decidePhoto(result, 0.8);
+        assert.deepEqual(decidePhoto(result, 0.8, DEFAULT_FLAG_THRESHOLDS), before);
+        assert.deepEqual(decidePhoto(result, 0.8, {}), before, "a missing flag uses the shared threshold");
+        assert.equal(before.outcome === "reject", flagP > FLAG_THRESHOLD, `${flag} at ${flagP}`);
+      }
+    }
+  }
+});
+
+test("each flag can have its own threshold", () => {
+  const result = answers({ approve: 0.9, reject: 0.08, unsure: 0.02 }, { people: 0.62, lighting: 0.55 });
+  assert.deepEqual(decidePhoto(result, 0.8), { outcome: "reject", flags: ["people", "lighting"] });
+  assert.deepEqual(decidePhoto(result, 0.8, { ...DEFAULT_FLAG_THRESHOLDS, lighting: 0.6 }), { outcome: "reject", flags: ["people"] });
+  assert.deepEqual(decidePhoto(result, 0.8, { ...DEFAULT_FLAG_THRESHOLDS, lighting: 0.6, people: 0.7 }), { outcome: "approve", flags: [] });
+  // Still strictly above: a flag exactly at its threshold does not count.
+  assert.deepEqual(decidePhoto(result, 0.8, { people: 0.62, lighting: 0.55 }), { outcome: "approve", flags: [] });
+  assert.deepEqual(decidePhoto(result, 0.8, { people: 0.3 }), { outcome: "reject", flags: ["people", "lighting"] });
+  // Lowering a threshold can flag a photo the shared threshold lets through.
+  assert.deepEqual(decidePhoto(answers({ approve: 0.95, reject: 0.05 }, { personal_info: 0.3 }), 0.8, { personal_info: 0.25 }),
+    { outcome: "reject", flags: ["personal_info"] });
 });
 
 test("every flag has a plain message for the player", () => {
