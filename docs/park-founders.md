@@ -9,7 +9,18 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 - **Be there.** The position must be inside the outline, allowing `min(max(accuracyM, 10), 35)` metres outside its edge. Accuracy worse than 100 m is refused.
 - **Outline.** A catalogue park uses its boundary. An OpenStreetMap park uses `kip_osm.parks`, then Nominatim and Overpass. An outline that is already a Parkdex park (`catalogueMatch`) is founded as that park, never published again. Unnamed OpenStreetMap outlines cannot be founded. Hidden parks are refused.
 - **Photo.** JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
-- **Check.** One Decisions API call: `verdict` (approve, reject, unsure) and six yes/no flags. Approved only when `verdict` is `approve` with at least 0.8 (`FOUNDER_PHOTO_APPROVE_THRESHOLD`) and no flag is above its threshold, 0.5 for each (`DEFAULT_FLAG_THRESHOLDS`). `tools/photo-lab` measures these thresholds against 100 labelled photos. Any flag rejects the photo with those flags; anything else is unsure. No answer within 8 s, or no `OPENROUTER_API_KEY`, is a retryable 503.
+- **Check.** One Decisions API call with six yes/no flags and no overall verdict. A photo is approved when no flag's "yes" probability is above that flag's threshold. Otherwise it is rejected, naming those flags, most likely first. The check never answers `unsure`. The thresholds (`DEFAULT_FLAG_THRESHOLDS` in `worker/founderPhoto.ts`) were chosen by the operator in `tools/photo-lab` against 100 labelled photos (#160):
+
+  | Flag | Counts when yes is above |
+  | --- | --- |
+  | `people` | 0.8 |
+  | `lighting` | 0.8 |
+  | `not_park` | 0.95 |
+  | `inappropriate` | 0.9 |
+  | `not_photo` | 0.95 |
+  | `personal_info` | 0.9 |
+
+  No answer within 8 s, an answer missing any flag, or no `OPENROUTER_API_KEY` is a retryable 503 (`photo_check_unavailable`). Before #160 the call also asked an overall `verdict` (approve, reject, unsure); a photo needed `approve` at 0.8 or more and no flag above 0.5, and anything else was `unsure`. Checks stored then keep their `verdict` answer and `threshold` in `moderation`; newer ones store `flagThresholds` instead.
 - **Founding.** One transaction under an advisory lock on the park (`worker/founding.ts`): the founder guard, for an OpenStreetMap park the proposal audit row (with `founder_account_id`), the draft and the operator dashboard's publish statements, then the founder row with the photo, then closing pending review requests for the park as `superseded`, then `kip_game.record_visit`. The park's marker is a point inside the part of the outline the founder is in, never their position. A second founder gets 409.
 - **Limits.** 20 photo checks an hour and 5 foundings a day per account.
 - **Account deletion** removes the founder row, the photo and the bonus. The park stays and can be founded again.
@@ -68,10 +79,15 @@ Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys; 
 }
 ```
 
-200, not approved (`flags` is empty when unsure; `message` is the first flag's message or the unsure message):
+200, not approved (`message` is the first flag's message):
 
 ```json
 { "outcome": "rejected", "flags": [{ "code": "people", "message": "We spotted people. Take one without anyone in it." }], "message": "We spotted people. Take one without anyone in it." }
+```
+
+`unsure` stays a valid outcome in the contract, and installed apps handle it, but the server no longer sends it for new checks. Only a retry of an attempt checked as unsure before #160 still answers:
+
+```json
 { "outcome": "unsure", "flags": [], "message": "We couldn't tell. Try another angle." }
 ```
 
@@ -124,16 +140,16 @@ Public; signed-in callers also get their own count. `Cache-Control` is `public, 
 
 - `GET /api/game/flags` adds `founders: [{ parkId, handle, coverUrl }]` for every founded park.
 - `GET /api/game/me` adds `founderPoints`, the bonus already included in `score`, and `foundingReviews` (see [Manual review](#manual-review)).
-- `POST /api/parks/found` adds `reviewableUntil` to `rejected` and `unsure` answers (see [Manual review](#manual-review)).
+- `POST /api/parks/found` adds `reviewableUntil` to `rejected` answers, and to the `unsure` answers of older checks (see [Manual review](#manual-review)).
 - `POST /api/park-proposals` answers 410 `proposals_retired` with "Update Parkdex to add parks. Now you can become a park's founder while you're standing in it." Installed builds show messages up to 200 characters as the error and never retry, so 410 is safe; reviewing stored proposals stays in the operator dashboard.
 
 ## Manual review
 
-When the photo check rejects a founding photo or can't decide (`rejected` or `unsure`), the player can ask the operator to look at it (#153). Design decided with the operator on 2026-10-10.
+When the photo check rejects a founding photo (`rejected`, or `unsure` for a check made before the overall verdict was dropped), the player can ask the operator to look at it (#153). Design decided with the operator on 2026-10-10.
 
 ### Rules
 
-- **Photo outcomes only.** `rejected` and `unsure` can be appealed. Not being in the park, hidden and unnamed parks, "already founded" and `photo_check_unavailable` stay hard failures.
+- **Photo outcomes only.** `rejected` and older `unsure` checks can be appealed. Not being in the park, hidden and unnamed parks, "already founded" and `photo_check_unavailable` stay hard failures.
 - **Photo only.** The request reuses the stored attempt: the photo with its metadata already removed, the position, the target, the flags and the model's answers. The player sends only the `attemptId`, never the photo again, and no note.
 - **Kept for a day.** The photo and position of a `rejected` or `unsure` check are kept for 24 hours (`kip_founders.check_photos`), then deleted by the daily retention run. A request keeps its own copy (`kip_founders.review_requests`) until 90 days after the decision. An approved photo lives on as the park's cover.
 - **Limits.** 3 requests per account per Victoria day (America/Vancouver), and one pending request per account and park.
@@ -144,10 +160,10 @@ When the photo check rejects a founding photo or can't decide (`rejected` or `un
 
 ### `POST /api/parks/found` (addition)
 
-`rejected` and `unsure` answers add `reviewableUntil`, the time until which `POST /api/parks/found/review` can use this attempt (24 hours after the check). It is `null` when the photo is no longer kept. A retry with the same `attemptId` answers the same.
+`rejected` answers (and older `unsure` ones) add `reviewableUntil`, the time until which `POST /api/parks/found/review` can use this attempt (24 hours after the check). It is `null` when the photo is no longer kept. A retry with the same `attemptId` answers the same.
 
 ```json
-{ "outcome": "unsure", "flags": [], "message": "We couldn't tell. Try another angle.", "reviewableUntil": "2026-10-11T17:00:00.000Z" }
+{ "outcome": "rejected", "flags": [{ "code": "lighting", "message": "It's too dark or blurry. Take one in good light and hold the phone steady." }], "message": "It's too dark or blurry. Take one in good light and hold the phone steady.", "reviewableUntil": "2026-10-11T17:00:00.000Z" }
 ```
 
 ### `POST /api/parks/found/review`
@@ -253,7 +269,7 @@ What a new founding of the outline checks, and what the removal does about each:
 
 ## Analytics
 
-`founder_photo_checked` (`outcome`: approve, reject, unsure or unavailable; `flags`: comma-separated; `source`: osm_new or existing) for every check, and `park_founded` (`source`) for every founding, plus the usual visit outcome event. Routes group park IDs as `/api/parks/:park/...`.
+`founder_photo_checked` (`outcome`: approve, reject or unavailable, and unsure before #160; `flags`: comma-separated; `source`: osm_new or existing) for every check, and `park_founded` (`source`) for every founding, plus the usual visit outcome event. Routes group park IDs as `/api/parks/:park/...`.
 
 `founding_review_requested` (`outcome`: reject or unsure; `source`: osm_new or existing) when a player asks for a review, and `founding_review_decided` (`decision`: approved or rejected; `reason_code`; `waited_minutes`) when the operator decides, with route `POST /operator/parks/review/:id/approve` or `/reject` and the player's account.
 
