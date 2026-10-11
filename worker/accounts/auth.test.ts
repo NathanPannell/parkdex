@@ -584,14 +584,75 @@ test("verification and reset Resend requests configure redirect rejection", asyn
   assert.match(requests.find((request) => request.payload.subject.includes("password"))?.payload.text ?? "", /#resetToken=[A-Za-z0-9_-]{43}/u);
 });
 
-test("Google-only accounts cannot acquire password access through password reset", async () => {
+test("Google-only accounts get sign-in directions from password reset, never a reset token", async () => {
   const r = rig();
   r.store.addGoogleOnlyAccount("google-only@example.test", "stable-google-subject");
-  const response = await call(r, "/api/auth/password-reset/request", { email: "google-only@example.test" });
+  const response = await call(r, "/api/auth/password-reset/request", { email: "Google-Only@example.test" });
+  assert.equal(response.status, 202);
+  assert.deepEqual(await responseJson(response), { accepted: true });
+  assert.equal([...r.store.actionTokens.values()].filter((token) => token.purpose === "password_reset").length, 0);
+  assert.equal(r.emails.length, 1);
+  const [message] = r.emails;
+  assert.equal(message.to, "google-only@example.test");
+  assert.equal(message.subject, "How to sign in to Parkdex");
+  for (const body of [message.text, message.html]) {
+    assert.match(body, /Continue with Google/u);
+    assert.match(body, /google-only@example\.test/u);
+    assert.match(body, /No password is needed/u);
+    assert.ok(body.includes(`${API_ORIGIN}/account`));
+    assert.doesNotMatch(body, /resetToken|verificationToken/u);
+  }
+  assert.match(message.html, /PARKDEX/u);
+});
+
+test("password reset responses are identical for password, Google-only and unknown emails", async () => {
+  const r = rig();
+  const seeded = await seedPasswordAccount(r, "password@example.test");
+  r.store.addGoogleOnlyAccount("google@example.test", "google-subject");
+  const responses = [
+    await call(r, "/api/auth/password-reset/request", { email: "password@example.test" }),
+    await call(r, "/api/auth/password-reset/request", { email: "google@example.test" }),
+    await call(r, "/api/auth/password-reset/request", { email: "nobody@example.test" }),
+  ];
+  const shapes = await Promise.all(responses.map(async (response) => {
+    const headers: string[][] = [];
+    response.headers.forEach((value, name) => { headers.push([name, value]); });
+    return { status: response.status, headers, body: await response.text() };
+  }));
+  assert.equal(shapes[0].status, 202);
+  assert.equal(shapes[0].body, JSON.stringify({ accepted: true }));
+  assert.deepEqual(shapes[1], shapes[0]);
+  assert.deepEqual(shapes[2], shapes[0]);
+
+  assert.deepEqual(r.emails.map((message) => [message.to, message.subject]), [
+    ["password@example.test", "Reset your Parkdex password"],
+    ["google@example.test", "How to sign in to Parkdex"],
+  ]);
+  assert.match(r.emails[0].text, /#resetToken=[A-Za-z0-9_-]{43}/u);
+  const resetTokens = [...r.store.actionTokens.values()].filter((token) => token.purpose === "password_reset");
+  assert.deepEqual(resetTokens.map((token) => token.accountId), [seeded.account!.id]);
+});
+
+test("password reset sends nothing to a deleting Google-only account", async () => {
+  const r = rig();
+  const account = r.store.addGoogleOnlyAccount("leaving@example.test", "leaving-subject");
+  account.deletionState = "deleting";
+  const response = await call(r, "/api/auth/password-reset/request", { email: "leaving@example.test" });
   assert.equal(response.status, 202);
   assert.deepEqual(await responseJson(response), { accepted: true });
   assert.equal(r.emails.length, 0);
-  assert.equal([...r.store.actionTokens.values()].filter((token) => token.purpose === "password_reset").length, 0);
+});
+
+test("a failed Google sign-in directions email records its own delivery failure", async () => {
+  const r = rig();
+  const deliveries: Promise<unknown>[] = [];
+  r.dependencies.sendEmail = async () => { throw new Error("provider down"); };
+  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.store.addGoogleOnlyAccount("google-fail@example.test", "google-fail-subject");
+  const response = await call(r, "/api/auth/password-reset/request", { email: "google-fail@example.test" });
+  assert.equal(response.status, 202);
+  await Promise.all(deliveries);
+  assert.deepEqual(r.store.events.filter((event) => event.outcome === "delivery_failed").map((event) => event.eventType), ["password_reset_google_email"]);
 });
 
 test("Google nonce is single use and changed Google email does not change the Kip account email", async () => {
