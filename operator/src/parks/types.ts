@@ -171,7 +171,13 @@ export type ReviewItem = {
 export type ReviewDetail = ReviewItem & {
   position: { lat: number; lng: number; accuracyM: number };
   photo: { sha256: string; width: number; height: number; bytes: number | null; purgedAt: string | null };
-  moderation: { model: string | null; threshold: number | null; answers: Record<string, { choice: string; probabilities: Record<string, number> }> } | null;
+  /** `threshold` and a `verdict` answer only on checks stored before the verdict question was dropped. */
+  moderation: {
+    model: string | null;
+    threshold: number | null;
+    flagThresholds: Record<string, number> | null;
+    answers: Record<string, { choice: string; probabilities: Record<string, number> }>;
+  } | null;
   geometry: MultiPolygon | null;
   park: { inParkdex: boolean; hidden: boolean; founder: { handle: string | null; foundedAt: string } | null };
   otherPending: number;

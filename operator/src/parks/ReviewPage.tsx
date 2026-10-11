@@ -85,10 +85,16 @@ function Row({ item, active, onOpen }: { item: ReviewItem; active: boolean; onOp
   );
 }
 
-/** The model's answer to each question: the verdict's approve probability, then each flag's yes. */
+/**
+ * The model's answer to each flag, marked at the threshold it is judged against. Checks stored
+ * before the verdict question was dropped also show the verdict's approve probability.
+ */
 function CheckAnswers({ detail }: { detail: ReviewDetail }) {
-  const answers = detail.moderation?.answers ?? {};
-  const verdict = answers.verdict?.probabilities ?? {};
+  const moderation = detail.moderation;
+  const answers = moderation?.answers ?? {};
+  const verdict = answers.verdict?.probabilities;
+  // Older checks counted every flag above one half.
+  const limit = (flag: string) => moderation?.flagThresholds?.[flag] ?? 0.5;
   const flags = Object.keys(FLAG_LABELS);
   return (
     <section className="rv-check" aria-labelledby="rv-check-title">
@@ -98,24 +104,28 @@ function CheckAnswers({ detail }: { detail: ReviewDetail }) {
         {detail.outcome === "reject" ? ` for ${outcomeLabel(detail).toLowerCase()}` : " The check could not decide."}
       </p>
       <div className="rv-bars">
-        <div className="rv-bar rv-bar--verdict">
-          <span>Approve</span>
-          <span className="rv-bar__track"><span style={{ width: percent(verdict.approve) }} /></span>
-          <strong>{percent(verdict.approve)}</strong>
-        </div>
+        {verdict ? (
+          <div className="rv-bar rv-bar--verdict">
+            <span>Approve</span>
+            <span className="rv-bar__track"><span style={{ width: percent(verdict.approve) }} /></span>
+            <strong>{percent(verdict.approve)}</strong>
+          </div>
+        ) : null}
         {flags.map((flag) => {
           const yes = answers[flag]?.probabilities?.yes;
           return (
-            <div key={flag} className={`rv-bar${typeof yes === "number" && yes > 0.5 ? " is-flagged" : ""}`}>
+            <div key={flag} className={`rv-bar${typeof yes === "number" && yes > limit(flag) ? " is-flagged" : ""}`} title={`Counts above ${percent(limit(flag))}`}>
               <span>{FLAG_LABELS[flag]}</span>
-              <span className="rv-bar__track"><span style={{ width: percent(yes) }} /></span>
+              <span className="rv-bar__track"><span style={{ width: percent(yes) }} /><i className="rv-bar__tick" style={{ left: percent(limit(flag)) }} /></span>
               <strong>{percent(yes)}</strong>
             </div>
           );
         })}
       </div>
       <p className="muted rv-check__model">
-        {detail.moderation ? <>{detail.moderation.model ?? "Unknown model"} · approves at {percent(detail.moderation.threshold ?? undefined)} and no flag above 50%</> : "No answers were stored for this check."}
+        {!moderation ? "No answers were stored for this check."
+          : verdict ? <>{moderation.model ?? "Unknown model"} · approves at {percent(moderation.threshold ?? undefined)} and no flag above 50%</>
+          : <>{moderation.model ?? "Unknown model"} · approves when no flag is above its mark</>}
       </p>
     </section>
   );

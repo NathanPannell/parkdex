@@ -2,6 +2,7 @@ import {
   emptyCounts, type ApproveResult, type FoundingReviewStore, type ReviewDetail, type ReviewListItem, type ReviewReasonCode, type ReviewStatus,
 } from "../../../worker/founding-reviews.js";
 import type { OsmFeature } from "../../../worker/osmParks.js";
+import { DEFAULT_FLAG_THRESHOLDS } from "../../../worker/founderPhoto.js";
 import { osmParkId } from "../../../worker/parkPublish.js";
 import { HttpError } from "../../../worker/validation.js";
 import type { CoverPhoto } from "./manager.js";
@@ -164,26 +165,38 @@ ${people}<g transform="scale(.5)">${dark}${screen}</g>
 
 type Probabilities = Partial<Record<"verdict" | "people" | "lighting" | "not_park" | "inappropriate" | "not_photo" | "personal_info", number>>;
 
-/** Model answers in the stored shape: the verdict's approve probability and each flag's yes. */
+/**
+ * Model answers in the stored shape: each flag's yes, with the production flag thresholds. With a
+ * `verdict`, the shape stored before the verdict question was dropped: its approve probability
+ * and approve threshold, and no flag thresholds.
+ */
 export function demoModeration(answers: Probabilities): NonNullable<ReviewDetail["moderation"]> {
-  const approve = answers.verdict ?? 0.1;
   const flag = (yes: number) => ({ choice: yes > 0.5 ? "yes" : "no", probabilities: { yes, no: Math.round((1 - yes) * 1000) / 1000 } });
+  const flags = {
+    people: flag(answers.people ?? 0.02),
+    lighting: flag(answers.lighting ?? 0.03),
+    not_park: flag(answers.not_park ?? 0.04),
+    inappropriate: flag(answers.inappropriate ?? 0.01),
+    not_photo: flag(answers.not_photo ?? 0.02),
+    personal_info: flag(answers.personal_info ?? 0.01),
+  };
+  const approve = answers.verdict;
+  if (approve === undefined) return { model: "openai/gpt-6-luna-decisions", threshold: null, flagThresholds: { ...DEFAULT_FLAG_THRESHOLDS }, answers: flags };
   return {
     model: "openai/gpt-6-luna-decisions",
     threshold: 0.8,
+    flagThresholds: null,
     answers: {
       verdict: { choice: approve >= 0.5 ? "approve" : approve > 0.3 ? "unsure" : "reject", probabilities: { approve, reject: Math.round((1 - approve) * 700) / 1000, unsure: Math.round((1 - approve) * 300) / 1000 } },
-      people: flag(answers.people ?? 0.02),
-      lighting: flag(answers.lighting ?? 0.03),
-      not_park: flag(answers.not_park ?? 0.04),
-      inappropriate: flag(answers.inappropriate ?? 0.01),
-      not_photo: flag(answers.not_photo ?? 0.02),
-      personal_info: flag(answers.personal_info ?? 0.01),
+      ...flags,
     },
   };
 }
 
-/** Realistic requests over the demo parks: three waiting, one approved, one rejected, one beaten to it. */
+/**
+ * Realistic requests over the demo parks: three waiting, one approved, one rejected, one beaten to
+ * it. The approved one is an older unsure check, stored with the overall verdict.
+ */
 export function seedDemoReviews(store: MemoryFoundingReviewStore, now: number): void {
   const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
   const feature = (name: string) => store.osm.features.find((item) => item.name === name) ?? null;
@@ -201,15 +214,15 @@ export function seedDemoReviews(store: MemoryFoundingReviewStore, now: number): 
     add({
       id: "6f3d2b1a-8c4e-4f7a-9b2d-1e5c7a9b3d01", accountId: "demo-7", handle: "trail_tia", status: "pending", parkId: osmParkId(gonzales), parkName: gonzales.name!,
       feature: gonzales, outcome: "reject", flags: ["people"], position: { ...centre(gonzales.geometry, 0.0002, -0.0001), accuracyM: 9 },
-      photo: demoPhoto(1, "people"), moderation: demoModeration({ verdict: 0.08, people: 0.91 }), createdAt: ago(185), checkedAt: ago(188),
+      photo: demoPhoto(1, "people"), moderation: demoModeration({ people: 0.91 }), createdAt: ago(185), checkedAt: ago(188),
     });
   }
   const thetis = store.live.parks.get("thetis-lake-park");
   if (thetis) {
     add({
       id: "0b7e9a52-4c1d-4f7e-9a51-2d8c6b3f1e07", accountId: "demo-12", handle: "fern_gully", status: "pending", parkId: thetis.id, parkName: thetis.name,
-      feature: null, outcome: "unsure", flags: [], position: { lat: thetis.lat + 0.0011, lng: thetis.lng - 0.0016, accuracyM: 14 },
-      photo: demoPhoto(2, "plain"), moderation: demoModeration({ verdict: 0.62, not_park: 0.31 }), createdAt: ago(52), checkedAt: ago(54),
+      feature: null, outcome: "reject", flags: ["not_park"], position: { lat: thetis.lat + 0.0011, lng: thetis.lng - 0.0016, accuracyM: 14 },
+      photo: demoPhoto(2, "plain"), moderation: demoModeration({ not_park: 0.97, people: 0.31 }), createdAt: ago(52), checkedAt: ago(54),
     });
   }
   const hollywood = feature("Hollywood Park");
@@ -217,7 +230,7 @@ export function seedDemoReviews(store: MemoryFoundingReviewStore, now: number): 
     add({
       id: "9a41c0de-2b7f-4e3a-8d6c-5f1b2a7e9c44", accountId: "demo-3", handle: "owl_eyes", status: "pending", parkId: osmParkId(hollywood), parkName: hollywood.name!,
       feature: hollywood, outcome: "reject", flags: ["lighting"], position: { ...centre(hollywood.geometry), accuracyM: 6 },
-      photo: demoPhoto(3, "dark"), moderation: demoModeration({ verdict: 0.12, lighting: 0.84 }), createdAt: ago(21), checkedAt: ago(22),
+      photo: demoPhoto(3, "dark"), moderation: demoModeration({ lighting: 0.84 }), createdAt: ago(21), checkedAt: ago(22),
     });
   }
   const cattle = store.live.parks.get("cattle-point");
@@ -235,7 +248,7 @@ export function seedDemoReviews(store: MemoryFoundingReviewStore, now: number): 
     add({
       id: "2c8b4f6e-1d3a-4b5c-9e7f-0a2d4c6e8b19", accountId: "demo-0", handle: "summit_sam", status: "rejected", parkId: douglas.id, parkName: douglas.name,
       feature: null, outcome: "reject", flags: ["not_photo"], position: { lat: douglas.lat + 0.0021, lng: douglas.lng + 0.0012, accuracyM: 18 },
-      photo: demoPhoto(4, "screen"), moderation: demoModeration({ verdict: 0.05, not_photo: 0.88 }), createdAt: ago(2_900), checkedAt: ago(2_902),
+      photo: demoPhoto(4, "screen"), moderation: demoModeration({ not_photo: 0.98 }), createdAt: ago(2_900), checkedAt: ago(2_902),
       decidedAt: ago(2_700), reasonCode: "other", reason: "That's a photo of a screen. Take one of the park itself.",
     });
   }
@@ -245,7 +258,7 @@ export function seedDemoReviews(store: MemoryFoundingReviewStore, now: number): 
     add({
       id: "c3e2a9f1-6b8d-4e0c-a2f5-9d7b1c3e5a60", accountId: "demo-9", handle: "kip_fan_22", status: "superseded", parkId: highrock.id, parkName: highrock.name,
       feature: null, outcome: "reject", flags: ["people", "personal_info"], position: { lat: highrock.lat, lng: highrock.lng + 0.0004, accuracyM: 8 },
-      photo: demoPhoto(0, "people"), moderation: demoModeration({ verdict: 0.04, people: 0.77, personal_info: 0.58 }),
+      photo: demoPhoto(0, "people"), moderation: demoModeration({ people: 0.93, personal_info: 0.91 }),
       createdAt: new Date(Date.parse(highrockFounder.foundedAt) - 95 * 60_000).toISOString(), checkedAt: new Date(Date.parse(highrockFounder.foundedAt) - 97 * 60_000).toISOString(),
       decidedAt: highrockFounder.foundedAt,
     });
