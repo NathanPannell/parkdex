@@ -94,7 +94,7 @@ function validateTarget(value: unknown): FoundTarget {
     }
     return { osm: { type: osm.type, id: osm.id } };
   }
-  throw new HttpError(400, "invalid_request", "Choose the park to found.");
+  throw new HttpError(400, "invalid_request", "Choose the park you're in.");
 }
 
 function invalidPhoto(): HttpError {
@@ -194,7 +194,7 @@ async function resolveExisting(handlers: FoundersHandlers, store: FoundersStore,
   if (founder) throw alreadyFounded(founder.handle);
   // The catalogue outline decides; an OpenStreetMap outline stands in for a park without one.
   const outline = park.boundary ?? fallback?.geometry ?? null;
-  if (!outline) throw new HttpError(422, "no_outline", "This park has no outline yet, so it can't be founded.");
+  if (!outline) throw new HttpError(422, "no_outline", "This park has no outline yet, so it can't have a founder.");
   return { kind: "existing", parkId, name: park.name, label: park.category, outline };
 }
 
@@ -208,7 +208,7 @@ async function resolveTarget(handlers: FoundersHandlers, store: FoundersStore, t
   // An outline that is already a Parkdex park is founded as that park, never published twice.
   const listed = catalogueMatch(feature, nearby);
   if (listed) return resolveExisting(handlers, store, listed.parkId, feature);
-  if (!feature.name) throw new HttpError(422, "unnamed_park", "This park has no name on OpenStreetMap yet, so it can't be founded.");
+  if (!feature.name) throw new HttpError(422, "unnamed_park", "This park has no name on OpenStreetMap yet, so it can't have a founder.");
   return { kind: "osm", parkId: publishedId, feature, nearby };
 }
 
@@ -224,7 +224,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   const photoSha256 = await sha256Hex(input.photo.bytes);
   const visitId = await founderVisitId(input.attemptId);
 
-  if (!await store.hasHandle(accountId)) throw new HttpError(409, "handle_required", "Choose a handle before founding a park.");
+  if (!await store.hasHandle(accountId)) throw new HttpError(409, "handle_required", "Choose a handle before you become a founder.");
 
   // A retry with the same attempt answers what the first request did, without asking the model again.
   const earlier = await store.attempt(accountId, input.attemptId, visitId);
@@ -238,13 +238,13 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   }
 
   const usage = await store.usage(accountId, at);
-  if (usage.foundedLastDay >= FOUNDED_PER_DAY) throw new HttpError(429, "rate_limited_founding", "You've founded a lot of parks today. Try again tomorrow.");
+  if (usage.foundedLastDay >= FOUNDED_PER_DAY) throw new HttpError(429, "rate_limited_founding", `You've become the founder of ${FOUNDED_PER_DAY} parks today. Try again tomorrow.`);
   if (usage.checksLastHour >= CHECKS_PER_HOUR) throw new HttpError(429, "rate_limited_founding", "That's a lot of photos this hour. Try again a little later.");
 
   const resolved = await resolveTarget(handlers, store, input.target, input.position);
   const outline = resolved.kind === "osm" ? resolved.feature.geometry : resolved.outline;
   const where = positionInside(input.position, outline);
-  if (!where.inside) throw new HttpError(422, "not_in_park", "You need to be in the park to found it. Walk a little further in and try again.");
+  if (!where.inside) throw new HttpError(422, "not_in_park", "You need to be in the park to become its founder. Walk a little further in and try again.");
 
   const osm = "osm" in input.target && resolved.kind === "osm" ? input.target.osm : null;
   const checker = handlers.photoChecker();
@@ -317,8 +317,8 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
     }
     if (result.status === "park_missing" || result.status === "park_hidden") throw new HttpError(404, "park_not_found", "That park is not in Parkdex.");
     if (result.status === "attempt_reused") throw new HttpError(409, "attempt_id_reused", "This attempt ID was already used for another park.");
-    if (result.status === "blocked") throw new HttpError(409, "founding_blocked", "This park can't be founded right now.");
-    throw new HttpError(503, "service_unavailable", "Founding didn't finish. Try again in a moment.");
+    if (result.status === "blocked") throw new HttpError(409, "founding_blocked", "You can't become this park's founder right now.");
+    throw new HttpError(503, "service_unavailable", "That didn't go through. Try again in a moment.");
   }
 
   handlers.emit("park_founded", { parkId: result.record.parkId, source });

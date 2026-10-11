@@ -7,13 +7,15 @@ import { createNeonParkManagerStore, neonRunner, type Bbox, type ParkManagerStor
 import { catalogueBox, createSqlOsmStore, matchOutlines, neighbourhood, OSM_LIMIT, osmDraft, parseOsmRef, type OsmStore } from "./osm.js";
 import { catalogueMatch } from "../../../worker/catalogueMatch.js";
 import type { FoundingReviewStore } from "../../../worker/founding-reviews.js";
-import { reviewRoutes } from "./reviews.js";
+import { createSqlParkRemovalStore, type ParkRemovalStore } from "./removal.js";
+import { analyticsEnvironment, reviewRoutes } from "./reviews.js";
 
 /**
  * Parks section under /api/parks: the map-first park manager. It reads and edits the live
  * catalogue of the database the toggle chose, hides, unhides and deletes parks, moderates
- * founders and covers, creates parks from OpenStreetMap outlines, and decides players' requests
- * for a manual review of a founding photo (/api/parks/review, reviews.ts).
+ * founders and covers, removes parks from the map so they can be founded again (removal.ts),
+ * creates parks from OpenStreetMap outlines, and decides players' requests for a manual review of
+ * a founding photo (/api/parks/review, reviews.ts).
  */
 
 /** Settings this section reads from the deployment. */
@@ -25,6 +27,8 @@ export interface ParksDependencies {
   osmStore?(env: DashboardEnv): OsmStore;
   /** Manual review requests for founding photos (#153). */
   foundingReviewStore?(env: DashboardEnv): FoundingReviewStore;
+  /** Remove from map: unfound a park and take it off the map, keeping its OpenStreetMap outline. */
+  parkRemovalStore?(env: DashboardEnv): ParkRemovalStore;
   /** The clock, so tests can pin "last 30 days" and flag falls. */
   now?(): number;
 }
@@ -96,6 +100,7 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
   const live = () => deps.liveParkStore?.(context.env) ?? createNeonLiveParkStore(databaseUrl(context.env));
   const manager = () => deps.parkManagerStore?.(context.env) ?? createNeonParkManagerStore(databaseUrl(context.env));
   const osm = () => deps.osmStore?.(context.env) ?? createSqlOsmStore(neonRunner(databaseUrl(context.env)));
+  const removal = () => deps.parkRemovalStore?.(context.env) ?? createSqlParkRemovalStore(neonRunner(databaseUrl(context.env)));
   const now = () => new Date(deps.now?.() ?? Date.now()).toISOString();
 
   if (path === "/api/parks") {
@@ -128,7 +133,7 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
   const osmMatch = /^\/api\/parks\/osm\/([^/]+)$/.exec(path);
   if (osmMatch) return osmRoute(request, context, osm(), osmMatch[1], now);
 
-  const match = /^\/api\/parks\/([^/]+)(?:\/(hide|unhide|founder|cover))?$/.exec(path);
+  const match = /^\/api\/parks\/([^/]+)(?:\/(hide|unhide|founder|cover|remove-from-map))?$/.exec(path);
   if (!match) return null;
   const [, id, action] = match;
   if (!ID.test(id)) throw new HttpError(404, "not_found", "That park is not in Parkdex.");
@@ -149,6 +154,18 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
     const photo = await coverInput(await readJsonBody(request, 2_200_000));
     await manager().replaceCover(id, photo, now());
     return json({ ok: true, photoSha256: photo.sha256 });
+  }
+  if (action === "remove-from-map") {
+    // GET says what a removal would do (or why it can't); POST does it.
+    allowMethods(request, "GET", "POST");
+    if (request.method === "GET") {
+      const plan = await removal().plan(id);
+      if (!plan) throw new HttpError(404, "not_found", "That park is not in Parkdex.");
+      return json({ plan });
+    }
+    context.requireSameOrigin();
+    if (request.headers.get("content-type")) plainObject(await readJsonBody(request, 1024), [], "Remove from map takes no fields.");
+    return json({ ok: true, ...await removal().remove(id, { at: now(), environment: analyticsEnvironment(context.env) }) });
   }
   if (action === "founder") {
     allowMethods(request, "DELETE");

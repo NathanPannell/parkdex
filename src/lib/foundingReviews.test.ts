@@ -21,7 +21,7 @@ const me = (pending: { parkId: string | null }[]): GameMe => ({
 
 describe("decisionMessage", () => {
   it("celebrates an approval with the bonus", () => {
-    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({ title: "You founded Paterson Park!", text: "Your photo was approved. You founded Paterson Park! +10", kip: "cheer" });
+    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({ title: "You're the founder of Paterson Park!", text: "Your photo was approved. You're the founder of Paterson Park! +10", kip: "cheer" });
   });
 
   it("gives the operator's reason for a rejection, without doubling its full stop", () => {
@@ -35,9 +35,18 @@ describe("decisionMessage", () => {
       .toBe("Your photo for Beacon Hill wasn't approved. You can try again next time you're there.");
   });
 
-  it("says when someone else founded the park first", () => {
-    expect(decisionMessage(decision({ requestId: "d", status: "superseded" }))).toMatchObject({ title: "Someone got there first", text: "Someone else founded Paterson Park first." });
-    expect(decisionMessage(decision({ requestId: "e", status: "superseded", founderHandle: "sam" })).title).toBe("@sam got there first");
+  it("says when someone else became the founder first", () => {
+    expect(decisionMessage(decision({ requestId: "d", status: "superseded" }))).toMatchObject({ title: "Someone else became the founder first", text: "Paterson Park has a founder now. You can still plant your flag there." });
+    expect(decisionMessage(decision({ requestId: "e", status: "superseded", founderHandle: "sam" })).title).toBe("@sam became the founder first");
+  });
+
+  it("uses the noun founder, never the verb found, which also reads as discovered", () => {
+    for (const status of ["approved", "rejected", "superseded"] as const) {
+      for (const founderHandle of [null, "sam"]) {
+        const message = decisionMessage(decision({ requestId: `${status}-${founderHandle}`, status, founderHandle, reason: "There are people in the photo." }));
+        for (const text of [message.eyebrow, message.title, message.text]) expect(text).not.toMatch(/\bfound(ed|ing|s)?\b/i);
+      }
+    }
   });
 });
 

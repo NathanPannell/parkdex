@@ -19,8 +19,8 @@ import "../onboarding.css";
 /**
  * Six short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
  * park, earn a point a day while it flies, take other players' parks for their flag's age, get
- * your own @handle and flag, and found parks nobody has founded yet. How flags eventually fall
- * is left for players to discover.
+ * your own @handle and flag, and become the founder of parks that have none yet. How flags
+ * eventually fall is left for players to discover.
  */
 const SLIDES = [
   {
@@ -54,9 +54,9 @@ const SLIDES = [
     tint: "#DCEBFF",
   },
   {
-    eyebrow: "Bonus · Found",
-    title: ["Found a park.", "Make it yours."],
-    body: "Standing in a park nobody has founded? Take its photo and it's yours, +10 points.",
+    eyebrow: "Bonus · Founder",
+    title: ["Be the founder.", "Snap its cover."],
+    body: "Standing in a park with no founder yet? Take its first photo to become the founder, +10 points.",
     tint: "#E6F4C8",
   },
 ];
@@ -313,7 +313,7 @@ function FoundIt() {
           <path d="M0 100 C 40 88, 110 90, 160 98 L160 120 L0 120 Z" fill="#2F9E6B" />
           <path d="M34 92 l10 -34 l10 34 Z M60 90 l8 -26 l8 26 Z M112 88 l11 -38 l11 38 Z" fill="#1C5B43" />
         </svg>
-        <span className="ob-found__caption">Founded by @you</span>
+        <span className="ob-found__caption">Founder: @you</span>
       </motion.div>
       <motion.span
         className="ob-found__points"

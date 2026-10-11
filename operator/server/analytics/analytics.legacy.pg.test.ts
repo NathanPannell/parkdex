@@ -10,7 +10,7 @@ import { createSqlAnalyticsStore } from "./store.ts";
 import type { AccountRow, AnalyticsStore } from "./types.ts";
 
 // Production can run a release behind staging. This database gets every deploy migration except
-// founders_001 and founders_002 (so no kip_founders schema), like production before the founders release, and
+// founders_001 to founders_003 (so no kip_founders schema), like production before the founders release, and
 // the analytics pages must still load. Point OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL at a
 // fresh loopback database named kip_qa_*.
 const DSN = process.env.OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL;
@@ -20,6 +20,7 @@ const DAY = 86_400_000;
 const FOUNDERS = "database/migrations/founders_001_init.sql";
 // founders_002 builds on founders_001, so it cannot arrive first.
 const FOUNDER_REVIEWS = "database/migrations/founders_002_reviews.sql";
+const PARK_REMOVED = "database/migrations/founders_003_park_removed.sql";
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
@@ -44,7 +45,7 @@ async function account(id: string, email: string, createdAt: string, handle: str
 
 before(async () => {
   if (!DSN) return;
-  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS);
+  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS && file !== PARK_REMOVED);
   const opened = await openTestDatabase(DSN, migrations);
   pool = opened.pool;
   runner = opened.runner;

@@ -4,12 +4,16 @@ import { linkHandler, navigate } from "../router";
 import { Card, formatCount, fullDate, Icon, Notice, PageHeader, Spinner, timeAgo, useConfirm, useToast } from "../ui";
 import { MapEditor } from "./MapEditor";
 import { RegionSelect } from "./RegionSelect";
-import { BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, SOURCE_LABELS, title, type ChangeRow, type LivePark, type LiveParkDetail, type MultiPolygon, type ParkActivity, type Position } from "./types";
+import {
+  BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, SOURCE_LABELS, title,
+  type ChangeRow, type LivePark, type LiveParkDetail, type MultiPolygon, type ParkActivity, type Position, type RemovalPlan, type RemovalResult,
+} from "./types";
 
 /**
  * /parks/<id>: one park. Edit its fields and outline (a guarded save that is refused with 409
- * park_changed when someone else changed it first), hide or unhide it, delete it, and moderate
- * its founder and cover. The side panels show visits, the flag holder and the content history.
+ * park_changed when someone else changed it first), hide or unhide it, remove it from the map so it
+ * can be founded again, delete it, and moderate its founder and cover. The side panels show
+ * visits, the flag holder and the content history.
  */
 
 type Form = Pick<LivePark, "name" | "short" | "category" | "region" | "biome" | "rarity" | "blurb">;
@@ -107,6 +111,7 @@ export function ParkPage({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [reload, setReload] = useState(0);
+  const [removal, setRemoval] = useState<RemovalPlan | null>(null);
   const coverInput = useRef<HTMLInputElement>(null);
   const path = `/api/parks/${encodeURIComponent(id)}`;
 
@@ -119,6 +124,24 @@ export function ParkPage({ id }: { id: string }) {
     return () => controller.abort();
   }, [path, reload]);
 
+  // Whether Remove from map can apply, so the button can say why not before anyone clicks it.
+  const loadRemoval = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const loaded = await api<{ plan: RemovalPlan }>(`${path}/remove-from-map`, { signal });
+      setRemoval(loaded.plan);
+      return loaded.plan;
+    } catch {
+      if (!signal?.aborted) setRemoval(null);
+      return null;
+    }
+  }, [path]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadRemoval(controller.signal);
+    return () => controller.abort();
+  }, [loadRemoval, reload]);
+
   // Moderation changes the activity panels, not the form; refresh them without dropping edits.
   const refreshActivity = useCallback(async () => {
     try {
@@ -127,7 +150,8 @@ export function ParkPage({ id }: { id: string }) {
     } catch {
       // The next full load shows it.
     }
-  }, [path]);
+    void loadRemoval();
+  }, [path, loadRemoval]);
 
   if (error) return <section className="page"><BackLink /><Notice tone="error">{error}</Notice></section>;
   if (!park || !form || !activity) return <section className="page"><BackLink /><div className="drawer__state"><Spinner /> Opening park...</div></section>;
@@ -220,6 +244,52 @@ export function ParkPage({ id }: { id: string }) {
     } catch (reason) {
       toast.show(errorText(reason, "Could not delete this park. Nothing was changed."), { tone: "error" });
       setBusy(null);
+    }
+  }
+
+  async function removeFromMap() {
+    if (!park || !activity) return;
+    setBusy("removal");
+    // Read again, so the popup counts what is there now.
+    const plan = await loadRemoval();
+    setBusy(null);
+    if (!plan) { toast.show("Could not check this park. Nothing was changed.", { tone: "error" }); return; }
+    if (plan.blocked || !plan.outline) { toast.show(plan.blocked?.message ?? "This park can't be removed from the map.", { tone: "error" }); return; }
+    const { outline, founder: planFounder, pendingReviews } = plan;
+    const confirmed = await confirm({
+      title: `Remove ${park.name} from the map?`,
+      tone: "danger",
+      icon: "park",
+      confirmLabel: "Remove from map",
+      body: (
+        <>
+          <p>This unfounds the park and takes it off the map in one change, so it can be founded again straight away.</p>
+          <ul className="removal-list">
+            <li><strong>Removed from the map.</strong> The park, its outline and drive data get tombstones in one content revision, and phones drop it on their next sync.</li>
+            {planFounder
+              ? <li><strong>Founder @{planFounder.handle ?? "deleted account"} and the cover photo are cleared</strong>, with their 10 founder points.</li>
+              : <li>It has no founder or cover photo to clear.</li>}
+            {pendingReviews > 0
+              ? <li><strong>{formatCount(pendingReviews)} pending founding {pendingReviews === 1 ? "review is" : "reviews are"} closed.</strong> The player reads that the park was removed from the map before anyone reviewed it.</li>
+              : <li>No founding reviews are waiting for it.</li>}
+            <li><strong>The OpenStreetMap outline {outline.name ?? ""} ({outline.type} {outline.id}) is kept.</strong> The app offers it as not in Parkdex, and founding it publishes <code>{outline.parkId}</code>.</li>
+            <li>{formatCount(activity.visits.total)} {activity.visits.total === 1 ? "visit" : "visits"} and {formatCount(activity.tenures)} flag {activity.tenures === 1 ? "tenure stay" : "tenures stay"} as game history, as with Delete.</li>
+          </ul>
+          {!plan.audited && <p className="muted">This database has no park_removed analytics event yet (founders_003), so only the content change records it.</p>}
+        </>
+      ),
+    });
+    if (!confirmed) return;
+    setBusy("removal");
+    try {
+      const result = await api<RemovalResult>(`${path}/remove-from-map`, { method: "POST" });
+      const closed = result.reviewsClosed ? ` ${result.reviewsClosed} pending ${result.reviewsClosed === 1 ? "review" : "reviews"} closed.` : "";
+      toast.show(`${park.name} was removed from the map and can be founded again.${closed}`);
+      navigate("/parks");
+    } catch (reason) {
+      toast.show(errorText(reason, "Could not remove this park from the map. Nothing was changed."), { tone: "error" });
+      setBusy(null);
+      await refreshActivity();
     }
   }
 
@@ -322,6 +392,23 @@ export function ParkPage({ id }: { id: string }) {
             )}
             <p className="muted pp-help">{hidden ? "Unhiding sends the park back to phones with its current values." : "Hiding keeps the park, its visits and flags, and takes it off every player's map on their next sync. Undo at any time."}</p>
             <div className="pp-danger">
+              <div>
+                <strong>Remove from map</strong>
+                <p className="muted">{removal?.blocked
+                  ? removal.blocked.message
+                  : "Unfounds the park and takes it off the map, but keeps its OpenStreetMap outline so it can be founded again."}</p>
+              </div>
+              <button
+                type="button"
+                className="button button--danger"
+                onClick={() => void removeFromMap()}
+                disabled={busy !== null || !removal || removal.blocked !== null}
+                title={removal?.blocked?.message}
+              >
+                {busy === "removal" ? <Spinner small /> : <Icon name="park" size={16} />} Remove from map...
+              </button>
+            </div>
+            <div className="pp-danger pp-danger--next">
               <div>
                 <strong>Delete park</strong>
                 <p className="muted">Removes the park and its founder for good. Visits stay as history.</p>

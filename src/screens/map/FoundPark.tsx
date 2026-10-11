@@ -76,7 +76,7 @@ const FLAG_ICONS: Record<string, IconName> = {
 
 function locationProblem(error: unknown): string {
   const reason = error instanceof Error ? error.message : "";
-  if (reason === "denied") return "Turn on location for Parkdex to found a park.";
+  if (reason === "denied") return "Turn on location for Parkdex to become a founder.";
   if (reason === "timeout") return "Finding you took too long. Step into the open and try again.";
   return "We couldn't find your location. Try again.";
 }
@@ -431,20 +431,20 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
 
   const instruction = step.kind === "locating" ? "Finding you…"
     : step.kind === "scanning" ? (park ? `Checking you're inside ${park.name}…` : "Looking for mapped parks around you…")
-      : step.kind === "results" && choice ? "Take a photo of the park to found it."
-        : "Stand inside a park to found it.";
+      : step.kind === "results" && choice ? "Take its photo to be the founder."
+        : "Stand in a park to be its founder.";
   const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken" || step.kind === "review_sent";
   const review = step.kind === "rejected" ? reviewButton(step.review, step.reviewable) : null;
   const sendingReview = step.kind === "rejected" && step.review.kind === "sending";
 
   return (
-    <div className="found" aria-label="Found a park">
+    <div className="found" aria-label="Become a founder">
       <div className="found-top card" ref={topCard}>
         <div>
-          <span className="eyebrow">Found a park</span>
+          <span className="eyebrow">Become the founder</span>
           <p aria-live="polite">{instruction}</p>
         </div>
-        <button className="btn btn--paper btn--icon" onClick={() => onClose()} aria-label="Close founding">
+        <button className="btn btn--paper btn--icon" onClick={() => onClose()} aria-label="Close">
           <Icon name="close" size={18} />
         </button>
       </div>
@@ -456,7 +456,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               <span className="found-status__spinner" aria-hidden="true" />
               <div>
                 <strong>{step.kind === "locating" ? "Finding you" : "Scanning"}</strong>
-                <span>{park ? "Only parks you're standing in can be founded." : "Only parks that contain you show up."}</span>
+                <span>{park ? "You can only become the founder of a park you're standing in." : "Only parks that contain you show up."}</span>
               </div>
             </div>
           ) : step.kind === "problem" ? (
@@ -476,7 +476,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               <Kip pose="think" size={64} />
               <div>
                 <strong>No mapped park here</strong>
-                <span>You can found a park only while you stand inside its outline on OpenStreetMap. Head into a park and scan again.</span>
+                <span>To become a park's founder, stand inside its outline on OpenStreetMap. Head into a park and scan again.</span>
               </div>
               <div className="found-row">
                 <button className="btn btn--sm" onClick={rescan}><Icon name="refresh" size={16} /> Scan again</button>
@@ -503,7 +503,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 </div>
               ) : (
                 <div className="found-pick">
-                  <span className="found-pick__title">{parks.length > 1 ? "Which park are you founding?" : "You're in"}</span>
+                  <span className="found-pick__title">{parks.length > 1 ? "Pick your park" : "You're in"}</span>
                   {parks.length > 1 ? (
                     <div className="found-list" role="radiogroup" aria-label="Parks around you">
                       {parks.map((item) => (
@@ -626,7 +626,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 ) : step.kind === "taken" ? (
                   <>
                     <strong className="found-check__title">{founderLine(step.founder)}</strong>
-                    <span className="found-check__detail">Someone got here first. You can still plant your flag.</span>
+                    <span className="found-check__detail">Someone else became the founder first. You can still plant your flag.</span>
                     <div className="found-row">
                       <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Back to the map</button>
                     </div>

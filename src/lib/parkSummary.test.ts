@@ -45,7 +45,7 @@ describe("founderCta", () => {
 describe("summaryStats", () => {
   it("shows the founder and the three visit counts", () => {
     expect(summaryStats({ status: "ready", summary: open }, true)).toEqual({ founder: "No founder yet", mine: "1", total: "4", last30Days: "2", pending: false, note: null });
-    expect(summaryStats({ status: "ready", summary: founded }, false)).toMatchObject({ founder: "Founded by @robin", mine: "Sign in", total: "9", last30Days: "3" });
+    expect(summaryStats({ status: "ready", summary: founded }, false)).toMatchObject({ founder: "Founder: @robin", mine: "Sign in", total: "9", last30Days: "3" });
   });
 
   it("shows placeholders while loading and a note offline", () => {

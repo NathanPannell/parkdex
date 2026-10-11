@@ -30,9 +30,9 @@ export function decisionMessage(decision: FoundingDecision): DecisionMessage {
   const park = decision.parkName;
   switch (decision.status) {
     case "approved":
-      return { eyebrow: "Photo review", title: `You founded ${park}!`, text: `Your photo was approved. You founded ${park}! +${FOUNDER_POINTS}`, kip: "cheer" };
+      return { eyebrow: "Photo review", title: `You're the founder of ${park}!`, text: `Your photo was approved. You're the founder of ${park}! +${FOUNDER_POINTS}`, kip: "cheer" };
     case "superseded":
-      return { eyebrow: "Photo review", title: decision.founderHandle ? `@${decision.founderHandle} got there first` : "Someone got there first", text: `Someone else founded ${park} first.`, kip: "point" };
+      return { eyebrow: "Photo review", title: decision.founderHandle ? `@${decision.founderHandle} became the founder first` : "Someone else became the founder first", text: `${park} has a founder now. You can still plant your flag there.`, kip: "point" };
     case "rejected": {
       const reason = decision.reason ? reasonClause(decision.reason) : "";
       return {

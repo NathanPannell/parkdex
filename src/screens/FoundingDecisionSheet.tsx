@@ -54,7 +54,7 @@ export function useFoundingDecisions(allowed: boolean): { current: FoundingDecis
   return { current, dismiss };
 }
 
-/** "Your photo was approved", "wasn't approved" or "someone else founded it first", in the takeover sheet's style. */
+/** "Your photo was approved", "wasn't approved" or "someone else became the founder first", in the takeover sheet's style. */
 export function FoundingDecisionSheet({ decision, onDismiss }: { decision: FoundingDecision | null; onDismiss: () => void }) {
   const message = decision ? decisionMessage(decision) : null;
   const cover = decision?.status === "approved" ? coverImageUrl(decision.coverUrl) : null;
