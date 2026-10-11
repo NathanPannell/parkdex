@@ -230,7 +230,7 @@ export function parseProposalStatus(value: unknown): ProposalStatus {
   throw new HttpError(400, "invalid_status", "Unknown proposal status.");
 }
 
-export const PROPOSALS_RETIRED_MESSAGE = "Update Parkdex to add parks. You can now found a park while you're standing in it.";
+export const PROPOSALS_RETIRED_MESSAGE = "Update Parkdex to add parks. Now you can become a park's founder while you're standing in it.";
 
 /**
  * The anonymous `/api/park-proposals` submit is retired: parks are founded by signed-in players

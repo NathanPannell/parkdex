@@ -369,7 +369,7 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   };
   const foundersStore = () => {
     if (dependencies.createFoundersStore) return dependencies.createFoundersStore(env);
-    if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Founding parks is unavailable.");
+    if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Becoming a founder isn't available right now.");
     return createNeonFoundersStore(env.DATABASE_URL);
   };
   const foundersResponse = await handleFoundersRequest(request, {
