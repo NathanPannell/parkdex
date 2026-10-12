@@ -1,8 +1,10 @@
 # Parkdex field app
 
-A standalone, fully offline Android app for the core Parkdex loop on Vancouver Island:
+An offline-first Android app for the core Parkdex loop on Vancouver Island:
 pick a park on the map, go there, check in inside the park boundary, take a photo, claim
-the badge, and share it. No accounts and no network sync: everything stays on the phone.
+the badge, and share it. Collecting works without an account or a connection. An account
+is optional: signing in with email and password or Google backs claims and photos up and
+restores them on another device. See `docs/accounts-implementation-contract.md`.
 
 - Parks on Vancouver Island come from the downloaded content catalogue. Only parks with
   published badge art appear on the map, and the Dex starts empty.
@@ -12,7 +14,7 @@ the badge, and share it. No accounts and no network sync: everything stays on th
   see `docs/content-compatibility.md`.
 - Maps: a bundled low-detail Protomaps base map of Canada (zoom 0 to 6). Detailed tiles
   (zoom 0 to 14) download for the area around the visitor, stream while online, and stay
-  available offline once saved. See `docs/content-sync.md`.
+  available offline once saved. See `docs/content-sync-contract.md` and `docs/map-releases.md`.
 - Kip the oystercatcher: generated pose images and an articulated rig (`public/art/kip/parts`).
 
 ## Setup
@@ -70,8 +72,8 @@ Set `sdk.dir` in `android/local.properties` to your Android SDK path before the 
 ## How check-in works
 
 The app watches GPS with high accuracy. A visitor counts as inside a park when they are within
-its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims live in
-localStorage; photos live in IndexedDB.
+its boundary, or within their reported GPS accuracy of it (capped at 35 m). Claims and photos
+are saved on the device first (IndexedDB) and backed up to the account when signed in.
 
 ## End-to-end check
 

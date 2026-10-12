@@ -90,6 +90,7 @@ Full steps are in `docs/delivery.md`. In short:
 2. **Staging.** Mark the PR ready, wait for green `PR checks`, then merge. `deploy-staging.yml` dispatches without waiting. Find the READY deployment for the merge SHA, then run `assign-staging --apply` and `verify-staging`. Report "ready in staging" only after the affected journeys pass at `staging.web.parkdex.app`.
 3. **Teardown.** With `STAGING_VERIFIED=1`, run `scripts/teardown-preview-pr.ps1 -PullRequest <n> -Apply`. Confirm every owned preview resource is absent before you reply.
 4. **Production.** Open a PR from `staging` to `main`. After the merge, run `assign-main --apply` and `verify-main`, then verify the journeys at `web.parkdex.app`.
+5. **Docs impact.** If the change alters a fact in the Atlas (`NathanPannell/parkdex-atlas`, `atlas/system.yaml`), update the Atlas in the same run.
 
 | Surface | Production | Staging |
 | --- | --- | --- |

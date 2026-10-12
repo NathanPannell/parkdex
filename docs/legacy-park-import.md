@@ -103,6 +103,17 @@ Exact replay is a no-op, including when the database has a newer content revisio
 
 The importer uses Shapely only to validate topology. It wraps Polygon coordinates as a one-part MultiPolygon and preserves source polygon order, every ring, and every XY position without simplification or repair.
 
+## Committed import bundles
+
+Each bundle under `database/imports/` is deterministic review input for this importer; building one makes no database, R2 or provider change. Both have been applied to staging and production.
+
+| Bundle | What it adds | Rebuild and test |
+| --- | --- | --- |
+| `provincial-regional-20260929/` | 270 Vancouver Island provincial and regional parks (244 new), with reviewed presentation, access and seven rarity changes. Applied without a reader floor. | `python scripts/build_island_import.py`, `python scripts/test_build_island_import.py` |
+| `legacy-bc-20261007/` | 1,273 more BC parks from the legacy web app, applied with `--minimum-reader 3` because the full catalogue exceeds the 4 MiB snapshot limit. Plain presentation: `scene` null, `circle` shape, `common` rarity, biome from a name keyword, a factual one-line blurb, and the unknown-access sentinel. | `python scripts/build_bc_import.py`, `python scripts/test_build_bc_import.py`, `npx vitest run src/lib/content/catalogue-release.test.ts` |
+
+Self-intersecting source rings are rebuilt with a planar-face even-odd rule that keeps the area the app counts as inside; each bundle's normalization report lists them. East Sooke keeps its more precise current boundary as the one preservation override.
+
 Run the unit tests with:
 
 ```powershell

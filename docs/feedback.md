@@ -18,6 +18,10 @@ Reports are reviewed in the separate operator dashboard (`operator/`), which run
 
 Failed notifications can be retried from the report. Each audience has its own saved payload, delivery status, lease, and Resend idempotency key. Sent messages are skipped. If a provider outcome remains unknown after Resend's 24-hour idempotency window, check Resend and the relevant mailbox before confirming a retry that could duplicate an email. There is no background retry schedule or polling service.
 
+## Email design
+
+Both emails use a table-based 600px frame with a Parkdex header, the `public/email/kip-wave.png` illustration in a 176px hero, the report or receipt content and one primary action. They use `Trebuchet MS` and `Arial, Helvetica, sans-serif` fallbacks instead of the app's variable fonts, and keep the app's ink, paper and Kip orange palette. Rendering can vary between email clients; check `npm run email:preview` output.
+
 ## Development and release
 
 Run `npm run typecheck`, `npm test`, and `npm run build`. `npm run email:preview` writes operator and receipt previews under `.codex/email-previews` and checks escaping, safe URLs, and receipt privacy.

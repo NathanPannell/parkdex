@@ -137,4 +137,4 @@ npx wrangler pages deploy ../.codex/cdn-dist --project-name parkdex-kip-content 
 Pop-Location
 ```
 
-The checked-in verification record is `docs/evidence/cloud-content/verification.json`. It records full database equality and replay, all public object hashes, HTTP semantics, Chrome cross-origin JSON/image/map/glyph checks, and the verified deployment. Browser test processes and tabs were closed after testing. Map attribution remains embedded in the unchanged source/map data; the existing visible Protomaps/OpenStreetMap attribution must be retained when connecting Android.
+The baseline was verified for full database equality and replay, public object hashes, HTTP semantics and cross-origin JSON, image, map and glyph loads; that record lives in git history (`docs/evidence/cloud-content/verification.json`, removed from the tree). Map attribution remains embedded in the unchanged source/map data; the existing visible Protomaps/OpenStreetMap attribution must be retained when connecting Android.

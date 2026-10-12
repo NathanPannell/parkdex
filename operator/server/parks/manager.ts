@@ -9,7 +9,7 @@ import type { MultiPolygon } from "./geometry.js";
  *
  * Every write is one transaction. Changes to public.parks and public.content_park_hidden go
  * through the content triggers, so each is one content revision that phones pick up on their
- * next sync (docs/park-visibility.md, docs/content-sync.md).
+ * next sync (docs/park-visibility.md, docs/content-sync-contract.md).
  */
 
 /** Where a park came from. Founded covers every osm-* park, whether a player or the operator published it. */

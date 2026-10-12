@@ -16,7 +16,7 @@ Keep exploring and collecting usable offline, while giving testers a short in-ap
 
 ## Capabilities and Constraints
 
-The current app has no accounts. Feedback is saved durably before email delivery. Screenshots are included only when intentionally selected. Precise location, photos, and sensitive logs are not automatically collected. The user confirmed that a receipt email address remains optional, with separate permission for follow-up. Reports and attachments are private to the operator. New, Reviewing, Planned, and Closed are the review statuses. Failed email delivery has a manual recovery action, without a scheduled retry service.
+Accounts are optional, and feedback works without one. Feedback is saved durably before email delivery. Screenshots are included only when intentionally selected. Precise location, photos, and sensitive logs are not automatically collected. The user confirmed that a receipt email address remains optional, with separate permission for follow-up. Reports and attachments are private to the operator. New, Reviewing, Planned, and Closed are the review statuses. Failed email delivery has a manual recovery action, without a scheduled retry service.
 
 ## Brand Commitments
 
