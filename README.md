@@ -1,5 +1,7 @@
 # Parkdex
 
+> **Legacy.** This repository is superseded by [parkdex-kip](https://github.com/NathanPannell/parkdex-kip), the current Parkdex app at `web.parkdex.app`. It still serves the MCP server and OAuth routes that [parkdex-landing](https://github.com/NathanPannell/parkdex-landing) proxies from `parkdex.app` and `staging.parkdex.app` to this repo's Railway API: `/mcp`, `/mcp/*`, `/authorize`, `/token`, `/register`, `/revoke` and `/oauth/consent`, plus the `/auth/google/callback` redirect to `map.parkdex.app` (see that repo's `vercel.json`). Do not shut down its Railway API, Neon database or `map.parkdex.app` until those routes move.
+
 Keep track of your BC park adventures.
 
 Parkdex is a field guide and collection game for parks across British Columbia. Find your next stop on the map, mark the places you've visited, and see how much of the province you've explored.
