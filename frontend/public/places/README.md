@@ -1,6 +1,6 @@
 # Place photos
 
-These images depict the named park or a documented feature within its boundary. The coverage batches record their source review dates in the catalogue credit index and task ledger. Source pages and available API metadata are checked for the named location, creator, direct source image, and reusable license. When a source description names only a feature, the manifest links metadata or an official park page that confirms the feature is inside the park. The manifest records the location evidence and URL, alt text, source and direct image links, license link, and changes for every image.
+These images depict the named park or a documented feature within its boundary. The coverage batches record their source review dates in the catalogue credit index. Source pages and available API metadata are checked for the named location, creator, direct source image, and reusable license. When a source description names only a feature, the manifest links metadata or an official park page that confirms the feature is inside the park. The manifest records the location evidence and URL, alt text, source and direct image links, license link, and changes for every image.
 
 Each photo has two local WebP variants. `*-thumb.webp` is at most 320 pixels wide and 64 KB for collection lists; the detail file is at most 960 pixels wide and 425 KB for place cards. Neither variant is upscaled. The interface may center-crop a variant to fit its responsive frame, and Next.js may negotiate a smaller encoded response for the device.
 
