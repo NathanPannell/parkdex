@@ -8,7 +8,7 @@ web
 
 ## Users
 
-Parkdex internal testers use the Android app to choose a Vancouver Island park, travel there, check in, take a photo, and collect a badge. The operator reviews their feedback privately.
+Parkdex testers use the Android app or web.parkdex.app to plant flags in British Columbia parks, compete with friends for points, and found new parks. The operator reviews their feedback privately.
 
 ## Product Purpose
 

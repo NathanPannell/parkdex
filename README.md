@@ -1,15 +1,17 @@
 # Parkdex field app
 
-An offline-first Android app for the core Parkdex loop on Vancouver Island:
-pick a park on the map, go there, check in inside the park boundary, take a photo, claim
-the badge, and share it. Collecting works without an account or a connection. An account
-is optional: signing in with email and password or Google backs claims and photos up and
-restores them on another device. See `docs/accounts-implementation-contract.md`.
+A flag game for British Columbia parks, on Android (Capacitor) and on the web at
+web.parkdex.app. Stand inside a park to plant your flag, earn a point for each day it flies,
+and take other players' parks. A player who photographs a park with no founder can become its
+founder. See `docs/park-founders.md`.
 
-- Parks on Vancouver Island come from the downloaded content catalogue. Only parks with
-  published badge art appear on the map, and the Dex starts empty.
-- Collector ranks: visiting 2, 5 and 10 unique parks opens Uncommon, Rare and Legendary
-  parks. See `docs/rarity-progression.md`.
+Parks and maps work offline without an account. Planting a flag needs a signed-in account with
+a handle and a connection, because every visit uses one server clock. Accounts use email and
+password or Google; see `docs/accounts-implementation-contract.md`. Badge claims made before the
+badge Dex was retired (#134) stay on the phone and back up to the account.
+
+- Parks across BC come from the content catalogue. Municipal and community parks are hidden
+  but kept. See `docs/content-catalogue.md` and `docs/park-visibility.md`.
 - Older installed builds keep reading new content. Content API changes must be additive;
   see `docs/content-compatibility.md`.
 - Maps: a bundled low-detail Protomaps base map of Canada (zoom 0 to 6). Detailed tiles
