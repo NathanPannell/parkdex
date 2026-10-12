@@ -544,9 +544,20 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
 }
 
+function authMailShell(heading: string, body: string): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Parkdex account</title></head><body style="margin:0;background:#fff8ec;color:#14231c;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:32px auto;padding:32px;background:#fffdf8;border:1px solid #ead6b6;border-radius:20px"><p style="font-weight:800;letter-spacing:.1em">PARKDEX</p><h1 style="font-size:28px">${heading}</h1>${body}<p style="font-size:13px">If you did not request this, you can ignore this email.</p></main></body></html>`;
+}
+
+function authMailButton(link: string, label: string): string {
+  return `<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 20px;background:#ff5a1f;color:#14231c;font-weight:700;text-decoration:none;border-radius:12px">${label}</a></p><p style="font-size:13px;overflow-wrap:anywhere">If the button does not work, copy and paste this address into your browser:<br>${escapeHtml(link)}</p>`;
+}
+
 function authMailHtml(link: string, kind: "verification" | "password_reset"): string {
   const action = kind === "verification" ? "verify your email address" : "reset your password";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Parkdex account</title></head><body style="margin:0;background:#fff8ec;color:#14231c;font-family:Arial,Helvetica,sans-serif"><main style="max-width:560px;margin:32px auto;padding:32px;background:#fffdf8;border:1px solid #ead6b6;border-radius:20px"><p style="font-weight:800;letter-spacing:.1em">PARKDEX</p><h1 style="font-size:28px">${kind === "verification" ? "Verify your email" : "Reset your password"}</h1><p>Use this link to ${action}. It expires in one hour and works once.</p><p><a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 20px;background:#ff5a1f;color:#14231c;font-weight:700;text-decoration:none;border-radius:12px">${kind === "verification" ? "Verify email" : "Reset password"}</a></p><p style="font-size:13px;overflow-wrap:anywhere">If the button does not work, copy and paste this address into your browser:<br>${escapeHtml(link)}</p><p style="font-size:13px">If you did not request this, you can ignore this email.</p></main></body></html>`;
+  return authMailShell(
+    kind === "verification" ? "Verify your email" : "Reset your password",
+    `<p>Use this link to ${action}. It expires in one hour and works once.</p>${authMailButton(link, kind === "verification" ? "Verify email" : "Reset password")}`,
+  );
 }
 
 function authMailText(link: string, kind: "verification" | "password_reset"): string {
@@ -554,7 +565,19 @@ function authMailText(link: string, kind: "verification" | "password_reset"): st
   return `Parkdex account\n\nUse this link to ${action}. It expires in one hour and works once:\n${link}\n\nIf you did not request this, you can ignore this email.`;
 }
 
-function authLink(env: AuthEnvironment, kind: "verification" | "password_reset", token: string): string {
+// A Google-only account has no password to reset, so a recovery request gets directions instead of silence.
+function googleSignInMailHtml(link: string, email: string): string {
+  return authMailShell(
+    "Sign in with Google",
+    `<p>Your Parkdex account uses Google sign-in, so it has no password to reset.</p><p>Open Parkdex, tap <strong>Continue with Google</strong> and choose <strong>${escapeHtml(email)}</strong>. No password is needed.</p>${authMailButton(link, "Open Parkdex")}`,
+  );
+}
+
+function googleSignInMailText(link: string, email: string): string {
+  return `Parkdex account\n\nYour Parkdex account uses Google sign-in, so it has no password to reset.\n\nOpen Parkdex, tap "Continue with Google" and choose ${email}. No password is needed:\n${link}\n\nIf you did not request this, you can ignore this email.`;
+}
+
+function accountPageLink(env: AuthEnvironment): URL {
   const base = emailLinkBase(env);
   if (!base) {
     throw new HttpError(503, "service_unavailable", "Account email links are unavailable.");
@@ -562,6 +585,11 @@ function authLink(env: AuthEnvironment, kind: "verification" | "password_reset",
   base.search = "";
   base.hash = "";
   base.pathname = `${base.pathname.replace(/\/+$/u, "")}/account`;
+  return base;
+}
+
+function authLink(env: AuthEnvironment, kind: "verification" | "password_reset", token: string): string {
+  const base = accountPageLink(env);
   base.hash = `${kind === "verification" ? "verificationToken" : "resetToken"}=${encodeURIComponent(token)}`;
   return base.toString();
 }
@@ -885,6 +913,10 @@ async function routeAuth(
         const link = authLink(env, "password_reset", token);
         queueEmail({ to: account.email, subject: "Reset your Parkdex password", html: authMailHtml(link, "password_reset"), text: authMailText(link, "password_reset") }, env, dependencies, store, "password_reset_email", emailScope);
       }
+    } else if (account && account.deletionState === "active" && account.providers.includes("google")) {
+      // Only the inbox owner sees this, and the response below is the same, so it reveals nothing about the account.
+      const link = accountPageLink(env).toString();
+      queueEmail({ to: account.email, subject: "How to sign in to Parkdex", html: googleSignInMailHtml(link, account.email), text: googleSignInMailText(link, account.email) }, env, dependencies, store, "password_reset_google_email", emailScope);
     }
     return jsonResponse({ accepted: true }, 202);
   }

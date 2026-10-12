@@ -10,5 +10,5 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["worker", "api", "scripts/preview-feedback-emails.ts"]
+  "include": ["worker", "api", "scripts/preview-feedback-emails.ts", "tools/photo-lab"]
 }

@@ -58,16 +58,13 @@ const OTHER = 'municipal-qa-removal-other';
 const IN_OTHER = { lat: 49.1215, lng: -123.0975, accuracyM: 6 };
 const BARE = 'municipal-qa-removal-bare';
 
-const answers = (approve, flags = {}) => ({
+const answers = (flags = {}) => ({
   model: 'qa-model',
-  answers: {
-    verdict: { choice: approve >= 0.5 ? 'approve' : 'reject', probabilities: { approve, reject: 1 - approve } },
-    ...Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: (flags[flag] ?? 0.01) > 0.5 ? 'yes' : 'no', probabilities: { yes: flags[flag] ?? 0.01, no: 1 - (flags[flag] ?? 0.01) } }])),
-  },
+  answers: Object.fromEntries(PHOTO_FLAGS.map((flag) => [flag, { choice: (flags[flag] ?? 0.01) > 0.5 ? 'yes' : 'no', probabilities: { yes: flags[flag] ?? 0.01, no: 1 - (flags[flag] ?? 0.01) } }])),
 });
-const APPROVE = answers(0.97);
-const PEOPLE = answers(0.03, { people: 0.96 });
-let verdict = APPROVE;
+const APPROVE = answers();
+const PEOPLE = answers({ people: 0.96 });
+let photoAnswers = APPROVE;
 
 const players = new Map();
 const authStore = {
@@ -89,7 +86,7 @@ const worker = createFeedbackWorker({
   // The production client over our own outline table, with Nominatim and Overpass unreachable.
   osmClient: createOsmClient({ NOMINATIM_URL: 'off', OVERPASS_URLS: 'https://overpass.invalid/api/interpreter' }, noNetwork, { table: createSqlOsmParkTable(databaseSqlRunner(dbUrl)) }),
   osmSearchAllowed: async () => true,
-  photoChecker: async () => verdict,
+  photoChecker: async () => photoAnswers,
   now: () => clock,
 });
 const env = {
@@ -260,7 +257,7 @@ try {
 
   // A curated park with its own outline, with a pending founding review, and another park's
   // pending review, which must be left alone.
-  verdict = PEOPLE;
+  photoAnswers = PEOPLE;
   const asker = await account('asker');
   const attempt = randomUUID();
   assert.equal((await json(await found(asker.token, { parkId: GREEN }, IN_GREEN, attempt))).outcome, 'rejected');
@@ -291,7 +288,7 @@ try {
   log('removing a curated park closes its pending reviews with the reason the player reads, and only those');
 
   // Its outline is offered as a new park and founded as one.
-  verdict = APPROVE;
+  photoAnswers = APPROVE;
   assert.equal((await offered(IN_GREEN, GREEN_OSM.id)).inCatalogue, null);
   const foundedGreen = await found(rival.token, { osm: { type: 'way', id: GREEN_OSM.id } }, IN_GREEN);
   assert.equal(foundedGreen.status, 200, await foundedGreen.clone().text());

@@ -65,8 +65,17 @@ export interface ReviewListItem {
 export interface ReviewDetail extends ReviewListItem {
   position: { lat: number; lng: number; accuracyM: number };
   photo: { sha256: string; width: number; height: number; bytes: number | null; purgedAt: string | null };
-  /** The model's answers to each question, with their probabilities. */
-  moderation: { model: string | null; threshold: number | null; answers: Record<string, { choice: string; probabilities: Record<string, number> }> } | null;
+  /**
+   * The model's answers to each question, with their probabilities. Checks stored before the
+   * verdict question was dropped have a `verdict` answer and `threshold`, its approve threshold;
+   * newer ones have `flagThresholds` instead.
+   */
+  moderation: {
+    model: string | null;
+    threshold: number | null;
+    flagThresholds: Record<string, number> | null;
+    answers: Record<string, { choice: string; probabilities: Record<string, number> }>;
+  } | null;
   /** The outline the player stood in: the OpenStreetMap outline checked, or the park's boundary. */
   geometry: MultiPolygon | null;
   park: { inParkdex: boolean; hidden: boolean; founder: { handle: string | null; foundedAt: string } | null };
@@ -128,6 +137,12 @@ function nullableIso(value: unknown): string | null {
 
 function jsonValue<T>(value: unknown): T {
   return (typeof value === "string" ? JSON.parse(value) : value) as T;
+}
+
+function numberRecord(value: unknown): Record<string, number> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const entries = Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]));
+  return entries.length ? Object.fromEntries(entries) : null;
 }
 
 function textArray(value: unknown): string[] {
@@ -272,6 +287,7 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
         moderation: moderation ? {
           model: typeof moderation.model === "string" ? moderation.model : null,
           threshold: typeof moderation.threshold === "number" ? moderation.threshold : null,
+          flagThresholds: numberRecord(moderation.flagThresholds),
           answers: (moderation.answers ?? {}) as NonNullable<ReviewDetail["moderation"]>["answers"],
         } : null,
         geometry: geometry?.type === "MultiPolygon" ? geometry : null,
@@ -357,7 +373,8 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
               id: proposalId,
               // The shape the operator dashboard shows for proposals.
               moderation: {
-                version: 1, checkedAt: input.at, model: stored.model ?? null, threshold: stored.threshold ?? null, answers: stored.answers ?? null,
+                version: stored.version ?? 1, checkedAt: input.at, model: stored.model ?? null, threshold: stored.threshold ?? null,
+                flagThresholds: stored.flagThresholds ?? null, answers: stored.answers ?? null,
                 reasons: ["Founded after the operator approved a manual review of the player's photo."],
                 osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, areaM2: feature.areaM2, distanceM, containsPin: distanceM === 0 },
                 nearby: [], review: { requestId: id },

@@ -5,7 +5,7 @@ import { createFeedbackWorker, type WorkerEnvironment } from "./index.ts";
 import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.ts";
 import { EXIF_GPS_JPEG } from "./fixtures/exif-gps-jpeg.ts";
 import type { PhotoAnswers, PhotoChecker } from "./founderPhoto.ts";
-import { PHOTO_FLAGS } from "./founderPhoto.ts";
+import { DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS } from "./founderPhoto.ts";
 import { CHECKS_PER_HOUR, FOUNDED_PER_DAY, founderVisitId, REVIEW_KEEP_MS, REVIEWS_PER_DAY } from "./founders.ts";
 import type {
   CatalogueParkRecord, CheckRecord, FoundedRecord, FounderInfo, FoundersStore, FoundExistingInput, FoundOsmInput, FoundResult, KeptAttempt, ParkSummaryRecord,
@@ -58,16 +58,14 @@ const INSIDE = { lat: 49.089, lng: -123.0601, accuracyM: 8 };
 const IN_BEACON = { lat: 48.415, lng: -123.365, accuracyM: 8 };
 const PHOTO = { mime: "image/jpeg", base64: Buffer.from(EXIF_GPS_JPEG).toString("base64"), width: 16, height: 12 };
 
-function verdict(approve: number, flags: Partial<Record<(typeof PHOTO_FLAGS)[number], number>> = {}): PhotoAnswers {
+/** The model's answers: each flag's yes, 0.01 unless given. */
+function flagged(flags: Partial<Record<(typeof PHOTO_FLAGS)[number], number>> = {}): PhotoAnswers {
   return {
     model: "openai/gpt-6-luna-decisions",
-    answers: {
-      verdict: { choice: approve >= 0.5 ? "approve" : "reject", probabilities: { approve, reject: 1 - approve } },
-      ...Object.fromEntries(PHOTO_FLAGS.map((flag) => {
-        const p = flags[flag] ?? 0.01;
-        return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
-      })),
-    },
+    answers: Object.fromEntries(PHOTO_FLAGS.map((flag) => {
+      const p = flags[flag] ?? 0.01;
+      return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
+    })),
   };
 }
 
@@ -77,7 +75,7 @@ class MemoryFoundersStore implements FoundersStore {
   handles = new Map<string, string>([[ACCOUNT, "sam"], [OTHER, "bee"]]);
   founded = new Map<string, { accountId: string; attemptId: string; sha256: string; bytes: Uint8Array; foundedAt: string; parkName: string; visit: FoundedRecord["visit"] }>();
   checks: Array<{ accountId: string; attemptId: string; parkId: string; osm: { type: string; id: number } | null; outcome: CheckRecord["outcome"]; flags: string[]; photoSha256: string; at: string; moderation: unknown }> = [];
-  /** Photos of rejected and unsure checks, kept for a review, by attempt. */
+  /** Photos of rejected checks (and older unsure ones), kept for a review, by attempt. */
   kept = new Map<string, { accountId: string; at: string; keep: KeptAttempt }>();
   requests: Array<{ id: string; accountId: string; attemptId: string; parkId: string; status: ReviewStatus; createdAt: string; seenAt: string | null }> = [];
   osmFoundings: FoundOsmInput[] = [];
@@ -197,7 +195,7 @@ function setup(options: { answers?: PhotoAnswers | null | "unconfigured"; featur
   const written: RequestContext[] = [];
   const pending: Promise<unknown>[] = [];
   const photoCalls: Parameters<PhotoChecker>[0][] = [];
-  const answers = options.answers === undefined ? verdict(0.94) : options.answers;
+  const answers = options.answers === undefined ? flagged() : options.answers;
   const checker: PhotoChecker = async (input) => {
     photoCalls.push(input);
     return answers === "unconfigured" ? null : answers;
@@ -261,7 +259,12 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.equal(founding.park.region, "British Columbia");
   assert.equal(founding.park.category, "municipal");
   assert.deepEqual(founding.osm, { type: "way", id: PATERSON.id });
-  assert.equal(founding.proposal.moderation.version, 1);
+  assert.equal(founding.proposal.moderation.version, 2);
+  assert.deepEqual(founding.proposal.moderation.flagThresholds, DEFAULT_FLAG_THRESHOLDS);
+  assert.equal("threshold" in founding.proposal.moderation, false, "there is no overall approve threshold");
+  assert.deepEqual(store.checks[0].moderation, {
+    version: 2, checkedAt: new Date(NOW).toISOString(), model: "openai/gpt-6-luna-decisions", flagThresholds: DEFAULT_FLAG_THRESHOLDS, answers: flagged().answers, flags: [],
+  });
   assert.ok(!JSON.stringify(founding.proposal.moderation).includes(String(INSIDE.lat)), "the audit record never holds the position");
   assert.deepEqual(store.checks.map((check) => [check.outcome, check.parkId]), [["approve", "osm-way-23938892"]]);
 
@@ -351,8 +354,8 @@ test("the position must be in the park, precise enough, and the park must exist 
   assert.equal(photoCalls.length, 1, "only the founding inside the park asked the model");
 });
 
-test("a rejected photo names each flag in plain words, an unsure one asks for another angle", async () => {
-  const rejected = setup({ answers: verdict(0.03, { people: 0.99, lighting: 0.7 }) });
+test("a rejected photo names each flag above its threshold in plain words; an older unsure check asks for another angle", async () => {
+  const rejected = setup({ answers: flagged({ people: 0.99, lighting: 0.85, not_park: 0.9 }) });
   const response = await rejected.found();
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), {
@@ -368,9 +371,17 @@ test("a rejected photo names each flag in plain words, an unsure one asks for an
   assert.deepEqual(rejected.store.checks.map((check) => [check.outcome, check.flags]), [["reject", ["people", "lighting"]]]);
   assert.deepEqual(rejected.written[0].events.map((event) => [event.type, event.properties]), [["founder_photo_checked", { outcome: "reject", flags: "people,lighting", source: "osm_new" }]]);
 
-  const unsure = setup({ answers: verdict(0.6) });
-  assert.deepEqual(await body(await unsure.found()), { outcome: "unsure", flags: [], message: "We couldn't tell. Try another angle.", reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString() });
-  assert.equal(unsure.store.founded.size, 0);
+  // Fairly likely flags at or below their thresholds approve; nothing is unsure any more.
+  const likely = setup({ answers: flagged({ people: 0.8, lighting: 0.7, not_park: 0.95, not_photo: 0.9, personal_info: 0.6 }) });
+  assert.equal((await body(await likely.found())).outcome, "founded");
+
+  // A retry of a check stored as unsure, before the verdict question was dropped, answers as before.
+  const older = setup({ answers: flagged({ people: 0.97 }) });
+  const olderAttempt = randomUUID();
+  await older.found({ attemptId: olderAttempt });
+  Object.assign(older.store.checks[0], { outcome: "unsure", flags: [] });
+  assert.deepEqual(await body(await older.found({ attemptId: olderAttempt })), { outcome: "unsure", flags: [], message: "We couldn't tell. Try another angle.", reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString() });
+  assert.equal(older.photoCalls.length, 1);
 
   // A retry of a rejected attempt answers the same without a second check.
   const attemptId = randomUUID();
@@ -432,7 +443,7 @@ test("the body is validated strictly and the photo must be a real JPEG of the st
 });
 
 test("rate limits: 20 photo checks an hour and 5 foundings a day", async () => {
-  const hourly = setup({ answers: verdict(0.6) });
+  const hourly = setup({ answers: flagged({ people: 0.97 }) });
   for (let index = 0; index < CHECKS_PER_HOUR; index += 1) assert.equal((await hourly.found()).status, 200);
   const limited = await hourly.found();
   assert.equal(limited.status, 429);
@@ -498,9 +509,9 @@ test("the park summary has public counts, the founder and the cover, plus your o
 
 // ---------------------------------------------------------------- manual review (#153)
 
-const people = () => verdict(0.03, { people: 0.97 });
+const people = () => flagged({ people: 0.97 });
 
-test("a rejected or unsure photo is kept for a day with its position and target; approved and unanswered ones are not", async () => {
+test("a rejected photo is kept for a day with its position and target; approved and unanswered ones are not", async () => {
   const rejected = setup({ answers: people() });
   const attemptId = randomUUID();
   const first = await body(await rejected.found({ attemptId }));
@@ -516,10 +527,10 @@ test("a rejected or unsure photo is kept for a day with its position and target;
   // A retry answers the same, including how long the photo is kept.
   assert.deepEqual(await body(await rejected.found({ attemptId })), first);
 
-  const unsure = setup({ answers: verdict(0.6) });
-  const catalogue = await body(await unsure.found({ target: { parkId: BEACON }, position: IN_BEACON }));
-  assert.equal(catalogue.outcome, "unsure");
-  assert.equal([...unsure.store.kept.values()][0].keep.osmFeature, null, "a catalogue park keeps no outline; its boundary is in the catalogue");
+  const dark = setup({ answers: flagged({ lighting: 0.9 }) });
+  const catalogue = await body(await dark.found({ target: { parkId: BEACON }, position: IN_BEACON }));
+  assert.equal(catalogue.outcome, "rejected");
+  assert.equal([...dark.store.kept.values()][0].keep.osmFeature, null, "a catalogue park keeps no outline; its boundary is in the catalogue");
 
   const approved = setup();
   await approved.found();
@@ -589,6 +600,13 @@ test("a review needs sign-in, a handle, a strict body and the caller's own rejec
   await unavailable.found({ attemptId: unavailableAttempt });
   assert.equal((await body(await unavailable.call("POST", "/api/parks/found/review", { attemptId: unavailableAttempt }))).code, "not_reviewable");
   assert.equal(store.requests.length + approved.store.requests.length + unavailable.store.requests.length, 0);
+
+  // A check stored as unsure, before the verdict question was dropped, can still be appealed.
+  const older = setup({ answers: people() });
+  const olderAttempt = randomUUID();
+  await older.found({ attemptId: olderAttempt });
+  Object.assign(older.store.checks[0], { outcome: "unsure", flags: [] });
+  assert.equal((await body(await older.call("POST", "/api/parks/found/review", { attemptId: olderAttempt }))).status, "pending");
 });
 
 test("a review is refused for a founded or hidden park and a second pending request; 3 a Victoria day", async () => {

@@ -213,7 +213,7 @@ export function Account({ onBack }: { onBack: () => void }) {
     if (mode === "reset") {
       await run(async () => {
         await auth.requestReset(email.trim());
-        setFormMessage("If an account can receive email at that address, a reset link is on its way.");
+        setFormMessage("If that email has a Parkdex account, we’ve sent instructions. Accounts that use Google sign in with “Continue with Google”.");
       });
       return;
     }
@@ -526,7 +526,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                 <>
                   <span className="eyebrow">Account recovery</span>
                   <h2>Reset your password</h2>
-                  <p>We’ll send a private reset link if this email can receive account messages.</p>
+                  <p>We’ll email a private reset link, or sign-in help if your account uses Google.</p>
                   <form className="account-form" onSubmit={(event) => void handleAuthSubmit(event)}>
                     <label className="fb-field"><span className="fb-label">Email</span><input className="fb-input" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
                     <button className="btn btn--sun btn--block" disabled={busy || !canRequestEmail}>{busy ? "Sending…" : "Send reset link"}</button>

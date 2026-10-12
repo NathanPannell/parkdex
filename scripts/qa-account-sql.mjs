@@ -92,6 +92,15 @@ try {
   assert.equal((await store.findAccountById(googleAccountId))?.passwordHash, null);
   log('Google-only account cannot gain password via reset', 'PASS');
 
+  // The reset route sends Google sign-in directions on exactly this shape of lookup.
+  const googleLookup = await store.findAccountByEmail(googleEmail);
+  assert.equal(googleLookup?.id, googleAccountId);
+  assert.equal(googleLookup?.passwordHash, null);
+  assert.equal(googleLookup?.deletionState, 'active');
+  assert.deepEqual(googleLookup?.providers, ['google']);
+  assert.deepEqual((await store.findAccountByEmail(email))?.providers, ['email']);
+  log('reset lookup reports a Google-only account by its providers', 'PASS');
+
   const raceSubject = `race-${suffix}`;
   const raceEmail = `race-${suffix}@example.test`;
   const concurrentGoogle = await Promise.all(Array.from({ length: 8 }, () => store.completeGoogleSignIn({ subject: raceSubject, email: raceEmail, displayName: null, accountId: randomUUID(), session: session('native'), now: now() })));
