@@ -246,10 +246,14 @@ export async function runHogQL(config: PostHogConfig, hogql: HogQL, options: Run
         method: "POST",
         headers: { authorization: `Bearer ${config.key}`, "content-type": "application/json" },
         body: JSON.stringify({ query: { kind: "HogQLQuery", query: hogql.query, ...(hogql.values ? { values: hogql.values } : {}) }, name: "parkdex-operator" }),
-        redirect: "error",
+        // The Edge runtime refuses redirect "error"; a redirect is treated as no answer instead.
+        redirect: "manual",
         signal: options.signal,
       });
     } catch {
+      throw new HttpError(502, "posthog_unreachable", "PostHog did not answer. Try again in a moment.");
+    }
+    if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
       throw new HttpError(502, "posthog_unreachable", "PostHog did not answer. Try again in a moment.");
     }
     const text = await response.text();
