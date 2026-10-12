@@ -46,6 +46,23 @@ export interface AccountDeleter {
   resume(receiptId: string): Promise<"pending" | "complete">;
 }
 
+/**
+ * The app's photo client asks for `redirect: "error"`, which the Vercel Edge runtime refuses with
+ * a TypeError before any request goes out, so every cleanup from the dashboard failed. Ask for
+ * "manual" instead and answer a redirect as a 502, which deleteAccountData records as a failed
+ * attempt, so a redirect is still never followed.
+ */
+export function edgeSafeFetch(inner: typeof fetch = fetch): typeof fetch {
+  return (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const strict = init.redirect === "error";
+    const response = await inner(input, strict ? { ...init, redirect: "manual" } : init);
+    if (strict && (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400))) {
+      return new Response(null, { status: 502 });
+    }
+    return response;
+  }) as typeof fetch;
+}
+
 export function createAccountDeleter(databaseUrl: string, photo: PhotoService, fetchFn?: typeof fetch): AccountDeleter {
   return {
     async resume(receiptId) {
@@ -58,7 +75,7 @@ export function createAccountDeleter(databaseUrl: string, photo: PhotoService, f
         ({ complete } = await deleteAccountData(
           { accountId: receipt.accountId, receiptId },
           { DATABASE_URL: databaseUrl, KIP_PHOTO_SERVICE_URL: photo.url, KIP_PHOTO_SERVICE_TOKEN: photo.token },
-          { fetch: fetchFn },
+          { fetch: edgeSafeFetch(fetchFn ?? fetch) },
         ));
       } catch {
         complete = false;

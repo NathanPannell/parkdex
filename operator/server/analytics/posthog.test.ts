@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { createDashboardApi, type DashboardEnv } from "../api.ts";
+import { strictEdgeFetch } from "../app/fakeCloud.ts";
 import { buildTemplate, guardCustomQuery, resetPostHogPacing } from "./posthog.ts";
 
 const ORIGIN = "https://operator.example.test";
@@ -142,4 +143,17 @@ test("every template keeps operator input in values, never in the query text", (
     assert.equal(hogql.query.includes("found_park_started"), false, name);
     assert.match(hogql.query, /LIMIT|GROUP BY day/, name);
   }
+});
+
+test("queries use only RequestInit fields the Edge runtime accepts, and a redirect is no answer", async () => {
+  const strict = strictEdgeFetch(async () => Response.json({ columns: ["event", "events", "people"], results: [["$pageview", 10, 3]], hasMore: false }));
+  const api = createDashboardApi({ posthogFetch: strict as unknown as typeof fetch });
+  const ok = await api(request("/api/analytics/posthog/query", { body: { template: "top_events", days: 7 } }), env);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(strict.violations, []);
+
+  resetPostHogPacing();
+  const redirecting = createDashboardApi({ posthogFetch: (async () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example.test/" } })) as typeof fetch });
+  const moved = await redirecting(request("/api/analytics/posthog/query", { body: { template: "top_events", days: 7 } }), env);
+  assert.equal(moved.status, 502);
 });
