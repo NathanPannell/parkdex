@@ -8,6 +8,7 @@ import { useAuth } from "../lib/accounts/AuthProvider";
 import { useContent } from "../lib/content/provider";
 import { sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit, hasLongHandle } from "../lib/game/handleFit";
 import { sortHeldParks } from "../lib/game/visit";
 import { bouncy, listItem, listParent, press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
@@ -94,7 +95,7 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
           </section>
         ) : (
           <>
-            <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""}`} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
+            <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""} ${hasLongHandle(player.handle) ? "has-long-handle" : ""}`} style={handleFit(player.handle)} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
               <span className="game-score__rays" aria-hidden="true" />
               <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" label={`Flag of @${player.handle}`} />
               <div className="game-score__text">

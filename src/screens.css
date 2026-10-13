@@ -1016,11 +1016,22 @@
 
 .nearby__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  column-gap: 5px;
+  max-width: 100%;
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ink-soft);
+}
+
+/* The card is too narrow for a long @handle at any readable size, so it ends in an ellipsis. */
+.nearby__owner {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nearby__meta i {
@@ -1215,6 +1226,22 @@
 
 .btn--glow {
   animation: glow 1.6s ease-in-out infinite;
+}
+
+/*
+ * The take button names the holder: "Take it from @handle". It wraps at the spaces, and a long
+ * handle's own line shrinks to fit beside the flag icon (--handle-chars, see handleFit).
+ */
+.park-sheet__cta,
+.arrival__card {
+  container-type: inline-size;
+}
+
+.park-sheet__cta > .btn--glow:only-child,
+.arrival__card .btn--block {
+  white-space: normal;
+  line-height: 1.1;
+  font-size: clamp(15px, (100cqi - 91px) / (var(--handle-chars, 1) * 0.6), 19px);
 }
 
 @keyframes glow {
@@ -1972,14 +1999,17 @@
   padding: calc(var(--safe-top) + 10px) 24px 0;
   text-align: center;
   min-height: 110px;
+  container-type: inline-size;
 }
 
 .eyebrow--light {
   color: rgba(255, 248, 236, 0.65);
 }
 
+/* "Take it from @handle" wraps at the spaces; the handle's own line shrinks to fit (handleFit). */
 .claim__head h1 {
   font-size: 38px;
+  font-size: clamp(24px, 100cqi / (var(--handle-chars, 1) * 0.6), 38px);
   font-weight: 800;
   margin-top: 8px;
 }

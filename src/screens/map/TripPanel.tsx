@@ -8,6 +8,7 @@ import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import { takeLabel, type ParkHolder } from "../../lib/game/visit";
 import { formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
+import { handleFit } from "../../lib/game/handleFit";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -153,7 +154,7 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = fals
         </Bubble>
         <Kip pose="cheer" size={92} />
       </motion.div>
-      <div className="arrival__card card">
+      <div className="arrival__card card" style={handleFit(holder.kind === "other" ? holder.flag.handle : null)}>
         <motion.span className="arrival__tag" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.15, stiffness: 600, damping: 14 }}>
           <Icon name="check" size={14} stroke={3.4} /> Inside the boundary
         </motion.span>

@@ -34,6 +34,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 0 20px 8px;
+  container-type: inline-size;
 }
 
 .handle-sheet__body h2 {
@@ -57,14 +58,20 @@
 .handle-sheet__preview > span:last-child {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* The @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .handle-sheet__preview strong {
   font-family: var(--display);
   font-size: 22px;
+  font-size: clamp(15px, 100cqi / (var(--handle-chars, 1) * 0.6), 22px);
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .handle-sheet__preview em {
@@ -115,8 +122,10 @@
   text-align: center;
 }
 
+/* "Meet your flag, @handle" wraps at the space; the handle's own line shrinks to fit. */
 .handle-reveal h2 {
   margin: 0;
+  font-size: clamp(20px, 100cqi / (var(--handle-chars, 1) * 0.6), 28px);
 }
 
 .handle-reveal__flag {
@@ -136,13 +145,18 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* The @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .game-identity__text strong {
   font-family: var(--display);
   font-size: 20px;
+  font-size: clamp(15px, 100cqi / (var(--handle-chars, 1) * 0.6), 20px);
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .game-identity__text span {
@@ -267,11 +281,14 @@
   min-width: 0;
 }
 
+/* An @handle never wraps. A long one gets its own line instead (.has-long-handle, below). */
 .game-score__text strong {
   font-family: var(--display);
   font-size: 20px;
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Direct children only: the rolling score digits are spans too. */
@@ -303,6 +320,44 @@
 
 .game-score.is-long .game-score__points strong {
   font-size: 26px;
+}
+
+/*
+ * A long @handle takes the card's full width above the parks held and the score, and shrinks
+ * from 20px towards 15px to stay on one line: the card's width less the 64px flag and its gap,
+ * shared by the handle's characters (about 0.6em each). An ellipsis is the last resort.
+ */
+.account-card.game-score.has-long-handle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pin handle handle"
+    "pin held points";
+  align-items: center;
+  row-gap: 2px;
+  container-type: inline-size;
+}
+
+.game-score.has-long-handle > .flag-pin {
+  grid-area: pin;
+}
+
+.game-score.has-long-handle .game-score__text {
+  display: contents;
+}
+
+.game-score.has-long-handle .game-score__text strong {
+  grid-area: handle;
+  font-size: 15px;
+  font-size: clamp(15px, (100cqi - 78px) / (var(--handle-chars) * 0.6), 20px);
+}
+
+.game-score.has-long-handle .game-score__text > span {
+  grid-area: held;
+}
+
+.game-score.has-long-handle .game-score__points {
+  grid-area: points;
 }
 
 .game-stale {
@@ -366,9 +421,12 @@ button.game-row:active {
 
 .game-row__name {
   flex: 1;
+  container-type: inline-size;
 }
 
+/* Leaderboard and friends rows shrink a long @handle towards 12.5px before the ellipsis (handleFit). */
 .game-row__name strong {
+  font-size: clamp(12.5px, 100cqi / (var(--handle-chars, 1) * 0.56), 16px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -559,10 +617,20 @@ button.game-row:active {
   min-width: 0;
 }
 
+.park-sheet__holder > span:nth-child(2) {
+  flex: 1;
+  container-type: inline-size;
+}
+
+/* The holder's @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .park-sheet__holder strong {
   font-family: var(--display);
   font-size: 18px;
+  font-size: clamp(14px, 100cqi / (var(--handle-chars, 1) * 0.6), 18px);
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .park-sheet__holder em {

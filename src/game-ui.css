@@ -200,13 +200,18 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* The @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .settings-flag__text strong {
   font-family: var(--display);
   font-size: 20px;
+  font-size: clamp(14px, 100cqi / (var(--handle-chars, 1) * 0.6), 20px);
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .settings-flag__text span {

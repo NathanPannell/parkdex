@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { buzz, sfx } from "../lib/feedback";
 import { GameError, handleProblem, normalizeHandle, type GamePlayer } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit } from "../lib/game/handleFit";
 import { press, shake } from "../lib/motion";
 import "../game.css";
 import "../game-ui.css";
@@ -105,7 +106,7 @@ export function HandleSheet() {
           {revealed ? (
             <motion.div key="reveal" className="handle-sheet__body handle-reveal" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               <span className="eyebrow">Your flag</span>
-              <h2 id="handle-title">Meet your flag, @{revealed.handle}</h2>
+              <h2 id="handle-title" style={handleFit(revealed.handle)}>Meet your flag, @{revealed.handle}</h2>
               <motion.div className="handle-reveal__flag" initial={{ scale: 0.3, rotate: -14 }} animate={{ scale: 1, rotate: -3 }} transition={{ type: "spring", stiffness: 260, damping: 13 }}>
                 <Flag seed={revealed.flagSeed} size={176} label={`Flag of @${revealed.handle}`} />
               </motion.div>
@@ -118,7 +119,7 @@ export function HandleSheet() {
             <motion.form key="pick" className="handle-sheet__body" onSubmit={(event) => void submit(event)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
               <span className="eyebrow">{existing ? "Your handle" : "Before you plant"}</span>
               <h2 id="handle-title">{existing ? "Change your handle" : "Pick your handle"}</h2>
-              <div className="handle-sheet__preview">
+              <div className="handle-sheet__preview" style={handleFit(handle || "yourname")}>
                 <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} className={previewSeed ? "is-waving" : undefined} />
                 <span>
                   <motion.strong key={handle.length} initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 600, damping: 20 }}>@{handle || "yourname"}</motion.strong>
