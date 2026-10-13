@@ -83,6 +83,12 @@ before(async () => {
      ('relation', 222, 'Mill Hill Regional Park', 'leisure=park', '{"leisure":"park","operator":"CRD"}', 48.45, 48.453, -123.49, -123.487, 80000, $2::jsonb, '2026-10-01')`,
     [JSON.stringify(multi(-123.47, 48.46)), JSON.stringify(multi(-123.49, 48.45, 0.003))],
   );
+  // Two extracts loaded side by side (osm_parks_002_sources.sql).
+  await pool.query(
+    `INSERT INTO kip_osm.source (source_id, source_date, source_sha256, source_name, row_count) VALUES
+     ('bc', '2026-10-01T00:00:00Z', repeat('a', 64), 'british-columbia-latest.osm.pbf', 2),
+     ('nova-scotia', '2026-10-12T20:21:35Z', repeat('b', 64), 'nova-scotia-latest.osm.pbf', 0)`,
+  );
   const api = createDashboardApi({
     liveParkStore: () => createSqlLiveParkStore(runner),
     parkManagerStore: () => createSqlParkManagerStore(runner),
@@ -110,6 +116,7 @@ test("the catalogue, stats and a park's activity read from the real tables", { s
   ]);
   const { stats } = await json<{ stats: Record<string, unknown> }>(await call("/api/parks/stats"));
   assert.deepEqual([stats.live, stats.hidden, stats.founded, stats.osmOutlines, stats.osmNotInParkdex], [2, 0, 1, 2, 1], "Mill Hill has no Parkdex pin in its box");
+  assert.equal(stats.osmSourceDate, "2026-10-01T00:00:00.000Z", "several extracts report the oldest");
 
   const { activity } = await json<{ activity: Record<string, any> }>(await call("/api/parks/regional-thetis-lake"));
   assert.deepEqual(activity.visits, { total: 3, last30Days: 2, uniquePlayers: 2 });
