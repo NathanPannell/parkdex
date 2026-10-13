@@ -19,6 +19,7 @@ import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { DEMO_TOOLS } from "../../lib/demo";
+import { KIP_TIP_IDS, requestKipTip } from "../../lib/kipTips";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
@@ -57,6 +58,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [demoTip, setDemoTip] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
   // Truthy while founding; holds the park when it started from that park's sheet.
@@ -610,6 +612,16 @@ export function MapScreen() {
               }}
             >
               <Icon name="refresh" size={18} /> Reset and replay onboarding
+            </button>
+            <button
+              onClick={() => {
+                setDemoOpen(false);
+                const id = KIP_TIP_IDS[demoTip % KIP_TIP_IDS.length];
+                setDemoTip((n) => n + 1);
+                requestKipTip(id, { force: true });
+              }}
+            >
+              <Icon name="bulb" size={18} /> Show Kip's Tip: {KIP_TIP_IDS[demoTip % KIP_TIP_IDS.length]}
             </button>
           </motion.div>
         )}
