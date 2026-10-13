@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { CrewList } from "../../components/CrewList";
 import { Icon } from "../../components/Icon";
 import type { Crew, ParkFlag } from "../../lib/game/client";
 import { crewHeadline, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
@@ -11,48 +10,52 @@ type Props = {
   /** The crew read when the page opened, when it matches the flag on the map. */
   crew: Crew | null;
   now: number;
-  myHandle: string | null;
   onShowCode: () => void;
 };
 
 /**
- * The park page's crew panel (#171): the protected hour for the leader, members and everyone
- * else, the way to show the crew code, and the crew list. After the hour, the crew list stays
- * under the holder row with "Crew window closed".
+ * The crew part of the park page's status block (#171): the protected hour for the leader,
+ * members and everyone else, and the way to show the crew code. Only the leader gets the big
+ * code button during the hour; members get a small one. The crew list itself sits under
+ * "More about this park". After the hour, one quiet line says the window closed.
  */
-export function CrewPanel({ phase, flag, crew, now, myHandle, onShowCode }: Props) {
+export function CrewPanel({ phase, flag, crew, now, onShowCode }: Props) {
   if (phase.kind === "none") return null;
-  const headline = crewHeadline(phase, now);
   const size = crew?.size ?? flag.crew?.size ?? 1;
-  const list = crew && crew.members.length > 0 ? <CrewList members={crew.members} flagSince={crew.flagSince} myHandle={myHandle} /> : null;
 
   if (phase.kind === "closed") {
     return (
-      <section className="crew-panel is-closed" aria-label="Crew">
-        <p className="crew-panel__closed"><Icon name="lock" size={14} /> Crew window closed{list ? "" : ` · crew of ${size}`}</p>
-        {list}
-      </section>
+      <div className="crew-panel is-closed" aria-label="Crew" role="group">
+        <p className="crew-panel__closed"><Icon name="lock" size={14} /> Crew window closed · crew of {size}</p>
+      </div>
     );
   }
 
   return (
-    <section className={`crew-panel is-${phase.kind}`} aria-label="Crew">
+    <div className={`crew-panel is-${phase.kind}`} aria-label="Crew" role="group">
       <p className="crew-panel__status" role="timer" aria-live="off">
-        <Icon name="shield" size={20} />
-        <strong>{headline}</strong>
+        <Icon name="shield" size={18} />
+        <strong>{crewHeadline(phase, now)}</strong>
       </p>
       {phase.kind === "outsider" ? (
-        phase.logged
-          ? <p className="crew-panel__note crew-panel__note--logged">{loggedVisitLine(phase.until)}</p>
-          : <p className="crew-panel__note">Ask the crew for their code to join.</p>
-      ) : (
+        <p className={`crew-panel__note${phase.logged ? " crew-panel__note--logged" : ""}`}>
+          {phase.logged ? loggedVisitLine(phase.until) : "Ask the crew for their code to join."}
+        </p>
+      ) : phase.kind === "leader" ? (
         <>
+          <p className="crew-panel__note">{size === 1 ? "Just you so far." : `Crew of ${size}.`}</p>
           <motion.button whileTap={press} className="btn btn--sun btn--block crew-panel__code" onClick={onShowCode}>
             <Icon name="qr" size={20} /> Show crew code
           </motion.button>
-          {list ?? <p className="crew-panel__note">{size === 1 ? "Just you so far." : `Crew of ${size}.`}</p>}
         </>
+      ) : (
+        <div className="crew-panel__row">
+          <p className="crew-panel__note">{`Crew of ${size}.`}</p>
+          <button className="btn btn--paper btn--sm crew-panel__code crew-panel__code--quiet" onClick={onShowCode}>
+            <Icon name="qr" size={16} /> Crew code
+          </button>
+        </div>
       )}
-    </section>
+    </div>
   );
 }

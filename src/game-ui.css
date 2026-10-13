@@ -247,16 +247,16 @@
   translate: none;
 }
 
-/* Park sheet holder row: colour says whose park it is at a glance. */
-.park-sheet__holder.is-mine {
+/* Park sheet status block: colour says whose park it is at a glance. */
+.park-status.is-mine {
   background: linear-gradient(90deg, #fff1b8, #fff 75%);
 }
 
-.park-sheet__holder.is-other {
+.park-status.is-other {
   background: linear-gradient(90deg, #ffe0e7, #fff 75%);
 }
 
-.park-sheet__holder.is-empty {
+.park-status.is-empty {
   border-style: dashed;
 }
 

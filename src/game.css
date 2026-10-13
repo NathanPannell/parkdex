@@ -597,20 +597,23 @@ button.game-row:active {
 /* Inside a park already visited today: no pulse, and the tag reads as a note, not a call. */
 .fab--visited .fab__label {
   background: var(--paper);
-  rotate: 0deg;
 }
 
 /* ---------- Park sheet: who holds the park ---------- */
+
+/* One status block: the flag holder, then the crew during and after the protected hour. */
+.park-status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+}
 
 .park-sheet__holder {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 0 4px;
-  padding: 10px 14px;
-  border: 2.5px solid var(--ink);
-  border-radius: var(--r-md);
-  background: #fff;
 }
 
 .park-sheet__holder > span:last-child {
@@ -643,11 +646,13 @@ button.game-row:active {
 
 /* ---------- Planting scene: a flag driven into a mound of dirt ---------- */
 
+/* Drawn at 280 by 330 and scaled from its top left corner to fit the stage (useSceneFit). */
 .plant-scene {
   position: relative;
   z-index: 2;
   width: 280px;
   height: 330px;
+  transform-origin: 0 0;
 }
 
 /* The pole's foot sits 22px inside the mound, so the mound hides it once planted. */
@@ -776,13 +781,13 @@ button.game-row:active {
   pointer-events: none;
 }
 
-/* The points land to the left of the pole, clear of the cloth and the headline. */
+/* The points land left of the pole, in scene coordinates, clear of the cloth and the text. */
 .plant-score {
   position: absolute;
   z-index: 6;
-  top: 16%;
-  left: 2%;
-  width: 170px;
+  top: 30px;
+  left: -44px;
+  width: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -791,7 +796,7 @@ button.game-row:active {
 
 .plant-score strong {
   font-family: var(--display);
-  font-size: 84px;
+  font-size: 72px;
   font-weight: 800;
   line-height: 0.95;
   color: var(--sun);
@@ -811,12 +816,74 @@ button.game-row:active {
   font-weight: 800;
 }
 
+/* Kip cheers on the right of the mound, below the cloth. */
 .plant-kip {
   position: absolute;
   z-index: 5;
-  right: 6px;
-  bottom: -6px;
+  right: -40px;
+  bottom: -4px;
   pointer-events: none;
+}
+
+/* Kip's cheer with the points part by part, for screen readers; the scene shows the total. */
+.plant__cheer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Crew, friend offer and new badge, as one row of small chips under the sentence. */
+.plant__extras {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.plant__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 2px solid rgba(255, 248, 236, 0.45);
+  border-radius: 99px;
+  background: rgba(255, 248, 236, 0.1);
+  color: var(--paper);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.plant__chip--button {
+  border-color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.badge-unlock--compact {
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px 12px 2px 3px;
+  border-width: 2px;
+  border-radius: 99px;
+  box-shadow: none;
+}
+
+.badge-unlock--compact .badge-unlock__text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.badge-unlock--compact .badge-unlock__text span {
+  font-size: 11px;
+}
+
+.badge-unlock--compact .badge-unlock__text strong {
+  font-size: 14px;
 }
 
 .plant__bubble {

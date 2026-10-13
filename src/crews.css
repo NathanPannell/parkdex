@@ -1,31 +1,28 @@
 /* Crew flags (#171): the park page's crew panel, crew lists, the code sheet, the join card and the join scene. */
 
+/* The crew part of the park sheet's status block, under the holder row. */
 .crew-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 2.5px solid var(--ink);
-  border-radius: var(--r-md);
-  background: #fff;
-  box-shadow: var(--pop);
-}
-
-.crew-panel.is-leader,
-.crew-panel.is-member {
-  background: linear-gradient(90deg, #fff1b8, #fff 80%);
-}
-
-.crew-panel.is-outsider {
-  background: linear-gradient(90deg, #e6ecff, #fff 80%);
-}
-
-.crew-panel.is-closed {
   gap: 8px;
-  padding: 10px 14px;
-  border-style: dashed;
-  box-shadow: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px dashed rgba(20, 35, 28, 0.15);
+}
+
+.crew-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crew-panel__code--quiet {
+  flex: none;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 14px;
+  gap: 6px;
 }
 
 .crew-panel__status {
@@ -37,7 +34,7 @@
 
 .crew-panel__status strong {
   font-family: var(--display);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
@@ -178,30 +175,6 @@
   .plant-pennant--wave .pennant {
     animation: none;
   }
-}
-
-.plant__crew {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(100%, 340px);
-  padding: 12px 14px;
-  border: 2px solid rgba(255, 248, 236, 0.5);
-  border-radius: var(--r-md);
-  background: rgba(255, 248, 236, 0.95);
-  color: var(--ink);
-}
-
-/* The button drops below a long @handle rather than squeezing it. */
-.plant__friend-offer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 2px dashed rgba(20, 35, 28, 0.15);
-  font-weight: 700;
 }
 
 .arrival__crew {
