@@ -1,6 +1,6 @@
 # Legacy BC park import
 
-`database/imports/legacy-bc-20261007/` adds every park from the legacy web Parkdex (`map.parkdex.app`) that is not already in the Parkdex catalogue: 1,273 parks across British Columbia. It is review input for `scripts/import_legacy_parks.py`; building it makes no database, R2 or provider change.
+`database/imports/legacy-bc-20261007/` adds every park from the legacy web Parkdex (formerly `map.parkdex.app`, retired with its Railway API on 2026-10-13) that is not already in the Parkdex catalogue: 1,273 parks across British Columbia. It is review input for `scripts/import_legacy_parks.py`; building it makes no database, R2 or provider change.
 
 The full catalogue is about 10 MB, more than the 4 MiB that the content API and every installed build accept in one response. So every new park gets content reader floor 3 (`--minimum-reader 3`): builds installed today keep their current snapshot, and newer builds load the whole catalogue from a CDN release. See `docs/content-catalogue.md`.
 

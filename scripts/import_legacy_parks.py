@@ -20,7 +20,6 @@ import cloud_content
 
 SCHEMA = "parkdex.legacy-park-import.v1"
 DEFAULT_BOUNDARY_URL = "https://staging.web.parkdex.app/data/boundaries.v1.geojson"
-DEFAULT_CATALOGUE_URL = "https://api-staging-882c.up.railway.app/api/places"
 ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 BIOMES = {"coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"}
