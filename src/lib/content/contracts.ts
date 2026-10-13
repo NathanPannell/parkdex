@@ -76,7 +76,12 @@ export type CatalogueChunkRef = {
  * evicted again, least recently used first (see leanCache.ts).
  */
 export type CatalogueCache = {
-  version: string;
+  /**
+   * The CDN catalogue release the stored boundaries come from, or null when the device
+   * trimmed a catalogue saved whole before it knew the release's chunk list. A null
+   * catalogue is replaced by the release on the next sync.
+   */
+  version: string | null;
   revision: number;
   chunks: CatalogueChunkRef[];
   /** Paths of the chunks whose boundaries are stored, least recently used first. */
@@ -340,6 +345,8 @@ export type ContentRuntimeOptions = {
   now?: () => number;
   /** A map pointer this build uses in place of the server's (see BUILD_MAP_POINTER). */
   mapPointer?: ContentMapPointer;
+  /** The player's last saved position, so content near them is kept before a fresh fix lands. */
+  lastLocation?: MapPoint | null;
   /** False when nothing shows badge art, so no scene file is required or fetched near the visitor. */
   badgeArt?: boolean;
   /** The app bundle's build. A new one (a web deploy or an over-the-air bundle) cleans up old content once. */
