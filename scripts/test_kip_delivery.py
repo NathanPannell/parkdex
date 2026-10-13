@@ -104,7 +104,6 @@ class AccountReleaseGates(unittest.TestCase):
             "founders_002_reviews.sql",
             "founders_003_park_removed.sql",
             "game_002_points.sql",
-            "game_003_crews.sql",
             "social_001_friends.sql",
             "osm_parks_002_sources.sql",
             "game_003_crews.sql",
