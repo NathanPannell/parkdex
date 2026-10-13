@@ -32,13 +32,59 @@ test("a small catalogue park inside a large outline does not make the outline a 
   assert.equal(catalogueMatch(WATERSHED, [playingField]), null);
 });
 
-test("the same name close by matches, the same name far away does not", () => {
-  const nearby = park({ id: "regional-watershed", name: "Watershed Regional Park", lat: 49.121, lng: -122.885, boundary: box(-122.886, 49.1205, -122.884, 49.1215) });
+test("a catalogue park without a boundary matches by the same name close by, not far away", () => {
+  // Pin-only legacy rows have nothing but a name and a pin to go on.
+  const nearby = park({ id: "regional-watershed", name: "Watershed Regional Park", lat: 49.121, lng: -122.885 });
   assert.equal(catalogueMatch(WATERSHED, [nearby])?.parkId, "regional-watershed");
-  const far = park({ id: "community-watershed", name: "Watershed Park", lat: 49.3, lng: -123.1, boundary: box(-123.101, 49.299, -123.099, 49.301) });
+  const sameWords = park({ id: "municipal-park-watershed", name: "Park Watershed", lat: 49.121, lng: -122.885 });
+  assert.equal(catalogueMatch(WATERSHED, [sameWords])?.parkId, "municipal-park-watershed", "word order and generic words don't matter");
+  const far = park({ id: "community-watershed", name: "Watershed Park", lat: 49.3, lng: -123.1 });
   assert.equal(catalogueMatch(WATERSHED, [far]), null);
+  // A name inside a longer one is another park, even with a pin right next to the outline.
+  const longer = park({ id: "municipal-watershed-dog", name: "Watershed Dog Park", lat: 49.121, lng: -122.885 });
+  assert.equal(catalogueMatch(WATERSHED, [longer]), null);
   assert.equal(nameKey("Château-Richer Provincial Park"), "chateau richer");
   assert.equal(nameKey("Park"), "");
+});
+
+test("a name never overrides the shapes: a catalogue park with a boundary next to the outline is another park", () => {
+  // The same name, but its boundary is 300 m north of the outline.
+  const beside = park({ id: "regional-watershed", name: "Watershed Regional Park", lat: 49.121, lng: -122.885, boundary: box(-122.886, 49.1205, -122.884, 49.1215) });
+  assert.equal(catalogueMatch(WATERSHED, [beside]), null);
+});
+
+// Steveston, Richmond: the real OpenStreetMap outlines (way 179219507 and way 31902392). They
+// touch neither each other nor share a name, but "steveston" is inside "steveston town square".
+const TOWN_SQUARE: MultiPolygon = { type: "MultiPolygon", coordinates: [[[
+  [-123.183254, 49.125553], [-123.182878, 49.125554], [-123.18288, 49.125276], [-123.183255, 49.125277], [-123.183254, 49.125553],
+]]] };
+const STEVESTON: MultiPolygon = { type: "MultiPolygon", coordinates: [[[
+  [-123.180522, 49.125873], [-123.179685, 49.126405], [-123.179726, 49.127813], [-123.174312, 49.127932], [-123.174287, 49.125227],
+  [-123.180991, 49.125252], [-123.18111, 49.125328], [-123.181113, 49.125879], [-123.180522, 49.125873],
+]]] };
+
+test("Steveston Community Park is not Steveston Town Square Park, in either order", () => {
+  const steveston: OsmFeature = { type: "way", id: 31902392, name: "Steveston Community Park", kind: "leisure=park", tags: { leisure: "park" }, geometry: STEVESTON, areaM2: 123_477 };
+  const townSquare: OsmFeature = { type: "way", id: 179219507, name: "Steveston Town Square Park", kind: "leisure=park", tags: { leisure: "park" }, geometry: TOWN_SQUARE, areaM2: 838 };
+  const foundedSquare = park({ id: "osm-way-179219507", name: "Steveston Town Square Park", lat: 49.125415, lng: -123.183067, boundary: TOWN_SQUARE });
+  const foundedSteveston = park({ id: "osm-way-31902392", name: "Steveston Community Park", lat: 49.126580, lng: -123.177200, boundary: STEVESTON });
+  assert.equal(catalogueMatch(steveston, [foundedSquare]), null);
+  assert.equal(catalogueMatch(townSquare, [foundedSteveston]), null);
+  // Each is still itself once published.
+  assert.equal(catalogueMatch(steveston, [foundedSquare, foundedSteveston])?.parkId, "osm-way-31902392");
+  assert.equal(catalogueMatch(townSquare, [foundedSteveston, foundedSquare])?.parkId, "osm-way-179219507");
+});
+
+test("the same name and a good share of the same ground is the same park, even drawn differently", () => {
+  // Two thin shoreline strips, each about 2 km by 30 m, offset along the shore so that neither
+  // middle lies in the other but they share 45% of their length (Sheringham Point Park).
+  const strip: OsmFeature = { type: "way", id: 2519257, name: "Sheringham Point Park", kind: "leisure=park", tags: { leisure: "park" }, geometry: box(-123.900, 48.380, -123.873, 48.3803), areaM2: 60_000 };
+  const drawn = (name: string) => park({ id: "community-sheringham", name, lat: 48.3801, lng: -123.88, boundary: box(-123.88515, 48.38, -123.85815, 48.3803) });
+  assert.equal(catalogueMatch(strip, [drawn("Sheringham Point Park")])?.parkId, "community-sheringham");
+  assert.equal(catalogueMatch(strip, [drawn("Sheringham Point Lookout")]), null, "a longer name is not the same name");
+  // Sharing only a sliver of ground is not enough.
+  const sliver = park({ id: "community-sheringham", name: "Sheringham Point Park", lat: 48.3801, lng: -123.87, boundary: box(-123.8745, 48.38, -123.8475, 48.3803) });
+  assert.equal(catalogueMatch(strip, [sliver]), null);
 });
 
 const SECRET = "test-session-secret-which-is-long-enough";
