@@ -19,6 +19,7 @@ import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
 import { DEMO_TOOLS } from "../../lib/demo";
+import { KIP_TIP_IDS, requestKipTip } from "../../lib/kipTips";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
@@ -31,6 +32,7 @@ import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../
 import { isFeatureEnabled } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
 import { NearbyPanel } from "./NearbyPanel";
+import { NEARBY_LIST_KM, NEARBY_LIST_SIZE, nearestParks } from "../../lib/nearbyParks";
 import { ArrivalCard, TripPanel } from "./TripPanel";
 
 const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
@@ -57,6 +59,7 @@ export function MapScreen() {
   const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [demoTip, setDemoTip] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
   // Truthy while founding; holds the park when it started from that park's sheet.
@@ -122,10 +125,8 @@ export function MapScreen() {
 
   // Straight-line distance ranks every park, including ones without a drive estimate.
   const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id), ageMs: flagAge(p.id) }), [user, visit.holderOf, flagDays, flagAge]);
-  const nearby = useMemo(
-    () => parks.map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) })).sort((a, b) => a.km - b.km).slice(0, 8),
-    [parks, user],
-  );
+  // "Parks near you" stays within NEARBY_LIST_KM of the player; search still covers every park.
+  const nearby = useMemo(() => nearestParks(parks, user, { limit: NEARBY_LIST_SIZE, maxKm: NEARBY_LIST_KM }), [parks, user]);
   const nearbyItems = useMemo(() => nearby.map(({ p }) => listItem(p)), [nearby, listItem]);
   const searchItems = useMemo(() => parks.map(listItem), [parks, listItem]);
 
@@ -314,7 +315,7 @@ export function MapScreen() {
 
   function teleportNearest() {
     if (!DEMO_TOOLS || !bounds) return;
-    const target = nearby[0]?.p;
+    const target = nearestParks(parks, user, { limit: 1 })[0]?.p;
     if (!target) return;
     const point = arrivalPoint(bounds.byId.get(target.id)!, user);
     setDemoOpen(false);
@@ -614,6 +615,16 @@ export function MapScreen() {
               }}
             >
               <Icon name="refresh" size={18} /> Reset and replay onboarding
+            </button>
+            <button
+              onClick={() => {
+                setDemoOpen(false);
+                const id = KIP_TIP_IDS[demoTip % KIP_TIP_IDS.length];
+                setDemoTip((n) => n + 1);
+                requestKipTip(id, { force: true });
+              }}
+            >
+              <Icon name="bulb" size={18} /> Show Kip's Tip: {KIP_TIP_IDS[demoTip % KIP_TIP_IDS.length]}
             </button>
           </motion.div>
         )}

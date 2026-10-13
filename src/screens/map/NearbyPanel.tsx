@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlagPin } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { formatDistance } from "../../lib/geo";
+import { NEARBY_LIST_KM } from "../../lib/nearbyParks";
 import type { Park } from "../../lib/parks";
 import { searchParks } from "../../lib/parkSearch";
 import { formatFlagAge } from "../../lib/game/flag";
@@ -77,6 +78,10 @@ export function NearbyPanel({ nearby, all, onSelect }: Props) {
           {searching && query.trim() && !hits.length ? (
             <motion.p key="empty" className="nearby__empty card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               No parks match "{query.trim()}"
+            </motion.p>
+          ) : items === nearby && !nearby.length && all.length > 0 ? (
+            <motion.p key="none-near" className="nearby__empty card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              No parks within {NEARBY_LIST_KM} km
             </motion.p>
           ) : (
             items.map((item, i) => <ParkCard key={item.park.id} item={item} index={i % STREAM_STEP} onSelect={onSelect} />)

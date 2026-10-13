@@ -2,6 +2,7 @@ import { AnimatePresence, MotionConfig } from "motion/react";
 import { AnimatePresence as Presence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BottomNav } from "./components/BottomNav";
+import { KipTipHost } from "./components/KipTip";
 import { ToastProvider } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
@@ -246,6 +247,7 @@ function Screens() {
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
       <TakeoverMessages allowed={messagesAllowed && !decisions.current} />
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
+      <KipTipHost paused={!state.startupReady || !onboarded || screen === "onboarding" || screen === "splash"} />
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
     </>
