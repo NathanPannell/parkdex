@@ -30,13 +30,17 @@ export function Flag({ seed, size = 48, days = 0, label, className }: Props) {
   );
 }
 
-/** A flag on its pole with an age tag, or an empty pole for a park nobody holds. */
-export function FlagPin({ seed, days = 0, size = 48, showAge = true, label, className }: Props & { showAge?: boolean }) {
+/**
+ * A flag on its pole with an age tag, or an empty pole for a park nobody holds. The tag reads
+ * `ageMs` (35m, 3h, 2d); without it, the whole days.
+ */
+export function FlagPin({ seed, days = 0, ageMs, size = 48, showAge = true, label, className }: Props & { showAge?: boolean; ageMs?: number }) {
   const id = useId();
   const weather = weatherForDays(days);
+  const age = seed && showAge ? formatFlagAge(ageMs ?? days * 86_400_000) : undefined;
   const markup = useMemo(
-    () => flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: seed && showAge ? formatFlagAge(days) : undefined }),
-    [seed, weather, id, showAge, days],
+    () => flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: age }),
+    [seed, weather, id, age],
   );
   return (
     <span

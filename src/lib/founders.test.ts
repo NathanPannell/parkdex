@@ -116,8 +116,8 @@ describe("foundPark", () => {
       outcome: "founded",
       park: { id: "osm-way-42", name: "Paterson Park" },
       coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
-      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 0, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
-      founderPoints: 10,
+      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
+      founderPoints: 24,
     }));
     const result = await foundPark(ACCOUNT, request);
     const [path, init, accountId] = fetchAuthenticated.mock.calls[0];
@@ -129,8 +129,8 @@ describe("foundPark", () => {
       outcome: "founded",
       park: { id: "osm-way-42", name: "Paterson Park" },
       coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
-      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 0, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
-      founderPoints: 10,
+      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
+      founderPoints: 24,
     });
   });
 
@@ -141,7 +141,7 @@ describe("foundPark", () => {
       visit: { visit: { visitId: "v", parkId: "p", outcome: "took", pointsEarned: 3, previousHolder: { handle: "b", flagSeed: "s" }, flagSince: null } },
     }));
     const result = await foundPark(ACCOUNT, request);
-    expect(result).toMatchObject({ outcome: "founded", founderPoints: 10, coverUrl: null, visit: { outcome: "took", pointsEarned: 3, previousHolder: { handle: "b" } } });
+    expect(result).toMatchObject({ outcome: "founded", founderPoints: 24, coverUrl: null, visit: { outcome: "took", pointsEarned: 3, previousHolder: { handle: "b" } } });
   });
 
   it("returns rejected and unsure photos with their flags", async () => {

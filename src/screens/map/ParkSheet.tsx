@@ -11,7 +11,7 @@ import { estimateTrip } from "../../lib/drive";
 import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
-import type { ParkHolder } from "../../lib/game/visit";
+import { takeLabel, takePoints, type ParkHolder } from "../../lib/game/visit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -164,15 +164,15 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
             <strong>{holderLine.title}</strong>
             <em>{holderLine.detail}</em>
           </span>
-          {holder.kind === "other" && flagDays > 0 && (
+          {holder.kind === "other" && (
             <motion.span
               className="park-sheet__bounty"
               initial={{ scale: 0, rotate: -12 }}
               animate={{ scale: [1, 1.08, 1], rotate: -4 }}
               transition={{ scale: { duration: 1.6, repeat: Infinity, delay: 0.6 }, rotate: { type: "spring", stiffness: 500, damping: 14 } }}
-              aria-label={`Worth ${flagDays} points`}
+              aria-label={`Worth ${takePoints(flagDays)} points`}
             >
-              +{flagDays}
+              +{takePoints(flagDays)}
             </motion.span>
           )}
         </motion.div>
@@ -277,7 +277,7 @@ function flagStatus(holder: ParkHolder, days: number): { title: string; detail: 
     case "mine":
       return { title: "Your flag", detail: days < 1 ? "Planted today" : `Flying for ${flown}` };
     case "other":
-      return { title: `@${holder.flag.handle}`, detail: days < 1 ? "Planted today." : `Flying for ${flown}. Take it for +${days} ${days === 1 ? "point" : "points"}.` };
+      return { title: `@${holder.flag.handle}`, detail: `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${takeLabel(days)}.` };
     case "empty":
       return { title: "No flag yet", detail: "Get inside the boundary to plant yours." };
     case "unknown":

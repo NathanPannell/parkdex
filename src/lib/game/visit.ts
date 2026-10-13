@@ -48,15 +48,59 @@ export function visitShortLabel(holder: ParkHolder, visited = false): string {
   return holder.kind === "mine" ? "Visit" : holder.kind === "other" ? "Take!" : "Plant!";
 }
 
+/**
+ * Points rules (#169), decided by the server. The app only uses them to label what a visit
+ * would pay; results always show the server's own numbers.
+ */
+export const POINTS = { plant: 6, take: 4, held: 1 } as const;
+
+export const HOURLY_POINTS_COPY = "One point for every hour your flag flies.";
+
+/** A score with thousands separators: hourly points reach four and five digits. */
+export function formatScore(score: number): string {
+  return Math.max(0, Math.floor(Number.isFinite(score) ? score : 0)).toLocaleString("en-CA");
+}
+
+export function formatPoints(score: number): string {
+  return `${formatScore(score)} ${score === 1 ? "point" : "points"}`;
+}
+
+/** What taking a flag that has flown this many whole days pays: 4, plus 1 for each day. */
+export function takePoints(days: number): number {
+  return POINTS.take + Math.max(0, Math.floor(Number.isFinite(days) ? days : 0));
+}
+
+export function takeLabel(days: number): string {
+  const points = takePoints(days);
+  return `Take it for +${points} ${points === 1 ? "point" : "points"}`;
+}
+
+const daysPhrase = (days: number) => (days === 1 ? "that day" : `those ${days} days`);
+
+/** What Kip shouts when the flag lands, with the points part by part: +6, +4 and +N days, +1. */
+export function plantCheer(result: Pick<VisitResult, "outcome" | "pointsBreakdown">): string {
+  const { base, days } = result.pointsBreakdown;
+  switch (result.outcome) {
+    case "took":
+      return days > 0 ? `KLEEP! +${base} for the take, +${days} for ${daysPhrase(days)}!` : `KLEEP! +${base} for the take!`;
+    case "planted":
+      return `KLEEP! Flag's up! +${base}`;
+    case "held":
+      return `Still flying! +${base}`;
+    case "already_today":
+      return "See you tomorrow!";
+  }
+}
+
 export type VisitHeadline = { title: string; detail: string };
 
 export function visitHeadline(result: VisitResult, parkName: string): VisitHeadline {
   switch (result.outcome) {
     case "planted":
-      return { title: "Flag planted", detail: `Your flag is flying over ${parkName}. It earns a point for every day it stays up.` };
+      return { title: "Flag planted", detail: `Your flag is flying over ${parkName}. ${HOURLY_POINTS_COPY}` };
     case "took": {
       const from = result.previousHolder ? ` from @${result.previousHolder.handle}` : "";
-      return { title: `You took ${parkName}${from}`, detail: "One point for each whole day their flag flew." };
+      return { title: `You took ${parkName}${from}`, detail: HOURLY_POINTS_COPY };
     }
     case "held":
       return { title: "Your flag is still flying", detail: `${parkName} is still yours.` };

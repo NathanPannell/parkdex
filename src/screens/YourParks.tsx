@@ -118,17 +118,19 @@ export function YourParks() {
               <motion.ul className="game-list" aria-label="Parks you hold" variants={listParent} initial="hidden" animate="show">
                 {parks.map((held, index) => {
                   const park = content?.parkById.get(held.parkId);
+                  // Days once the flag has flown one; before that, the hours it has earned.
+                  const [age, unit] = held.days > 0 ? [held.days, held.days === 1 ? "day" : "days"] : [held.hours, held.hours === 1 ? "hour" : "hours"];
                   return (
                     <motion.li key={held.parkId} variants={listItem}>
-                      <motion.button whileTap={press} className={`game-row card ${index === 0 && held.days > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
+                      <motion.button whileTap={press} className={`game-row card ${index === 0 && held.hours > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
                         <FlagPin seed={player.flagSeed} days={held.days} size={44} showAge={false} />
                         <span className="game-row__name">
                           <strong>{park?.name ?? held.parkId}</strong>
-                          <span>{index === 0 && held.days > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
+                          <span>{index === 0 && held.hours > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
                         </span>
                         <span className="game-row__days">
-                          <strong>{held.days}</strong>
-                          <span>{held.days === 1 ? "day" : "days"}</span>
+                          <strong>{age}</strong>
+                          <span>{unit}</span>
                         </span>
                       </motion.button>
                     </motion.li>

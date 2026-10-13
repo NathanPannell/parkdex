@@ -14,7 +14,7 @@ import { estimateTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
-import { flagAgeDays } from "../../lib/game/flag";
+import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
 import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { FIELD, isNative } from "../../lib/native";
@@ -91,6 +91,10 @@ export function MapScreen() {
     const flag = flags?.get(parkId);
     return flag ? flagAgeDays(flag.since, flagsNow) : 0;
   }, [flags, flagsNow]);
+  const flagAge = useCallback((parkId: string) => {
+    const flag = flags?.get(parkId);
+    return flag ? flagAgeMs(flag.since, flagsNow) : 0;
+  }, [flags, flagsNow]);
   const visibleFc = useMemo(() => {
     if (!bounds) return undefined;
     const ids = new Set(parks.map((park) => park.id));
@@ -117,7 +121,7 @@ export function MapScreen() {
   }, [player, game.me?.score]);
 
   // Straight-line distance ranks every park, including ones without a drive estimate.
-  const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id) }), [user, visit.holderOf, flagDays]);
+  const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id), ageMs: flagAge(p.id) }), [user, visit.holderOf, flagDays, flagAge]);
   const nearby = useMemo(
     () => parks.map((p) => ({ p, km: distanceKm(user, [p.lng, p.lat]) })).sort((a, b) => a.km - b.km).slice(0, 8),
     [parks, user],
@@ -657,6 +661,7 @@ export function MapScreen() {
             park={trip}
             holder={visit.holderOf(trip.id)}
             flagDays={flagDays(trip.id)}
+            flagAgeMs={flagAge(trip.id)}
             remaining={here?.id === trip.id ? { mode: "walk", km: 0, minutes: 0 } : remaining!}
             totalKm={tripStart.current?.total ?? remaining!.km}
             simulating={simulating}

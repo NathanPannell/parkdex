@@ -12,7 +12,7 @@ import { createVisitId, GameError, gameErrorMessage, sendVisit, type VisitResult
 import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
-import { parkHolder, visitHeadline } from "../lib/game/visit";
+import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { useStore } from "../lib/store";
 import "../game.css";
@@ -29,7 +29,7 @@ const ZOOM = 0.1;
 const DIM = 0.72;
 
 type Failure = { message: string; action: "retry" | "sign-in" | "handle" };
-type Score = { value: number; target: number; kind: "count" | "rate" };
+type Score = { value: number; target: number };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -181,13 +181,13 @@ export function Plant() {
   }
 
   async function countUp(target: number) {
-    setScore({ value: 0, target, kind: "count" });
+    setScore({ value: 0, target });
     sfx.thud();
     buzz(40);
     await wait(260);
     const step = countStepMs(target);
     for (let value = 1; value <= target; value += 1) {
-      setScore({ value, target, kind: "count" });
+      setScore({ value, target });
       sfx.coin(value);
       if (value % 2 === 1) buzz(6);
       await wait(step);
@@ -214,8 +214,7 @@ export function Plant() {
       zoom.set(1);
       dim.set(0);
       setCheering(true);
-      if (plan.count !== null) setScore({ value: plan.count, target: plan.count, kind: "count" });
-      else if (visit.outcome === "planted") setScore({ value: 1, target: 1, kind: "rate" });
+      if (plan.count !== null) setScore({ value: plan.count, target: plan.count });
       sfx.pop();
       buzz(30);
       return;
@@ -288,12 +287,6 @@ export function Plant() {
     if (plan.count !== null) {
       await wait(250);
       await countUp(plan.count);
-    } else if (visit.outcome === "planted") {
-      await wait(250);
-      setScore({ value: 1, target: 1, kind: "rate" });
-      sfx.thud();
-      sfx.coin(4);
-      buzz(40);
     }
   }
 
@@ -470,7 +463,7 @@ export function Plant() {
               <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
                 +{score.value}
               </motion.strong>
-              <span>{score.kind === "rate" ? "point a day" : score.target === 1 ? "point" : "points"}</span>
+              <span>{score.target === 1 ? "point" : "points"}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -492,7 +485,7 @@ export function Plant() {
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
               <motion.div className="claim__kip plant__bubble" variants={pop}>
                 <Bubble side="to-right" style={{ position: "relative" }}>
-                  {result.outcome === "took" ? `KLEEP! +${result.pointsEarned} for ${result.pointsEarned === 1 ? "that day" : `those ${result.pointsEarned} days`}!` : result.outcome === "planted" ? "KLEEP! Flag's up!" : result.outcome === "held" ? "Still flying!" : "See you tomorrow!"}
+                  {plantCheer(result)}
                 </Bubble>
               </motion.div>
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>

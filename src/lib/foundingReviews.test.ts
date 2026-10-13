@@ -21,7 +21,7 @@ const me = (pending: { parkId: string | null }[]): GameMe => ({
 
 describe("decisionMessage", () => {
   it("celebrates an approval with the bonus", () => {
-    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({ title: "You're the founder of Paterson Park!", text: "Your photo was approved. You're the founder of Paterson Park! +10", kip: "cheer" });
+    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({ title: "You're the founder of Paterson Park!", text: "Your photo was approved. You're the founder of Paterson Park! +24", kip: "cheer" });
   });
 
   it("gives the operator's reason for a rejection, without doubling its full stop", () => {

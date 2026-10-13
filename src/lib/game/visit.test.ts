@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { GameMe, ParkFlag } from "./client";
-import { hasVisitedToday, latestTakeoverAt, nextVisitStep, parkHolder, sortHeldParks, visitHeadline, visitLabel, visitShortLabel } from "./visit";
+import type { GameMe, ParkFlag, VisitOutcome } from "./client";
+import { formatPoints, formatScore, hasVisitedToday, latestTakeoverAt, nextVisitStep, parkHolder, plantCheer, sortHeldParks, takeLabel, takePoints, visitHeadline, visitLabel, visitShortLabel } from "./visit";
 
 const flag = (parkId: string, handle: string): ParkFlag => ({ parkId, handle, flagSeed: `${handle}-seed`, since: "2026-10-01T00:00:00Z" });
 const flags = new Map([["blueberry", flag("blueberry", "sam")], ["beacon", flag("beacon", "robin")]]);
@@ -63,16 +63,47 @@ describe("visit steps", () => {
 });
 
 describe("visit results", () => {
-  const base = { visitId: "v", parkId: "blueberry", pointsEarned: 0, previousHolder: null, flagSince: null };
+  const base = { visitId: "v", parkId: "blueberry", pointsEarned: 0, pointsBreakdown: { base: 0, days: 0 }, previousHolder: null, flagSince: null };
 
   it("names what happened", () => {
-    expect(visitHeadline({ ...base, outcome: "planted" }, "Blueberry").title).toBe("Flag planted");
+    const planted = visitHeadline({ ...base, outcome: "planted" }, "Blueberry");
+    expect(planted.title).toBe("Flag planted");
+    expect(planted.detail).toBe("Your flag is flying over Blueberry. One point for every hour your flag flies.");
     const took = visitHeadline({ ...base, outcome: "took", pointsEarned: 12, previousHolder: { handle: "b", flagSeed: "x" } }, "Blueberry");
     expect(took.title).toBe("You took Blueberry from @b");
-    expect(took.detail).toMatch(/each whole day/);
+    expect(took.detail).toBe("One point for every hour your flag flies.");
     expect(visitHeadline({ ...base, outcome: "took", pointsEarned: 1, previousHolder: null }, "Blueberry").title).toBe("You took Blueberry");
     expect(visitHeadline({ ...base, outcome: "held" }, "Blueberry").title).toBe("Your flag is still flying");
     expect(visitHeadline({ ...base, outcome: "already_today" }, "Blueberry").title).toBe("Already visited today");
+  });
+});
+
+describe("points", () => {
+  it("formats four and five digit scores", () => {
+    expect(formatScore(0)).toBe("0");
+    expect(formatScore(1234)).toBe("1,234");
+    expect(formatScore(54321)).toBe("54,321");
+    expect(formatPoints(1)).toBe("1 point");
+    expect(formatPoints(12345)).toBe("12,345 points");
+  });
+
+  it("prices a take at 4 plus the days the flag has flown", () => {
+    expect(takePoints(0)).toBe(4);
+    expect(takePoints(1)).toBe(5);
+    expect(takePoints(10)).toBe(14);
+    expect(takePoints(-2)).toBe(4);
+    expect(takeLabel(0)).toBe("Take it for +4 points");
+    expect(takeLabel(10)).toBe("Take it for +14 points");
+  });
+
+  it("breaks the points of a visit down", () => {
+    const visit = (outcome: VisitOutcome, base: number, days = 0) => ({ outcome, pointsBreakdown: { base, days } });
+    expect(plantCheer(visit("took", 4, 3))).toBe("KLEEP! +4 for the take, +3 for those 3 days!");
+    expect(plantCheer(visit("took", 4, 1))).toBe("KLEEP! +4 for the take, +1 for that day!");
+    expect(plantCheer(visit("took", 4))).toBe("KLEEP! +4 for the take!");
+    expect(plantCheer(visit("planted", 6))).toBe("KLEEP! Flag's up! +6");
+    expect(plantCheer(visit("held", 1))).toBe("Still flying! +1");
+    expect(plantCheer(visit("already_today", 0))).toBe("See you tomorrow!");
   });
 });
 

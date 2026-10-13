@@ -68,7 +68,7 @@ function Stage() {
             </>
           ) : (
             <>
-              <p>Plant your flag in real parks. Go to a park and your flag goes up. You earn a point for every day it flies, until someone takes it.</p>
+              <p>Plant your flag in real parks. Go to a park and your flag goes up. You earn a point for every hour it flies, until someone takes it.</p>
               <p>
                 Parkdex is made for your phone. <a href="https://parkdex.app/#beta-access" target="_blank" rel="noopener noreferrer">Get the Android app</a> to play where you are.
               </p>

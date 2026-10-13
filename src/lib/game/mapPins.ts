@@ -1,5 +1,5 @@
 import type { ParkFlag } from "./client";
-import { flagAgeDays, flagPinSvg, flagSpec, formatFlagAge, weatherForDays, type FlagWeather } from "./flag";
+import { flagAgeDays, flagAgeMs, flagPinSvg, flagSpec, formatFlagAge, weatherForDays, type FlagWeather } from "./flag";
 
 /**
  * Park pins for the map's symbol layer. Each pin names a shared image (empty pole, or a
@@ -29,7 +29,7 @@ export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<strin
     if (flag) {
       const days = flagAgeDays(flag.since, now);
       const weather = weatherForDays(days);
-      const label = formatFlagAge(days);
+      const label = formatFlagAge(flagAgeMs(flag.since, now));
       icon = pinIconId(flag.flagSeed, weather, label);
       dot = flagSpec(flag.flagSeed).field;
       if (!images.has(icon)) images.set(icon, { seed: flag.flagSeed, weather, label });

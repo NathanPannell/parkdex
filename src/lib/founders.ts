@@ -9,7 +9,7 @@ import type { LngLat } from "./geo";
  */
 
 /** The one-time bonus a founder earns; the server's answer wins when it sends one. */
-export const FOUNDER_POINTS = 10;
+export const FOUNDER_POINTS = 24;
 /** The server refuses positions less precise than this. */
 export const MAX_FOUND_ACCURACY_M = 100;
 /** A scan position older than this is replaced by a fresh fix before the photo check. */

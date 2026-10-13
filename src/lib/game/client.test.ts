@@ -59,14 +59,22 @@ describe("player state", () => {
   it("reads the player, score, held parks and takeovers", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, {
       player: { handle: "robin", flagSeed: "abc" },
-      score: 12,
-      parks: [{ parkId: "beacon-hill", since: "2026-10-01T00:00:00Z", days: 6 }, { parkId: 7 }],
+      score: 1234,
+      parks: [
+        { parkId: "beacon-hill", since: "2026-10-01T00:00:00Z", days: 6, hours: 150 },
+        { parkId: "thetis", since: "2026-10-05T00:00:00Z", days: 2 },
+        { parkId: 7 },
+      ],
       takeovers: [{ parkId: "blueberry", byHandle: "sam", byFlagSeed: "def", at: "2026-10-06T00:00:00Z" }],
     }));
     await expect(fetchGameMe(ACCOUNT)).resolves.toEqual({
       player: { handle: "robin", flagSeed: "abc" },
-      score: 12,
-      parks: [{ parkId: "beacon-hill", since: "2026-10-01T00:00:00Z", days: 6 }],
+      score: 1234,
+      // A park without hours comes from a server before #169: at least 24 hours a day.
+      parks: [
+        { parkId: "beacon-hill", since: "2026-10-01T00:00:00Z", days: 6, hours: 150 },
+        { parkId: "thetis", since: "2026-10-05T00:00:00Z", days: 2, hours: 48 },
+      ],
       takeovers: [{ parkId: "blueberry", byHandle: "sam", byFlagSeed: "def", at: "2026-10-06T00:00:00Z" }],
       flagSeed: "abc",
       visitedToday: [],
@@ -144,12 +152,20 @@ describe("visits", () => {
       visit: { visitId: "v1", parkId: "blueberry", outcome: "took", pointsEarned: 4, previousHolder: { handle: "sam", flagSeed: "x" }, flagSince: "2026-10-07T00:00:00Z" },
     }));
     await expect(sendVisit(ACCOUNT, { visitId: "v1", parkId: "blueberry" })).resolves.toEqual({
-      visitId: "v1", parkId: "blueberry", outcome: "took", pointsEarned: 4, previousHolder: { handle: "sam", flagSeed: "x" }, flagSince: "2026-10-07T00:00:00Z",
+      visitId: "v1", parkId: "blueberry", outcome: "took", pointsEarned: 4, pointsBreakdown: { base: 4, days: 0 },
+      previousHolder: { handle: "sam", flagSeed: "x" }, flagSince: "2026-10-07T00:00:00Z",
     });
     const [path, init] = fetchAuthenticated.mock.calls[0];
     expect(path).toBe("/api/game/visits");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ visitId: "v1", parkId: "blueberry" });
+  });
+
+  it("reads the points breakdown of a take", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
+      visit: { visitId: "v2", parkId: "blueberry", outcome: "took", pointsEarned: 14, pointsBreakdown: { base: 4, days: 10 }, previousHolder: null, flagSince: null },
+    }));
+    await expect(sendVisit(ACCOUNT, { visitId: "v2", parkId: "blueberry" })).resolves.toMatchObject({ pointsEarned: 14, pointsBreakdown: { base: 4, days: 10 } });
   });
 
   it("rejects an outcome this build does not know", async () => {
