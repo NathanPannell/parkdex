@@ -74,6 +74,7 @@
       "scripts/test_authoring_queue.py",
       "scripts/test_downshift_park_rarities.py",
       "scripts/test_build_bc_import.py",
+      "scripts/test_build_ns_import.py",
       "scripts/test_content_catalogue.py",
       "scripts/test_park_visibility.py",
       "scripts/test_osm_park_index.py",
