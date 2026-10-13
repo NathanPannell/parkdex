@@ -76,3 +76,5 @@ python scripts/import_legacy_parks.py plan --source "$bundle/boundaries.geojson.
 ```
 
 Expect `ready`, no blockers and 112 changes. Then apply with the reviewed plan SHA, build the catalogue release, upload it, verify the CDN copy and point staging at it, as in `docs/import-legacy-bc-parks.md`. If the staging catalogue has changed since 2026-10-13, run `fetch` and `build` again first so the ID, overlap and size checks use the current release; review any change in the official sources that this shows.
+
+The staging load on 2026-10-13, with its plan SHA, release ID and counts, is recorded in `docs/import-nova-scotia.md`.
