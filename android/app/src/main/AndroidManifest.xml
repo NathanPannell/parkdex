@@ -33,11 +33,15 @@
                     android:scheme="https"
                     android:host="${authLinkHost}"
                     android:path="/account" />
-                <!-- Friend links (#64). Crew links (#170) add their own pathPrefix here. -->
+                <!-- Friend links (#64) and crew links (#171). -->
                 <data
                     android:scheme="https"
                     android:host="${authLinkHost}"
                     android:pathPrefix="/friend/" />
+                <data
+                    android:scheme="https"
+                    android:host="${authLinkHost}"
+                    android:pathPrefix="/crew/" />
             </intent-filter>
         </activity>
 

@@ -14,6 +14,7 @@ import { estimateTrip } from "../../lib/drive";
 import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
+import { useCrew } from "../../lib/game/CrewProvider";
 import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
 import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
@@ -77,6 +78,7 @@ export function MapScreen() {
 
   const game = useGame();
   const visit = useVisit();
+  const crew = useCrew();
   const runtime = useContentRuntime();
   const { user, selectedId, tripId, located } = state;
   // Every park in the catalogue can carry a flag, with or without badge art.
@@ -690,7 +692,10 @@ export function MapScreen() {
             flagDays={flagDays(here.id)}
             visitLabel={visit.labelFor(here.id)}
             visited={visit.visitedToday(here.id)}
+            crew={visit.crewOf(here.id)}
+            now={game.serverNow()}
             onCheckIn={() => checkIn(here.id)}
+            onScanCrew={crew.enabled ? () => crew.openScanner(here.id) : undefined}
             onDismiss={() => setDismissedArrival(here.id)}
           />
         )}

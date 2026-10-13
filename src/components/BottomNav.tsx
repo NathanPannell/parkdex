@@ -5,7 +5,6 @@ import { useStore, type Screen } from "../lib/store";
 import { useContent } from "../lib/content/provider";
 import { isUsableGpsAccuracy } from "../lib/geo";
 import { useVisit } from "../lib/game/useVisit";
-import { visitShortLabel } from "../lib/game/visit";
 import { Icon, type IconName } from "./Icon";
 
 type Tab = "map" | "parks" | "leaderboard" | "settings";
@@ -93,7 +92,7 @@ export function BottomNav() {
         <AnimatePresence>
           {here && (
             <motion.span className="fab__label" initial={{ scale: 0, y: 6 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 600, damping: 18 }}>
-              {visit.signedIn ? visitShortLabel(visit.holderOf(here.id), visited) : "Plant!"}
+              {visit.shortLabelFor(here.id)}
             </motion.span>
           )}
         </AnimatePresence>

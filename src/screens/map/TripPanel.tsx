@@ -7,6 +7,7 @@ import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import { takeLabel, type ParkHolder } from "../../lib/game/visit";
+import { formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -99,18 +100,27 @@ export function TripPanel({ park, holder, flagDays, flagAgeMs, remaining, totalK
   );
 }
 
-export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = false, onCheckIn, onDismiss }: {
+export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = false, crew = { kind: "none" }, now = Date.now(), onCheckIn, onScanCrew, onDismiss }: {
   park: Park;
   holder: ParkHolder;
   flagDays: number;
   visitLabel: string;
   /** Already visited today: another visit would not count, so there is nothing to press. */
   visited?: boolean;
+  /** The player's crew phase here (#171); `none` unless the crews flag is on. */
+  crew?: CrewPhase;
+  now?: number;
   onCheckIn: () => void;
+  onScanCrew?: () => void;
   onDismiss: () => void;
 }) {
   const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
-  const message = visited
+  const outsider = crew.kind === "outsider" && !visited ? crew : null;
+  const message = outsider
+    ? outsider.logged
+      ? loggedVisitLine(outsider.until)
+      : `@${outsider.leader}'s crew flag is protected for ${formatMinutesLeft(outsider.until, now)}. Log your visit, or ask the crew for their code to join.`
+    : visited
     ? holder.kind === "mine"
       ? "Your flag is flying here. You visited today, so come back tomorrow to check in again."
       : holder.kind === "other"
@@ -154,7 +164,18 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = fals
         </h2>
         <p>{message}</p>
         <AnimatePresence>
-          {visited ? (
+          {outsider ? (
+            <motion.div key="crew" className="arrival__crew" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              {onScanCrew && (
+                <button className="btn btn--block btn--glow" onClick={onScanCrew}>
+                  <Icon name="qr" /> Scan crew code
+                </button>
+              )}
+              <button className="btn btn--block btn--paper" onClick={onCheckIn} disabled={outsider.logged}>
+                <Icon name="flag" /> {outsider.logged ? "Visit logged" : visitLabel}
+              </button>
+            </motion.div>
+          ) : visited ? (
             <motion.p className="arrival__visited" role="status" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
               <Icon name="check" size={18} stroke={3} /> {visitLabel}
             </motion.p>

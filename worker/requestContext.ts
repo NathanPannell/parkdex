@@ -103,6 +103,7 @@ export function normalizeRoute(method: string | undefined, path: string): string
   const segments = path.split("/").filter(Boolean).slice(0, 8).map((segment, index, all) => {
     // Park IDs in /api/parks/:park/... would otherwise make one route per park.
     if (index === 2 && all[0] === "api" && all[1] === "parks" && segment !== "found") return ":park";
+    if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";
     // Handles in DELETE /api/friends/:handle would make one route per friend.
     if (index === 2 && all[0] === "api" && all[1] === "friends" && segment !== "code") return ":handle";
     if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";

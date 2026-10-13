@@ -7,8 +7,13 @@ import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
  */
 
 export type GamePlayer = { handle: string; flagSeed: string };
-/** `days` is the flag's age for weathering; `hours` is this player's holding points on it (additive, #169). */
-export type HeldPark = { parkId: string; since: string; days: number; hours: number };
+/** A held park's crew (#170): its size, whether this player leads it, and the protected hour's end while it lasts. */
+export type HeldParkCrew = { size: number; leader: boolean; protectedUntil: string | null };
+/**
+ * `days` is the flag's age for weathering; `hours` is this player's holding points on it (additive, #169).
+ * `crew` is additive (#170): crew members hold the park too, so this can list a park whose flag someone else leads.
+ */
+export type HeldPark = { parkId: string; since: string; days: number; hours: number; crew?: HeldParkCrew | null };
 export type Takeover = { parkId: string; byHandle: string; byFlagSeed: string; at: string };
 /** A founding photo the player sent for manual review, still waiting (#153). */
 export type PendingFoundingReview = { requestId: string; parkId: string | null; parkName: string; createdAt: string };
@@ -38,13 +43,24 @@ export type GameMe = {
   visitedToday?: string[];
   /** When that day ends, from the server, so the list expires at midnight in Victoria (additive). */
   visitedTodayUntil?: string | null;
+  /**
+   * Parks with only a logged visit today, during someone else's protected hour (additive, #170).
+   * A logged visit leaves the day's flag action unused, so the park can still be taken after the hour.
+   */
+  loggedToday?: string[];
   /** Manual reviews of founding photos: those waiting, and unseen decisions (additive, #153). */
   foundingReviews?: FoundingReviews;
 };
 
-export type VisitOutcome = "planted" | "took" | "held" | "already_today";
+/**
+ * `joined` and `logged` come from crews (#170) and reach every build, whatever the `crews` flag
+ * says: joining a crew, and a visit during someone else's protected hour.
+ */
+export type VisitOutcome = "planted" | "took" | "held" | "joined" | "logged" | "already_today";
 /** pointsEarned in parts: the outcome's base points and a take's day bonus (additive, #169). */
 export type PointsBreakdown = { base: number; days: number };
+/** Why a visit was logged instead of taking the flag: someone else's protected hour (#170). */
+export type ProtectedHour = { until: string; leader: GamePlayer | null; crewSize: number };
 export type VisitResult = {
   visitId: string;
   parkId: string;
@@ -53,19 +69,51 @@ export type VisitResult = {
   pointsBreakdown: PointsBreakdown;
   previousHolder: GamePlayer | null;
   flagSince: string | null;
+  /** Set for a logged visit, and for already_today during someone else's protected hour (additive, #170). */
+  protected: ProtectedHour | null;
 };
 
-export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string };
+/** A flag's crew for map pins (#170). The leader is the flag's own holder; `memberSeeds` has up to 3 more, earliest first. */
+export type FlagCrew = { size: number; memberSeeds: string[]; protectedUntil: string | null };
+/** `crew` is additive (#170); a server from before it sends none. */
+export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string; crew?: FlagCrew | null };
+
+export type CrewMember = { handle: string; flagSeed: string; joinedAt: string; leader: boolean };
+/** A crew as the signed-in player sees it (#170). `code` is set only for members during the protected hour. */
+export type Crew = {
+  parkId: string;
+  leader: GamePlayer;
+  /** The leader first, then by when they joined. */
+  members: CrewMember[];
+  size: number;
+  cap: number;
+  flagSince: string;
+  protectedUntil: string | null;
+  member: boolean;
+  code: string | null;
+  codeExpiresAt: string | null;
+};
+export type ParkCrewResponse = { parkId: string; crew: Crew | null; serverTime: string };
+export type JoinCrewResult =
+  | { status: "joined"; visit: VisitResult; crew: Crew }
+  | { status: "already_member"; visit: null; crew: Crew };
 /** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
 export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
 export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
 export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number };
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
-export type GameErrorCode = "handle_taken" | "handle_rejected" | "handle_required" | "invalid_handle" | "park_not_found" | "visit_id_reused" | "invalid_request" | "unauthenticated" | "unavailable" | "offline";
+export type GameErrorCode =
+  | "handle_taken" | "handle_rejected" | "handle_required" | "invalid_handle" | "park_not_found" | "visit_id_reused" | "invalid_request"
+  | "unauthenticated" | "unavailable" | "offline" | "account_deleting"
+  // Crew joins (#170).
+  | "invalid_code" | "code_not_found" | "code_expired" | "crew_full" | "already_today";
 
-const KNOWN_CODES = new Set<GameErrorCode>(["handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request", "unauthenticated", "unavailable", "offline"]);
-const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "already_today"]);
+const KNOWN_CODES = new Set<GameErrorCode>([
+  "handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request",
+  "unauthenticated", "unavailable", "offline", "account_deleting", "invalid_code", "code_not_found", "code_expired", "crew_full", "already_today",
+]);
+const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "joined", "logged", "already_today"]);
 const DECISIONS = new Set<FoundingDecisionStatus>(["approved", "rejected", "superseded"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -143,7 +191,7 @@ export function parseMe(body: unknown): GameMe {
       if (!parkId || !since) return null;
       const days = count(park.days);
       // A server from before #169 sends no hours; a whole day is at least 24 of them.
-      return { parkId, since, days, hours: typeof park.hours === "number" ? count(park.hours) : days * 24 };
+      return { parkId, since, days, hours: typeof park.hours === "number" ? count(park.hours) : days * 24, crew: parseHeldCrew(park.crew) };
     }),
     takeovers: list(row.takeovers, (takeover) => {
       const parkId = text(takeover.parkId);
@@ -153,10 +201,21 @@ export function parseMe(body: unknown): GameMe {
       return parkId && byHandle && byFlagSeed && at ? { parkId, byHandle, byFlagSeed, at } : null;
     }),
     flagSeed: text(row.flagSeed) ?? parsePlayer(row.player)?.flagSeed ?? null,
-    visitedToday: Array.isArray(row.visitedToday) ? row.visitedToday.filter((id): id is string => typeof id === "string" && id.length > 0) : [],
+    visitedToday: ids(row.visitedToday),
     visitedTodayUntil: instant(row.visitedTodayUntil),
+    loggedToday: ids(row.loggedToday),
     foundingReviews: parseFoundingReviews(row.foundingReviews),
   };
+}
+
+function ids(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+}
+
+function parseHeldCrew(value: unknown): HeldParkCrew | null {
+  const row = record(value);
+  if (!row) return null;
+  return { size: Math.max(1, count(row.size)), leader: row.leader !== false, protectedUntil: instant(row.protectedUntil) };
 }
 
 export function parseFoundingReviews(value: unknown): FoundingReviews {
@@ -209,7 +268,63 @@ export function parseVisit(body: unknown): VisitResult {
     pointsBreakdown: breakdown ? { base: count(breakdown.base), days: count(breakdown.days) } : { base: pointsEarned, days: 0 },
     previousHolder: parsePlayer(visit.previousHolder),
     flagSince: text(visit.flagSince),
+    protected: parseProtected(visit.protected),
   };
+}
+
+function parseProtected(value: unknown): ProtectedHour | null {
+  const row = record(value);
+  const until = instant(row?.until);
+  if (!row || !until) return null;
+  return { until, leader: parsePlayer(row.leader), crewSize: Math.max(1, count(row.crewSize)) };
+}
+
+function parseFlagCrew(value: unknown): FlagCrew | null {
+  const row = record(value);
+  if (!row) return null;
+  const memberSeeds = Array.isArray(row.memberSeeds) ? row.memberSeeds.filter((seed): seed is string => typeof seed === "string" && seed.length > 0).slice(0, 3) : [];
+  return { size: Math.max(1, count(row.size), memberSeeds.length + 1), memberSeeds, protectedUntil: instant(row.protectedUntil) };
+}
+
+export function parseCrew(value: unknown): Crew | null {
+  const row = record(value);
+  const parkId = text(row?.parkId);
+  const leader = parsePlayer(row?.leader);
+  const flagSince = instant(row?.flagSince);
+  if (!row || !parkId || !leader || !flagSince) return null;
+  const members = list(row.members, (member): CrewMember | null => {
+    const player = parsePlayer(member);
+    const joinedAt = instant(member.joinedAt);
+    return player && joinedAt ? { ...player, joinedAt, leader: member.leader === true } : null;
+  });
+  return {
+    parkId,
+    leader,
+    members,
+    size: Math.max(1, count(row.size), members.length),
+    cap: count(row.cap) || 8,
+    flagSince,
+    protectedUntil: instant(row.protectedUntil),
+    member: row.member === true,
+    code: text(row.code),
+    codeExpiresAt: instant(row.codeExpiresAt),
+  };
+}
+
+export function parseParkCrew(body: unknown, parkId: string): ParkCrewResponse {
+  const row = record(body) ?? {};
+  return { parkId: text(row.parkId) ?? parkId, crew: parseCrew(row.crew), serverTime: text(row.serverTime) ?? new Date().toISOString() };
+}
+
+export function parseJoinCrew(body: unknown): JoinCrewResult {
+  const row = record(body);
+  const crew = parseCrew(row?.crew);
+  if (row && crew && row.status === "already_member") return { status: "already_member", visit: null, crew };
+  if (row && crew && row.status === "joined") {
+    const visit = parseVisit(row);
+    if (visit.outcome === "joined") return { status: "joined", visit, crew };
+  }
+  throw new GameError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
 }
 
 export function parseFlags(body: unknown): FlagsResponse {
@@ -220,7 +335,7 @@ export function parseFlags(body: unknown): FlagsResponse {
       const handle = text(flag.handle);
       const flagSeed = text(flag.flagSeed);
       const since = text(flag.since);
-      return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since } : null;
+      return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since, crew: parseFlagCrew(flag.crew) } : null;
     }),
     founders: list(row.founders, (founder) => {
       const parkId = text(founder.parkId);
@@ -263,6 +378,12 @@ const MESSAGES: Record<GameErrorCode, string> = {
   unauthenticated: "Sign in again to keep playing.",
   unavailable: "Parkdex is unavailable right now. Try again shortly.",
   offline: "You need a connection for this.",
+  account_deleting: "This account is being deleted.",
+  invalid_code: "Crew codes are 6 letters and numbers.",
+  code_not_found: "No crew has that code. Check it and try again.",
+  code_expired: "That crew's protected hour is over, so it can't take new people.",
+  crew_full: "That crew is full. Crews have up to 8 people.",
+  already_today: "You already had your flag turn at this park today. Come back tomorrow.",
 };
 
 export function gameErrorMessage(error: unknown): string {
@@ -311,6 +432,19 @@ export async function saveHandle(accountId: string, handle: string): Promise<Gam
 
 export async function sendVisit(accountId: string, visit: { visitId: string; parkId: string }): Promise<VisitResult> {
   return parseVisit(await request(authenticated(accountId), "/api/game/visits", { method: "POST", body: JSON.stringify(visit) }));
+}
+
+/**
+ * The crew at a park (#170). Members get the code, which the server records as shown, so call
+ * this when the park page or the code sheet opens, never on a map refresh.
+ */
+export async function fetchParkCrew(accountId: string, parkId: string): Promise<ParkCrewResponse> {
+  return parseParkCrew(await request(authenticated(accountId), `/api/game/parks/${encodeURIComponent(parkId)}/crew`), parkId);
+}
+
+/** Joins the crew whose code this is (#170). Resending the same visit ID returns the same answer. */
+export async function joinCrew(accountId: string, join: { visitId: string; code: string }): Promise<JoinCrewResult> {
+  return parseJoinCrew(await request(authenticated(accountId), "/api/game/crews/join", { method: "POST", body: JSON.stringify(join) }));
 }
 
 export async function markTakeoversSeen(accountId: string, at: string): Promise<void> {

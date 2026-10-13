@@ -12,6 +12,7 @@ import { useContent, useContentRuntime } from "../../lib/content/provider";
 import type { ParkFlag } from "../../lib/game/client";
 import { PIN_POLE_X } from "../../lib/game/flag";
 import { buildPins, PIN_PIXEL_RATIO, pinImageSvg, type PinImage } from "../../lib/game/mapPins";
+import { isFeatureEnabled } from "../../lib/appConfig";
 
 type Tier = "far" | "mid" | "near";
 // Pins stay dots until the map is zoomed to a town, so dense areas stay readable.
@@ -82,7 +83,9 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
   const focusRef = useRef(focusedId);
   focusRef.current = focusedId;
   const hasReadyMapContent = !!content?.releaseId;
-  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow), [hasReadyMapContent, parks, flags, flagsNow]);
+  // Crew pennants and the protected shield (#171) show only with the crews flag on.
+  const crews = isFeatureEnabled("crews");
+  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews }), [hasReadyMapContent, parks, flags, flagsNow, crews]);
   // The style never changes after creation, so the map draws its detail once.
   const loaded = styleIsReady;
 
