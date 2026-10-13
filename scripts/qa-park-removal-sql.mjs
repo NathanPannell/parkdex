@@ -203,8 +203,8 @@ try {
   const first = await found(tester.token, { osm: { type: 'way', id: MEADOW.id } }, IN_MEADOW);
   assert.equal(first.status, 200, await first.clone().text());
   const firstBody = await json(first);
-  assert.deepEqual([firstBody.outcome, firstBody.park.id, firstBody.visit.outcome, firstBody.founderPoints], ['founded', MEADOW_PARK, 'planted', 10]);
-  assert.equal(await score(tester.id), scoreBefore + 10);
+  assert.deepEqual([firstBody.outcome, firstBody.park.id, firstBody.visit.outcome, firstBody.founderPoints], ['founded', MEADOW_PARK, 'planted', 24]);
+  assert.equal(await score(tester.id), scoreBefore + 24 + 6, 'the founder bonus and the plant bonus');
   const listed = await offered(IN_MEADOW, MEADOW.id);
   assert.deepEqual([listed.inCatalogue?.parkId, listed.founder?.handle], [MEADOW_PARK, tester.handle], 'the search shows it founded');
   log('a tester founds an OpenStreetMap park');
@@ -222,7 +222,7 @@ try {
   assert.equal(await count('SELECT count(*) FROM kip_founders.parks WHERE park_id = $1', [MEADOW_PARK]), 0, 'the founder and cover are gone');
   assert.equal(await count('SELECT count(*) FROM kip_park_drafts.drafts WHERE id = $1', [MEADOW_PARK]), 0, 'the draft goes too, so nothing blocks a new founding');
   assert.equal(await count('SELECT count(*) FROM kip_osm.parks WHERE osm_type = $1 AND osm_id = $2', ['way', MEADOW.id]), 1, 'the outline stays');
-  assert.equal(await score(tester.id), scoreBefore, 'the founder bonus goes with the founder row');
+  assert.equal(await score(tester.id), scoreBefore + 6, 'the founder bonus goes with the founder row; the visit keeps its plant bonus');
   const tombstones = (await pool.query('SELECT entity, operation FROM public.content_changes WHERE revision = $1 AND entity_id = $2 ORDER BY entity', [result.revision, MEADOW_PARK])).rows;
   assert.deepEqual(tombstones.map((row) => `${row.entity}:${row.operation}`), ['boundary:delete', 'drive:delete', 'park:delete'], 'one content revision, like Delete');
   assert.equal(await count('SELECT count(*) FROM kip_game.visits WHERE park_id = $1', [MEADOW_PARK]), 1, 'the visit stays as history');
@@ -245,10 +245,10 @@ try {
   const second = await found(tester.token, { osm: { type: 'way', id: MEADOW.id } }, IN_MEADOW);
   assert.equal(second.status, 200, await second.clone().text());
   const secondBody = await json(second);
-  assert.deepEqual([secondBody.outcome, secondBody.park.id, secondBody.founderPoints], ['founded', MEADOW_PARK, 10]);
+  assert.deepEqual([secondBody.outcome, secondBody.park.id, secondBody.founderPoints], ['founded', MEADOW_PARK, 24]);
   assert.equal(secondBody.visit.outcome, 'already_today', 'today\'s first visit still counts; founding accepts it');
   assert.equal(await count('SELECT count(*) FROM kip_founders.parks WHERE park_id = $1 AND account_id = $2', [MEADOW_PARK, tester.id]), 1);
-  assert.equal(await score(tester.id), scoreBefore + 10, 'the bonus is counted once');
+  assert.equal(await score(tester.id), scoreBefore + 6 + 24, 'the bonus is counted once');
   assert.equal(await count('SELECT count(*) FROM kip_game.visits WHERE park_id = $1', [MEADOW_PARK]), 1, 'one visit a day');
   assert.equal(await count("SELECT count(*) FROM kip_analytics.events WHERE event_type = 'park_founded' AND park_id = $1", [MEADOW_PARK]), 2);
   const summary = await json(await call('GET', `/api/parks/${MEADOW_PARK}/summary`));

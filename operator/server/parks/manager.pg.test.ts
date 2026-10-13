@@ -180,7 +180,9 @@ test("an OpenStreetMap outline is created through the publish transaction, and a
 });
 
 test("delete removes the park and its founder in one revision and keeps visits as history", { skip: !DSN }, async () => {
-  const scoreBefore = Number((await pool.query("SELECT score FROM kip_game.player_scores(now()) WHERE account_id = $1", [founder])).rows[0].score);
+  // One clock for both reads, so an hour of holding cannot tick over between them.
+  const scoredAt = new Date().toISOString();
+  const scoreBefore = Number((await pool.query("SELECT score FROM kip_game.player_scores($2) WHERE account_id = $1", [founder, scoredAt])).rows[0].score);
   const start = await revision();
   const deleted = await call("/api/parks/regional-thetis-lake", { method: "DELETE" });
   assert.equal(deleted.status, 200, await deleted.clone().text());
@@ -190,8 +192,8 @@ test("delete removes the park and its founder in one revision and keeps visits a
     assert.equal(await count(`SELECT count(*) FROM ${table} = 'regional-thetis-lake'`), 0, table);
   }
   assert.equal(await count("SELECT count(*) FROM kip_game.visits WHERE park_id = 'regional-thetis-lake'"), 3, "visits stay as history");
-  const scoreAfter = Number((await pool.query("SELECT score FROM kip_game.player_scores(now()) WHERE account_id = $1", [founder])).rows[0].score);
-  assert.equal(scoreBefore - scoreAfter, 10, "the founder bonus goes with the founder row");
+  const scoreAfter = Number((await pool.query("SELECT score FROM kip_game.player_scores($2) WHERE account_id = $1", [founder, scoredAt])).rows[0].score);
+  assert.equal(scoreBefore - scoreAfter, 24, "the founder bonus goes with the founder row");
   assert.equal((await call("/api/parks/regional-thetis-lake", { method: "DELETE" })).status, 404);
 
   // Without the draft left behind, the same OpenStreetMap park can be published again.

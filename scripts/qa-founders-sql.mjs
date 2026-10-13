@@ -159,7 +159,7 @@ try {
   const parkId = `osm-way-${PATERSON.id}`;
   assert.equal(result.outcome, 'founded');
   assert.deepEqual(result.park, { id: parkId, name: 'Paterson Park' });
-  assert.equal(result.founderPoints, 10);
+  assert.equal(result.founderPoints, 24);
   assert.equal(result.visit.outcome, 'planted');
   const park = (await pool.query('SELECT * FROM public.parks WHERE id = $1', [parkId])).rows[0];
   assert.equal(park.category, 'municipal');
@@ -179,7 +179,7 @@ try {
   assert.ok(!founder.text.includes('QA Camera Maker') && !founder.text.includes('GPSLatitude'), 'the stored photo has no metadata');
   assert.equal(await count("SELECT count(*) FROM kip_game.visits WHERE account_id = $1 AND park_id = $2 AND source = 'visit'", [a.id, parkId]), 1);
   assert.equal((await pool.query('SELECT handle FROM kip_game.flags_up($1) WHERE park_id = $2', [new Date(clock + 1000).toISOString(), parkId])).rows[0].handle, a.handle);
-  assert.equal(await score(a.id), 10, 'founding pays 10 points at once');
+  assert.equal(await score(a.id), 24 + 6, 'founding pays the 24 point bonus and the 6 point plant bonus at once');
   log('founding an OpenStreetMap park publishes it, stores the photo, plants the flag and pays the bonus in one transaction');
 
   const replay = await found(a.token, { osm: { type: 'way', id: PATERSON.id } }, IN_PATERSON, attemptId);
@@ -210,9 +210,9 @@ try {
   await pool.query('SELECT kip_game.record_visit($1, $2, $3, $4)', [randomUUID(), c.id, 'municipal-qa-founders-take', new Date(clock - 3 * 86_400_000).toISOString()]);
   const take = await json(await found(d.token, { parkId: 'municipal-qa-founders-take' }, { lat: 49.1115, lng: -123.0975, accuracyM: 5 }));
   assert.equal(take.visit.outcome, 'took');
-  assert.equal(take.visit.pointsEarned, 3);
+  assert.equal(take.visit.pointsEarned, 4 + 3);
   assert.equal(take.visit.previousHolder.handle, c.handle);
-  assert.equal(await score(d.id), 13, 'the bounty plus the founder bonus');
+  assert.equal(await score(d.id), 7 + 24, 'the take plus the founder bonus');
   log('a founding visit takes a held flag');
 
   const racers = await Promise.all(Array.from({ length: RACERS }, (_, index) => account(`r${index}`)));
@@ -257,9 +257,10 @@ try {
   const flags = await json(await call('GET', '/api/game/flags'));
   assert.ok(flags.founders.some((item) => item.parkId === parkId && item.handle === a.handle && item.coverUrl === result.coverUrl));
   const me = await json(await call('GET', '/api/game/me', { token: a.token }));
-  assert.equal(me.founderPoints, 10);
+  assert.equal(me.founderPoints, 24);
   const board = await json(await call('GET', '/api/game/leaderboard'));
-  assert.equal(board.players.find((row) => row.handle === a.handle).score, 10);
+  assert.equal(board.players.find((row) => row.handle === a.handle).score, await score(a.id));
+  assert.ok(await score(a.id) >= 24 + 6);
   log('summary counts, flags, me and the leaderboard include founders');
 
   const osmSearch = await json(await call('GET', `/api/osm/parks?lat=${IN_EXISTING.lat}&lng=${IN_EXISTING.lng}&accuracy=10`));

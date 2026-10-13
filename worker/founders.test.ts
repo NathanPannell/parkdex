@@ -109,7 +109,7 @@ class MemoryFoundersStore implements FoundersStore {
     const check = this.checks.filter((row) => row.accountId === accountId && row.attemptId === attemptId && row.outcome !== "unavailable").at(-1);
     const kept = this.kept.get(attemptId);
     return {
-      founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 10, visit: entry[1].visit } : null,
+      founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 24, visit: entry[1].visit } : null,
       check: check ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256, keptAt: kept?.accountId === accountId ? kept.at : null } : null,
     };
   }
@@ -122,7 +122,8 @@ class MemoryFoundersStore implements FoundersStore {
     if (this.founded.has(parkId)) return { status: "already_founded" };
     const planted = !this.visits.some((visit) => visit.parkId === parkId);
     const visit = {
-      visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const, pointsEarned: 0,
+      visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const,
+      pointsEarned: planted ? 6 : 4, pointsBreakdown: { base: planted ? 6 : 4, days: 0 },
       previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false,
     };
     this.visits.push({ accountId: input.accountId, parkId, at: input.at });
@@ -131,7 +132,7 @@ class MemoryFoundersStore implements FoundersStore {
       accountId: input.accountId, attemptId: input.attemptId, sha256: input.photo.sha256, bytes: new Uint8Array(Buffer.from(input.photo.base64, "base64")),
       foundedAt: input.at, parkName, visit,
     });
-    return { status: "founded", record: { parkId, parkName, photoSha256: input.photo.sha256, founderPoints: 10, visit } };
+    return { status: "founded", record: { parkId, parkName, photoSha256: input.photo.sha256, founderPoints: 24, visit } };
   }
   async foundOsm(input: FoundOsmInput) {
     this.osmFoundings.push(input);
@@ -239,8 +240,8 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.equal(result.outcome, "founded");
   assert.deepEqual(result.park, { id: "osm-way-23938892", name: "Paterson Park" });
   assert.match(result.coverUrl, new RegExp(`^${origin}/api/parks/osm-way-23938892/cover/[0-9a-f]{64}\\.jpg$`));
-  assert.equal(result.founderPoints, 10);
-  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsEarned", "previousHolder", "visitId"]);
+  assert.equal(result.founderPoints, 24);
+  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsBreakdown", "pointsEarned", "previousHolder", "visitId"]);
   assert.equal(result.visit.outcome, "planted");
   assert.equal(result.visit.visitId, await founderVisitId(attemptId));
 
@@ -271,7 +272,7 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.deepEqual(written[0].events.map((event) => [event.type, event.parkId, event.properties]), [
     ["founder_photo_checked", "osm-way-23938892", { outcome: "approve", flags: "", source: "osm_new" }],
     ["park_founded", "osm-way-23938892", { source: "osm_new" }],
-    ["flag_planted", "osm-way-23938892", { points_earned: 0 }],
+    ["flag_planted", "osm-way-23938892", { points_earned: 6 }],
   ]);
   assert.equal(written[0].route, "POST /api/parks/found");
 });

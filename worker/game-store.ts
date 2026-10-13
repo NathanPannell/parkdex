@@ -15,11 +15,19 @@ export interface VisitRecord {
   parkId: string;
   outcome: VisitOutcome;
   pointsEarned: number;
+  /** pointsEarned split into the outcome's base points and a take's day bonus (#169). */
+  pointsBreakdown: PointsBreakdown;
   previousHolder: { handle: string; flagSeed: string } | null;
   flagSince: string | null;
   visitedAt: string;
   /** True when this visit first closed a fallen flag at the park. */
   fell: boolean;
+}
+
+export interface PointsBreakdown {
+  base: number;
+  /** One point per whole day the taken flag had flown; 0 for every other outcome. */
+  days: number;
 }
 
 export type RecordVisitResult =
@@ -32,8 +40,11 @@ export type SetHandleResult =
 
 export interface HeldPark {
   parkId: string;
+  /** When the flag went up; days counts from here, for weathering. */
   since: string;
   days: number;
+  /** Whole hours this account has held the flag: its holding points so far. */
+  hours: number;
 }
 
 export interface Takeover {
@@ -138,11 +149,17 @@ export function visitFromJson(value: unknown): VisitRecord {
   const outcome = String(visit.outcome);
   if (!VISIT_OUTCOMES.has(outcome)) throw new Error("unexpected stored visit outcome");
   const holder = visit.previousHolder as Record<string, unknown> | null;
+  const pointsEarned = Number(visit.pointsEarned);
+  const breakdown = visit.pointsBreakdown as Record<string, unknown> | null | undefined;
   return {
     visitId: String(visit.visitId).toLowerCase(),
     parkId: String(visit.parkId),
     outcome: outcome as VisitOutcome,
-    pointsEarned: Number(visit.pointsEarned),
+    pointsEarned,
+    // game_001's visit_json has no breakdown; it only runs briefly while a deploy replays it.
+    pointsBreakdown: breakdown
+      ? { base: Number(breakdown.base), days: Number(breakdown.days) }
+      : { base: pointsEarned, days: 0 },
     previousHolder: holder ? { handle: String(holder.handle), flagSeed: String(holder.flagSeed) } : null,
     flagSince: nullableIso(visit.flagSince),
     visitedAt: iso(visit.visitedAt),
@@ -215,11 +232,11 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
       const [score, parks, takeovers, visitedToday, dayEnd] = await Promise.all([
         rows("SELECT score FROM kip_game.player_scores($2::timestamptz) WHERE account_id = $1::uuid", [accountId, now]),
         rows(`
-          SELECT t.park_id, t.started_at, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
-          FROM kip_game.tenures t
-          WHERE t.holder_account_id = $1::uuid AND kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)
-            AND t.started_at <= $2::timestamptz
-          ORDER BY t.started_at ASC, t.park_id ASC`, [accountId, now]),
+          SELECT h.park_id, h.flag_since, kip_game.whole_days(h.flag_since, $2::timestamptz) AS days,
+            kip_game.holding_points(h.held_from, h.last_visit_at, h.ended_at, $2::timestamptz) AS hours
+          FROM kip_game.holdings($2::timestamptz) h
+          WHERE h.account_id = $1::uuid AND kip_game.flag_up(h.last_visit_at, h.ended_at, $2::timestamptz)
+          ORDER BY h.flag_since ASC, h.park_id ASC`, [accountId, now]),
         rows(`
           SELECT t.park_id, t.ended_at, taker.handle, taker.flag_seed
           FROM kip_game.players me
@@ -238,7 +255,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
       ]);
       return {
         score: Number(score[0]?.score ?? 0),
-        parks: parks.map((row) => ({ parkId: String(row.park_id), since: iso(row.started_at), days: Number(row.days) })),
+        parks: parks.map((row) => ({ parkId: String(row.park_id), since: iso(row.flag_since), days: Number(row.days), hours: Number(row.hours) })),
         takeovers: takeovers.map((row) => ({
           parkId: String(row.park_id), byHandle: String(row.handle), byFlagSeed: String(row.flag_seed), at: iso(row.ended_at),
         })),

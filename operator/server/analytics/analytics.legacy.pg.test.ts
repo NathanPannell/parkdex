@@ -21,6 +21,8 @@ const FOUNDERS = "database/migrations/founders_001_init.sql";
 // founders_002 builds on founders_001, so it cannot arrive first.
 const FOUNDER_REVIEWS = "database/migrations/founders_002_reviews.sql";
 const PARK_REMOVED = "database/migrations/founders_003_park_removed.sql";
+// Hourly points (#169) build on founders_001, so a database without founders predates them too.
+const GAME_POINTS = "database/migrations/game_002_points.sql";
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
@@ -45,7 +47,7 @@ async function account(id: string, email: string, createdAt: string, handle: str
 
 before(async () => {
   if (!DSN) return;
-  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS && file !== PARK_REMOVED);
+  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS && file !== PARK_REMOVED && file !== GAME_POINTS);
   const opened = await openTestDatabase(DSN, migrations);
   pool = opened.pool;
   runner = opened.runner;

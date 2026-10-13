@@ -117,6 +117,7 @@ export function apiVisit(visit: VisitRecord) {
     parkId: visit.parkId,
     outcome: visit.outcome,
     pointsEarned: visit.pointsEarned,
+    pointsBreakdown: visit.pointsBreakdown,
     previousHolder: visit.previousHolder,
     flagSince: visit.flagSince,
   };

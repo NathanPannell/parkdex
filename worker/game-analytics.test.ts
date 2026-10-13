@@ -24,7 +24,8 @@ function visitResult(outcome: "took" | "planted", fell: boolean): RecordVisitRes
   return {
     status: "recorded",
     visit: {
-      visitId: "33333333-3333-4333-8333-333333333333", parkId: PARK, outcome, pointsEarned: outcome === "took" ? 4 : 0,
+      visitId: "33333333-3333-4333-8333-333333333333", parkId: PARK, outcome, pointsEarned: outcome === "took" ? 4 : 6,
+      pointsBreakdown: { base: outcome === "took" ? 4 : 6, days: 0 },
       previousHolder: null, flagSince: "2026-10-08T17:00:00.000Z", visitedAt: "2026-10-08T17:00:00.000Z", fell,
     },
   };

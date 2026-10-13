@@ -103,6 +103,7 @@ class AccountReleaseGates(unittest.TestCase):
             "operator_analytics_001_indexes.sql",
             "founders_002_reviews.sql",
             "founders_003_park_removed.sql",
+            "game_002_points.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):
