@@ -24,7 +24,6 @@ import { setMuted } from "./lib/feedback";
 import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
 import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
 import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
-import { Camera } from "./screens/Camera";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { PortraitOnly } from "./components/PortraitOnly";
@@ -194,9 +193,9 @@ function Screens() {
     if (screen !== "plant") clearConfetti();
   }, [screen]);
 
-  // The badge claim screen is retired. The old camera check-in can still ask for it; send it home.
+  // The badge claim screen and the old camera check-in are retired; send either home.
   useEffect(() => {
-    if (screen === "claim") dispatch({ type: "go", screen: "map" });
+    if (screen === "claim" || screen === "camera") dispatch({ type: "go", screen: "map" });
   }, [dispatch, screen]);
 
   // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
@@ -289,7 +288,6 @@ function Screens() {
         )}
       </Presence>
       <AnimatePresence>
-        {screen === "camera" && <Camera key="camera" />}
         {screen === "plant" && <Plant key="plant" />}
       </AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>

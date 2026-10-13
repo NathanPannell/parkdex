@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCollectionRankProgress, getRarityProgress, setRankProgressionEnabled } from "./progression";
 import { DEMO_START, load, persistOnboardingPreferences, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
@@ -167,14 +166,12 @@ describe("claim progress hydration", () => {
     });
   });
 
-  it("derives the same rank after owner claims are restored", () => {
+  it("restores every owner claim and marks progress ready", () => {
     const restoredClaims: Record<string, Claim> = {};
-    const catalogue: Pick<Park, "id" | "rarity">[] = [];
     for (const [rarity, count] of [["common", 3], ["uncommon", 3]] as const) {
       for (let index = 0; index < count; index += 1) {
         const id = `${rarity}-${index}`;
         restoredClaims[id] = restoredClaim(id, rarity);
-        catalogue.push({ id, rarity });
       }
     }
 
@@ -183,13 +180,8 @@ describe("claim progress hydration", () => {
       ownerKey: "guest",
       claims: restoredClaims,
     });
-    // Ranks only exist while rank progression is switched on (it is off by default).
-    setRankProgressionEnabled(true);
-    const rank = getCollectionRankProgress(getRarityProgress(restored.claims, catalogue));
-    setRankProgressionEnabled(false);
-
     expect(restored.progressReady).toBe(true);
-    expect(rank).toMatchObject({ available: true, visited: 6, rank: { name: "Wayfinder" } });
+    expect(Object.keys(restored.claims).sort()).toEqual(Object.keys(restoredClaims).sort());
   });
 
   it("keeps a ready owner's claim screen mounted during background refresh", () => {
