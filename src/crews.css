@@ -1,0 +1,207 @@
+/* Crew flags (#171): the park page's crew panel, crew lists, the code sheet, the join card and the join scene. */
+
+.crew-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+  box-shadow: var(--pop);
+}
+
+.crew-panel.is-leader,
+.crew-panel.is-member {
+  background: linear-gradient(90deg, #fff1b8, #fff 80%);
+}
+
+.crew-panel.is-outsider {
+  background: linear-gradient(90deg, #e6ecff, #fff 80%);
+}
+
+.crew-panel.is-closed {
+  gap: 8px;
+  padding: 10px 14px;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.crew-panel__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.crew-panel__status strong {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.crew-panel__note,
+.crew-panel__closed {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+.crew-panel__note--logged {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.crew-panel__closed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.park-sheet__log {
+  flex: none;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+
+.crew-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crew-list li {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crew-list strong {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crew-list em {
+  font-size: 13px;
+  font-style: normal;
+  color: var(--ink-soft);
+}
+
+.crew-list li.is-me strong {
+  color: var(--kip-dark);
+}
+
+/* The code sheet: a big QR and the code in letters you can type. */
+.crew-code__card {
+  gap: 10px;
+}
+
+.crew-code__code {
+  font-family: var(--display);
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+}
+
+.crew-code__timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--sun);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.crew-join h2 {
+  font-size: 26px;
+}
+
+.crew-join__blocker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 2px dashed var(--ink);
+  border-radius: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.pennant {
+  display: inline-block;
+  line-height: 0;
+}
+
+.pennant svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* The join scene: the leader's flag stands, and the player's pennant is hoisted up its pole. */
+.plant-flag--crew {
+  z-index: 1;
+}
+
+.plant-pennant {
+  position: absolute;
+  left: 10px;
+  top: 100px;
+  transform-origin: left center;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35));
+}
+
+.plant-pennant--wave .pennant {
+  animation: flag-wave 2.4s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-pennant--wave .pennant {
+    animation: none;
+  }
+}
+
+.plant__crew {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 340px);
+  padding: 12px 14px;
+  border: 2px solid rgba(255, 248, 236, 0.5);
+  border-radius: var(--r-md);
+  background: rgba(255, 248, 236, 0.95);
+  color: var(--ink);
+}
+
+.plant__friend-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 2px dashed rgba(20, 35, 28, 0.15);
+  font-weight: 700;
+}
+
+.arrival__crew {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

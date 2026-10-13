@@ -13,6 +13,9 @@ import { FRIEND_LINK_PREFIX } from "./lib/friends/links";
 import { FRIEND_CODE_LENGTH, normalizeSocialCode } from "./lib/social/codes";
 import { listenForAppLinks, type AppLinkRoutes } from "./lib/social/links";
 import { AddFriendSheet } from "./screens/AddFriendSheet";
+import { CrewProvider, useCrew } from "./lib/game/CrewProvider";
+import { CREW_CODE_LENGTH, CREW_LINK_PREFIX, crewLinkPark } from "./lib/game/crew";
+import { CrewSheets } from "./screens/CrewSheets";
 import { HandleSheet } from "./screens/HandleSheet";
 import "./game-ui.css";
 import "./account.css";
@@ -53,12 +56,14 @@ export function App() {
       <AuthProvider>
         <GameProvider>
           <FriendsProvider>
-            <StoreProvider>
-              <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
-                <ContentProvider><Stage /></ContentProvider>
-              </div>
-              <UpdateGate status={updateStatus} />
-            </StoreProvider>
+            <CrewProvider>
+              <StoreProvider>
+                <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
+                  <ContentProvider><Stage /></ContentProvider>
+                </div>
+                <UpdateGate status={updateStatus} />
+              </StoreProvider>
+            </CrewProvider>
           </FriendsProvider>
         </GameProvider>
       </AuthProvider>
@@ -150,15 +155,18 @@ function Screens() {
   const auth = useAuth();
   const game = useGame();
   const friends = useFriends();
+  const crew = useCrew();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
   // A link to open once the app is past the splash and onboarding.
-  const linkTarget = useRef<"leaderboard" | null>(null);
+  const linkTarget = useRef<"leaderboard" | "map" | null>(null);
   const linkTries = useRef(0);
   const openIncoming = useRef(friends.openIncoming);
   openIncoming.current = friends.openIncoming;
+  const offerJoin = useRef(crew.offerJoin);
+  offerJoin.current = crew.offerJoin;
 
-  // App Links and web paths into the app (src/lib/social/links.ts). Crew links (#170) add a route here.
+  // App Links and web paths into the app (src/lib/social/links.ts): friend links (#64) and crew links (#171).
   useEffect(() => {
     const routes: AppLinkRoutes = {};
     if (friends.enabled) {
@@ -169,9 +177,18 @@ function Screens() {
         linkTarget.current = "leaderboard";
       };
     }
+    if (crew.enabled) {
+      // A crew link opens the map with its join card, which runs the sign-in, handle and in-park checks.
+      routes[CREW_LINK_PREFIX] = (value, url) => {
+        const code = normalizeSocialCode(value, CREW_CODE_LENGTH);
+        if (!code) return;
+        offerJoin.current({ code, parkId: crewLinkPark(url), source: "link" });
+        linkTarget.current = "map";
+      };
+    }
     if (!Object.keys(routes).length) return;
     return listenForAppLinks(routes);
-  }, [friends.enabled]);
+  }, [friends.enabled, crew.enabled]);
 
   // Onboarding can finish with its own move to the map, so keep the target until it shows.
   useEffect(() => {
@@ -298,6 +315,7 @@ function Screens() {
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
       <TakeoverMessages allowed={messagesAllowed && !decisions.current} />
+      {crew.enabled && <CrewSheets />}
       {friends.enabled && <AddFriendSheet />}
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       <KipTipHost paused={!state.startupReady || !onboarded || screen === "onboarding" || screen === "splash"} />

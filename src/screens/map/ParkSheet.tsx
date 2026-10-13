@@ -19,6 +19,11 @@ import { SHOW_BADGE_ART } from "../../lib/parks";
 import { founderCta, summaryCover, summaryStats, useParkSummary } from "../../lib/parkSummary";
 import { useGame } from "../../lib/game/GameProvider";
 import { hasPendingReview } from "../../lib/foundingReviews";
+import { crewMatchesFlag, crewPhase, isProtectedPhase } from "../../lib/game/crew";
+import { useCrew } from "../../lib/game/CrewProvider";
+import { useParkCrew, useServerClock } from "../../lib/game/useParkCrew";
+import { useKipTip } from "../../lib/kipTips";
+import { CrewPanel } from "./CrewPanel";
 import "../../found-park.css";
 
 type Props = {
@@ -76,7 +81,20 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const landscape = landscapeOf(park);
   const tint = LANDSCAPE_TINT[landscape];
   const live = isLive(park);
-  const holderLine = flagStatus(holder, flagDays);
+  // Crews (#171), behind the crews flag: the protected hour, the code and the crew list.
+  const crewUi = useCrew();
+  const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
+  const myHandle = game.me?.player?.handle ?? null;
+  const crewInput = { enabled: crewUi.enabled && signedIn, flag, myHandle, me: game.me };
+  const firstPhase = crewPhase({ ...crewInput, now: game.serverNow() });
+  // Members and the leader see the crew list (and outsiders after the hour), so read it once as the page opens.
+  const parkCrew = useParkCrew(park.id, firstPhase.kind === "leader" || firstPhase.kind === "member" || firstPhase.kind === "closed");
+  const crew = crewMatchesFlag(parkCrew.crew, flag) ? parkCrew.crew : null;
+  const now = useServerClock(isProtectedPhase(firstPhase));
+  const phase = crewPhase({ ...crewInput, crew, now });
+  useKipTip("crew-leader", phase.kind === "leader");
+  useKipTip("crew-outsider", phase.kind === "outsider" && !phase.logged);
+  const holderLine = flagStatus(holder, flagDays, phase.kind === "outsider");
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
@@ -141,7 +159,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           </>
         )}
         <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {holder.kind === "mine" ? "Your flag flies here" : holder.kind === "other" ? `@${holder.flag.handle}'s park` : holder.kind === "empty" ? "No flag yet" : "Flags need a connection"}
+          {holder.kind === "mine" ? (holder.member ? "Your crew's flag flies here" : "Your flag flies here") : holder.kind === "other" ? `@${holder.flag.handle}'s park` : holder.kind === "empty" ? "No flag yet" : "Flags need a connection"}
         </motion.div>
       </div>
 
@@ -164,7 +182,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
             <strong>{holderLine.title}</strong>
             <em>{holderLine.detail}</em>
           </span>
-          {holder.kind === "other" && (
+          {holder.kind === "other" && phase.kind !== "outsider" && (
             <motion.span
               className="park-sheet__bounty"
               initial={{ scale: 0, rotate: -12 }}
@@ -176,6 +194,12 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
             </motion.span>
           )}
         </motion.div>
+
+        {flag && phase.kind !== "none" && (
+          <motion.div variants={item}>
+            <CrewPanel phase={phase} flag={flag} crew={crew} now={now} myHandle={myHandle} onShowCode={() => crewUi.openCodeSheet(park.id)} />
+          </motion.div>
+        )}
 
         {founder.kind === "pending" && (
           <motion.div variants={item} className="founder-review" role="status">
@@ -254,7 +278,17 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       </motion.div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
-        {inside ? (
+        {inside && phase.kind === "outsider" ? (
+          // Outsiders during the protected hour: joining is the main way in, logging the visit the second.
+          <>
+            <button className="btn btn--block btn--glow" onClick={() => crewUi.openScanner(park.id)}>
+              <Icon name="qr" /> Scan crew code
+            </button>
+            <button className="btn btn--paper park-sheet__log" onClick={onCheckIn} disabled={phase.logged}>
+              {phase.logged ? "Logged" : "Log visit"}
+            </button>
+          </>
+        ) : inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
             <Icon name="flag" /> {visitLabel}
           </button>
@@ -271,13 +305,15 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   );
 }
 
-function flagStatus(holder: ParkHolder, days: number): { title: string; detail: string } {
+function flagStatus(holder: ParkHolder, days: number, protectedNow = false): { title: string; detail: string } {
   const flown = days === 1 ? "1 day" : `${days} days`;
   switch (holder.kind) {
     case "mine":
+      if (holder.member) return { title: `@${holder.flag.handle}'s crew`, detail: `You hold it together. ${days < 1 ? "Planted today" : `Flying for ${flown}`}` };
       return { title: "Your flag", detail: days < 1 ? "Planted today" : `Flying for ${flown}` };
     case "other":
-      return { title: `@${holder.flag.handle}`, detail: `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${takeLabel(days)}.` };
+      // During someone else's protected hour the flag can't be taken yet (#171).
+      return { title: `@${holder.flag.handle}`, detail: `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${protectedNow ? "Protected for now." : `${takeLabel(days)}.`}` };
     case "empty":
       return { title: "No flag yet", detail: "Get inside the boundary to plant yours." };
     case "unknown":

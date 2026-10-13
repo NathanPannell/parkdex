@@ -106,6 +106,23 @@ Each flag gains `crew: { size, memberSeeds, protectedUntil }`. The leader is the
 - `visitedToday` lists parks with a flag action today. New `loggedToday` lists parks with only a logged visit, which can still be taken after the hour.
 - `takeovers` also lists flags the player held as a crew member.
 
+## App (#171)
+
+Every build reads `logged` and `joined`, and the `protected` details, whatever the `crews` flag says (`src/lib/game/client.ts`). With the flag off, a logged visit shows "Visit logged" and "This flag was just planted. Come back after 3:42 pm to take it." The flag only shows the crew UI:
+
+- **Park page** (`ParkSheet.tsx`, `CrewPanel.tsx`), from `crewPhase()` in `src/lib/game/crew.ts`:
+  - leader during the hour: "Your flag is protected · 58 min", **Show crew code** and the crew list
+  - member: "You're in @tom's crew · protected 42 min", the same button and list
+  - outsider: "@tom's crew flag is protected · 42 min", "Ask the crew for their code to join", and inside the park **Scan crew code** with **Log visit**. After logging: "Visit logged · +1. Come back after 3:42 pm to take this park."
+  - after the hour: the usual states, with the crew list and "Crew window closed" under the holder row
+- The park page reads `GET /api/game/parks/:parkId/crew` once when it opens, for leaders, members and closed crews only, and the code sheet reads it once when it opens. Map refreshes never call it.
+- **Bottom bar:** "Log" for outsiders during the hour, "Later" once logged, and "Join" while a scanned code waits for the park you stand in.
+- **Crew code sheet** (`CrewSheets.tsx`): the QR of `https://<web host>/crew/CODE?park=<parkId>`, the code in large letters, the countdown and "Anyone in the crew can show this code". It keeps the screen on through the Screen Wake Lock API where the browser or WebView has it.
+- **Joining:** the in-app scanner (`QrScanner.tsx`, with "Type code instead"), or the `/crew/` App Link (`AndroidManifest.xml`) and web path (`vercel.json`, no-store and noindex), open the join card: "Join @tom's crew at Beacon Hill · +2", the crew, Join and Cancel. The link's `park` names the park; a code typed on a park page is for that park; otherwise it is the park you stand in. Join goes through sign-in, the handle sheet and the in-park check ("Get inside Beacon Hill Park to join").
+- **Result:** the plant scene hoists the player's pennant up the leader's pole, counts +2 and lists the crew. With the `friends` flag on, it offers "Add @sara as a friend?" for members who aren't friends yet; the friends API adds by code only, so the button opens the player's own friend code to scan.
+- **Map pins** (`mapPins.ts`): the leader's flag with up to 3 pennants in members' colours below it, a "+N" tag for bigger crews, and a gold shield during the hour. The image ID adds `crew:<size>:<p|o>:<member seeds>` to the flag's own ID. `flag.ts` is unchanged.
+- **Kip's Tips:** `crew-leader`, `crew-outsider` and `crew-joined`.
+
 ## Analytics
 
 `crew_joined`, `crew_code_shown` and `visit_logged_protected`, each with `crew_size`. A logged visit emits `visit_logged_protected` instead of a `flag_*` event.
