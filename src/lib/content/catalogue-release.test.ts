@@ -9,13 +9,15 @@ import type { Park } from "../parks";
 import * as currentReader from "./manifest";
 import * as readerV1 from "./compat/reader-v1";
 
-// Every park the legacy BC import releases must pass the app's local claim
-// snapshot check and the account API contract, or a claim of that park fails
-// only when it is saved or backed up. The new parks reach older builds never,
-// and newer builds through the CDN catalogue, so both paths are checked.
+// Every park the legacy BC and Nova Scotia imports release must pass the app's
+// local claim snapshot check and the account API contract, or a claim of that
+// park fails only when it is saved or backed up. The new parks reach older
+// builds never, and newer builds through the CDN catalogue, so both paths are
+// checked.
 
 const BC = new URL("../../../database/imports/legacy-bc-20261007/", import.meta.url);
 const ISLAND = new URL("../../../database/imports/provincial-regional-20260929/", import.meta.url);
+const NS = new URL("../../../database/imports/ns-20261013/", import.meta.url);
 const LIMIT = 4 * 1024 * 1024;
 const HEADROOM = 512 * 1024;
 const OLDER_READERS = [
@@ -65,6 +67,7 @@ function importedParks(catalogue: Place[], review: Review, features: Feature[]):
 
 const bcParks = importedParks(json(new URL("catalogue.json", BC)), json(new URL("new-park-review.json", BC)), gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", BC)).features);
 const islandParks = importedParks(json(new URL("catalogue.json", ISLAND)), json(new URL("new-park-review.json", ISLAND)), json<{ features: Feature[] }>(new URL("boundaries.geojson", ISLAND)).features);
+const nsParks = importedParks(json(new URL("catalogue.json", NS)), json(new URL("new-park-review.json", NS)), gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", NS)).features);
 
 function release(base: Snapshot, ...additions: Added[]): Snapshot {
   const added = additions.flat();
@@ -86,6 +89,8 @@ const OLDER_RELEASES = [
 const FULL_RELEASES = [
   { name: "staging with every legacy BC park", snapshot: release(staging, bcParks) },
   { name: "production with the island bundle and every legacy BC park", snapshot: release(production, islandParks, bcParks) },
+  { name: "staging with every legacy BC park and Nova Scotia", snapshot: release(staging, bcParks, nsParks) },
+  { name: "production with the island bundle, every legacy BC park and Nova Scotia", snapshot: release(production, islandParks, bcParks, nsParks) },
 ];
 
 function response() {
@@ -177,13 +182,35 @@ describe.each(FULL_RELEASES)("reader 3 catalogue: $name", ({ snapshot }) => {
   });
 });
 
-describe("legacy BC boundaries in the app's containment check", () => {
-  const report = json<{ parks: { id: string; status: string; probes?: { secondaryRegion?: [number, number]; hole?: [number, number] } }[] }>(new URL("comparison-report.json", BC));
-  const byId = new Map(bcParks.map(({ park, feature }) => [String(park.id), feature.geometry as unknown as Boundary]));
+describe("Nova Scotia reaching reader 3 installs that are behind", () => {
+  it("fits in one change batch with headroom under the content sync limit", async () => {
+    const changes = nsParks.flatMap(({ park, feature, drive }) => [
+      { entity: "park", op: "upsert", id: park.id, value: park },
+      { entity: "boundary", op: "upsert", id: park.id, value: feature },
+      { entity: "drive", op: "upsert", id: park.id, value: drive },
+    ]);
+    const res = response();
+    const repository = {
+      snapshot: async () => staging,
+      changes: async () => ({ headRevision: staging.revision + 1, retentionFloor: 0, hasMore: false, hubs: staging.drive.hubs, batches: [{ revision: staging.revision + 1, changes }] }),
+      scene: async () => null,
+    };
+    await createChangesHandler({ repository })({ method: "GET", query: { after: String(staging.revision), limit: "50", reader: "3" }, headers: {} }, res);
+    expect(res.statusCode).toBe(200);
+    expect(new TextEncoder().encode(res.body).byteLength).toBeLessThan(LIMIT - HEADROOM);
+  });
+});
+
+describe.each([
+  { name: "legacy BC", bundle: BC, parks: bcParks, minimum: 100 },
+  { name: "Nova Scotia", bundle: NS, parks: nsParks, minimum: 40 },
+])("$name boundaries in the app's containment check", ({ bundle, parks, minimum }) => {
+  const report = json<{ parks: { id: string; status: string; probes?: { secondaryRegion?: [number, number]; hole?: [number, number] } }[] }>(new URL("comparison-report.json", bundle));
+  const byId = new Map(parks.map(({ park, feature }) => [String(park.id), feature.geometry as unknown as Boundary]));
   const probed = report.parks.filter((row) => row.status === "new" && row.probes && Object.keys(row.probes).length);
 
   it("counts a visit inside every secondary region and none inside a hole", () => {
-    expect(probed.length).toBeGreaterThan(100);
+    expect(probed.length).toBeGreaterThan(minimum);
     for (const row of probed) {
       const boundary = byId.get(row.id);
       if (row.probes?.secondaryRegion) expect(insideBoundary(row.probes.secondaryRegion, boundary), row.id).toBe(true);

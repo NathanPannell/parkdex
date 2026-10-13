@@ -1,0 +1,121 @@
+{
+  "schema": "parkdex.ns-source-fetch.v1",
+  "fetchedAt": "2026-10-13T07:10:15Z",
+  "rawFiles": "Kept outside the repository; `python scripts/build_ns_import.py fetch --raw <folder>` downloads them again.",
+  "sources": {
+    "nsecc-parks.geojson": {
+      "url": "https://services1.arcgis.com/qpxtVXh93G601MmT/arcgis/rest/services/Nova_Scotia_Parks_and_Protected_Areas_System_V1/FeatureServer/1/query?where=PROT_TYPE%20LIKE%20%27%25Park%25%27&outFields=%2A&returnGeometry=true&outSR=4326&orderByFields=OBJECTID&f=geojson",
+      "page": "https://nse.maps.arcgis.com/home/item.html?id=c4561687c5f845f5a425d9426f7bc8ab",
+      "role": "Provincial park outlines (PROT_TYPE 'Provincial Park', designated under the Provincial Parks Act and managed by Natural Resources and Renewables) and the Sable Island National Park Reserve outline, from the province's Parks and Protected Areas System layer.",
+      "retrievedAt": "2026-10-13T07:10:17Z",
+      "bytes": 4623966,
+      "sha256": "545cc90d7ce7bbac7f7ca908ae055673642b68b015bc59978c51510ce525a26b"
+    },
+    "nsecc-attributes.json": {
+      "url": "https://services1.arcgis.com/qpxtVXh93G601MmT/arcgis/rest/services/Nova_Scotia_Parks_and_Protected_Areas_System_V1/FeatureServer/1/query?where=1%3D1&outFields=OBJECTID%2CPROT_NAME%2CPROT_TYPE%2CPROT_STATUS%2CLEGISLATION%2CMGMT_AUTHORITY&returnGeometry=false&orderByFields=OBJECTID&f=json",
+      "page": "https://nse.maps.arcgis.com/home/item.html?id=c4561687c5f845f5a425d9426f7bc8ab",
+      "role": "Every feature of the same layer without geometry, to count what the provincial park filter leaves out.",
+      "retrievedAt": "2026-10-13T07:10:17Z",
+      "bytes": 307644,
+      "sha256": "0affd3b30ec5f64c695a6960c647ed425d970cb3dda2ff71df0ac95366e03a64"
+    },
+    "clss-national-parks-ns.geojson": {
+      "url": "https://proxyinternet.nrcan-rncan.gc.ca/arcgis/rest/services/CLSS-SATC/CLSS_Administrative_Boundaries/MapServer/1/query?where=jurisdiction%3D%27NS%27&outFields=%2A&returnGeometry=true&outSR=4326&orderByFields=OBJECTID&f=geojson",
+      "page": "https://open.canada.ca/data/en/dataset/9e1507cd-f25c-4c64-995b-6563bf9d65bd",
+      "role": "Legislative national park boundaries in Nova Scotia (Cape Breton Highlands, Kejimkujik inland and Seaside).",
+      "retrievedAt": "2026-10-13T07:10:19Z",
+      "bytes": 432385,
+      "sha256": "85e64d471bf7171ee26c107590ea8e34db9de4407644e3aab9a66fac218132c2"
+    },
+    "parks-canada-finder.html": {
+      "url": "https://parks.canada.ca/pn-np/recherche-parcs-parks-search",
+      "page": "https://parks.canada.ca/pn-np/recherche-parcs-parks-search",
+      "role": "Parks Canada park finder; each park row carries its map point as WKT.",
+      "retrievedAt": "2026-10-13T07:10:21Z",
+      "bytes": 165288,
+      "sha256": "94bdb5ba6bbe4bad4779a0e62f50f3cf692446100abbd5c48b4f20b9850e4ba1"
+    },
+    "ns-park-entrances.geojson": {
+      "url": "https://data.novascotia.ca/api/geospatial/c6mf-qy4u?method=export&format=GeoJSON",
+      "page": "https://data.novascotia.ca/Nature-and-Environment/Provincial-Day-use-and-Camping-Park-Entrances/c6mf-qy4u",
+      "role": "Official provincial day-use and camping park entrance points (Natural Resources), used as pins when one lies inside the park outline.",
+      "retrievedAt": "2026-10-13T07:10:22Z",
+      "bytes": 24663,
+      "sha256": "3ecb6c895caad176861ea21aae76c879501306a16a0af32904f79ab8a9e5396b"
+    },
+    "ns-municipalities.geojson": {
+      "url": "https://data.novascotia.ca/api/geospatial/7bqh-hssn?method=export&format=GeoJSON",
+      "page": "https://data.novascotia.ca/Municipalities/Municipality-Boundaries/7bqh-hssn",
+      "role": "Municipality boundaries with their county, used to place each pin in a county.",
+      "retrievedAt": "2026-10-13T07:10:41Z",
+      "bytes": 72471812,
+      "sha256": "7ed171b01537124fa7c757c142a168c99f099bd3e19a7ae26a595549d73c8399"
+    },
+    "nstdb-park-delimiters.json": {
+      "url": "https://data.novascotia.ca/resource/k3u4-5mnw.json?%24select=feat_code%2Cfeat_desc%2Cname&%24where=feat_code%20in%20%28%27DLPKPR50%27%2C%27DLPKNA50%27%29&%24order=name%2Cfeat_code&%24limit=1000",
+      "page": "https://data.novascotia.ca/Lands-Forests-and-Wildlife/Nova-Scotia-Topographic-Database-Delimiters-Poly-L/k3u4-5mnw",
+      "role": "Names of provincial and national park delimiters in the Nova Scotia Topographic Database, as an independent completeness check.",
+      "retrievedAt": "2026-10-13T07:10:42Z",
+      "bytes": 11720,
+      "sha256": "e36416be39cb6e618ef5b37f818c36d2eadd8977d7364336b2a87b6180d62218"
+    },
+    "staging-snapshot-reader1.json": {
+      "url": "https://staging.web.parkdex.app/api/content/snapshot?reader=1",
+      "role": "Parkdex staging content snapshot as reader 1 receives it",
+      "retrievedAt": "2026-10-13T07:10:43Z",
+      "bytes": 1704623,
+      "sha256": "10ead4ed51c80558dfcfafc77cc5b91b473813ff2809dc1ec834c1bc9f0d2717"
+    },
+    "staging-snapshot-reader2.json": {
+      "url": "https://staging.web.parkdex.app/api/content/snapshot?reader=2",
+      "role": "Parkdex staging content snapshot as reader 2 receives it",
+      "retrievedAt": "2026-10-13T07:10:44Z",
+      "bytes": 1750933,
+      "sha256": "bddae81a62988f76aacff2a92d1ee1406f397048e4de9d7f5c480984378f932c"
+    },
+    "staging-snapshot-reader3.json": {
+      "url": "https://staging.web.parkdex.app/api/content/snapshot?reader=3",
+      "role": "Parkdex staging content snapshot as reader 3 receives it",
+      "retrievedAt": "2026-10-13T07:10:45Z",
+      "bytes": 439,
+      "sha256": "4b0f0d44f86c521fc91fcab5260b9a42cd91196b427b14397574006425bdbf12"
+    },
+    "staging-catalogue/catalogue/index.json": {
+      "url": "https://kip-assets.parkdex.app/releases/cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df/catalogue/index.json",
+      "role": "Parkdex staging CDN catalogue release (revision 160, 1057 parks); its boundary chunks are pinned by the hashes inside the index",
+      "retrievedAt": "2026-10-13T07:10:48Z",
+      "bytes": 665102,
+      "sha256": "cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df",
+      "chunks": 17
+    },
+    "production-snapshot-reader1.json": {
+      "url": "https://web.parkdex.app/api/content/snapshot?reader=1",
+      "role": "Parkdex production content snapshot as reader 1 receives it",
+      "retrievedAt": "2026-10-13T07:10:51Z",
+      "bytes": 1646312,
+      "sha256": "ff03b1abeacd5496a68ee100fb8fdffafed773f49b699cc2d991c1f449ac5313"
+    },
+    "production-snapshot-reader2.json": {
+      "url": "https://web.parkdex.app/api/content/snapshot?reader=2",
+      "role": "Parkdex production content snapshot as reader 2 receives it",
+      "retrievedAt": "2026-10-13T07:10:51Z",
+      "bytes": 1667723,
+      "sha256": "842642a22ca4820833e428341bc1da6023bd987eb46d8ab0485f1ff4d66679ef"
+    },
+    "production-snapshot-reader3.json": {
+      "url": "https://web.parkdex.app/api/content/snapshot?reader=3",
+      "role": "Parkdex production content snapshot as reader 3 receives it",
+      "retrievedAt": "2026-10-13T07:10:52Z",
+      "bytes": 438,
+      "sha256": "4311089467d24d60b20745e1d11be753de826dd0a1cb1d075527de5646419a05"
+    },
+    "production-catalogue/catalogue/index.json": {
+      "url": "https://kip-assets.parkdex.app/releases/66157f277cbbe5d83c29d1bffad8a3b908ce9d40b1b5562d7cbc710880112647/catalogue/index.json",
+      "role": "Parkdex production CDN catalogue release (revision 29, 1067 parks); its boundary chunks are pinned by the hashes inside the index",
+      "retrievedAt": "2026-10-13T07:10:56Z",
+      "bytes": 593140,
+      "sha256": "66157f277cbbe5d83c29d1bffad8a3b908ce9d40b1b5562d7cbc710880112647",
+      "chunks": 16
+    }
+  }
+}

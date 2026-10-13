@@ -1,0 +1,2580 @@
+{
+  "parks": {
+    "national-cape-breton-highlands-national-park": {
+      "presentation": {
+        "short": "Cape Breton Highlands",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 615667,
+        "blurb": "A national park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "national-kejimkujik-national-park-and-national-historic-site": {
+      "presentation": {
+        "short": "Kejimkujik",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 19285,
+        "blurb": "A national park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "national-sable-island-national-park-reserve": {
+      "presentation": {
+        "short": "Sable Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 703671,
+        "blurb": "A national park reserve in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-amherst-shore-provincial-park": {
+      "presentation": {
+        "short": "Amherst Shore",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 646292,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-annapolis-basin-lookoff-provincial-park": {
+      "presentation": {
+        "short": "Annapolis Basin Lookoff",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 26792,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-anthony-provincial-park": {
+      "presentation": {
+        "short": "Anthony",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 833856,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-arisaig-provincial-park": {
+      "presentation": {
+        "short": "Arisaig",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 234386,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-barra-forest-and-macneils-vale-provincial-park": {
+      "presentation": {
+        "short": "Barra Forest and MacNeils Vale",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 543124,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-barrachois-provincial-park": {
+      "presentation": {
+        "short": "Barrachois",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 813008,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-battery-provincial-park": {
+      "presentation": {
+        "short": "Battery",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 398546,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-bayfield-beach-provincial-park": {
+      "presentation": {
+        "short": "Bayfield Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 749129,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-bayswater-beach-provincial-park": {
+      "presentation": {
+        "short": "Bayswater Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 939351,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-beaver-mountain-provincial-park": {
+      "presentation": {
+        "short": "Beaver Mountain",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 282554,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-bell-provincial-park": {
+      "presentation": {
+        "short": "Bell",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 533265,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-ben-eoin-provincial-park": {
+      "presentation": {
+        "short": "Ben Eoin",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 398184,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-blomidon-provincial-park": {
+      "presentation": {
+        "short": "Blomidon",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 720776,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-blue-sea-beach-provincial-park": {
+      "presentation": {
+        "short": "Blue Sea Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 388498,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-boylston-provincial-park": {
+      "presentation": {
+        "short": "Boylston",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 724675,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cabots-landing-provincial-park": {
+      "presentation": {
+        "short": "Cabots Landing",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 427434,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-camerons-brook-provincial-park": {
+      "presentation": {
+        "short": "Camerons Brook",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 489307,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cape-chignecto-provincial-park": {
+      "presentation": {
+        "short": "Cape Chignecto",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 510577,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cape-smokey-provincial-park": {
+      "presentation": {
+        "short": "Cape Smokey",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 286544,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cape-split-provincial-park": {
+      "presentation": {
+        "short": "Cape Split",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 793365,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-card-lake-provincial-park": {
+      "presentation": {
+        "short": "Card Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 585215,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-caribou-munroe-island-provincial-park": {
+      "presentation": {
+        "short": "Caribou-Munroe Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 65439,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-central-grove-provincial-park": {
+      "presentation": {
+        "short": "Central Grove",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 159161,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-clairmont-provincial-park": {
+      "presentation": {
+        "short": "Clairmont",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 353014,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-clam-harbour-beach-provincial-park": {
+      "presentation": {
+        "short": "Clam Harbour Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 579325,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cleveland-beach-provincial-park": {
+      "presentation": {
+        "short": "Cleveland Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 73666,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-coldbrook-provincial-park": {
+      "presentation": {
+        "short": "Coldbrook",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 969932,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cole-harbour-lawrencetown-provincial-park": {
+      "presentation": {
+        "short": "Cole Harbour - Lawrencetown",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 273630,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-cottage-cove-provincial-park": {
+      "presentation": {
+        "short": "Cottage Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 452894,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-crystal-crescent-beach-provincial-park": {
+      "presentation": {
+        "short": "Crystal Crescent Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 950112,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-dalem-lake-provincial-park": {
+      "presentation": {
+        "short": "Dalem Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 532928,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-dollar-lake-provincial-park": {
+      "presentation": {
+        "short": "Dollar Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 343817,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-dominion-beach-provincial-park": {
+      "presentation": {
+        "short": "Dominion Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 619201,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-dunns-beach-provincial-park": {
+      "presentation": {
+        "short": "Dunns Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 593819,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-east-river-provincial-park": {
+      "presentation": {
+        "short": "East River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 236349,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-ellenwood-provincial-park": {
+      "presentation": {
+        "short": "Ellenwood",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 61846,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-falls-lake-provincial-park": {
+      "presentation": {
+        "short": "Falls Lake",
+        "biome": "waterfall",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 542193,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-fancy-lake-provincial-park": {
+      "presentation": {
+        "short": "Fancy Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 445347,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-five-islands-provincial-park": {
+      "presentation": {
+        "short": "Five Islands",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 130556,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-fox-harbour-provincial-park": {
+      "presentation": {
+        "short": "Fox Harbour",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 119041,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-glenwood-provincial-park": {
+      "presentation": {
+        "short": "Glenwood",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 680556,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-graves-island-provincial-park": {
+      "presentation": {
+        "short": "Graves Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 68501,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-green-hill-provincial-park": {
+      "presentation": {
+        "short": "Green Hill",
+        "biome": "mountain",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 286665,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-groves-point-provincial-park": {
+      "presentation": {
+        "short": "Groves Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 841303,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-gulf-shore-provincial-park": {
+      "presentation": {
+        "short": "Gulf Shore",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 846425,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-heather-beach-provincial-park": {
+      "presentation": {
+        "short": "Heather Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 105798,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-indian-fields-provincial-park": {
+      "presentation": {
+        "short": "Indian Fields",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 196821,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-jerry-lawrence-provincial-park": {
+      "presentation": {
+        "short": "Jerry Lawrence",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 90398,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-judds-pools-provincial-park": {
+      "presentation": {
+        "short": "Judds Pools",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 496194,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lake-charlotte-provincial-park": {
+      "presentation": {
+        "short": "Lake Charlotte",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 339718,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lake-george-provincial-park": {
+      "presentation": {
+        "short": "Lake George",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 863507,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lake-midway-provincial-park": {
+      "presentation": {
+        "short": "Lake Midway",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 843268,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lake-o-law-provincial-park": {
+      "presentation": {
+        "short": "Lake-O-Law",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 172588,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-laurie-provincial-park": {
+      "presentation": {
+        "short": "Laurie",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 320373,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lennox-passage-provincial-park": {
+      "presentation": {
+        "short": "Lennox Passage",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 578773,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lochiel-lake-provincial-park": {
+      "presentation": {
+        "short": "Lochiel Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 28509,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-londonderry-provincial-park": {
+      "presentation": {
+        "short": "Londonderry",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 931492,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-long-lake-provincial-park": {
+      "presentation": {
+        "short": "Long Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 711512,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-lumsden-pond-provincial-park": {
+      "presentation": {
+        "short": "Lumsden Pond",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 139095,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-mabou-provincial-park": {
+      "presentation": {
+        "short": "Mabou",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 234815,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-martinique-beach-provincial-park": {
+      "presentation": {
+        "short": "Martinique Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 291939,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-mavilette-beach-provincial-park": {
+      "presentation": {
+        "short": "Mavilette Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 855909,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-mcnabs-and-lawlor-island-provincial-park": {
+      "presentation": {
+        "short": "McNabs & Lawlor Island",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 839468,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-melmerby-beach-provincial-park": {
+      "presentation": {
+        "short": "Melmerby Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 762119,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-mira-river-provincial-park": {
+      "presentation": {
+        "short": "Mira River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 13827,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-monks-head-provincial-park": {
+      "presentation": {
+        "short": "Monks Head",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 226140,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-moose-river-gold-mines-provincial-park": {
+      "presentation": {
+        "short": "Moose River Gold Mines",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 127848,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-musquodoboit-valley-provincial-park": {
+      "presentation": {
+        "short": "Musquodoboit Valley",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 669074,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-northport-beach-provincial-park": {
+      "presentation": {
+        "short": "Northport Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 254155,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-oakfield-provincial-park": {
+      "presentation": {
+        "short": "Oakfield",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 525222,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-owls-head-provincial-park": {
+      "presentation": {
+        "short": "Owls Head",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 160204,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-petersfield-provincial-park": {
+      "presentation": {
+        "short": "Petersfield",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 597245,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-plaster-provincial-park": {
+      "presentation": {
+        "short": "Plaster",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 60145,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-pomquet-beach-provincial-park": {
+      "presentation": {
+        "short": "Pomquet Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 21450,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-pondville-beach-provincial-park": {
+      "presentation": {
+        "short": "Pondville Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 879915,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-port-hood-station-provincial-park": {
+      "presentation": {
+        "short": "Port Hood Station",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 498334,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-port-maitland-beach-provincial-park": {
+      "presentation": {
+        "short": "Port Maitland Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 696545,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-porters-lake-provincial-park": {
+      "presentation": {
+        "short": "Porters Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 899783,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-powells-point-provincial-park": {
+      "presentation": {
+        "short": "Powells Point",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 801562,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-queensland-beach-provincial-park": {
+      "presentation": {
+        "short": "Queensland Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 434694,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-rissers-beach-provincial-park": {
+      "presentation": {
+        "short": "Rissers Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 57326,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-rushtons-beach-provincial-park": {
+      "presentation": {
+        "short": "Rushtons Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 116623,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-sable-river-provincial-park": {
+      "presentation": {
+        "short": "Sable River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 102996,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-sackville-lakes-provincial-park": {
+      "presentation": {
+        "short": "Sackville Lakes",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 367467,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-salsman-provincial-park": {
+      "presentation": {
+        "short": "Salsman",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 32374,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-salt-springs-provincial-park": {
+      "presentation": {
+        "short": "Salt Springs",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 894101,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-sand-hills-beach-provincial-park": {
+      "presentation": {
+        "short": "Sand Hills Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 417949,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-savary-provincial-park": {
+      "presentation": {
+        "short": "Savary",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 964752,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-second-peninsula-provincial-park": {
+      "presentation": {
+        "short": "Second Peninsula",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 477709,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-shinimicas-provincial-park": {
+      "presentation": {
+        "short": "Shinimicas",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 244488,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-smileys-provincial-park": {
+      "presentation": {
+        "short": "Smileys",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 965783,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-smugglers-cove-provincial-park": {
+      "presentation": {
+        "short": "Smugglers Cove",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 615704,
+        "blurb": "A provincial park in Nova Scotia's Yarmouth and Acadian Shores region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-st-anns-provincial-park": {
+      "presentation": {
+        "short": "St. Anns",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 558073,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-st-marys-river-provincial-park": {
+      "presentation": {
+        "short": "St. Marys River",
+        "biome": "river",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 318196,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-summerville-beach-provincial-park": {
+      "presentation": {
+        "short": "Summerville Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 443215,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-tatamagouche-provincial-park": {
+      "presentation": {
+        "short": "Tatamagouche",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 929118,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-taylor-head-provincial-park": {
+      "presentation": {
+        "short": "Taylor Head",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 710734,
+        "blurb": "A provincial park on Nova Scotia's Eastern Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-ten-mile-lake-provincial-park": {
+      "presentation": {
+        "short": "Ten Mile Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 548594,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-the-islands-provincial-park": {
+      "presentation": {
+        "short": "The Islands",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 119380,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-thomas-raddall-provincial-park": {
+      "presentation": {
+        "short": "Thomas Raddall",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 510350,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-tidnish-dock-provincial-park": {
+      "presentation": {
+        "short": "Tidnish Dock",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 366955,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-valleyview-provincial-park": {
+      "presentation": {
+        "short": "Valleyview",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 423465,
+        "blurb": "A provincial park in Nova Scotia's Bay of Fundy and Annapolis Valley region.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-waterside-beach-provincial-park": {
+      "presentation": {
+        "short": "Waterside Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 668181,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-wentworth-provincial-park": {
+      "presentation": {
+        "short": "Wentworth",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 63192,
+        "blurb": "A provincial park on Nova Scotia's Northumberland Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-wentzells-lake-provincial-park": {
+      "presentation": {
+        "short": "Wentzells Lake",
+        "biome": "lake",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 881352,
+        "blurb": "A provincial park on Nova Scotia's South Shore.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-west-dover-provincial-park": {
+      "presentation": {
+        "short": "West Dover",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 970099,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-west-mabou-beach-provincial-park": {
+      "presentation": {
+        "short": "West Mabou Beach",
+        "biome": "coast",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 145999,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-whycocomagh-provincial-park": {
+      "presentation": {
+        "short": "Whycocomagh",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 481321,
+        "blurb": "A provincial park on Cape Breton Island, Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "provincial-william-e-degarthe-provincial-park": {
+      "presentation": {
+        "short": "William E. deGarthe",
+        "biome": "forest",
+        "shape": "circle",
+        "rarity": "common",
+        "seed": 530585,
+        "blurb": "A provincial park in the Halifax Metro region of Nova Scotia.",
+        "scene": null
+      },
+      "accessUnknown": true,
+      "walkM": 0,
+      "drive": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  }
+}
