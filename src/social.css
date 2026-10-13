@@ -184,6 +184,7 @@
   flex-direction: row;
   align-items: center;
   gap: 12px;
+  padding: 12px 14px 12px 18px;
   background: var(--paper-2);
 }
 
@@ -194,15 +195,15 @@
   min-width: 0;
 }
 
+.friends-week__text .eyebrow {
+  white-space: nowrap;
+}
+
 .friends-week__text strong {
   font-family: var(--display);
   font-size: 22px;
   font-weight: 800;
-}
-
-.friends-week__text > span:last-child {
-  font-size: 13px;
-  color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .friends-week .btn {

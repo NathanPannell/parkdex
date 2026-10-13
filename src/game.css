@@ -409,7 +409,8 @@ button.game-row:active {
   font-weight: 800;
 }
 
-.game-board li:first-child .game-row__rank {
+/* First place, and everyone tied for it, wears the same badge. */
+.game-row__rank.is-first {
   background: var(--kip);
   color: var(--paper);
 }
