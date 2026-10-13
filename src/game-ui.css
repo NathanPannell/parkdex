@@ -100,12 +100,30 @@
 
 /* ---------- Leaderboard podium ---------- */
 
+/* The steps stand on one base line, so the podium reads as a whole even with one or two players. */
+.game-podium-stand {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0 0;
+}
+
 .game-podium {
   display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
   align-items: end;
-  gap: 8px;
-  padding: 6px 4px 0;
+  gap: 6px;
+  padding: 0 6px;
+}
+
+/* One or two players: only their steps, centred. */
+.game-podium--1 {
+  grid-template-columns: minmax(0, 168px);
+  justify-content: center;
+}
+
+.game-podium--2 {
+  grid-template-columns: repeat(2, minmax(0, 150px));
+  justify-content: center;
 }
 
 .game-podium__spot {
@@ -113,12 +131,15 @@
   flex-direction: column;
   align-items: center;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .game-podium__flag {
   margin-bottom: 2px;
 }
 
+/* The @handle stays on one line and shrinks to fit its step (--handle-chars, see handleFit),
+   leaving room for the pill's padding. An ellipsis is the last resort. */
 .game-podium__handle {
   max-width: 100%;
   overflow: hidden;
@@ -126,6 +147,7 @@
   white-space: nowrap;
   font-family: var(--display);
   font-size: 15px;
+  font-size: clamp(11px, (100cqi - 14px) / (var(--handle-chars, 1) * 0.6), 15px);
   font-weight: 800;
 }
 
@@ -164,11 +186,31 @@
   background: #f1c9a0;
 }
 
+.game-podium__base {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  box-shadow: 0 3px 0 rgba(20, 35, 28, 0.18);
+}
+
 .game-podium__spot.is-me .game-podium__handle {
-  padding: 0 8px;
+  padding: 0 7px;
   border-radius: 99px;
   background: var(--ink);
   color: var(--sun);
+}
+
+/* Below a short podium: a quiet note instead of blank space. */
+.account-card.game-board-more {
+  flex-direction: row;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  text-align: left;
+}
+
+.game-board-more p {
+  margin: 0;
 }
 
 /* ---------- Takeover messages ---------- */
