@@ -142,11 +142,6 @@
   cursor: zoom-in;
 }
 
-.viewer-open:focus-visible {
-  outline: 3px solid var(--kip);
-  outline-offset: 2px;
-}
-
 .fullscreen-viewer__cover-mark {
   display: inline-flex;
   align-items: center;
