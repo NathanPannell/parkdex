@@ -43,7 +43,8 @@
     "database/migrations/founders_002_reviews.sql",
     "database/migrations/founders_003_park_removed.sql",
     "database/migrations/game_002_points.sql",
-    "database/migrations/social_001_friends.sql"
+    "database/migrations/social_001_friends.sql",
+    "database/migrations/osm_parks_002_sources.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
