@@ -296,7 +296,8 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
              count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM public.parks p WHERE p.id = 'osm-' || o.osm_type || '-' || o.osm_id)
                AND NOT EXISTS (SELECT 1 FROM public.parks p WHERE p.lat BETWEEN o.min_lat AND o.max_lat AND p.lng BETWEEN o.min_lng AND o.max_lng)
              )::integer AS missing,
-             (SELECT source_date FROM kip_osm.source) AS source_date
+             -- One row per extract (bc, nova-scotia, ...); the oldest says how stale the outlines can be.
+             (SELECT min(source_date) FROM kip_osm.source) AS source_date
            FROM kip_osm.parks o`,
         ), [{ outlines: 0, missing: 0, source_date: null }]),
       ]);

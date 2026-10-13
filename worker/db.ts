@@ -28,7 +28,15 @@ const WRITE_STATEMENTS = [
  * Database functions that change data. Other function calls (scores, flags, leaderboards) are
  * reads. Add a function here when it writes, or its calls will be counted as reads.
  */
-export const WRITE_FUNCTIONS = new Set(["kip_game.record_visit", "kip_game.join_crew"]);
+export const WRITE_FUNCTIONS = new Set([
+  "kip_game.record_visit",
+  "kip_game.join_crew",
+  // Friends (#64): codes are created on first read, so ensure_friend_code writes too.
+  "kip_social.ensure_friend_code",
+  "kip_social.reset_friend_code",
+  "kip_social.add_friend",
+  "kip_social.remove_friend",
+]);
 const MAX_TABLES = 16;
 const CACHE_LIMIT = 500;
 const classificationCache = new Map<string, SqlClassification>();

@@ -6,6 +6,8 @@ import { useAuth } from "./accounts/AuthProvider";
 import { getNativeInstallIdentity, isNative } from "./native";
 import { onboardingMatchesInstall } from "./onboardingIdentity";
 import { isOverTheAirBundle } from "./ota";
+import { readLastLocation } from "./lastLocation";
+import { isPointInsideContentBounds } from "./content/contracts";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
@@ -26,6 +28,9 @@ type State = {
   user: LngLat;
   // Metres of GPS uncertainty; null until the first real fix arrives.
   accuracy: number | null;
+  // The player's last real position, from a fix or the one saved last time. Demo moves
+  // (teleports, simulated trips) never change it. Null when Parkdex has never had one.
+  located: LngLat | null;
   locationError: string | null;
   muted: boolean;
   screen: Screen;
@@ -59,7 +64,8 @@ export type Action =
   | { type: "progressFailed"; ownerKey: string; message: string }
   | { type: "reset" };
 
-// Downtown Victoria: the mockup's starting point for testers without GPS.
+// Downtown Victoria: the demo spot for testers without GPS and players outside every
+// supported province. A real location inside the content areas always wins over it.
 export const DEMO_START: LngLat = [-123.3656, 48.4284];
 const KEY = "parkdex-mockup-v1";
 
@@ -73,6 +79,7 @@ const initial: State = {
   claimRevisionByPark: {},
   user: DEMO_START,
   accuracy: null,
+  located: null,
   locationError: null,
   muted: false,
   screen: "splash",
@@ -91,11 +98,12 @@ const initial: State = {
 export function load(): State {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    if (!saved || typeof saved !== "object") return initial;
+    if (!saved || typeof saved !== "object") return { ...initial, ...savedLocation() };
     // Claims and photos are migrated transactionally by personalStore. Never project
     // the legacy unpartitioned records into the UI before an owner is known.
     return {
       ...initial,
+      ...savedLocation(),
       onboarded: !!saved.onboarded,
       muted: !!saved.muted,
       onboardingBuildId: typeof saved.onboardingBuildId === "string" ? saved.onboardingBuildId : null,
@@ -104,6 +112,12 @@ export function load(): State {
   } catch {
     return initial;
   }
+}
+
+/** Starts from the last real position inside the content areas, rather than the demo spot. */
+function savedLocation(): Pick<State, "user" | "located"> {
+  const last = readLastLocation();
+  return last && isPointInsideContentBounds(last) ? { user: last, located: last } : { user: DEMO_START, located: null };
 }
 
 export function persistOnboardingPreferences(
@@ -156,7 +170,14 @@ export function reducer(state: State, action: Action): State {
     case "trip":
       return { ...state, tripId: action.id };
     case "move":
-      return { ...state, user: action.user, accuracy: action.accuracy === undefined ? state.accuracy : action.accuracy, locationError: null };
+      return {
+        ...state,
+        user: action.user,
+        accuracy: action.accuracy === undefined ? state.accuracy : action.accuracy,
+        // Only a move that carries a fix's accuracy is a real position.
+        located: typeof action.accuracy === "number" ? action.user : state.located,
+        locationError: null,
+      };
     case "locationError":
       return { ...state, locationError: action.error };
     case "photo":

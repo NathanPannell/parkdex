@@ -1,7 +1,5 @@
-import type { ContentRuntime } from "./content/contracts";
+import { mapChunkIndex, type ContentRuntime } from "./content/contracts";
 import { chunkIdsForCells, loadCellIndex, readSavedSquares } from "./mapCells";
-
-const MAP_CHUNK = /^map\/island\/(\d{3,})\.bin$/;
 
 /** What Parkdex keeps on this device, grouped the way Manage downloads shows it. */
 export type LocalStorageSummary = {
@@ -32,9 +30,8 @@ export async function summarizeLocalStorage(runtime: ContentRuntime): Promise<Lo
       summary.unusedBytes += file.size;
       continue;
     }
-    const chunk = file.path.match(MAP_CHUNK);
-    if (chunk) {
-      const id = Number(chunk[1]);
+    const id = mapChunkIndex(file.path);
+    if (id !== null) {
       if (saved.has(id)) summary.savedSquaresBytes += file.size;
       else {
         summary.mapCacheBytes += file.size;

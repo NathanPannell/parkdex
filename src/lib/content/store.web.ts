@@ -1,4 +1,4 @@
-import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
 
 const DATABASE = "parkdex-content-v1";
@@ -21,7 +21,6 @@ type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | 
 type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string; readerVersion?: number };
 
 // Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
-const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
 
 // Incremental batches keep the version of the reader that wrote the full cache.
 function storedReaderVersion(cursor: SyncCursor): number {
@@ -363,7 +362,7 @@ export class WebContentStore implements ContentStore {
 
   async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
     const key = assertHash(hash);
-    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
+    const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path));
     const db = await this.database();
     await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES, SYNC_ROWS, MAP_INVENTORIES, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
       const activeRequest = tx.objectStore(META).get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;

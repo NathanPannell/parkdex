@@ -13,6 +13,7 @@ import {
 } from "../lib/mapCells";
 import { summarizeLocalStorage, type LocalStorageSummary } from "../lib/localStorageSummary";
 import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../lib/downloadPreferences";
+import { mapFolder } from "../lib/content/contracts";
 import { mapChunkPath } from "../lib/offlineTiles";
 import { useStore } from "../lib/store";
 import "../download-maps.css";
@@ -50,7 +51,8 @@ export function ManageDownloads() {
     setBusy("cache");
     setError(null);
     try {
-      for (const id of summary.mapCacheChunks) await runtime.deleteMapChunk?.(releaseId, mapChunkPath(id));
+      const folder = mapFolder(content?.manifest.files ?? []);
+      for (const id of summary.mapCacheChunks) await runtime.deleteMapChunk?.(releaseId, mapChunkPath(id, folder));
       await refresh();
     } catch {
       setError("Some map detail could not be cleared. Try again.");

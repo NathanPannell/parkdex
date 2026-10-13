@@ -2,10 +2,10 @@
 // reuses that exact transaction so a park approved by the model reaches phones the same way.
 import { guessBiome, publishStatements, SHAPE_FOR_CATEGORY, shortName, type SqlRunner } from "../operator/server/drafts.js";
 import { positionCount, simplifyMultiPolygon, type MultiPolygon, type OsmFeature } from "./osmParks.js";
+import { provinceOfOutline } from "./provinces.js";
 
 export type { SqlRunner };
 
-export const FALLBACK_REGION = "British Columbia";
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 
 /**
@@ -35,11 +35,24 @@ export function seedFor(id: string): number {
   return hash % 1_000_001;
 }
 
+// Parks Canada runs the national parks and park reserves in both provinces, named in English or French.
+const NATIONAL = /\bnational park\b|\bparks canada\b|\bparcs canada\b/;
+// BC Parks and its ecological reserves, and Nova Scotia's provincial parks, protected
+// wilderness areas and the provincial departments that run them.
+const PROVINCIAL = new RegExp([
+  /\bprovincial (?:wildlife )?park\b/.source,
+  /\becological reserve\b/.source,
+  /\bbc parks\b/.source,
+  /\bwilderness area\b/.source,
+  /\bnova scotia (?:provincial parks|department of natural resources|natural resources and renewables|environment and climate change)\b/.source,
+  /\bprovince of nova scotia\b/.source,
+].join("|"));
+
 /** Only categories every installed build accepts (docs/content-compatibility.md). */
 export function categoryFor(feature: Pick<OsmFeature, "name" | "tags">): string {
   const text = `${feature.name ?? ""} ${feature.tags.protection_title ?? ""} ${feature.tags.operator ?? ""}`.toLowerCase();
-  if (feature.tags.boundary === "national_park" || /\bnational park\b|parks canada/.test(text)) return "national";
-  if (/\bprovincial park\b|\becological reserve\b|bc parks/.test(text)) return "provincial";
+  if (feature.tags.boundary === "national_park" || NATIONAL.test(text)) return "national";
+  if (PROVINCIAL.test(text)) return "provincial";
   if (/\bregional park\b|\bregional district\b|\bcrd\b/.test(text)) return "regional";
   if (feature.tags.leisure === "park" || feature.tags.leisure === "garden" || feature.tags.leisure === "dog_park") return "municipal";
   return "community";
@@ -103,7 +116,8 @@ export function parkFromProposal(feature: OsmFeature, proposal: ProposalProvenan
     name,
     short: plainText(shortName(name), 140) || name,
     category,
-    region: plainText(region, 140) || FALLBACK_REGION,
+    // Without a region from a park nearby, the province that holds the outline.
+    region: plainText(region, 140) || provinceOfOutline(feature.geometry),
     // The proposer's pin is where they stood or tapped, so it makes a sensible marker.
     lat: pin[1],
     lng: pin[0],

@@ -1,6 +1,7 @@
 import { featureFilter, type Feature } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, it } from "vitest";
-import { mapStyle } from "./mapStyle";
+import { contentBoundsEnvelope } from "./content/contracts";
+import { DETAIL_BOUNDS, mapStyle } from "./mapStyle";
 
 describe("map style", () => {
   it("draws the water shadow only for polygon water features", () => {
@@ -16,5 +17,11 @@ describe("map style", () => {
 
     expect(matches(globalProperties, lake)).toBe(true);
     expect(matches(globalProperties, stream)).toBe(false);
+  });
+
+  it("bounds the detailed source by one box around BC and Nova Scotia", () => {
+    expect(DETAIL_BOUNDS).toEqual(contentBoundsEnvelope());
+    const source = mapStyle("release-v2").sources.protomaps;
+    expect(source).toMatchObject({ type: "vector", bounds: [-139.1, 43.3, -59.6, 60.0], maxzoom: 14 });
   });
 });

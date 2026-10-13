@@ -1,5 +1,5 @@
 import { findTile, PMTiles, zxyToTileId } from "pmtiles";
-import type { ContentRuntime, ContentSnapshot, MapPoint } from "./contracts";
+import { mapFolder, type ContentRuntime, type ContentSnapshot, type MapPoint } from "./contracts";
 import {
   getAllowedMapChunks,
   getRegisteredMapSnapshot,
@@ -59,7 +59,8 @@ export async function prefetchMapArea(
 
   const snapshot = readySnapshot(runtime, releaseId, snapshotOverride);
   const manifest = snapshot.manifest.mapManifest;
-  const source = new RuntimeChunkSource(runtime, releaseId, manifest, () => undefined, true, signal);
+  const folder = mapFolder(snapshot.manifest.files);
+  const source = new RuntimeChunkSource(runtime, releaseId, manifest, folder, () => undefined, true, signal);
   const archive = new PMTiles(source);
   const tiles = detail === "starter" ? starterTiles(point) : nearbyCells(point, detail === "surrounding" ? 1 : 0);
   const header = await archive.getHeader();
@@ -75,7 +76,7 @@ export async function prefetchMapArea(
     for (const index of dataChunks) {
       throwIfAborted(signal);
       if (index < 0 || index >= manifest.count) throw new Error("The PMTiles index points outside the declared map chunks");
-      await runtime.ensureFile(releaseId, mapChunkPath(index), detail === "surrounding" ? "bulk" : "nearby", signal);
+      await runtime.ensureFile(releaseId, mapChunkPath(index, folder), detail === "surrounding" ? "bulk" : "nearby", signal);
       source.touchedChunks.add(index);
     }
   }
@@ -308,7 +309,7 @@ function validatePoint(point: MapPoint): void {
 }
 
 function chunkBytes(snapshot: ContentSnapshot, index: number, defaultSize: number): number {
-  const path = mapChunkPath(index);
+  const path = mapChunkPath(index, mapFolder(snapshot.manifest.files));
   return snapshot.manifest.files.find((file) => file.path === path)?.byte_size ?? defaultSize;
 }
 

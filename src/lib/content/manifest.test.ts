@@ -339,4 +339,46 @@ describe("incremental content validation", () => {
       files: [mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 5)],
     }, mapVersion)).toThrow(/chunk inventory/);
   });
+
+  it("reads map inventories from any chunk folder, with the layout and every chunk in one folder", () => {
+    const mapVersion = "e".repeat(64);
+    const mapFile = (path: string, size: number) => {
+      const key = `releases/${releaseId}/${path}`;
+      return {
+        path,
+        key,
+        url: `https://kip-assets.parkdex.app/${key.split("/").map(encodeURIComponent).join("/")}`,
+        sha256: "f".repeat(64),
+        byte_size: size,
+        content_type: path.endsWith(".pbf") ? "application/x-protobuf" : path.endsWith(".bin") ? "application/octet-stream" : "application/json",
+      };
+    };
+    const inventory = (files: ReturnType<typeof mapFile>[]) => ({
+      schema: "parkdex.content-map/v1",
+      version: mapVersion,
+      mapManifest: { size: 5, chunkBytes: 4, count: 2 },
+      files: [...files, mapFile("map/fonts/Noto Sans Regular/0-255.pbf", 2)],
+    });
+    const detail = parseContentMapInventory(inventory([
+      mapFile("map/detail/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1),
+    ]), mapVersion);
+    expect(detail.files.map((entry) => entry.path)).toContain("map/detail/001.bin");
+    expect(parseContentMapInventory(inventory([
+      mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1),
+    ]), mapVersion).mapManifest.count).toBe(2);
+
+    // Chunks beside a different layout, two layouts, or chunks under fonts are not one map.
+    expect(() => parseContentMapInventory(inventory([
+      mapFile("map/detail/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1),
+    ]), mapVersion)).toThrow(/unexpected size/);
+    expect(() => parseContentMapInventory(inventory([
+      mapFile("map/detail/manifest.json", 32), mapFile("map/island/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1),
+    ]), mapVersion)).toThrow(/chunk inventory/);
+    expect(() => parseContentMapInventory(inventory([
+      mapFile("map/fonts/manifest.json", 32), mapFile("map/fonts/000.bin", 4), mapFile("map/fonts/001.bin", 1),
+    ]), mapVersion)).toThrow();
+    expect(() => parseContentMapInventory(inventory([
+      mapFile("map/detail/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1), mapFile("map/detail/002.bin", 1),
+    ]), mapVersion)).toThrow(/out-of-range/);
+  });
 });

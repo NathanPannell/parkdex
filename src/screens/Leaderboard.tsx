@@ -5,9 +5,11 @@ import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { fetchGameLeaderboard, gameErrorMessage, isOfflineError, type LeaderboardRow } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
+import { useFriends } from "../lib/friends/FriendsProvider";
 import { formatScore } from "../lib/game/visit";
 import { bouncy, listItem, listParent, press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
+import { FriendsBoard } from "./FriendsBoard";
 import "../game.css";
 import "../game-ui.css";
 
@@ -52,12 +54,25 @@ function Podium({ players, myHandle }: { players: LeaderboardRow[]; myHandle: st
   );
 }
 
-/** Every player ranked by total score. Online only: nothing is kept between visits. */
+type BoardTab = "everyone" | "friends";
+
+/**
+ * Every player ranked by total score. Online only: nothing is kept between visits. With the
+ * `friends` flag on, a second tab ranks the player and their friends by parks visited this week.
+ */
 export function Leaderboard() {
   const { dispatch } = useStore();
   const game = useGame();
+  const friends = useFriends();
   const [board, setBoard] = useState<Board>({ status: "loading", players: [], message: null });
+  const [tab, setTab] = useState<BoardTab>(friends.enabled && friends.incoming ? "friends" : "everyone");
   const myHandle = game.me?.player?.handle ?? null;
+  const showFriends = friends.enabled && tab === "friends";
+
+  // A friend link opens the friends tab.
+  useEffect(() => {
+    if (friends.enabled && friends.incoming) setTab("friends");
+  }, [friends.enabled, friends.incoming]);
 
   const load = useCallback(async () => {
     setBoard((current) => ({ ...current, status: "loading", message: null }));
@@ -79,16 +94,43 @@ export function Leaderboard() {
     <motion.main className="screen account-screen account-screen--tabbed game-screen scroll" {...tabPage} aria-labelledby="leaderboard-title">
       <header className="account-head">
         <div className="account-head__title">
-          <span className="eyebrow">Everyone playing</span>
+          <span className="eyebrow">{showFriends ? "You and your friends" : "Everyone playing"}</span>
           <h1 id="leaderboard-title">Leaderboard</h1>
         </div>
-        <motion.button whileTap={{ rotate: 180, scale: 0.9 }} className="btn btn--paper btn--icon game-refresh" onClick={() => void load()} aria-label="Refresh" disabled={board.status === "loading"}>
+        <motion.button
+          whileTap={{ rotate: 180, scale: 0.9 }}
+          className="btn btn--paper btn--icon game-refresh"
+          onClick={() => void (showFriends ? friends.refresh() : load())}
+          aria-label="Refresh"
+          disabled={showFriends ? friends.status === "loading" : board.status === "loading"}
+        >
           <Icon name="refresh" size={20} />
         </motion.button>
       </header>
 
       <div className="account-body">
-        {board.status === "offline" || board.status === "error" ? (
+        {friends.enabled && (
+          <div className="board-tabs" role="tablist" aria-label="Leaderboard">
+            {(["everyone", "friends"] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                role="tab"
+                id={`board-tab-${name}`}
+                aria-selected={tab === name}
+                aria-controls="board-panel"
+                className={`board-tabs__tab ${tab === name ? "is-on" : ""}`}
+                onClick={() => setTab(name)}
+              >
+                {name === "everyone" ? "Everyone" : "Friends"}
+                {tab === name && <motion.span layoutId="board-tab-pill" className="board-tabs__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
+              </button>
+            ))}
+          </div>
+        )}
+        {showFriends ? (
+          <div id="board-panel" role="tabpanel" aria-labelledby="board-tab-friends" className="board-panel"><FriendsBoard /></div>
+        ) : board.status === "offline" || board.status === "error" ? (
           <section className="account-card card game-empty" role="alert">
             <Kip size={64} pose="think" />
             <h2>{board.status === "offline" ? "The leaderboard needs a connection" : "The leaderboard didn't load"}</h2>

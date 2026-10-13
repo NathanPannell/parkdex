@@ -133,6 +133,23 @@ export async function shareImage(blob: Blob, fileName: string, text: string) {
   return "unsupported" as const;
 }
 
+/** Shares a link through the system share sheet; browsers without one copy it instead. */
+export async function shareLink(url: string, text: string): Promise<"shared" | "copied" | "unsupported"> {
+  if (isNative) {
+    await Share.share({ title: text, text, url, dialogTitle: text });
+    return "shared";
+  }
+  if (typeof navigator.share === "function") {
+    await navigator.share({ title: text, text, url });
+    return "shared";
+  }
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(url);
+    return "copied";
+  }
+  return "unsupported";
+}
+
 export function onBackButton(handler: () => void) {
   if (!isNative) return () => {};
   const sub = App.addListener("backButton", handler);
