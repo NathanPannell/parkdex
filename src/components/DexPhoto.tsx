@@ -54,7 +54,7 @@ export function AddDexPhoto({ park, open, onClose, onSaved }: { park: Park; open
         {open && (
           <PhotoCapture
             key="dex-camera"
-            place={`At ${name}`}
+            place={name}
             hint="Take a photo of the park for your Dex."
             caption={`${name} · ${new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`}
             onClose={onClose}

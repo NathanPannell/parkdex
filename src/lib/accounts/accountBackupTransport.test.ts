@@ -391,4 +391,19 @@ describe("account backup transport", () => {
     expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/${CLAIM_ID}/extra`), "GET", API_ORIGIN)).toThrow();
     expect(() => assertAccountBackupRequest(new URL(`https://attacker.example/api/claims`), "GET", API_ORIGIN)).toThrow();
   });
+
+  it("permits the photo display routes (#174) only with their exact methods and a small JSON body", async () => {
+    expect(assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/display`), "GET", API_ORIGIN)).toBe("displays");
+    expect(assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`), "PUT", API_ORIGIN)).toBe("display");
+    expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/display`), "PUT", API_ORIGIN)).toThrow();
+    expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/display?all=1`), "GET", API_ORIGIN)).toThrow();
+    expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`), "GET", API_ORIGIN)).toThrow();
+    const body = JSON.stringify({ crop: null, coverAt: null, removed: true });
+    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders(), body }, API_ORIGIN))
+      .resolves.toMatchObject({ status: 200 });
+    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders({ "Content-Type": "image/jpeg" }), body }, API_ORIGIN))
+      .rejects.toThrow("content type");
+    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders(), body: "x".repeat(16 * 1024 + 1) }, API_ORIGIN))
+      .rejects.toThrow("byte limit");
+  });
 });

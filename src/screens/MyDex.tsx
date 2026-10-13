@@ -46,7 +46,7 @@ export function MyDex() {
           }}
         >
           {segment === item.id && <motion.span layoutId="dex-segment-pill" className="dex-segments__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
-          <span>{item.label}</span>
+          <span className="dex-segments__label">{item.label}</span>
         </button>
       ))}
     </div>
