@@ -21,7 +21,7 @@ function FriendRowItem({ row, open, onToggle, onRemove, canRemove }: { row: Frie
   const [busy, setBusy] = useState(false);
   const content = (
     <>
-      <span className="game-row__rank" aria-label={`Rank ${row.rank}`}>{row.rank}</span>
+      <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank}`}>{row.rank}</span>
       <Flag seed={row.flagSeed} size={40} />
       <span className="game-row__name">
         <strong style={handleFit(row.isMe ? `${row.handle} (you)` : row.handle)}>@{row.handle}{row.isMe ? " (you)" : ""}</strong>
@@ -137,9 +137,8 @@ export function FriendsBoard() {
 
       <section className="account-card card friends-week">
         <div className="friends-week__text">
-          <span className="eyebrow">Parks visited this week</span>
+          <span className="eyebrow">Parks this week</span>
           <strong>{board ? weekLabel(board.week) : "This week"}</strong>
-          <span>Each park counts once. Resets Monday.</span>
         </div>
         <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => friends.setAddSheet("open")}>
           <Icon name="flagPlus" size={18} /> Add friend

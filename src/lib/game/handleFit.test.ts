@@ -52,4 +52,9 @@ describe("handle styles", () => {
   it("keeps the score card's long handle between 15px and 20px", () => {
     expect(rule("game.css", ".game-score.has-long-handle .game-score__text strong")).toContain("clamp(15px,");
   });
+
+  it("shrinks a podium handle to fit its step, down to 11px", () => {
+    expect(rule("game-ui.css", ".game-podium__handle")).toMatch(/clamp\(11px, [^;]*var\(--handle-chars, 1\)[^;]*, 15px\)/);
+    expect(rule("game-ui.css", ".game-podium__spot")).toContain("container-type: inline-size");
+  });
 });

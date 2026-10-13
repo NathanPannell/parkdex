@@ -8,6 +8,7 @@ import { useAuth } from "../lib/accounts/AuthProvider";
 import { useContent } from "../lib/content/provider";
 import { sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
+import { describeFlagAge, flagAgeMs, formatFlagAge } from "../lib/game/flag";
 import { handleFit, hasLongHandle } from "../lib/game/handleFit";
 import { sortHeldParks } from "../lib/game/visit";
 import { bouncy, listItem, listParent, press, tabPage } from "../lib/motion";
@@ -42,6 +43,7 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
   const player = game.me?.player ?? null;
   const parks = sortHeldParks(game.me?.parks ?? []);
   const score = useCountUp(game.me?.score ?? 0);
+  const now = Date.now();
 
   // Scores change while the app sits in the background, so read them fresh on open.
   useEffect(() => {
@@ -123,8 +125,8 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
               <motion.ul className="game-list" aria-label="Parks you hold" variants={listParent} initial="hidden" animate="show">
                 {parks.map((held, index) => {
                   const park = content?.parkById.get(held.parkId);
-                  // Days once the flag has flown one; before that, the hours it has earned.
-                  const [age, unit] = held.days > 0 ? [held.days, held.days === 1 ? "day" : "days"] : [held.hours, held.hours === 1 ? "hour" : "hours"];
+                  // The same age tag as the map pin: 35m, 3h, 2d.
+                  const ageMs = flagAgeMs(held.since, now);
                   return (
                     <motion.li key={held.parkId} variants={listItem}>
                       <motion.button whileTap={press} className={`game-row card ${index === 0 && held.hours > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
@@ -133,9 +135,8 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
                           <strong>{park?.name ?? held.parkId}</strong>
                           <span>{index === 0 && held.hours > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
                         </span>
-                        <span className="game-row__days">
-                          <strong>{age}</strong>
-                          <span>{unit}</span>
+                        <span className="game-row__days" role="img" aria-label={`Flying for ${describeFlagAge(ageMs)}`}>
+                          <strong>{formatFlagAge(ageMs)}</strong>
                         </span>
                       </motion.button>
                     </motion.li>

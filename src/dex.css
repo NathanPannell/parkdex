@@ -5,21 +5,22 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin: -6px 0 16px;
+  margin: 0 0 14px;
   padding: 4px;
   border: 2.5px solid var(--ink);
   border-radius: 999px;
   background: var(--paper-2);
 }
 
+/* Same size and type as the leaderboard's Everyone and Friends switch (.board-tabs). */
 .dex-segments__tab {
   position: relative;
-  height: 38px;
+  height: 40px;
   border: 0;
   border-radius: 999px;
   background: none;
-  color: var(--ink-2);
-  font: 800 15px var(--body);
+  color: var(--ink-soft);
+  font: 800 16px var(--display);
   cursor: pointer;
 }
 
@@ -38,6 +39,7 @@
   border-radius: 999px;
   background: var(--sun);
   border: 2px solid var(--ink);
+  box-shadow: 0 2px 0 var(--ink);
 }
 
 .dex-summary {
@@ -172,8 +174,8 @@
   margin: 0;
   padding: 12px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
 }
 
 .dex-tile {
@@ -229,15 +231,17 @@
   text-align: center;
 }
 
+/* Under the photo, up to two lines that break between words rather than inside them. */
 .dex-tile__name {
-  font-size: 13px;
+  margin-top: 2px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .dex-tile__visits {
@@ -454,7 +458,7 @@
 .badge-shelf {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .badge-shelf__head {
@@ -478,9 +482,10 @@
 }
 
 .badge-shelf__help {
-  color: var(--ink-2);
-  font-size: 13px;
+  color: var(--ink-soft);
+  font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .badge-shelf__flag {
@@ -498,8 +503,8 @@
 .badge-shelf__grid {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 82px;
-  gap: 4px;
+  grid-auto-columns: 78px;
+  gap: 12px;
   margin: 0;
   padding: 4px 0 6px;
   overflow-x: auto;
@@ -580,10 +585,16 @@
   line-height: 16px;
 }
 
+/* Names take at most two lines and break between words, so neighbours never run together. */
 .badge-shelf__name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   font-size: 11.5px;
   font-weight: 900;
   line-height: 1.15;
+  text-wrap: balance;
 }
 
 .badge-shelf__hint {

@@ -251,8 +251,10 @@
 /* ---------- Your parks and leaderboard ---------- */
 
 /* Tabbed pages leave room for the bottom bar. */
-.account-screen--tabbed {
-  padding-bottom: calc(var(--safe-bottom) + 110px);
+/* Room for the bottom nav and its raised flag button. Two classes, so the base
+   .account-screen padding never wins on import order. */
+.account-screen.account-screen--tabbed {
+  padding-bottom: calc(var(--safe-bottom) + 120px);
 }
 
 .account-screen--tabbed .account-head__title {
@@ -409,7 +411,8 @@ button.game-row:active {
   font-weight: 800;
 }
 
-.game-board li:first-child .game-row__rank {
+/* First place, and everyone tied for it, wears the same badge. */
+.game-row__rank.is-first {
   background: var(--kip);
   color: var(--paper);
 }

@@ -16,41 +16,45 @@ import "../game-ui.css";
 
 type Board = { status: "loading" | "ready" | "offline" | "error"; players: LeaderboardRow[]; message: string | null };
 
-// Podium order on screen: second, first, third.
+// Podium order on screen: second, first, third. With fewer players only their steps show,
+// centred, so one or two players don't leave an empty step.
 const PODIUM = [1, 0, 2];
 const PODIUM_HEIGHT = [92, 64, 44];
 
 function Podium({ players, myHandle }: { players: LeaderboardRow[]; myHandle: string | null }) {
+  const places = PODIUM.filter((place) => players[place]);
   return (
-    <div className="game-podium" aria-label="Top players">
-      {PODIUM.map((place, column) => {
-        const row = players[place];
-        if (!row) return <span key={place} className="game-podium__spot" />;
-        const mine = row.handle === myHandle;
-        return (
-          <motion.div
-            key={row.handle}
-            className={`game-podium__spot ${mine ? "is-me" : ""}`}
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ ...bouncy, delay: 0.1 + column * 0.08 + (place === 0 ? 0.15 : 0) }}
-          >
-            <span className="game-podium__flag">
-              <FlagPin seed={row.flagSeed} patches={row.patches} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
-            </span>
-            <strong className="game-podium__handle">@{row.handle}</strong>
-            <span className="game-podium__score">{formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}</span>
-            <motion.span
-              className={`game-podium__block game-podium__block--${place + 1}`}
-              initial={{ height: 0 }}
-              animate={{ height: PODIUM_HEIGHT[place] }}
-              transition={{ ...bouncy, delay: 0.05 + column * 0.08 }}
+    <div className="game-podium-stand">
+      <div className={`game-podium game-podium--${places.length}`} aria-label="Top players">
+        {places.map((place, column) => {
+          const row = players[place];
+          const mine = row.handle === myHandle;
+          return (
+            <motion.div
+              key={row.handle}
+              className={`game-podium__spot ${place === 0 ? "is-first" : ""} ${mine ? "is-me" : ""}`}
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ ...bouncy, delay: 0.1 + column * 0.08 + (place === 0 ? 0.15 : 0) }}
             >
-              {place + 1}
-            </motion.span>
-          </motion.div>
-        );
-      })}
+              <span className="game-podium__flag">
+                <FlagPin seed={row.flagSeed} patches={row.patches} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
+              </span>
+              <strong className="game-podium__handle" style={handleFit(row.handle)}>@{row.handle}</strong>
+              <span className="game-podium__score">{formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}</span>
+              <motion.span
+                className={`game-podium__block game-podium__block--${place + 1}`}
+                initial={{ height: 0 }}
+                animate={{ height: PODIUM_HEIGHT[place] }}
+                transition={{ ...bouncy, delay: 0.05 + column * 0.08 }}
+              >
+                {place + 1}
+              </motion.span>
+            </motion.div>
+          );
+        })}
+      </div>
+      <span className="game-podium__base" aria-hidden="true" />
     </div>
   );
 }
@@ -153,6 +157,12 @@ export function Leaderboard() {
         ) : (
           <>
             <Podium players={board.players} myHandle={myHandle} />
+            {rest.length === 0 && (
+              <section className="account-card card game-empty game-board-more">
+                <Kip size={56} pose="wave" />
+                <p className="account-help">More players show up here as they plant flags.</p>
+              </section>
+            )}
             {rest.length > 0 && (
               <motion.ol className="game-list game-board" aria-label="Everyone else by score" variants={listParent} initial="hidden" animate="show" start={4}>
                 {rest.map((row, index) => {
@@ -160,7 +170,7 @@ export function Leaderboard() {
                   return (
                     <motion.li key={row.handle} variants={listItem}>
                       <div className={`game-row card ${mine ? "is-me" : ""}`} aria-current={mine ? "true" : undefined}>
-                        <span className="game-row__rank" aria-label={`Rank ${row.rank || index + 4}`}>{row.rank || index + 4}</span>
+                        <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank || index + 4}`}>{row.rank || index + 4}</span>
                         <Flag seed={row.flagSeed} patches={row.patches} size={40} />
                         <span className="game-row__name">
                           <strong style={handleFit(mine ? `${row.handle} (you)` : row.handle)}>@{row.handle}{mine ? " (you)" : ""}</strong>
