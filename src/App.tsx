@@ -264,7 +264,7 @@ function Screens() {
   const showMap = state.startupReady && onboarded && screen !== "onboarding" && screen !== "account";
   // Settings pages cover the map but keep it mounted, so its camera and tiles survive.
   const mapCovered = screen === "plant" || screen === "settings" || screen === "downloads";
-  // Your parks, the leaderboard and settings are tabs, so the bar stays on them.
+  // My Dex, the leaderboard and settings are tabs, so the bar stays on them.
   const showNav = showMap && (screen === "map" || screen === "parks" || screen === "leaderboard" || screen === "settings");
 
   // Messages on open: review decisions first, then parks taken while away.
