@@ -4,14 +4,14 @@ import { BadgeUnlock } from "../components/BadgeUnlock";
 import { AddDexPhoto } from "../components/DexPhoto";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
-import { Bubble, Kip } from "../components/Kip";
+import { Kip } from "../components/Kip";
 import { Rays } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { useContent } from "../lib/content/provider";
 import { createVisitId, GameError, gameErrorMessage, joinCrew, sendVisit, type Crew, type GameErrorCode, type VisitResult } from "../lib/game/client";
-import { CrewList, Pennant } from "../components/CrewList";
+import { Pennant } from "../components/CrewList";
 import { friendOffers } from "../lib/game/crew";
 import { useCrew } from "../lib/game/CrewProvider";
 import { useFriends } from "../lib/friends/FriendsProvider";
@@ -42,6 +42,9 @@ type Failure = { message: string; action: "retry" | "sign-in" | "handle" | "none
 const FINAL_JOIN_ERRORS = new Set<GameErrorCode>(["invalid_code", "code_not_found", "code_expired", "crew_full", "already_today", "park_not_found", "account_deleting", "visit_id_reused"]);
 // Where the pennant waits low on the leader's pole before it is hoisted (#171).
 const PENNANT_LOW = 112;
+// The scene's own size; it scales down to fit the space the result text leaves it.
+const SCENE_WIDTH = 280;
+const SCENE_HEIGHT = 330;
 type Score = { value: number; target: number };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,6 +66,30 @@ function shakeFrames(amplitude: number): number[] {
 
 function run(value: MotionValue<number>, to: number | number[], options: Parameters<typeof animate>[2]) {
   return animate(value, to as never, options);
+}
+
+/**
+ * How far the flag scene shrinks to fit its stage, which gets shorter as the result text and
+ * buttons arrive below it. The flag, Kip and the points scale together, so none of them ever
+ * runs into the text.
+ */
+function useSceneFit() {
+  const stage = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
+  useEffect(() => {
+    const element = stage.current;
+    if (!element) return;
+    const measure = () => {
+      const { clientWidth, clientHeight } = element;
+      if (!clientWidth || !clientHeight) return;
+      setFit(Math.max(0.5, Math.min(1, clientHeight / SCENE_HEIGHT, clientWidth / (SCENE_WIDTH + 60))));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [stage, fit] as const;
 }
 
 /**
@@ -106,6 +133,7 @@ export function Plant() {
   const [alreadyMember, setAlreadyMember] = useState(false);
   // "Add a photo" after the visit (#174): the camera, the crop, then the photo joins My Dex.
   const [adding, setAdding] = useState(false);
+  const [stage, fit] = useSceneFit();
 
   const progress = useMotionValue(0);
   const ring = useTransform(progress, (p) => 289 * (1 - p));
@@ -462,14 +490,14 @@ export function Plant() {
         </AnimatePresence>
       </div>
 
-      <div className="claim__stage">
+      <div className="claim__stage" ref={stage}>
         {won && (phase === "done" || score) && (
           <div className="claim__rays">
             <Rays color="#FFE27A" size={620} opacity={0.4} speed={20} />
           </div>
         )}
-        <motion.div className="plant-camera" style={{ x: camX, y: camY, rotate: camRotate, scale: zoom }}>
-          <div className="plant-scene">
+        <motion.div className="plant-camera" style={{ x: camX, y: camY, rotate: camRotate, scale: zoom, width: SCENE_WIDTH * fit, height: SCENE_HEIGHT * fit }}>
+          <div className="plant-scene" style={{ scale: fit }}>
             <AnimatePresence>
               {impact && !reduce && (
                 <motion.span
@@ -544,6 +572,33 @@ export function Plant() {
                 />
               ))}
             </div>
+            {/* The points land left of the pole and Kip cheers right of the mound, inside the scene. */}
+            <AnimatePresence>
+              {score && (
+                <motion.div
+                  key="score"
+                  className="plant-score"
+                  initial={{ scale: 3, opacity: 0, rotate: -12 }}
+                  animate={{ scale: 1, opacity: 1, rotate: -4 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 14 }}
+                  aria-live="polite"
+                >
+                  <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
+                    +{score.value}
+                  </motion.strong>
+                  <span>{score.target === 1 ? "point" : "points"}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {cheering && (
+                <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
+                  <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
+                    <Kip pose={won ? "celebrate" : "cheer"} size={92} flip />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
 
@@ -553,69 +608,37 @@ export function Plant() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {score && (
-            <motion.div
-              key="score"
-              className="plant-score"
-              initial={{ scale: 3, opacity: 0, rotate: -12 }}
-              animate={{ scale: 1, opacity: 1, rotate: -4 }}
-              transition={{ type: "spring", stiffness: 520, damping: 14 }}
-              aria-live="polite"
-            >
-              <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
-                +{score.value}
-              </motion.strong>
-              <span>{score.target === 1 ? "point" : "points"}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {cheering && (
-            <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
-              <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
-                <Kip pose={won ? "celebrate" : "cheer"} size={112} flip />
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <div className="claim__foot">
         <AnimatePresence mode="wait">
           {phase === "done" && (result || alreadyMember) && headline ? (
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
-              <motion.div className="claim__kip plant__bubble" variants={pop}>
-                <Bubble side="to-right" style={{ position: "relative" }}>
-                  {result ? plantCheer(result) : "You're already in!"}
-                </Bubble>
-              </motion.div>
+              {/* One headline above, the points in the scene, then one sentence and at most two buttons. */}
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>
-              {joinedCrew && (
-                <motion.div variants={pop} className="plant__crew">
-                  <CrewList members={joinedCrew.members} flagSince={joinedCrew.flagSince} myHandle={me?.handle} />
-                  {offers.map((member) => (
-                    <div key={member.handle} className="plant__friend-offer">
-                      <span>Add @{member.handle} as a friend?</span>
-                      <button className="btn btn--sm btn--paper" onClick={() => friends.setAddSheet("open")}>Show my code</button>
-                    </div>
-                  ))}
-                </motion.div>
-              )}
-              {/* The badges this visit unlocked (#175). */}
-              <BadgeUnlock unlocks={result?.newBadges} variants={pop} onOpen={() => leave("parks", "collection")} />
-              {park && (
-                <motion.div variants={pop} className="claim__row">
-                  <button className="btn btn--sm btn--glow" onClick={() => { sfx.pop(); setAdding(true); }}>
-                    <Icon name="camera" size={18} /> Add a photo
-                  </button>
+              {result && <span className="plant__cheer">{plantCheer(result)}</span>}
+              {(joinedCrew || (result?.newBadges?.length ?? 0) > 0) && (
+                <motion.div variants={pop} className="plant__extras">
+                  {/* The badges this visit unlocked (#175). */}
+                  <BadgeUnlock unlocks={result?.newBadges} compact onOpen={() => leave("parks", "collection")} />
+                  {joinedCrew && (
+                    <span className="plant__chip">
+                      <Icon name="flag" size={16} /> Crew of {joinedCrew.size}
+                    </span>
+                  )}
+                  {offers.length > 0 && (
+                    <button className="plant__chip plant__chip--button" onClick={() => friends.setAddSheet("open")}>
+                      <Icon name="qr" size={16} /> {offers.length === 1 ? `Add @${offers[0].handle} as a friend` : `Add ${offers.length} crewmates as friends`}
+                    </button>
+                  )}
                 </motion.div>
               )}
               <motion.div variants={pop} className="claim__row">
-                <button className="btn btn--sm btn--sun" onClick={() => leave("parks")}>
-                  <Icon name="flag" size={18} /> Your flags
-                </button>
+                {park && (
+                  <button className="btn btn--sm btn--sun" onClick={() => { sfx.pop(); setAdding(true); }}>
+                    <Icon name="camera" size={18} /> Add a photo
+                  </button>
+                )}
                 <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>
                   <Icon name="map" size={18} /> Back to map
                 </button>

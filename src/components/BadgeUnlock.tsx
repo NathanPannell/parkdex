@@ -11,13 +11,15 @@ type Props = {
   onOpen: () => void;
   /** Motion variants, so the card pops in with the rest of the result. */
   variants?: Variants;
+  /** A small chip in a row with other results, instead of a card. */
+  compact?: boolean;
 };
 
 /**
  * The unlock moment (#175): the new badge spins in on the result of the visit or founding that
  * earned it, and the first one brings Kip's Tip about sewing badges onto your flag.
  */
-export function BadgeUnlock({ unlocks, onOpen, variants }: Props) {
+export function BadgeUnlock({ unlocks, onOpen, variants, compact = false }: Props) {
   const badges = (unlocks ?? []).flatMap((unlock) => badgeById(unlock.id) ?? []);
   useKipTip("badge-first", badges.length > 0);
   if (!badges.length) return null;
@@ -25,12 +27,12 @@ export function BadgeUnlock({ unlocks, onOpen, variants }: Props) {
   return (
     <motion.button
       variants={variants}
-      className="badge-unlock"
+      className={compact ? "badge-unlock badge-unlock--compact" : "badge-unlock"}
       onClick={onOpen}
       aria-label={`Badge earned: ${badges.map((badge) => badge.name).join(", ")}. Open your badges.`}
     >
       <motion.span initial={{ rotate: -20, scale: 0.4 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 12, delay: 0.3 }}>
-        <AchievementBadge badge={first} size={58} />
+        <AchievementBadge badge={first} size={compact ? 30 : 58} />
       </motion.span>
       <span className="badge-unlock__text">
         <span>{badges.length === 1 ? "Badge earned" : `${badges.length} badges earned`}</span>

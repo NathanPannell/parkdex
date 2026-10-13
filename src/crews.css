@@ -177,30 +177,6 @@
   }
 }
 
-.plant__crew {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(100%, 340px);
-  padding: 12px 14px;
-  border: 2px solid rgba(255, 248, 236, 0.5);
-  border-radius: var(--r-md);
-  background: rgba(255, 248, 236, 0.95);
-  color: var(--ink);
-}
-
-/* The button drops below a long @handle rather than squeezing it. */
-.plant__friend-offer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 2px dashed rgba(20, 35, 28, 0.15);
-  font-weight: 700;
-}
-
 .arrival__crew {
   display: flex;
   flex-direction: column;
