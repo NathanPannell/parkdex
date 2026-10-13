@@ -9,7 +9,8 @@ import pg from 'pg';
 // stand-ins. Covers founding a new OpenStreetMap park and a catalogue park in one transaction,
 // concurrent founders, the founder bonus in player_scores, one visit per day, hidden parks,
 // the cover photo, summary counts, analytics rows and account deletion, and outlines in a far
-// part of a big catalogue park (#182).
+// part of a big catalogue park (#182), and two neighbouring parks where one name is inside the
+// other (Steveston Town Square Park and Steveston Community Park).
 // Content triggers check every park, so this runs in its own throwaway kip_qa_ database.
 const shared = process.env.PGDATABASE;
 assert.ok(shared?.startsWith('kip_qa_') || shared === 'kip_accounts_qa', 'SQL QA requires a dedicated kip_qa_ database');
@@ -58,7 +59,15 @@ const IN_HOLE_PARK = { type: 'way', id: osmBase + 3, name: 'QA Hole Meadow', kin
 const IN_HOLE = { lat: 48.01, lng: -123.23, accuracyM: 8 };
 const NEIGHBOUR = { type: 'way', id: osmBase + 4, name: 'QA Neighbour Green', kind: 'leisure=park', tags: { name: 'QA Neighbour Green', leisure: 'park' }, geometry: multi(box(-123.205, 48, -123.2, 48.005)), areaM2: 210_000 };
 const IN_NEIGHBOUR = { lat: 48.0025, lng: -123.2025, accuracyM: 8 };
-const OUTLINES = [PATERSON, RACE, FAR_PART, IN_HOLE_PARK, NEIGHBOUR];
+// The real Steveston outlines: a small square about 120 m west of the big park, sharing no ground.
+const TOWN_SQUARE = { type: 'way', id: osmBase + 5, name: 'Steveston Town Square Park', kind: 'leisure=park', tags: { name: 'Steveston Town Square Park', leisure: 'park' },
+  geometry: multi([[-123.183254, 49.125553], [-123.182878, 49.125554], [-123.18288, 49.125276], [-123.183255, 49.125277], [-123.183254, 49.125553]]), areaM2: 838 };
+const STEVESTON = { type: 'way', id: osmBase + 6, name: 'Steveston Community Park', kind: 'leisure=park', tags: { name: 'Steveston Community Park', leisure: 'park' },
+  geometry: multi([[-123.180522, 49.125873], [-123.179685, 49.126405], [-123.179726, 49.127813], [-123.174312, 49.127932], [-123.174287, 49.125227],
+    [-123.180991, 49.125252], [-123.18111, 49.125328], [-123.181113, 49.125879], [-123.180522, 49.125873]]), areaM2: 123_477 };
+const IN_TOWN_SQUARE = { lat: 49.12541, lng: -123.18307, accuracyM: 8 };
+const IN_STEVESTON = { lat: 49.1266, lng: -123.177, accuracyM: 8 };
+const OUTLINES = [PATERSON, RACE, FAR_PART, IN_HOLE_PARK, NEIGHBOUR, TOWN_SQUARE, STEVESTON];
 const inside = ([x, y], ring) => {
   let result = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
@@ -324,6 +333,22 @@ try {
   assert.equal(neighbourFounding.status, 200, await neighbourFounding.clone().text());
   assert.equal((await json(neighbourFounding)).park.id, `osm-way-${NEIGHBOUR.id}`);
   log('founding an outline in the far part founds the catalogue park; the hole and the neighbour are published as new parks');
+
+  // A name inside a longer one is not the same park: founding Steveston Town Square Park must not
+  // make Steveston Community Park, next door, "already founded" (or the other way round).
+  const f = await account('f');
+  const squareFounding = await found(f.token, { osm: { type: 'way', id: TOWN_SQUARE.id } }, IN_TOWN_SQUARE);
+  assert.equal(squareFounding.status, 200, await squareFounding.clone().text());
+  assert.equal((await json(squareFounding)).park.id, `osm-way-${TOWN_SQUARE.id}`);
+  const stevestonSearch = await search(IN_STEVESTON);
+  assert.deepEqual(stevestonSearch.map((item) => [item.name, item.inCatalogue, item.founder]), [['Steveston Community Park', null, null]], 'the big park is not marked as the founded square');
+  const stevestonFounding = await found(f.token, { osm: { type: 'way', id: STEVESTON.id } }, IN_STEVESTON);
+  assert.equal(stevestonFounding.status, 200, await stevestonFounding.clone().text());
+  assert.equal((await json(stevestonFounding)).park.id, `osm-way-${STEVESTON.id}`);
+  assert.equal((await pool.query('SELECT source FROM kip_founders.parks WHERE park_id = $1', [`osm-way-${STEVESTON.id}`])).rows[0].source, 'osm_new');
+  const squareSearch = await search(IN_TOWN_SQUARE);
+  assert.deepEqual(squareSearch.map((item) => [item.name, item.inCatalogue?.parkId, item.founder?.handle]), [['Steveston Town Square Park', `osm-way-${TOWN_SQUARE.id}`, f.handle]], 'the square is still itself');
+  log("founding a park whose name is inside a neighbour's name leaves the neighbour free to found");
 
   const events = (await pool.query("SELECT event_type, park_id, properties, route FROM kip_analytics.events WHERE event_type IN ('park_founded', 'founder_photo_checked') ORDER BY occurred_at")).rows;
   assert.ok(events.some((event) => event.event_type === 'park_founded' && event.park_id === parkId && event.properties.source === 'osm_new' && event.route === 'POST /api/parks/found'));
