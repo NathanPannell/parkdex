@@ -129,7 +129,7 @@ describe("foundPark", () => {
       outcome: "founded",
       park: { id: "osm-way-42", name: "Paterson Park" },
       coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
-      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
+      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z", protected: null },
       founderPoints: 24,
     });
   });
