@@ -20,8 +20,6 @@ import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./req
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   rankProgression: false,
   parkProposals: true,
-  /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
-  crews: false,
   /** Friends by QR code and the weekly friends board (#64). Off until the operator turns it on. */
   friends: false,
   /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
