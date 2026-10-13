@@ -15,6 +15,7 @@ const RANGES = [
 const GROUPS: Record<string, string> = {
   flag_planted: "game", flag_taken: "game", flag_held: "game", visit_already_today: "game", flag_fell: "game",
   leaderboard_viewed: "game", takeover_message_seen: "game", handle_set: "game",
+  crew_joined: "game", crew_code_shown: "game", visit_logged_protected: "game",
   park_founded: "founding", founder_photo_checked: "founding",
   park_viewed: "app", directions_opened: "app", park_claimed: "app",
   db_read: "db", db_write: "db",

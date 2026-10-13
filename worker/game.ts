@@ -1,11 +1,13 @@
 import { HttpError, readJsonBody } from "./validation.js";
 import { checkHandle, HANDLE_PATTERN, normalizeHandle, type HandleVerdict } from "./handles.js";
 import type { ModerationEnv, ModerationFetch } from "./moderation.js";
-import { createNeonGameStore, type FoundingReviewRecord, type GameStore, type PlayerRecord, type RecordVisitResult, type VisitRecord } from "./game-store.js";
+import { createNeonGameStore, type CrewRecord, type FoundingReviewRecord, type GameStore, type PlayerRecord, type RecordVisitResult, type VisitRecord } from "./game-store.js";
+import { normalizeCrewCode } from "./crewCodes.js";
 
 /**
- * Flag game API (V1): handles, visits, flags, scores, leaderboard and takeover messages.
- * Visits use the server clock; the client never sends a visit time.
+ * Flag game API (V1): handles, visits, flags, scores, leaderboard and takeover messages, plus
+ * crews (#170): a protected hour after each plant or take, crew codes and crew joins.
+ * Visits and joins use the server clock; the client never sends a visit time.
  */
 
 export interface GameEnv extends ModerationEnv {
@@ -32,13 +34,18 @@ export type GameEventName =
   | "flag_fell"
   | "leaderboard_viewed"
   | "takeover_message_seen"
-  | "handle_set";
+  | "handle_set"
+  // Crews (#170). Each carries the crew size.
+  | "crew_joined"
+  | "crew_code_shown"
+  | "visit_logged_protected";
 
 export interface GameEvent {
   name: GameEventName;
   accountId: string | null;
   parkId?: string;
   pointsEarned?: number;
+  crewSize?: number;
 }
 
 export interface GameDependencies {
@@ -54,6 +61,7 @@ export interface GameDependencies {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const CREW_PATH = /^\/api\/game\/parks\/([^/]+)\/crew$/;
 const MAX_BODY_BYTES = 4 * 1024;
 /** Decided review requests listed until the app marks them seen. */
 export const FOUNDING_DECISIONS_LIMIT = 20;
@@ -89,6 +97,14 @@ export function validateVisitBody(body: unknown): { visitId: string; parkId: str
   return { visitId: value.visitId.toLowerCase(), parkId: value.parkId };
 }
 
+export function validateJoinBody(body: unknown): { visitId: string; code: string } {
+  const value = exactKeys(body, ["visitId", "code"]);
+  if (typeof value.visitId !== "string" || !UUID.test(value.visitId)) throw new HttpError(400, "invalid_request", "Invalid visit ID.");
+  const code = typeof value.code === "string" ? normalizeCrewCode(value.code) : null;
+  if (!code) throw new HttpError(400, "invalid_code", "Crew codes are 6 letters and numbers.");
+  return { visitId: value.visitId.toLowerCase(), code };
+}
+
 export function validateHandleBody(body: unknown): string {
   const value = exactKeys(body, ["handle"]);
   if (typeof value.handle !== "string" || value.handle.length > 64) throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
@@ -120,15 +136,37 @@ export function apiVisit(visit: VisitRecord) {
     pointsBreakdown: visit.pointsBreakdown,
     previousHolder: visit.previousHolder,
     flagSince: visit.flagSince,
+    // Additive (#170): why a visit was logged, or null.
+    protected: visit.protected,
+  };
+}
+
+/** A crew as `GET /api/game/parks/:parkId/crew` and `POST /api/game/crews/join` return it. */
+export function apiCrew(crew: CrewRecord) {
+  return {
+    parkId: crew.parkId,
+    leader: crew.leader,
+    members: crew.members,
+    size: crew.size,
+    cap: crew.cap,
+    flagSince: crew.flagSince,
+    protectedUntil: crew.protectedUntil,
+    member: crew.member,
+    code: crew.code,
+    codeExpiresAt: crew.codeExpiresAt,
   };
 }
 
 /** The analytics events a visit result stands for. Replays emit nothing because they changed nothing. */
 export function visitEvents(result: RecordVisitResult, accountId: string): GameEvent[] {
-  if (result.status !== "recorded" && result.status !== "already_today") return [];
+  if (result.status !== "recorded" && result.status !== "protected" && result.status !== "already_today") return [];
   const { visit } = result;
   const events: GameEvent[] = [];
   if (visit.fell) events.push({ name: "flag_fell", accountId, parkId: visit.parkId });
+  if (visit.outcome === "logged") {
+    events.push({ name: "visit_logged_protected", accountId, parkId: visit.parkId, pointsEarned: visit.pointsEarned, crewSize: visit.protected?.crewSize });
+    return events;
+  }
   const name: GameEventName = visit.outcome === "planted" ? "flag_planted"
     : visit.outcome === "took" ? "flag_taken"
       : visit.outcome === "held" ? "flag_held" : "visit_already_today";
@@ -192,6 +230,47 @@ async function postVisit(request: Request, env: GameEnv, auth: GameAuth, depende
   return json({ visit: apiVisit(result.visit) });
 }
 
+async function postJoinCrew(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
+  const { accountId } = await auth.mutation();
+  const { visitId, code } = validateJoinBody(await readJsonBody(request, MAX_BODY_BYTES));
+  const result = await getStore(env, dependencies).joinCrew(accountId, code, visitId, new Date(now).toISOString());
+  switch (result.status) {
+    case "joined":
+      await emit(dependencies, [{ name: "crew_joined", accountId, parkId: result.visit.parkId, pointsEarned: result.visit.pointsEarned, crewSize: result.crew.size }]);
+      return json({ status: "joined", visit: apiVisit(result.visit), crew: apiCrew(result.crew) });
+    case "replayed":
+      return json({ status: "joined", visit: apiVisit(result.visit), crew: apiCrew(result.crew) });
+    case "already_member":
+      return json({ status: "already_member", visit: null, crew: apiCrew(result.crew) });
+    case "code_not_found":
+      throw new HttpError(404, "code_not_found", "That crew code doesn't match a crew.");
+    case "code_expired":
+      throw new HttpError(410, "code_expired", "That crew code has expired.");
+    case "crew_full":
+      throw new HttpError(409, "crew_full", "That crew is full.");
+    case "already_today":
+      throw new HttpError(409, "already_today", "You already had your flag turn at this park today.");
+    case "park_not_found":
+      throw new HttpError(404, "park_not_found", "That park is not in the catalogue.");
+    case "handle_required":
+      throw new HttpError(409, "handle_required", "Choose a handle before joining a crew.");
+    case "account_unavailable":
+      throw new HttpError(410, "account_deleting", "This account is being deleted.");
+    default:
+      throw new HttpError(409, "visit_id_reused", "This visit ID was already used for another visit.");
+  }
+}
+
+async function getParkCrew(parkId: string, env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
+  const { accountId } = await auth.account();
+  if (parkId.length > 160 || !PARK_ID.test(parkId)) throw new HttpError(400, "invalid_request", "Invalid park ID.");
+  const serverTime = new Date(now).toISOString();
+  const crew = await getStore(env, dependencies).parkCrew(parkId, accountId, serverTime);
+  // The code only reaches members during the hour, so this is when a member could share it.
+  if (crew?.code) await emit(dependencies, [{ name: "crew_code_shown", accountId, parkId, crewSize: crew.size }]);
+  return json({ parkId, crew: crew ? apiCrew(crew) : null, serverTime });
+}
+
 /** Pending requests and unseen decisions, as `GET /api/game/me` lists them (docs/park-founders.md). */
 export function apiFoundingReviews(records: FoundingReviewRecord[], origin: string) {
   return {
@@ -220,7 +299,7 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   const flagSeed = player?.flagSeed ?? await flagSeedFor(accountId);
   if (!player) {
     return json({
-      player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, founderPoints: 0,
+      player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, loggedToday: [], founderPoints: 0,
       foundingReviews: { pending: [], decided: [] }, serverTime: new Date(now).toISOString(),
     });
   }
@@ -280,6 +359,11 @@ export async function handleGameRequest(
   const path = new URL(request.url).pathname;
   if (path !== "/api/game" && !path.startsWith("/api/game/")) return null;
   const now = dependencies.now?.() ?? Date.now();
+  const crewPath = CREW_PATH.exec(path);
+  if (crewPath) {
+    requireMethod(request, "GET");
+    return getParkCrew(crewPath[1], env, auth, dependencies, now);
+  }
   switch (path) {
     case "/api/game/handle":
       requireMethod(request, "PUT");
@@ -299,6 +383,9 @@ export async function handleGameRequest(
     case "/api/game/leaderboard":
       requireMethod(request, "GET");
       return getLeaderboard(env, dependencies, now);
+    case "/api/game/crews/join":
+      requireMethod(request, "POST");
+      return postJoinCrew(request, env, auth, dependencies, now);
     default:
       throw new HttpError(404, "not_found", "API route not found.");
   }

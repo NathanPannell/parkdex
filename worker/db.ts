@@ -30,6 +30,7 @@ const WRITE_STATEMENTS = [
  */
 export const WRITE_FUNCTIONS = new Set([
   "kip_game.record_visit",
+  "kip_game.join_crew",
   // Friends (#64): codes are created on first read, so ensure_friend_code writes too.
   "kip_social.ensure_friend_code",
   "kip_social.reset_friend_code",
