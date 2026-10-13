@@ -1,0 +1,153 @@
+/* The full-screen photo and flag viewer (components/FullscreenViewer.tsx). */
+.fullscreen-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  color: #fff;
+  isolation: isolate;
+  touch-action: none;
+}
+
+.fullscreen-viewer__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #000;
+}
+
+.fullscreen-viewer__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(var(--safe-top) + 4px) max(env(safe-area-inset-right), 14px) 6px max(env(safe-area-inset-left), 14px);
+}
+
+.fullscreen-viewer__count {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.fullscreen-viewer__close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.fullscreen-viewer__close:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
+}
+
+.fullscreen-viewer__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.fullscreen-viewer__stage.is-zoomed {
+  cursor: grab;
+}
+
+.fullscreen-viewer__stage.is-zoomed.is-active {
+  cursor: grabbing;
+}
+
+.fullscreen-viewer__slide {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.fullscreen-viewer__image,
+.fullscreen-viewer__content {
+  display: block;
+  max-width: none;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* Under a finger the slide follows it exactly. */
+.fullscreen-viewer__stage.is-active .fullscreen-viewer__image,
+.fullscreen-viewer__stage.is-active .fullscreen-viewer__content {
+  transition: none;
+}
+
+.fullscreen-viewer__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px calc(var(--safe-bottom) + 10px);
+  text-align: center;
+}
+
+.fullscreen-viewer__caption {
+  font-weight: 700;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+/* "My flag", big: the flag with its patches, then @handle and score. */
+.flag-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.flag-view .flag {
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+}
+
+.flag-view__name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--display);
+  line-height: 1.1;
+}
+
+.flag-view__name strong {
+  font-size: 26px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.flag-view__name span {
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* A tappable photo or flag that opens the viewer. */
+.viewer-open {
+  cursor: zoom-in;
+}
+
+.fullscreen-viewer__cover-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--sun);
+}

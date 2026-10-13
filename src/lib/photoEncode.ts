@@ -1,5 +1,5 @@
 import { MAX_BACKUP_PHOTO_BYTES, jpegDimensions } from "./accounts/photoBackupRendition";
-import { cropPixels, type PhotoCrop } from "./photoCrop";
+import { CROP_ASPECT, cropPixels, type PhotoCrop } from "./photoCrop";
 import { decoderIgnoredOrientation, jpegOrientation, orientationTransform, uprightSize } from "./photoOrientation";
 
 /**
@@ -87,10 +87,11 @@ function encodeCanvas(canvas: HTMLCanvasElement, qualities: number[], maxBytes: 
 
 /**
  * The upload rendition: draws the crop of the image (or all of it without one) at its upload size
- * and encodes it, stepping quality down if it is too large.
+ * and encodes it, stepping quality down if it is too large. `aspect` is the crop's shape, 3:4
+ * unless the capture asked for another (a founder's 16:9 cover).
  */
-export function encodePhoto({ source, width, height }: Drawable, options: { crop?: PhotoCrop } = {}): EncodedPhoto {
-  const area = options.crop ? cropPixels(options.crop, width, height) : { sx: 0, sy: 0, sw: width, sh: height };
+export function encodePhoto({ source, width, height }: Drawable, options: { crop?: PhotoCrop; aspect?: number } = {}): EncodedPhoto {
+  const area = options.crop ? cropPixels(options.crop, width, height, options.aspect ?? CROP_ASPECT) : { sx: 0, sy: 0, sw: width, sh: height };
   const size = fitWithin(area.sw, area.sh);
   const { canvas, context } = openCanvas(size.width, size.height);
   context.drawImage(source, area.sx, area.sy, area.sw, area.sh, 0, 0, size.width, size.height);

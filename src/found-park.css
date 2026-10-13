@@ -291,6 +291,11 @@
   max-height: 38vh;
 }
 
+/* A founder's crop is the park sheet's landscape cover shape (PARK_COVER_ASPECT). */
+.found-check__photo.is-landscape {
+  width: min(320px, 84vw);
+}
+
 .found-check__photo.is-checking img {
   filter: saturate(0.7);
 }
@@ -380,9 +385,13 @@
   z-index: 2;
 }
 
-/* Covers are the player's 3:4 crop (#173), the polaroid's own shape. */
+/* Covers are the founder's crop in its own shape: landscape now, 3:4 before. */
 .found-done__cover .polaroid__img {
   max-height: 34vh;
+}
+
+.found-done__cover.is-landscape {
+  width: min(300px, 78vw);
 }
 
 .found-done__cover .polaroid__caption {
@@ -681,12 +690,17 @@
   line-height: 1.35;
 }
 
+/* The cover as the park sheet shows it: landscape, older 3:4 covers filled in with object-fit. */
 .decision-sheet__cover {
   justify-self: center;
-  width: min(180px, 48vw);
+  width: min(260px, 68vw);
   padding: 10px 10px 12px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
   transform: rotate(-2deg);
+}
+
+.decision-sheet__cover .polaroid__img {
+  aspect-ratio: 16 / 9;
 }
 
 .found-sent__icon {

@@ -7,6 +7,7 @@ import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
 import { Flag } from "../../components/Flag";
+import { MyFlagViewer } from "../../components/FlagViewer";
 import { insidePark, parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
@@ -60,6 +61,7 @@ export function MapScreen() {
   const [demoOpen, setDemoOpen] = useState(false);
   const [demoTip, setDemoTip] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [viewingFlag, setViewingFlag] = useState(false);
   const [pressMenu, setPressMenu] = useState<MapLongPress | null>(null);
   // Truthy while founding; holds the park when it started from that park's sheet.
   const [founding, setFounding] = useState<{ parkId: string | null } | null>(null);
@@ -462,38 +464,46 @@ export function MapScreen() {
       {mapView}
 
       <div className="map-top">
-        <motion.button
+        <motion.div
           className="counter card"
-          onClick={() => {
-            // The score opens My Dex on the flags that earn it (#174).
-            openDexOn("flags");
-            dispatch({ type: "go", screen: "parks" });
-          }}
           initial={{ y: -80 }}
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}
-          whileTap={{ scale: 0.95 }}
-          aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your flags in My Dex` : "My Dex"}
         >
-          <span className={player ? "counter__kip counter__kip--flag" : "counter__kip"}>
-            {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}
-          </span>
-          <span className="counter__text">
-            {player && game.me ? (
-              <>
-                <strong>
-                  <RollingNumber value={game.me.score} />
-                  <em> {game.me.score === 1 ? "point" : "points"}</em>
-                </strong>
-                <span>@{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}</span>
-              </>
-            ) : (
-              <>
-                <strong>Plant your flag</strong>
-                <span>{visit.signedIn ? (game.me ? "Pick a handle to start" : "Go to any park") : "Sign in to play"}</span>
-              </>
-            )}
-          </span>
+          {/* Your flag opens big; the rest of the chip opens My Dex. */}
+          {player && (
+            <motion.button className="counter__kip counter__kip--flag viewer-open" onClick={() => setViewingFlag(true)} whileTap={{ scale: 0.92 }} aria-label={`Show the flag of @${player.handle} full screen`}>
+              <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} className="is-waving" /></span>
+            </motion.button>
+          )}
+          <motion.button
+            className="counter__main"
+            onClick={() => {
+              // The score opens My Dex on the flags that earn it (#174).
+              openDexOn("flags");
+              dispatch({ type: "go", screen: "parks" });
+            }}
+            whileTap={{ scale: 0.95 }}
+            aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your flags in My Dex` : "My Dex"}
+          >
+            {!player && <span className="counter__kip"><Kip pose="avatar" size={48} /></span>}
+            <span className="counter__text">
+              {player && game.me ? (
+                <>
+                  <strong>
+                    <RollingNumber value={game.me.score} />
+                    <em> {game.me.score === 1 ? "point" : "points"}</em>
+                  </strong>
+                  <span>@{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}</span>
+                </>
+              ) : (
+                <>
+                  <strong>Plant your flag</strong>
+                  <span>{visit.signedIn ? (game.me ? "Pick a handle to start" : "Go to any park") : "Sign in to play"}</span>
+                </>
+              )}
+            </span>
+          </motion.button>
           <AnimatePresence>
             {scoreBump && (
               <motion.span
@@ -508,7 +518,7 @@ export function MapScreen() {
               </motion.span>
             )}
           </AnimatePresence>
-        </motion.button>
+        </motion.div>
         <motion.div className="map-top__tools" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.4 }}>
           <button
             className={`tool card ${menuOpen ? "tool--open" : ""}`}
@@ -736,6 +746,7 @@ export function MapScreen() {
       </AnimatePresence>
 
       {FIELD && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
+      <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </div>
   );
 }

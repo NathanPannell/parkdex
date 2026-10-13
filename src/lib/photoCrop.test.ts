@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  clampCrop, cropImageStyle, cropPixels, cropZoom, isPhotoCrop, largestCrop, MAX_CROP_ZOOM, maxCropZoom, MIN_CROP_WIDTH_PX, panCrop, roundCrop, zoomCrop, type PhotoCrop,
+  clampCrop, CROP_ASPECT, CROP_STAGE_GUTTER, cropFrameSize, cropImageStyle, cropPixels, cropZoom, isPhotoCrop, largestCrop, MAX_CROP_ZOOM, maxCropZoom, MIN_CROP_EDGE_PX,
+  panCrop, PARK_COVER_ASPECT, roundCrop, zoomCrop, type PhotoCrop,
 } from "./photoCrop";
 import { uprightSize } from "./photoOrientation";
 
@@ -52,12 +53,12 @@ describe("zoom limits", () => {
     expect(cropZoom(out, 2048, 1536)).toBeCloseTo(1, 10);
   });
 
-  it("stops zooming in once the crop is MIN_CROP_WIDTH_PX wide", () => {
+  it("stops zooming in once the crop is MIN_CROP_EDGE_PX wide", () => {
     const limit = maxCropZoom(2048, 1536);
-    expect(limit).toBeCloseTo(1152 / MIN_CROP_WIDTH_PX, 10);
+    expect(limit).toBeCloseTo(1152 / MIN_CROP_EDGE_PX, 10);
     const zoomed = zoomCrop(largestCrop(2048, 1536), 50, { x: 0.5, y: 0.5 }, 2048, 1536);
     expect(cropZoom(zoomed, 2048, 1536)).toBeCloseTo(limit, 10);
-    expect(zoomed.width * 2048).toBeCloseTo(MIN_CROP_WIDTH_PX, 6);
+    expect(zoomed.width * 2048).toBeCloseTo(MIN_CROP_EDGE_PX, 6);
   });
 
   it("caps zoom at MAX_CROP_ZOOM on a large photo", () => {
@@ -165,5 +166,88 @@ describe("storing and showing a crop", () => {
     expect(cropImageStyle({ x: 0.25, y: 0.1, width: 0.5, height: 0.5 })).toEqual({
       position: "absolute", left: "-50%", top: "-20%", width: "200%", height: "200%", maxWidth: "none",
     });
+  });
+});
+
+describe("the park cover's 16:9 crop", () => {
+  const cover = PARK_COVER_ASPECT;
+
+  it("is the park sheet's landscape shape, and the Dex keeps 3:4", () => {
+    expect(cover).toBeCloseTo(16 / 9, 10);
+    expect(CROP_ASPECT).toBeCloseTo(3 / 4, 10);
+  });
+
+  it("takes the full width of an upright photo and centres it vertically", () => {
+    const crop = largestCrop(1536, 2048, cover);
+    expect(crop.width).toBe(1);
+    expect(crop.x).toBe(0);
+    expect(crop.height).toBeCloseTo(864 / 2048, 10);
+    expect(crop.y).toBeCloseTo((1 - 864 / 2048) / 2, 10);
+    expect(pixelAspect(crop, 1536, 2048)).toBeCloseTo(16 / 9, 10);
+  });
+
+  it("takes the full width of a 4:3 landscape photo, trimming top and bottom", () => {
+    const crop = largestCrop(2048, 1536, cover);
+    expect(crop.width).toBe(1);
+    expect(crop.height).toBeCloseTo(1152 / 1536, 10);
+    expect(cropPixels(crop, 2048, 1536, cover)).toEqual({ sx: 0, sy: 192, sw: 2048, sh: 1152 });
+  });
+
+  it("takes the full height of a photo wider than 16:9", () => {
+    const crop = largestCrop(4000, 1500, cover);
+    expect(crop.height).toBe(1);
+    expect(pixelAspect(crop, 4000, 1500)).toBeCloseTo(16 / 9, 10);
+    expect(crop.x).toBeCloseTo((1 - crop.width) / 2, 10);
+  });
+
+  it("limits zoom by the short edge, its height", () => {
+    // 1536 x 864 at the largest fit on an upright 1536 x 2048 photo.
+    expect(maxCropZoom(1536, 2048, cover)).toBeCloseTo(864 / MIN_CROP_EDGE_PX, 10);
+    const zoomed = zoomCrop(largestCrop(1536, 2048, cover), 50, { x: 0.5, y: 0.5 }, 1536, 2048, cover);
+    expect(zoomed.height * 2048).toBeCloseTo(MIN_CROP_EDGE_PX, 6);
+    expect(pixelAspect(zoomed, 1536, 2048)).toBeCloseTo(16 / 9, 10);
+  });
+
+  it("pans and zooms in the same shape, inside the photo", () => {
+    let crop = zoomCrop(largestCrop(1536, 2048, cover), 1.6, { x: 0.2, y: 0.8 }, 1536, 2048, cover);
+    crop = panCrop(crop, -3, 3, 1536, 2048, cover);
+    expectInside(crop);
+    expect(crop.y).toBe(0);
+    expect(pixelAspect(crop, 1536, 2048)).toBeCloseTo(16 / 9, 10);
+    const area = cropPixels(crop, 1536, 2048, cover);
+    expect(Math.abs(area.sw / area.sh - 16 / 9)).toBeLessThan(0.004);
+    expect(area.sx + area.sw).toBeLessThanOrEqual(1536);
+  });
+
+  it("repairs a stored 3:4 rectangle into a 16:9 one", () => {
+    const portrait = largestCrop(1536, 2048);
+    const repaired = clampCrop(portrait, 1536, 2048, cover);
+    expectInside(repaired);
+    expect(pixelAspect(repaired, 1536, 2048)).toBeCloseTo(16 / 9, 10);
+  });
+
+  it("refuses a shape that is not a number", () => {
+    expect(() => largestCrop(100, 100, 0)).toThrow();
+    expect(() => largestCrop(100, 100, Number.NaN)).toThrow();
+  });
+});
+
+describe("cropFrameSize", () => {
+  it("fills the width with a landscape frame on an upright phone stage", () => {
+    const frame = cropFrameSize(360, 560, PARK_COVER_ASPECT);
+    expect(frame.width).toBe(360 - CROP_STAGE_GUTTER * 2);
+    expect(frame.width / frame.height).toBeCloseTo(16 / 9, 10);
+    expect(frame.height).toBeLessThan(560 - CROP_STAGE_GUTTER * 2);
+  });
+
+  it("is held by the height for a 3:4 frame on a short stage", () => {
+    const frame = cropFrameSize(412, 480);
+    expect(frame.height).toBeCloseTo(480 - CROP_STAGE_GUTTER * 2, 10);
+    expect(frame.width / frame.height).toBeCloseTo(3 / 4, 10);
+  });
+
+  it("is held by the height for a 16:9 frame on a very short stage", () => {
+    const frame = cropFrameSize(412, 200, PARK_COVER_ASPECT);
+    expect(frame.height).toBeCloseTo(200 - CROP_STAGE_GUTTER * 2, 10);
   });
 });

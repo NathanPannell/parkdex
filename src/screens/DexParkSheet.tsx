@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Badge } from "../components/Badge";
 import { AboveNav, AddDexPhoto, CroppedPhoto, RecropPhoto } from "../components/DexPhoto";
+import { FullscreenViewer, useViewer } from "../components/FullscreenViewer";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toast";
 import { useBackHandler } from "../lib/backStack";
@@ -24,14 +25,17 @@ function dateLabel(at: string): string {
 }
 
 /**
- * A park in My Dex (#174): your photos of it (tap one to make it the cover), re-crop or remove a
- * photo, add another, and your visit dates.
+ * A park in My Dex (#174): your photos of it, re-crop or remove a photo, add another, and your
+ * visit dates. Tapping the cover or a photo in the strip opens it full screen, uncropped, where you
+ * can swipe through the park's photos and make one the cover.
  */
 export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, onSaved, onShowOnMap }: Props) {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [recropping, setRecropping] = useState<DexPhoto | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const photos = tile?.photos ?? [];
+  const viewer = useViewer(photos.length);
   useBackHandler(onClose, !!tile && !adding && !recropping);
   useEffect(() => setConfirmRemove(false), [tile?.park.id, tile?.cover?.claimId]);
 
@@ -70,7 +74,11 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
               <div className="dex-detail__body">
                 <div className="dex-detail__hero">
                   {cover
-                    ? <CroppedPhoto blob={cover.blob} crop={cover.crop} alt={`Your photo of ${park.name}`} />
+                    ? (
+                      <button className="viewer-open dex-detail__hero-open" onClick={() => viewer.open(photos.findIndex((photo) => photo.claimId === cover.claimId))} aria-label={`Show your photo of ${park.name} full screen`}>
+                        <CroppedPhoto blob={cover.blob} crop={cover.crop} alt={`Your photo of ${park.name}`} />
+                      </button>
+                    )
                     : <Badge park={park} size={170} state={visit ? "earned" : "silhouette"} remoteArt={false} />}
                 </div>
 
@@ -94,19 +102,14 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
                 {tile.photos.length > 1 && (
                   <div className="dex-detail__strip-wrap">
-                    <h3>Your photos <span>Tap one to make it the cover</span></h3>
+                    <h3>Your photos <span>Tap one to see it full screen</span></h3>
                     <ul className="dex-detail__strip">
-                      {tile.photos.map((photo) => (
+                      {tile.photos.map((photo, index) => (
                         <li key={photo.claimId}>
                           <button
-                            className={`dex-detail__thumb ${photo.claimId === cover?.claimId ? "is-cover" : ""}`}
-                            aria-pressed={photo.claimId === cover?.claimId}
-                            aria-label={`Photo from ${dateLabel(photo.claimedAt)}${photo.claimId === cover?.claimId ? ", the cover" : ""}`}
-                            onClick={() => {
-                              if (photo.claimId === cover?.claimId) return;
-                              sfx.pop();
-                              void onSetCover(photo.claimId).catch(fail);
-                            }}
+                            className={`dex-detail__thumb viewer-open ${photo.claimId === cover?.claimId ? "is-cover" : ""}`}
+                            aria-label={`Photo from ${dateLabel(photo.claimedAt)}${photo.claimId === cover?.claimId ? ", the cover" : ""}. Show it full screen`}
+                            onClick={() => viewer.open(index)}
                           >
                             <CroppedPhoto blob={photo.blob} crop={photo.crop} alt="" />
                             {photo.claimId === cover?.claimId && <span className="dex-detail__cover-mark"><Icon name="check" size={14} stroke={3} /></span>}
@@ -143,6 +146,21 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
         )}
       </AnimatePresence>
       {park && <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} onSaved={onSaved} />}
+      {/* The whole photo as taken, not the crop. */}
+      <FullscreenViewer
+        slides={photos.map((photo) => ({ key: photo.claimId, blob: photo.blob, alt: `Your photo of ${park?.name ?? "this park"} from ${dateLabel(photo.claimedAt)}`, caption: dateLabel(photo.claimedAt) }))}
+        index={tile ? viewer.index : null}
+        onStep={viewer.step}
+        onClose={viewer.close}
+        label={`Your photos of ${park?.name ?? "this park"}`}
+        actions={(slide) => slide.key === cover?.claimId
+          ? <span className="fullscreen-viewer__cover-mark"><Icon name="check" size={16} stroke={3} /> Cover photo</span>
+          : (
+            <button className="btn btn--sm btn--paper" onClick={() => { sfx.pop(); void onSetCover(slide.key).catch(fail); }}>
+              <Icon name="image" size={16} /> Make it the cover
+            </button>
+          )}
+      />
       <RecropPhoto
         blob={recropping?.blob ?? null}
         crop={recropping?.crop ?? null}

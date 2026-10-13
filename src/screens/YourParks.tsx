@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Flag, FlagPin } from "../components/Flag";
+import { MyFlagViewer } from "../components/FlagViewer";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { RollingNumber } from "../components/Motion";
@@ -44,6 +45,7 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
   const parks = sortHeldParks(game.me?.parks ?? []);
   const score = useCountUp(game.me?.score ?? 0);
   const now = Date.now();
+  const [viewingFlag, setViewingFlag] = useState(false);
 
   // Scores change while the app sits in the background, so read them fresh on open.
   useEffect(() => {
@@ -99,7 +101,9 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
           <>
             <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""} ${hasLongHandle(player.handle) ? "has-long-handle" : ""}`} style={handleFit(player.handle)} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
               <span className="game-score__rays" aria-hidden="true" />
-              <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" label={`Flag of @${player.handle}`} />
+              <button className="viewer-open game-score__flag" onClick={() => setViewingFlag(true)} aria-label={`Show the flag of @${player.handle} full screen`}>
+                <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" />
+              </button>
               <div className="game-score__text">
                 <strong>@{player.handle}</strong>
                 <span>{plural(parks.length, "park", "parks")} held</span>
@@ -147,6 +151,7 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
           </>
         )}
       </div>
+      <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </motion.main>
   );
 }

@@ -1,9 +1,10 @@
 import { motion, type PanInfo } from "motion/react";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { Badge } from "../../components/Badge";
 import { AddDexPhoto } from "../../components/DexPhoto";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { FlagPin } from "../../components/Flag";
+import { FullscreenViewer } from "../../components/FullscreenViewer";
 import { Icon } from "../../components/Icon";
 import { Rays, Tilt } from "../../components/Motion";
 import { boundaryAreaKm2, formatArea } from "../../lib/area";
@@ -76,6 +77,19 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const cover = summaryCover(summary, game.flags?.founders.get(park.id)?.coverUrl ?? null);
   const [coverFailed, setCoverFailed] = useState(false);
   const showCover = !!cover && !coverFailed;
+  const [viewingCover, setViewingCover] = useState(false);
+  // Tapping the cover opens it full screen (FullscreenViewer, mounted at the end of the sheet).
+  const coverOpener = showCover ? {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": `Show the photo of ${park.name} full screen`,
+    onClick: () => setViewingCover(true),
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setViewingCover(true);
+    },
+  } : {};
   // "Add another photo" for parks you have visited (#174), from a claim here or visits on the server.
   const visited = !!claim || (summary.summary?.visits.mine ?? 0) > 0 || !!game.me?.visitedToday?.includes(park.id);
   const [adding, setAdding] = useState(false);
@@ -157,8 +171,9 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       {/* The hero scrolls away with the page, so nothing ever sits underneath it. */}
       <div className="park-sheet__scroll scroll">
         <div
-          className={`park-sheet__hero${showCover ? " has-cover" : ""}`}
+          className={`park-sheet__hero${showCover ? " has-cover viewer-open" : ""}`}
           style={{ aspectRatio: PARK_COVER_ASPECT, background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}
+          {...coverOpener}
         >
           {showCover ? (
             // The founder's approved photo replaces the badge as the park's face.
@@ -348,6 +363,12 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
         )}
       </motion.div>
       <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} />
+      <FullscreenViewer
+        slides={showCover ? [{ key: "cover", src: cover, alt: `${park.name}, photographed by its founder` }] : []}
+        index={viewingCover ? 0 : null}
+        onClose={() => setViewingCover(false)}
+        label={`Cover photo of ${park.name}`}
+      />
     </motion.div>
   );
 }

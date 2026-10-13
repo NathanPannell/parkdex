@@ -332,3 +332,10 @@
   flex-direction: column;
   min-width: 0;
 }
+
+/* The chip's flag opens it full screen; the rest of the chip opens My Dex. */
+.counter__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
