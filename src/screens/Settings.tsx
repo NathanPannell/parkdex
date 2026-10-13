@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { useGame } from "../lib/game/GameProvider";
 import { listItem, listParent, press, tabPage } from "../lib/motion";
 import "../game-ui.css";
+import { WebAppSettings } from "./WebAppSettings";
 import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
@@ -137,6 +138,8 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
             <Icon name="next" size={18} />
           </motion.button>
         </motion.section>
+
+        <WebAppSettings />
 
         <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
       </div>
