@@ -1,7 +1,7 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
 
 const DATABASE = "parkdex_content";
@@ -11,7 +11,6 @@ const TEMP = `${ROOT}/tmp`;
 const ACTIVE_POINTER = "1";
 
 // Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
-const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
 
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
@@ -416,7 +415,7 @@ export class NativeContentStore implements ContentStore {
 
   async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
     const key = assertHash(hash);
-    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
+    const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path));
     await this.withFileLock(key, () => this.exclusive(async () => {
       const activeId = await this.getActiveId();
       const active = activeId ? await this.getRelease(activeId) : undefined;

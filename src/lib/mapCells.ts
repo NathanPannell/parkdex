@@ -155,12 +155,27 @@ type SavedSquares = { version: string; keys: string[] };
 
 /** Squares the visitor chose to keep. Kept per device; the map files themselves live in the content store. */
 export function readSavedSquares(storage: Pick<Storage, "getItem"> | undefined = safeStorage()): string[] {
+  const saved = readSquares(storage);
+  return saved && saved.current ? saved.keys : [];
+}
+
+/**
+ * Squares saved for the map an earlier build pinned. Their files belong to that
+ * archive, so they are not offline with this map; Download maps offers them again.
+ */
+export function readSquaresToSaveAgain(storage: Pick<Storage, "getItem"> | undefined = safeStorage()): string[] {
+  const saved = readSquares(storage);
+  return saved && !saved.current ? saved.keys : [];
+}
+
+function readSquares(storage: Pick<Storage, "getItem"> | undefined): { keys: string[]; current: boolean } | null {
   try {
     const value = JSON.parse(storage?.getItem(SAVED_KEY) ?? "null") as SavedSquares | null;
-    if (!value || !Array.isArray(value.keys)) return [];
-    return value.keys.filter((key) => typeof key === "string" && /^\d+\/\d+$/.test(key));
+    if (!value || !Array.isArray(value.keys)) return null;
+    const keys = value.keys.filter((key) => typeof key === "string" && /^\d+\/\d+$/.test(key));
+    return { keys, current: value.version === undefined || value.version === BUILD_MAP_POINTER.version };
   } catch {
-    return [];
+    return null;
   }
 }
 

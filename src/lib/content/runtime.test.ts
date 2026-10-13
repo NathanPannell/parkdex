@@ -64,7 +64,8 @@ vi.mock("./map-downloads", () => ({
         mapMock.onNearbyPause?.();
       });
     }
-    await runtime.ensureFile(releaseId, "map/island/000.bin", "nearby", signal);
+    const { mapChunkPath, mapFolder } = await import("./contracts");
+    await runtime.ensureFile(releaseId, mapChunkPath(0, mapFolder(snapshotOverride.manifest.files)), "nearby", signal);
     return { releaseId, detail, chunkIds: [0], allowedChunkIds: [0] };
   },
 }));
@@ -87,7 +88,7 @@ function toBytes(value: unknown): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-async function makeRelease(id: string, generation: number, parkId: string, scene: string) {
+async function makeRelease(id: string, generation: number, parkId: string, scene: string, mapFolder = "island") {
   const park = { id: parkId, name: `${parkId} park`, short: parkId, ...PARK_FIELDS, scene };
   const boundaries = {
     type: "FeatureCollection",
@@ -104,9 +105,9 @@ async function makeRelease(id: string, generation: number, parkId: string, scene
     ["data/drive.json", toBytes(drive)],
     ["boundaries.geojson", toBytes(boundaries)],
     [`art/badges/scenes/${scene}.webp`, toBytes(`scene:${scene}`)],
-    ["map/island/manifest.json", toBytes(mapIndex)],
-    ["map/island/000.bin", new Uint8Array([1, 2, 3, 4]).buffer],
-    ["map/island/001.bin", new Uint8Array([5, 6, 7, 8]).buffer],
+    [`map/${mapFolder}/manifest.json`, toBytes(mapIndex)],
+    [`map/${mapFolder}/000.bin`, new Uint8Array([1, 2, 3, 4]).buffer],
+    [`map/${mapFolder}/001.bin`, new Uint8Array([5, 6, 7, 8]).buffer],
     ["map/fonts/Noto Sans Regular/0-255.pbf", new Uint8Array([9, 10, 11]).buffer],
   ];
   const files: ContentFile[] = [];
@@ -731,6 +732,42 @@ describe("content runtime", () => {
     expect(server.calls).toContain(pinned.manifestUrl);
     expect(server.calls).not.toContain(serverPointer.manifestUrl);
     expect((await store.getSyncState("staging"))?.map).toEqual(pinned);
+  });
+
+  it("reads a pinned map whose chunks are in map/detail/, like the combined BC and Nova Scotia map", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "provincial-detail-map-park", "scene-detail", "detail");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-detail.webp")!;
+    const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+    const inventory: ContentMapInventory = {
+      schema: "parkdex.content-map/v1",
+      version: release.channel.releaseId,
+      mapManifest: release.rawManifest.mapManifest,
+      files: mapFiles,
+    };
+    const inventoryBytes = toBytes(inventory);
+    const pinned: ContentMapPointer = {
+      version: release.channel.releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+      manifestSha256: await sha256Hex(inventoryBytes),
+    };
+    const snapshot = contentSyncSnapshot(9, release.park, [sceneFile]);
+    const remoteFiles = new Map<string, ArrayBuffer>([[pinned.manifestUrl, inventoryBytes]]);
+    for (const file of mapFiles) remoteFiles.set(file.url, release.content.get(file.url)!.slice(0));
+    remoteFiles.set(sceneFile.url, release.content.get(sceneFile.url)!.slice(0));
+    const server = contentSyncServer(snapshot, new Map(), new Map(), remoteFiles);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [], undefined, "staging", pinned));
+    await runtime.start();
+
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    const releaseId = runtime.getStatus().snapshot!.releaseId;
+    const firstChunk = mapFiles.find((file) => file.path === "map/detail/000.bin")!;
+    await vi.waitFor(async () => expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(true));
+    expect(server.calls).not.toContain(mapFiles.find((file) => file.path === "map/detail/001.bin")!.url);
+    expect(await runtime.hasLocalFile?.(releaseId, "map/detail/000.bin")).toBe(true);
+    expect([...new Uint8Array((await runtime.readLocalMapFile?.(pinned.version, "map/detail/000.bin"))!)]).toEqual([1, 2, 3, 4]);
+    await runtime.deleteMapChunk?.(releaseId, "map/detail/000.bin");
+    expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(false);
   });
 
   it("downloads nearby detail on mobile data and never fetches the whole map", async () => {

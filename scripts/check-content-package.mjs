@@ -121,7 +121,9 @@ function forbiddenAssetReason(path) {
   if (/(^|\/)(parks|drive)(?:[-.][^/]*)?\.json$/.test(normalized)) return "park or drive catalog file is packaged";
   if (/(^|\/)[^/]*boundar(?:y|ies)[^/]*\.(?:geojson|json|pbf)$/.test(normalized)) return "park boundaries are packaged";
   if (/(^|\/)art\/badges\/scenes(?:\/|$)/.test(normalized)) return "badge scene asset is packaged";
-  if (normalized.startsWith("/map/island/")) return "detailed PMTiles map content is packaged";
+  if (normalized.startsWith("/map/island/") || /^\/map\/(?!fonts\/)[^/]+\/(?:\d{3,}\.bin|manifest\.json)$/.test(normalized)) {
+    return "detailed PMTiles map content is packaged";
+  }
   if (normalized.startsWith("/map/fonts/")) return "map glyph binary is packaged";
   if (normalized.startsWith("/map/bootstrap/") && path !== OVERVIEW_PATH) return "unexpected bootstrap map asset is packaged";
   if (/\.pmtiles$/.test(normalized) && path !== OVERVIEW_PATH) return "PMTiles archive is packaged";

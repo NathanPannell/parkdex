@@ -1,4 +1,4 @@
-// Builds public/map/cells.json: for every zoom-9 square in the detailed map archive, the
+// Builds public/map/cells.json: for every zoom-9 square with detail in the map archive, the
 // chunk IDs that hold its z7-z14 tiles and the directories needed to find them offline.
 // The Download maps screen uses it to show exact sizes and to download chosen squares.
 // Usage: node scripts/build-map-cells.mjs <archive.pmtiles> <chunkBytes> <map-version>
@@ -50,6 +50,10 @@ function cellRanges(x, y) {
 async function cellChunks(x, y) {
   const ranges = cellRanges(x, y);
   const overlaps = (a, b) => ranges.some(([start, end]) => a <= end && b >= start);
+  // The z7-z8 ancestors also cover squares just outside the archive's areas; only a
+  // square with its own z9+ tiles has detail worth downloading.
+  const ownRanges = ranges.slice(ANCESTOR_ZOOMS.length);
+  const ownTile = (a, b) => ownRanges.some(([start, end]) => a <= end && b >= start);
   const chunks = new Set();
   let tiles = 0;
   chunksOf(0, 127, chunks);
@@ -66,7 +70,7 @@ async function cellChunks(x, y) {
         continue;
       }
       if (!overlaps(entry.tileId, entry.tileId + entry.runLength - 1)) continue;
-      tiles += 1;
+      if (ownTile(entry.tileId, entry.tileId + entry.runLength - 1)) tiles += 1;
       chunksOf(header.tileDataOffset + entry.offset, entry.length, chunks);
     }
   };
