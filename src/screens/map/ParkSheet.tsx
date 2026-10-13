@@ -135,7 +135,8 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       dragConstraints={{ top: 0, bottom: 0 }}
       dragElastic={{ top: 0.05, bottom: 0.7 }}
       onDragEnd={onDragEnd}
-      style={handleFit(holder.kind === "other" ? holder.flag.handle : null)}
+      // The holder line is "@handle" or "@handle's crew"; it and the take button fit that line.
+      style={handleFit(holderLine.title.startsWith("@") ? holderLine.title.slice(1) : null)}
     >
       <div className={`park-sheet__hero${showCover ? " has-cover" : ""}`} style={{ background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}>
         <div className="sheet__handle" />

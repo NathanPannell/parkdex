@@ -176,8 +176,10 @@
   }
 }
 
+/* "You took … from @handle" wraps at the spaces; the handle's line shrinks to fit (handleFit). */
 .plant__stamp {
   font-size: 26px;
+  font-size: clamp(18px, (min(330px, 100cqi) - 40px) / (var(--handle-chars, 1) * 0.6), 26px);
   line-height: 1.15;
   max-width: 330px;
   text-transform: none;
