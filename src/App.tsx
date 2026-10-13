@@ -8,6 +8,11 @@ import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
 import { handleBack } from "./lib/backStack";
 import { GameProvider, useGame } from "./lib/game/GameProvider";
+import { FriendsProvider, useFriends } from "./lib/friends/FriendsProvider";
+import { FRIEND_LINK_PREFIX } from "./lib/friends/links";
+import { FRIEND_CODE_LENGTH, normalizeSocialCode } from "./lib/social/codes";
+import { listenForAppLinks, type AppLinkRoutes } from "./lib/social/links";
+import { AddFriendSheet } from "./screens/AddFriendSheet";
 import { HandleSheet } from "./screens/HandleSheet";
 import "./game-ui.css";
 import "./account.css";
@@ -47,12 +52,14 @@ export function App() {
     <MotionConfig reducedMotion="user">
       <AuthProvider>
         <GameProvider>
-          <StoreProvider>
-            <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
-              <ContentProvider><Stage /></ContentProvider>
-            </div>
-            <UpdateGate status={updateStatus} />
-          </StoreProvider>
+          <FriendsProvider>
+            <StoreProvider>
+              <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
+                <ContentProvider><Stage /></ContentProvider>
+              </div>
+              <UpdateGate status={updateStatus} />
+            </StoreProvider>
+          </FriendsProvider>
         </GameProvider>
       </AuthProvider>
       <PortraitOnly panel={portraitPanel} />
@@ -142,8 +149,41 @@ function Screens() {
   const { state, dispatch } = useStore();
   const auth = useAuth();
   const game = useGame();
+  const friends = useFriends();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
+  // A link to open once the app is past the splash and onboarding.
+  const linkTarget = useRef<"leaderboard" | null>(null);
+  const linkTries = useRef(0);
+  const openIncoming = useRef(friends.openIncoming);
+  openIncoming.current = friends.openIncoming;
+
+  // App Links and web paths into the app (src/lib/social/links.ts). Crew links (#170) add a route here.
+  useEffect(() => {
+    const routes: AppLinkRoutes = {};
+    if (friends.enabled) {
+      routes[FRIEND_LINK_PREFIX] = (value) => {
+        const code = normalizeSocialCode(value, FRIEND_CODE_LENGTH);
+        if (!code) return;
+        openIncoming.current(code);
+        linkTarget.current = "leaderboard";
+      };
+    }
+    if (!Object.keys(routes).length) return;
+    return listenForAppLinks(routes);
+  }, [friends.enabled]);
+
+  // Onboarding can finish with its own move to the map, so keep the target until it shows.
+  useEffect(() => {
+    if (!linkTarget.current || !state.startupReady || !onboarded || screen === "splash" || screen === "onboarding") return;
+    if (screen === linkTarget.current || linkTries.current >= 3) {
+      linkTarget.current = null;
+      linkTries.current = 0;
+      return;
+    }
+    linkTries.current += 1;
+    dispatch({ type: "go", screen: linkTarget.current });
+  });
 
   // The providers and first screen have rendered, so this bundle works and must not be rolled back.
   useEffect(() => notifyOverTheAirReady(), []);
@@ -258,6 +298,7 @@ function Screens() {
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
       <TakeoverMessages allowed={messagesAllowed && !decisions.current} />
+      {friends.enabled && <AddFriendSheet />}
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       <KipTipHost paused={!state.startupReady || !onboarded || screen === "onboarding" || screen === "splash"} />
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>

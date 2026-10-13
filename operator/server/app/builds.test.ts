@@ -25,7 +25,7 @@ test("build rows and per-environment update rules can be edited, and invalid inp
   const listing = await (await api(request("/api/app/builds"), env)).json() as { builds: unknown[]; rules: { environment: string }[]; knownFlags: string[]; retiredFlags: string[] };
   assert.equal(listing.builds.length, 1);
   assert.deepEqual(listing.rules.map((rule) => rule.environment), ["production", "staging"]);
-  assert.deepEqual(listing.knownFlags, [], "retired flags are not offered for new rows");
+  assert.deepEqual(listing.knownFlags, ["friends"], "retired flags are not offered for new rows");
   assert.deepEqual(listing.retiredFlags, ["rankProgression", "parkProposals"]);
   for (const invalid of [{ apiPointer: "main" }, { flags: { "bad name": true } }, { flags: { ok: "yes" } }, { extra: 1 }, { minimumBuild: 3 }]) {
     assert.equal((await api(request("/api/app/builds/android/1", { method: "PUT", body: invalid }), env)).status, 400, JSON.stringify(invalid));

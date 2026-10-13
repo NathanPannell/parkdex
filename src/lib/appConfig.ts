@@ -20,6 +20,8 @@ import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./req
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   rankProgression: false,
   parkProposals: true,
+  /** Friends by QR code and the weekly friends board (#64). Off until the operator turns it on. */
+  friends: false,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;
