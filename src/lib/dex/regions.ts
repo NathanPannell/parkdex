@@ -47,7 +47,8 @@ const NOVA_SCOTIA = [
 
 const key = (region: string) => region.trim().toLowerCase();
 
-const PROVINCE_BY_REGION = new Map<string, string>([
+/** Every known region label, lower-cased, with its province. game_004_badges.sql mirrors it. */
+export const PROVINCE_BY_REGION: ReadonlyMap<string, string> = new Map<string, string>([
   ...BRITISH_COLUMBIA.map((region) => [key(region), "British Columbia"] as const),
   ...NOVA_SCOTIA.map((region) => [key(region), "Nova Scotia"] as const),
 ]);

@@ -1,5 +1,6 @@
 import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { BadgeUnlock } from "../components/BadgeUnlock";
 import { AddDexPhoto } from "../components/DexPhoto";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
@@ -392,8 +393,8 @@ export function Plant() {
     void send();
   };
 
-  function leave(screen: "map" | "parks") {
-    if (screen === "parks") openDexOn("flags");
+  function leave(screen: "map" | "parks", segment: "flags" | "collection" = "flags") {
+    if (screen === "parks") openDexOn(segment);
     for (const action of leavePlant(park ? park.id : null, screen)) dispatch(action);
   }
 
@@ -597,6 +598,8 @@ export function Plant() {
                   ))}
                 </motion.div>
               )}
+              {/* The badges this visit unlocked (#175). */}
+              <BadgeUnlock unlocks={result?.newBadges} variants={pop} onOpen={() => leave("parks", "collection")} />
               {park && (
                 <motion.div variants={pop} className="claim__row">
                   <button className="btn btn--sm btn--glow" onClick={() => { sfx.pop(); setAdding(true); }}>

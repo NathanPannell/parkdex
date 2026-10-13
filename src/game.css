@@ -758,3 +758,37 @@ button.game-row:active {
   white-space: normal;
   text-align: center;
 }
+
+/* The unlock moment on the visit result (#175). */
+.badge-unlock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: var(--pop);
+  color: var(--ink);
+  text-align: left;
+}
+
+.badge-unlock__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.badge-unlock__text span {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-unlock__text strong {
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.1;
+}

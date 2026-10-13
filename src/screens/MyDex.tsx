@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Badge } from "../components/Badge";
+import { BadgeShelf } from "../components/BadgeShelf";
 import { CroppedPhoto } from "../components/DexPhoto";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
@@ -53,11 +54,11 @@ export function MyDex() {
   );
   return segment === "flags"
     ? <YourParks key="flags" title="My Dex" toolbar={toolbar} />
-    : <DexCollection key="collection" toolbar={toolbar} />;
+    : <DexCollection key="collection" toolbar={toolbar} shelf={<BadgeShelf />} />;
 }
 
 /**
- * The collection. `shelf` is the slot at the top for the badge shelf (#175); nothing fills it yet.
+ * The collection. `shelf` is the slot at the top for the badge shelf (#175).
  */
 export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?: ReactNode }) {
   const { dispatch } = useStore();
@@ -110,7 +111,7 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
       {toolbar}
 
       <div className="account-body">
-        {/* #175: the badge shelf goes here, above the summary. */}
+        {/* #175: the badge shelf, above the summary. */}
         {shelf}
 
         <section className="account-card card dex-summary" aria-live="polite">

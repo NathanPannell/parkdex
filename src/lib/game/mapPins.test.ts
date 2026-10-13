@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ParkFlag } from "./client";
 import { flagPinSvg, flagSpec } from "./flag";
-import { buildPins, EMPTY_PIN, pinIconId } from "./mapPins";
+import { buildPins, EMPTY_PIN, patchIconId, pinIconId } from "./mapPins";
 
 const DAY = 86_400_000;
 const now = Date.parse("2026-10-07T12:00:00Z");
@@ -53,5 +53,16 @@ describe("map pins", () => {
     expect(flagPinSvg(null)).toContain("stroke-dasharray");
     expect(flagPinSvg("robin", { label: "<b>" })).toContain("&#60;b&#62;");
     expect(flagPinSvg("robin", { label: "12d" })).toContain(">12d</text>");
+  });
+
+  it("gives a holder's first known patch its own shared image, for close zoom (#175)", () => {
+    const flags = new Map([
+      ["a", { ...flag("a", "robin", 2), patches: ["nope", "hold-7", "parks-1"] }],
+      ["b", { ...flag("b", "sam", 2), patches: ["hold-7"] }],
+      ["c", flag("c", "kim", 2)],
+    ]);
+    const { collection, patches } = buildPins(parks, flags, now);
+    expect(collection.features.map((feature) => feature.properties.patch)).toEqual([patchIconId("hold-7"), patchIconId("hold-7"), "", ""]);
+    expect([...patches]).toEqual([[patchIconId("hold-7"), "hold-7"]]);
   });
 });

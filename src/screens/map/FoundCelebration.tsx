@@ -1,5 +1,6 @@
 import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
+import { BadgeUnlock } from "../../components/BadgeUnlock";
 import { Flag } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { Bubble, Kip } from "../../components/Kip";
@@ -9,6 +10,8 @@ import { buzz, sfx } from "../../lib/feedback";
 import type { FoundResult } from "../../lib/founders";
 import { countStepMs, flagConfetti } from "../../lib/game/plantScene";
 import { visitHeadline } from "../../lib/game/visit";
+import { openDexOn } from "../../lib/dex/prefs";
+import { useStore } from "../../lib/store";
 import "../../game.css";
 
 type Props = {
@@ -31,6 +34,7 @@ function shakeFrames(amplitude: number): number[] {
  */
 export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
   const reduce = useReducedMotion() ?? false;
+  const { dispatch } = useStore();
   const [landed, setLanded] = useState(reduce);
   const [points, setPoints] = useState(reduce ? result.founderPoints : 0);
   const [done, setDone] = useState(reduce);
@@ -162,6 +166,16 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
                   </span>
                 </motion.div>
               )}
+              {/* The badges this founding unlocked, such as Spelunker (#175). */}
+              <BadgeUnlock
+                unlocks={result.newBadges}
+                variants={pop}
+                onOpen={() => {
+                  openDexOn("collection");
+                  onClose();
+                  dispatch({ type: "go", screen: "parks" });
+                }}
+              />
               <motion.div variants={pop} className="claim__row">
                 <button className="btn btn--sm btn--sun" onClick={() => onClose(result.park.id)}>
                   <Icon name="pin" size={18} /> See the park
