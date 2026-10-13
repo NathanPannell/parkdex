@@ -1,5 +1,6 @@
 import {
   canDownloadContent,
+  CONTENT_AREAS,
   CONTENT_READER_VERSION,
   isContentTransportPaused,
   isMapChunkPath,
@@ -7,7 +8,7 @@ import {
   isPointInsideContentBounds,
   isWaitingForContentWifi,
   mapChunkIndex,
-  VICTORIA,
+  nearestContentArea,
   type Connectivity,
   type ContentChannel,
   type ContentChangeBatch,
@@ -143,6 +144,15 @@ function parseEnvironment(value: unknown, expected: ContentEnvironment) {
   return parseContentChannel(value, expected);
 }
 
+/**
+ * Where starter map coverage is anchored: the visitor inside a supported province, else
+ * the town of the province nearest their last position, else Victoria.
+ */
+export function mapAnchorFor(inside: MapPoint | null, last: MapPoint | null): MapPoint {
+  if (inside) return inside;
+  return last ? nearestContentArea(last).anchor : CONTENT_AREAS[0].anchor;
+}
+
 function validMapPoint(point: MapPoint | null): point is MapPoint {
   return point !== null && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
     point[0] >= -180 && point[0] <= 180 && point[1] >= -90 && point[1] <= 90;
@@ -236,6 +246,8 @@ class ContentRuntimeController implements ContentRuntime {
   private discoveryEtag: string | null = null;
   private latestChannel: ContentChannel | null = null;
   private currentLocation: MapPoint | null = null;
+  // The last valid position, inside the content areas or not. It survives a lost fix.
+  private lastLocation: MapPoint | null = null;
   private nearbyAnchor: { releaseId: string; point: MapPoint } | null = null;
   private nearbyRequest: { releaseId: string; point: MapPoint; controller: AbortController } | null = null;
   private nearbyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -510,6 +522,7 @@ class ContentRuntimeController implements ContentRuntime {
   setLocation(point: MapPoint | null): void {
     if (this.stopped) return;
     this.currentLocation = validMapPoint(point) && isPointInsideContentBounds(point) ? [point[0], point[1]] : null;
+    if (validMapPoint(point)) this.lastLocation = [point[0], point[1]];
     if (this.status.snapshot) this.scheduleNearbyPrefetch(false);
     this.scheduleNearbyArt();
   }
@@ -2138,9 +2151,8 @@ class ContentRuntimeController implements ContentRuntime {
     return { ...state, map: { ...pointer } };
   }
 
-  /** Coverage is anchored on the visitor when known, otherwise on the demo start. */
   private mapAnchor(): MapPoint {
-    return this.currentLocation ?? VICTORIA;
+    return mapAnchorFor(this.currentLocation, this.lastLocation);
   }
 
   private async refreshMapReadiness(snapshot: ContentSnapshot): Promise<void> {

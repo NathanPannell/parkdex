@@ -17,6 +17,7 @@ import { useVisit } from "../../lib/game/useVisit";
 import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
 import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
+import { startingMapView, USER_ZOOM } from "../../lib/provinces";
 import { FIELD, isNative } from "../../lib/native";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { KIP_TIP_IDS, requestKipTip } from "../../lib/kipTips";
@@ -40,10 +41,6 @@ const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
 const FAR_ZOOM = 10.5;
 const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
 
-// Close enough to show badges rather than dots when the map opens on the visitor.
-const USER_ZOOM = 12.5;
-// Without any known location, frame British Columbia rather than a placeholder town.
-const BC_VIEW = { center: [-125.5, 53.8] as LngLat, zoom: 4.6 };
 // Devices with real GPS never open on the demo starting point.
 const TRACKS_REAL_LOCATION = FIELD || isNative;
 
@@ -75,16 +72,13 @@ export function MapScreen() {
   } | null>(null);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
-  const [initialView] = useState(() => {
-    if (!TRACKS_REAL_LOCATION) return { center: state.user, zoom: 12 };
-    const last = readLastLocation();
-    return last ? { center: last, zoom: USER_ZOOM } : BC_VIEW;
-  });
+  // Without a location inside a province, frame the province nearest the last one, or BC.
+  const [initialView] = useState(() => startingMapView(TRACKS_REAL_LOCATION, state.user, readLastLocation()));
 
   const game = useGame();
   const visit = useVisit();
   const runtime = useContentRuntime();
-  const { user, selectedId, tripId } = state;
+  const { user, selectedId, tripId, located } = state;
   // Every park in the catalogue can carry a flag, with or without badge art.
   const parks = useMemo(() => content?.parks ?? [], [content?.parks]);
   const flags = game.flags?.byPark ?? null;
@@ -365,9 +359,9 @@ export function MapScreen() {
     buzz(20);
   }
 
-  function recenter() {
+  function recenter(center: LngLat = user) {
     sfx.tap();
-    mapRef.current?.flyTo({ center: user, zoom: 12.5, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+    mapRef.current?.flyTo({ center, zoom: USER_ZOOM, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
   }
 
   const remaining = trip ? estimateTrip(user, trip, content?.drive) : null;
@@ -599,16 +593,18 @@ export function MapScreen() {
             <button onClick={teleportNearest}>
               <Icon name="sparkle" size={18} /> Teleport into nearest park
             </button>
-            <button
-              onClick={() => {
-                setDemoOpen(false);
-                endTrip();
-                dispatch({ type: "move", user: [-123.3656, 48.4284], accuracy: null });
-                recenter();
-              }}
-            >
-              <Icon name="locate" size={18} /> Back to downtown Victoria
-            </button>
+            {located && (
+              <button
+                onClick={() => {
+                  setDemoOpen(false);
+                  endTrip();
+                  dispatch({ type: "move", user: located, accuracy: null });
+                  recenter(located);
+                }}
+              >
+                <Icon name="locate" size={18} /> Back to my location
+              </button>
+            )}
             <button
               onClick={() => {
                 if (confirm("Reset the mockup and replay onboarding?")) dispatch({ type: "reset" });

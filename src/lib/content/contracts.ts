@@ -311,17 +311,54 @@ export type ContentRuntimeOptions = {
  */
 export const CONTENT_READER_VERSION = 3;
 export const VICTORIA: MapPoint = [-123.3656, 48.4284];
+export const HALIFAX: MapPoint = [-63.5752, 44.6488];
 /** West, south, east, north in degrees. */
 export type MapBox = readonly [west: number, south: number, east: number, north: number];
+/** A supported province: its map box and the town that stands in for it when the visitor is elsewhere. */
+export interface ContentArea {
+  name: string;
+  box: MapBox;
+  anchor: MapPoint;
+}
 /**
  * Areas the detailed map archive this build uses covers: the boxes of the
  * --region of its Protomaps extract (scripts/map-region.geojson). They gate the
- * detailed map, nearby downloads and nearby art.
+ * detailed map, nearby downloads and nearby art. worker/provinces.ts repeats the
+ * names and boxes for the API; a test keeps the two lists equal.
  */
-export const CONTENT_BOUNDS: readonly MapBox[] = [
-  [-139.1, 48.2, -114.0, 60.0], // British Columbia
-  [-66.5, 43.3, -59.6, 47.1], // Nova Scotia
+export const CONTENT_AREAS: readonly ContentArea[] = [
+  { name: "British Columbia", box: [-139.1, 48.2, -114.0, 60.0], anchor: VICTORIA },
+  { name: "Nova Scotia", box: [-66.5, 43.3, -59.6, 47.1], anchor: HALIFAX },
 ];
+export const CONTENT_BOUNDS: readonly MapBox[] = CONTENT_AREAS.map((area) => area.box);
+
+function insideBox([lng, lat]: MapPoint, [west, south, east, north]: MapBox): boolean {
+  return lng >= west && lng <= east && lat >= south && lat <= north;
+}
+
+/** The supported province whose box holds the point, or null outside every one. */
+export function contentAreaAt(point: MapPoint, areas: readonly ContentArea[] = CONTENT_AREAS): ContentArea | null {
+  if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) return null;
+  return areas.find((area) => insideBox(point, area.box)) ?? null;
+}
+
+/** The province holding the point, else the one whose box is closest; the first area for an invalid point. */
+export function nearestContentArea(point: MapPoint, areas: readonly ContentArea[] = CONTENT_AREAS): ContentArea {
+  if (areas.length === 0) throw new RangeError("At least one content area is required");
+  const [lng, lat] = point;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return areas[0];
+  let best = areas[0];
+  let bestKm = Infinity;
+  for (const area of areas) {
+    const [west, south, east, north] = area.box;
+    const nearLng = Math.min(east, Math.max(west, lng));
+    const nearLat = Math.min(north, Math.max(south, lat));
+    const kx = 111.32 * Math.cos((((lat + nearLat) / 2) * Math.PI) / 180);
+    const km = Math.hypot((lng - nearLng) * kx, (lat - nearLat) * 110.54);
+    if (km < bestKm) [best, bestKm] = [area, km];
+  }
+  return best;
+}
 
 export function isPointInsideContentBounds(point: MapPoint, bounds: readonly MapBox[] = CONTENT_BOUNDS): boolean {
   const [lng, lat] = point;
