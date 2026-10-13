@@ -4,9 +4,10 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useSyncE
 import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
+import { localCacheMarker } from "./leanCache";
 import { readAllowMobileMapData, subscribeAllowMobileMapData } from "../downloadPreferences";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
-import { BUILD_MAP_POINTER, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
+import { BUILD_MAP_POINTER, OFFLINE_DOWNLOADS, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
 import { useStore } from "../store";
 import { useAuth } from "../accounts/AuthProvider";
 import { isUsableGpsAccuracy } from "../geo";
@@ -71,14 +72,18 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       connectivity: initialConnectivity(),
       fetch: contentFetch,
       mapPointer: BUILD_MAP_POINTER,
+      appBuild: typeof __APP_BUILD__ === "undefined" ? "unknown" : __APP_BUILD__,
+      cacheMarker: localCacheMarker(),
     });
   }
   const runtime = runtimeRef.current;
   const stopTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    runtime.setAllowMobileMapData?.(readAllowMobileMapData());
-    return subscribeAllowMobileMapData((allowed) => runtime.setAllowMobileMapData?.(allowed));
+    // The switch only governs offline downloads (#199). Map detail around the player and park
+    // content use any connection either way.
+    runtime.setAllowMobileMapData?.(OFFLINE_DOWNLOADS && readAllowMobileMapData());
+    return subscribeAllowMobileMapData((allowed) => runtime.setAllowMobileMapData?.(OFFLINE_DOWNLOADS && allowed));
   }, [runtime]);
 
   useLayoutEffect(() => {

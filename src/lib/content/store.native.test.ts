@@ -250,6 +250,33 @@ describe("NativeContentStore deletion guard", () => {
     await store.close();
   });
 
+  it("deletes badge art the active release and the catalogue list only when it is optional", async () => {
+    const query = nativeMocks.db.query.getMockImplementation()!;
+    nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.includes("FROM content_sync_rows WHERE entity = 'asset'")) return { values: [{ value_json: JSON.stringify(sceneFile) }] };
+      return query(statement, values);
+    });
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    await expect(store.deleteFile(HASH, { optionalMapChunk: true })).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(HASH, { optionalArt: true });
+    expect(nativeMocks.deleteFile).toHaveBeenCalledOnce();
+    expect(nativeMocks.db.run).toHaveBeenCalledWith("DELETE FROM content_files WHERE hash = ?", [HASH]);
+    await store.close();
+  });
+
+  it("keeps a retained earned-park scene even when art is optional", async () => {
+    activeRelease = release([]);
+    retainedRows = [{ park_json: JSON.stringify(park("earned-park", "Earned Park")), scene_file_json: JSON.stringify(sceneFile) }];
+    const store = new NativeContentStore();
+    await store.initialize();
+
+    await expect(store.deleteFile(HASH, { optionalArt: true, optionalMapChunk: true })).rejects.toThrow(/active or retained content/);
+    expect(nativeMocks.deleteFile).not.toHaveBeenCalled();
+    await store.close();
+  });
+
   it("refuses to delete a retained earned-park scene after its release is retired", async () => {
     activeRelease = release([]);
     retainedRows = [{

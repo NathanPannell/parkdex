@@ -8,7 +8,11 @@ import {
   isPointInsideContentBounds,
   isWaitingForContentWifi,
   mapChunkIndex,
+  mapChunkPath,
+  mapFolder,
   nearestContentArea,
+  OFFLINE_DOWNLOADS,
+  type CatalogueChunkRef,
   type Connectivity,
   type ContentChannel,
   type ContentChangeBatch,
@@ -27,6 +31,7 @@ import {
   type ContentSyncCursor,
   type ContentRequestInit,
   type DownloadPurpose,
+  type MapBox,
   type StoredFileSummary,
   type MapPoint,
   type RetainedPark,
@@ -35,12 +40,14 @@ import {
 import {
   ContentValidationError,
   applyContentChangeBatch,
-  assembleCatalogueSnapshot,
+  assembleLeanCatalogue,
   assertFileBytes,
   catalogueIndexFile,
   coreFiles,
+  evictCatalogueChunks,
   fileByPath,
   mapChunkFiles,
+  mergeCatalogueChunks,
   parseContentChannel,
   parseContentChanges,
   parseContentMapInventory,
@@ -59,6 +66,18 @@ import { ContentDownloadScheduler, type DownloadPolicy } from "./scheduler";
 import { prefetchMapArea } from "./map-downloads";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity, restoreArchivedScene as restoreLegacyArchivedScene } from "./archived-art";
 import { removeAllowedMapChunks, resetAllowedMapChunks, setAllowedMapChunks } from "../offlineTiles";
+import { chunkIdsForCells, clearSavedSquares, loadCellIndex, readSavedSquares, readSquaresToSaveAgain } from "../mapCells";
+import {
+  artToKeep,
+  cacheGeneration,
+  chunkForPark,
+  chunksInView,
+  chunksNear,
+  chunksToEvict,
+  cleanupKeepSet,
+  filesToDelete,
+  VIEW_GUIDE_MIN_ZOOM,
+} from "./leanCache";
 
 const DISCOVERY_COOLDOWN_MS = 5 * 60 * 1000;
 const MANUAL_RETRY_COOLDOWN_MS = 15 * 1000;
@@ -72,6 +91,10 @@ const LOCATION_MOVE_THRESHOLD_KM = 25;
 // from the art CDN when shown. Re-check after a shorter move so art stays ahead of the visitor.
 const NEARBY_ART_KM = 15;
 const NEARBY_ART_MOVE_KM = 5;
+// Park boundaries near the player are re-checked after a move of this distance.
+const NEARBY_GUIDE_MOVE_KM = 10;
+// A map view settles for this long before its boundaries load.
+const VIEW_GUIDE_DEBOUNCE_MS = 400;
 const SCENE_PREFIX = "art/badges/scenes/";
 // Catalogue chunks are small immutable files; a few at a time keeps a phone responsive.
 const CATALOGUE_CHUNK_CONCURRENCY = 4;
@@ -164,6 +187,31 @@ function distanceKm(a: MapPoint, b: MapPoint) {
   const dLng = (b[0] - a[0]) * radians;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * radians) * Math.cos(b[1] * radians) * Math.sin(dLng / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** Chunks of the squares saved for this build's map; squares saved for an older map have no files in it. */
+async function savedSquareChunks(): Promise<Set<number>> {
+  const keys = readSavedSquares();
+  if (keys.length === 0 && readSquaresToSaveAgain().length === 0) return new Set();
+  try {
+    return chunkIdsForCells(await loadCellIndex(), keys);
+  } catch {
+    return new Set();
+  }
+}
+
+/** A stored boundary chunk reference as a downloadable, checkable content file. */
+function catalogueChunkFile(ref: CatalogueChunkRef) {
+  return {
+    path: ref.path,
+    key: ref.url.slice("https://kip-assets.parkdex.app/".length),
+    url: ref.url,
+    sha256: ref.sha256,
+    byte_size: ref.byte_size,
+    content_type: "application/json",
+    parkIds: ref.parkIds,
+    bbox: ref.bbox,
+  };
 }
 
 function phaseForActive(connected: boolean): ContentPhase {
@@ -261,6 +309,15 @@ class ContentRuntimeController implements ContentRuntime {
   private waitingForBulkWifi = false;
   // Set when the platform stopped a request during a pause that had no stop, so resume restarts it.
   private pausedWorkPending = false;
+  // Paths of the map chunks around the player's last position, or null before it is known.
+  private nearMapChunks: Set<string> | null = null;
+  // Boundary chunks near the player's position when they were last checked.
+  private nearGuideChunks = new Set<string>();
+  private nearGuideAnchor: MapPoint | null = null;
+  private guideWork: Promise<void> = Promise.resolve();
+  private viewGuideTimer: ReturnType<typeof setTimeout> | undefined;
+  private cleanupPromise: Promise<void> | null = null;
+  private catalogueBytes: { state: ContentSyncState; bytes: number } | null = null;
 
   constructor(private readonly options: ContentRuntimeOptions) {
     const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -525,6 +582,7 @@ class ContentRuntimeController implements ContentRuntime {
     if (validMapPoint(point)) this.lastLocation = [point[0], point[1]];
     if (this.status.snapshot) this.scheduleNearbyPrefetch(false);
     this.scheduleNearbyArt();
+    this.scheduleNearbyGuides();
   }
 
   /** Download one park's badge art now, for a claim made before nearby art finished. */
@@ -703,6 +761,7 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.closePromise) return this.closePromise;
     this.stopped = true;
     this.clearSyncRetry();
+    if (this.viewGuideTimer !== undefined) globalThis.clearTimeout(this.viewGuideTimer);
     if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
     this.nearbyTimer = undefined;
     this.nearbyAbort?.abort();
@@ -719,6 +778,8 @@ class ContentRuntimeController implements ContentRuntime {
         ...this.candidatePromises.values(),
         ...this.bulkPromises.values(),
         ...this.archivedScenePromises.values(),
+        this.guideWork,
+        this.cleanupPromise ?? Promise.resolve(),
       ]);
       if (this.initialized) await this.options.store.close();
     })();
@@ -1068,6 +1129,14 @@ class ContentRuntimeController implements ContentRuntime {
       state = null;
       resetCursor = true;
     }
+    // After an update, a catalogue saved whole (every boundary) is replaced once by a
+    // fresh snapshot, which keeps only the boundaries near the player when the API
+    // names a CDN catalogue. The cache stays on screen until that commits.
+    if (state && !state.catalogue && this.cleanupDue()) {
+      previous = state;
+      state = null;
+      resetCursor = true;
+    }
     if (!state) {
       state = await this.fetchFullSnapshot(sourceId, signal);
       if (!previous) previous = this.syncPreviousState ?? state;
@@ -1107,6 +1176,8 @@ class ContentRuntimeController implements ContentRuntime {
     });
     if (this.hasSyncApi()) this.startMapSync();
     else if (this.status.snapshot) this.startBulkMap(this.status.snapshot.releaseId);
+    this.scheduleNearbyGuides(true);
+    this.startCacheCleanup();
   }
 
   /**
@@ -1121,17 +1192,24 @@ class ContentRuntimeController implements ContentRuntime {
     if (!pointer) return { ...parseContentSnapshot(body), sourceId };
     this.setStatus({ syncStage: "downloading" });
     const index = parseCatalogueIndex(parseJsonBytes(await this.fetchCatalogueFile(catalogueIndexFile(pointer), signal)), pointer);
-    const features: unknown[][] = new Array(index.chunks.length);
+    // Only the boundaries near the player download now; the rest load when the player looks at them.
+    const parkPoints = new Map((index.body.parks as { id?: unknown; lng?: unknown; lat?: unknown }[])
+      .filter((park) => typeof park?.id === "string" && typeof park.lng === "number" && typeof park.lat === "number")
+      .map((park) => [park.id as string, { lng: park.lng as number, lat: park.lat as number }]));
+    const near = new Set(chunksNear(index.chunks.map((chunk) => ({ ...chunk, bbox: chunk.bbox ?? null })), parkPoints, this.mapAnchor()));
+    const wanted = index.chunks.filter((chunk) => near.has(chunk.path));
+    const features = new Map<string, unknown[]>();
     let next = 0;
     const worker = async () => {
-      while (next < index.chunks.length) {
-        const position = next++;
-        const chunk = index.chunks[position]!;
-        features[position] = parseCatalogueChunk(parseJsonBytes(await this.fetchCatalogueFile(chunk, signal)), chunk);
+      while (next < wanted.length) {
+        const chunk = wanted[next++]!;
+        features.set(chunk.path, parseCatalogueChunk(parseJsonBytes(await this.fetchCatalogueFile(chunk, signal)), chunk));
       }
     };
-    await Promise.all(Array.from({ length: Math.min(CATALOGUE_CHUNK_CONCURRENCY, index.chunks.length) }, worker));
-    return { ...assembleCatalogueSnapshot(index, features), sourceId };
+    await Promise.all(Array.from({ length: Math.min(CATALOGUE_CHUNK_CONCURRENCY, wanted.length) }, worker));
+    this.nearGuideChunks = near;
+    this.nearGuideAnchor = this.currentLocation;
+    return { ...assembleLeanCatalogue(index, features), sourceId };
   }
 
   private async fetchCatalogueFile(file: ContentFile, signal: AbortSignal): Promise<ArrayBuffer> {
@@ -1185,16 +1263,11 @@ class ContentRuntimeController implements ContentRuntime {
    * parks near the visitor, plus any asset that is not badge art. Other art loads on demand.
    */
   private requiredAssets(state: ContentSyncState): ContentFile[] {
-    const claimed = new Set(this.options.claimedParkIds());
-    const near = this.currentLocation;
-    const wanted = new Set<string>();
-    for (const park of state.parks) {
-      if (!park.scene || this.options.badgeArt === false) continue;
-      if (claimed.has(park.id) || (near && distanceKm(near, [park.lng, park.lat]) <= NEARBY_ART_KM)) {
-        wanted.add(`${SCENE_PREFIX}${park.scene}.webp`);
-      }
-    }
-    return state.assets.filter((file) => !file.path.startsWith(SCENE_PREFIX) || wanted.has(file.path));
+    const other = state.assets.filter((file) => !file.path.startsWith(SCENE_PREFIX));
+    if (this.options.badgeArt === false) return other;
+    // Claimed parks' art, then the nearest parks' art up to a small budget.
+    const art = artToKeep(state.parks, state.assets, new Set(this.options.claimedParkIds()), this.currentLocation, NEARBY_ART_KM);
+    return [...other, ...art];
   }
 
   private async requiredSceneAssetsAreLocal(state: ContentSyncState): Promise<boolean> {
@@ -2089,10 +2162,14 @@ class ContentRuntimeController implements ContentRuntime {
         if (this.nearbyRequest === request) this.nearbyRequest = null;
         return;
       }
-      // The visitor's own square downloads on any connection; the squares around it wait for Wi-Fi.
-      const work = prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot)
-        .then(() => prefetchMapArea(this, request.releaseId, point, "surrounding", signal, currentSnapshot))
-        .then(() => {
+      // With offline downloads, the visitor's own square downloads on any connection and the
+      // squares around it wait for Wi-Fi. Without them, only the view around the visitor is kept.
+      const area = OFFLINE_DOWNLOADS
+        ? prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot)
+          .then(() => prefetchMapArea(this, request.releaseId, point, "surrounding", signal, currentSnapshot))
+        : prefetchMapArea(this, request.releaseId, point, "starter", signal, currentSnapshot)
+          .then((result) => this.keepOnlyNearMapChunks(request.releaseId, result.chunkIds, currentSnapshot.manifest.files));
+      const work = area.then(() => {
         if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
           this.nearbyAnchor = { releaseId: request.releaseId, point };
         }
@@ -2108,6 +2185,222 @@ class ContentRuntimeController implements ContentRuntime {
         }
       });
     }, LOCATION_DEBOUNCE_MS);
+  }
+
+  /** Delete saved detail of the current map that is not around the player any more. */
+  private async keepOnlyNearMapChunks(releaseId: string, chunkIds: readonly number[], files: readonly ContentFile[]): Promise<void> {
+    if (OFFLINE_DOWNLOADS || this.stopped) return;
+    const folder = mapFolder(files);
+    const near = new Set(chunkIds.map((index) => mapChunkPath(index, folder)));
+    this.nearMapChunks = near;
+    const saved = new Set((await this.options.store.listFiles()).map((file) => file.hash));
+    for (const file of files) {
+      if (!isMapChunk(file.path) || near.has(file.path) || !saved.has(file.sha256)) continue;
+      if ((this.inFlightHashes.get(file.sha256) ?? 0) > 0) continue;
+      await this.deleteMapChunk(releaseId, file.path).catch(() => {});
+    }
+  }
+
+  /** Approximate bytes of the stored catalogue rows (parks, boundaries, drive times, badge descriptors). */
+  getCatalogueBytes(): number {
+    const state = this.syncState;
+    if (!state) return 0;
+    if (this.catalogueBytes?.state === state) return this.catalogueBytes.bytes;
+    let bytes = 0;
+    try {
+      const encoder = new TextEncoder();
+      for (const part of [state.parks, state.boundaries.features, state.drive, state.assets, state.catalogue ?? null]) {
+        bytes += encoder.encode(JSON.stringify(part)).byteLength;
+      }
+    } catch {
+      bytes = 0;
+    }
+    this.catalogueBytes = { state, bytes };
+    return bytes;
+  }
+
+  loadBoundariesInView(bounds: MapBox, zoom: number): void {
+    if (this.stopped || !this.syncState?.catalogue || !(zoom >= VIEW_GUIDE_MIN_ZOOM)) return;
+    if (this.viewGuideTimer !== undefined) globalThis.clearTimeout(this.viewGuideTimer);
+    this.viewGuideTimer = globalThis.setTimeout(() => {
+      this.viewGuideTimer = undefined;
+      const catalogue = this.syncState?.catalogue;
+      if (!catalogue) return;
+      const paths = chunksInView(catalogue.chunks, this.parkPoints(), bounds);
+      void this.queueGuides(paths).catch(() => {});
+    }, VIEW_GUIDE_DEBOUNCE_MS);
+  }
+
+  async loadParkBoundary(parkId: string): Promise<void> {
+    const catalogue = this.syncState?.catalogue;
+    if (this.stopped || !catalogue) return;
+    if (this.syncState?.boundaries.features.some((feature) => feature.properties.id === parkId)) return;
+    const path = chunkForPark(catalogue.chunks, parkId);
+    if (path) await this.queueGuides([path]);
+  }
+
+  /** Keep the boundaries around the player on the device as they move. */
+  private scheduleNearbyGuides(force = false): void {
+    const point = this.currentLocation;
+    const catalogue = this.syncState?.catalogue;
+    if (!point || !catalogue || this.stopped) return;
+    if (!force && this.nearGuideAnchor && distanceKm(this.nearGuideAnchor, point) < NEARBY_GUIDE_MOVE_KM) return;
+    this.nearGuideAnchor = point;
+    this.nearGuideChunks = new Set(chunksNear(catalogue.chunks, this.parkPoints(), point));
+    void this.queueGuides([...this.nearGuideChunks]).catch(() => {});
+  }
+
+  private parkPoints(): Map<string, { lng: number; lat: number }> {
+    return new Map((this.syncState?.parks ?? []).map((park) => [park.id, { lng: park.lng, lat: park.lat }]));
+  }
+
+  private queueGuides(paths: readonly string[]): Promise<void> {
+    const work = this.guideWork.then(() => this.loadGuides(paths));
+    this.guideWork = work.catch(() => {});
+    return work;
+  }
+
+  /**
+   * Load boundary chunks the player needs now, mark them recently used, then evict the
+   * least recently used ones beyond the cache cap. Nearby chunks are never evicted.
+   */
+  private async loadGuides(paths: readonly string[]): Promise<void> {
+    const state = this.syncState;
+    const catalogue = state?.catalogue;
+    if (this.stopped || !state || !catalogue || paths.length === 0) return;
+    const refs = new Map(catalogue.chunks.map((chunk) => [chunk.path, chunk]));
+    const missing = paths.filter((path) => refs.has(path) && !catalogue.loaded.includes(path));
+    const loaded = new Map<string, unknown[]>();
+    if (missing.length) {
+      if (!this.foreground || !this.canDownloadContent()) return;
+      const signal = new AbortController().signal;
+      for (const path of missing) {
+        const ref = refs.get(path)!;
+        const chunk = catalogueChunkFile(ref);
+        loaded.set(path, parseCatalogueChunk(parseJsonBytes(await this.fetchCatalogueFile(chunk, signal)), chunk));
+      }
+    }
+    // The catalogue may have changed while chunks downloaded; merge onto the newest one of the same release.
+    let next = this.syncState;
+    if (this.stopped || !next?.catalogue || next.catalogue.version !== catalogue.version) return;
+    const before = next;
+    next = mergeCatalogueChunks(next, loaded, paths);
+    const sizes = new Map(next.catalogue!.chunks.map((chunk) => [chunk.path, chunk.byte_size]));
+    const keep = new Set([...this.nearGuideChunks, ...paths]);
+    next = evictCatalogueChunks(next, chunksToEvict(next.catalogue!.loaded, sizes, keep));
+    const changed = next.boundaries.features.length !== before.boundaries.features.length || loaded.size > 0 ||
+      next.catalogue!.loaded.length !== before.catalogue!.loaded.length;
+    if (changed) await this.persistSyncState(next);
+    this.syncState = next;
+    this.catalogueBytes = null;
+    const snapshot = this.status.snapshot;
+    if (changed && snapshot && snapshot.generation === next.revision) this.setStatus({ snapshot: { ...snapshot, boundaries: next.boundaries } });
+  }
+
+  /** Save a catalogue with a different set of boundaries at the same revision. */
+  private async persistSyncState(state: ContentSyncState): Promise<void> {
+    const sourceId = this.configuredSourceId();
+    const cursor = await this.options.store.getSyncCursor(this.environment);
+    // A sync committed meanwhile; its catalogue replaces this one and keeps the nearby boundaries.
+    if (!cursor || cursor.revision !== state.revision || cursor.sourceId !== sourceId) return;
+    await this.options.store.replaceSyncState(this.environment, cursor.revision, { ...state, sourceId }, sourceId, sourceId);
+  }
+
+  private cleanupDue(): boolean {
+    const marker = this.options.cacheMarker;
+    return !!marker && marker.read() !== this.cacheGeneration();
+  }
+
+  private cacheGeneration(): string {
+    return cacheGeneration(this.options.appBuild ?? "unknown", this.options.mapPointer?.version ?? this.syncState?.map?.version ?? null);
+  }
+
+  private startCacheCleanup(): void {
+    if (this.cleanupPromise || this.stopped || !this.cleanupDue()) return;
+    const work = this.cleanUpOldContent().catch(() => {
+      // Each step is safe to repeat; the next start tries again.
+    });
+    this.cleanupPromise = work.finally(() => {
+      this.cleanupPromise = null;
+    });
+  }
+
+  /**
+   * After an app, map or content update, delete what belongs to old releases: older map
+   * releases and their chunks, the saved release of the first content format, saved map
+   * squares, far away map detail and badge art not near the player. Claims, photos, the
+   * account and the personal store are kept elsewhere and are not touched. Every step can
+   * be interrupted and run again; the marker is written only once all of them finish.
+   */
+  private async cleanUpOldContent(): Promise<void> {
+    const state = this.syncState;
+    if (!state || this.stopped) return;
+    const generation = this.cacheGeneration();
+    const store = this.options.store;
+    // Saved map squares are optional downloads (#199); their detail goes unless it is near the player.
+    const squareChunks = OFFLINE_DOWNLOADS ? new Set<number>() : await savedSquareChunks();
+    const activeId = await store.getActiveId();
+    if (activeId) await store.clearActiveRelease(activeId);
+    for (const release of await store.listReleases()) await store.deleteRelease(release.id);
+    this.legacyMapReleaseId = null;
+    const mapVersion = state.map?.version ?? null;
+    await store.pruneMapInventories(mapVersion ? [mapVersion] : []);
+    for (const version of [...this.mapInventories.keys()]) if (version !== mapVersion) this.mapInventories.delete(version);
+    for (const version of [...this.localMapInventories.keys()]) if (version !== mapVersion) this.localMapInventories.delete(version);
+    const inventory = mapVersion ? await this.getVerifiedMapInventory(mapVersion) : null;
+    const retained = await store.getRetainedParks();
+    const archived = await store.listArchivedScenes();
+    const protectedHashes = [
+      ...retained.flatMap((entry) => entry.sceneFile ? [entry.sceneFile.sha256] : []),
+      ...archived.map((scene) => scene.file.sha256),
+      ...[...this.inFlightHashes].filter(([, count]) => count > 0).map(([hash]) => hash),
+    ];
+    const keep = cleanupKeepSet({
+      mapFiles: inventory?.files ?? [],
+      nearMapChunks: OFFLINE_DOWNLOADS ? null : this.nearMapChunks,
+      art: this.requiredAssets(state).filter((file) => file.path.startsWith(SCENE_PREFIX)),
+      protectedHashes,
+    });
+    for (const file of inventory?.files ?? []) {
+      const index = mapChunkIndex(file.path);
+      if (index !== null && squareChunks.has(index) && !this.nearMapChunks?.has(file.path)) keep.delete(file.sha256);
+    }
+    const releaseId = this.status.snapshot?.releaseId;
+    const chunkPathByHash = new Map((inventory?.files ?? []).filter((file) => isMapChunk(file.path)).map((file) => [file.sha256, file.path]));
+    const deleted = new Set<string>();
+    for (const file of filesToDelete(await store.listFiles(), keep)) {
+      if (this.stopped) return;
+      if ((this.inFlightHashes.get(file.hash) ?? 0) > 0) continue;
+      try {
+        await store.deleteFile(file.hash, { optionalMapChunk: true, optionalArt: true });
+      } catch {
+        continue;
+      }
+      deleted.add(file.hash);
+      this.forgetLocalFile(file.hash);
+      const path = chunkPathByHash.get(file.hash);
+      const index = path ? mapChunkIndex(path) : null;
+      if (releaseId && index !== null) removeAllowedMapChunks(releaseId, [index]);
+    }
+    this.dropDeletedArtUrls(deleted);
+    if (this.stopped) return;
+    if (!OFFLINE_DOWNLOADS) clearSavedSquares();
+    this.options.cacheMarker?.write(generation);
+  }
+
+  private forgetLocalFile(hash: string): void {
+    this.localFileSizes.delete(hash);
+    for (const key of this.verifiedHashes) if (key.startsWith(`${hash}:`)) this.verifiedHashes.delete(key);
+    for (const [key] of this.fileUrlPromises) if (key.startsWith(`${hash}:`)) this.fileUrlPromises.delete(key);
+  }
+
+  /** Point badges whose saved art was deleted back at the CDN copy. */
+  private dropDeletedArtUrls(deleted: ReadonlySet<string>): void {
+    const snapshot = this.status.snapshot;
+    if (!snapshot || deleted.size === 0) return;
+    const hashByPath = new Map(snapshot.manifest.files.map((file) => [file.path, file.sha256]));
+    const assetUrls = new Map([...snapshot.assetUrls].filter(([path]) => !deleted.has(hashByPath.get(path) ?? "")));
+    if (assetUrls.size !== snapshot.assetUrls.size) this.setStatus({ snapshot: { ...snapshot, assetUrls } });
   }
 
   private startBulkMap(releaseId: string): void {

@@ -240,6 +240,8 @@ export function MapScreen() {
     buzz(10);
     const p = content?.parkById.get(id);
     if (!p) return;
+    // A park far from the player may not have its outline on the device yet.
+    void runtime.loadParkBoundary?.(id).catch(() => {});
     if (content) void recordParkViewed({ parkId: p.id, entryPoint, contentReleaseId: content.releaseId }).catch(() => {});
     const map = mapRef.current;
     const boundary = bounds?.byId.get(p.id);

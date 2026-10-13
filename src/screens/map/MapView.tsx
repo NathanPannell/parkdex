@@ -121,6 +121,13 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
     setUserHost(uEl);
 
     map.on("zoom", () => setTier(tierOf(map.getZoom())));
+    // Park outlines away from the player load for the area in view; the runtime skips zoomed-out views.
+    const loadViewBoundaries = () => {
+      const view = map.getBounds();
+      runtime.loadBoundariesInView?.([view.getWest(), view.getSouth(), view.getEast(), view.getNorth()], map.getZoom());
+    };
+    map.on("moveend", loadViewBoundaries);
+    map.on("load", loadViewBoundaries);
     map.on("click", (e: MapMouseEvent) => {
       selectRef.current(parkAtPoint(map, [e.point.x, e.point.y], pinnedIds.current));
     });
