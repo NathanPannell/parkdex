@@ -19,6 +19,7 @@ import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
 import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
+import { handleFit } from "../lib/game/handleFit";
 import { useKipTip } from "../lib/kipTips";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { openDexOn } from "../lib/dex/prefs";
@@ -140,6 +141,8 @@ export function Plant() {
   const title = ticket
     ? `Join ${standing ? `@${standing.handle}'s` : "the"} crew`
     : holder.kind === "other" ? `Take it from @${holder.flag.handle}` : holder.kind === "mine" ? "Visit your flag" : "Plant your flag";
+  // The part of the title that cannot wrap: the @handle, with its 's when joining a crew.
+  const titleHandle = ticket ? (standing ? `${standing.handle}'s` : null) : holder.kind === "other" ? holder.flag.handle : null;
   const verb = ticket ? "join" : holder.kind === "other" ? "take it" : holder.kind === "mine" ? "visit" : "plant";
   const flagSeed = me?.flagSeed ?? game.me?.flagSeed ?? null;
 
@@ -407,6 +410,8 @@ export function Plant() {
     : result?.outcome === "joined" && joinedCrew
       ? { ...visitHeadline(result, parkName), title: `You joined @${joinedCrew.leader.handle}'s crew` }
       : result ? visitHeadline(result, parkName) : null;
+  // The stamp names the crew's leader or the player the flag was taken from.
+  const headlineHandle = alreadyMember ? null : result?.outcome === "joined" && joinedCrew ? `${joinedCrew.leader.handle}'s` : result?.outcome === "took" ? result.previousHolder?.handle : null;
   // Friends (#64): after joining, offer the crew members who aren't friends yet.
   const friendsBoard = friends.enabled ? friends.board : null;
   const refreshFriends = useRef(friends.refresh);
@@ -447,11 +452,11 @@ export function Plant() {
           {!headline || phase === "playing" ? (
             <motion.div key="a" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
               <span className="eyebrow eyebrow--light">At {parkName}</span>
-              <h1>{title}</h1>
+              <h1 style={handleFit(titleHandle)}>{title}</h1>
             </motion.div>
           ) : (
             <motion.div key="b" initial={{ scale: 2.4, rotate: -16, opacity: 0 }} animate={{ scale: 1, rotate: -3, opacity: 1 }} transition={{ type: "spring", stiffness: 520, damping: 15 }}>
-              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`}>{headline.title}</span>
+              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`} style={handleFit(headlineHandle)}>{headline.title}</span>
             </motion.div>
           )}
         </AnimatePresence>

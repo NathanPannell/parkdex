@@ -12,6 +12,7 @@ import { useContent } from "../lib/content/provider";
 import { CREW_CODE_LENGTH, CREW_POINTS, crewCodeFromText, crewLink, formatMinutesLeft } from "../lib/game/crew";
 import { useCrew, type CrewJoinTarget } from "../lib/game/CrewProvider";
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit } from "../lib/game/handleFit";
 import { useParkCrew, useScreenWakeLock, useServerClock } from "../lib/game/useParkCrew";
 import { useVisit } from "../lib/game/useVisit";
 import { isUsableGpsAccuracy } from "../lib/geo";
@@ -194,7 +195,7 @@ function CrewJoinCard({ target }: { target: CrewJoinTarget }) {
     <Sheet label="crew-join-title" onClose={crewUi.dismissJoin}>
       <div className="handle-sheet__body crew-join">
         <span className="eyebrow">Crew code {formatSocialCode(target.code)}</span>
-        <h2 id="crew-join-title">{title}</h2>
+        <h2 id="crew-join-title" style={handleFit(leader ? `${leader}'s` : null)}>{title}</h2>
         {crew && crew.members.length > 0 ? (
           <CrewList members={crew.members} flagSince={crew.flagSince} myHandle={game.me?.player?.handle} />
         ) : (

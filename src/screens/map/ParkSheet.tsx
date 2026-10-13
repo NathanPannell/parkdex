@@ -13,6 +13,7 @@ import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
 import { takeLabel, takePoints, type ParkHolder } from "../../lib/game/visit";
+import { handleFit } from "../../lib/game/handleFit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -134,6 +135,8 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       dragConstraints={{ top: 0, bottom: 0 }}
       dragElastic={{ top: 0.05, bottom: 0.7 }}
       onDragEnd={onDragEnd}
+      // The holder line is "@handle" or "@handle's crew"; it and the take button fit that line.
+      style={handleFit(holderLine.title.startsWith("@") ? holderLine.title.slice(1) : null)}
     >
       <div className={`park-sheet__hero${showCover ? " has-cover" : ""}`} style={{ background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}>
         <div className="sheet__handle" />

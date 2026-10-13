@@ -128,8 +128,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* "Join @leader's crew…" wraps at the spaces; the handle's own line shrinks to fit (handleFit). */
 .crew-join h2 {
   font-size: 26px;
+  font-size: clamp(20px, (100cqi - 52px) / (var(--handle-chars, 1) * 0.6), 26px);
 }
 
 .crew-join__blocker {
@@ -190,8 +192,10 @@
   color: var(--ink);
 }
 
+/* The button drops below a long @handle rather than squeezing it. */
 .plant__friend-offer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;

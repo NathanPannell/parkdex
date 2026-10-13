@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit } from "../lib/game/handleFit";
 import { formatPoints } from "../lib/game/visit";
 import { listItem, listParent, press, tabPage } from "../lib/motion";
 import "../game-ui.css";
@@ -66,6 +67,7 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
         <motion.button
           whileTap={press}
           className="account-card card settings-flag"
+          style={handleFit(player?.handle)}
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 28 }}

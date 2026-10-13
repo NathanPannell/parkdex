@@ -96,7 +96,6 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
   const { park, km, holder, days, ageMs } = item;
   const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
   const owner = holder.kind === "mine" ? "Yours" : flag ? `@${flag.handle}` : holder.kind === "empty" ? "No flag" : null;
-  const status = owner ? `${owner} · ${formatDistance(km)}` : `${formatDistance(km)} away`;
   return (
     <motion.button
       layout
@@ -113,7 +112,16 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
         <FlagPin seed={flag?.flagSeed ?? null} days={days} ageMs={ageMs} size={52} />
       </span>
       <span className="nearby__name">{park.short}</span>
-      <span className="nearby__meta">{status}</span>
+      <span className="nearby__meta">
+        {owner ? (
+          <>
+            <span className="nearby__owner">{owner}</span>
+            <span>· {formatDistance(km)}</span>
+          </>
+        ) : (
+          `${formatDistance(km)} away`
+        )}
+      </span>
     </motion.button>
   );
 }

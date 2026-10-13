@@ -7,6 +7,7 @@ import { fetchGameLeaderboard, gameErrorMessage, isOfflineError, type Leaderboar
 import { useGame } from "../lib/game/GameProvider";
 import { useFriends } from "../lib/friends/FriendsProvider";
 import { formatScore } from "../lib/game/visit";
+import { handleFit } from "../lib/game/handleFit";
 import { bouncy, listItem, listParent, press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
 import { FriendsBoard } from "./FriendsBoard";
@@ -162,7 +163,7 @@ export function Leaderboard() {
                         <span className="game-row__rank" aria-label={`Rank ${row.rank || index + 4}`}>{row.rank || index + 4}</span>
                         <Flag seed={row.flagSeed} patches={row.patches} size={40} />
                         <span className="game-row__name">
-                          <strong>@{row.handle}{mine ? " (you)" : ""}</strong>
+                          <strong style={handleFit(mine ? `${row.handle} (you)` : row.handle)}>@{row.handle}{mine ? " (you)" : ""}</strong>
                           <span>{row.parksHeld} {row.parksHeld === 1 ? "park" : "parks"} held</span>
                         </span>
                         <span className="game-row__score">

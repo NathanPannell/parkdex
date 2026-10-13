@@ -9,6 +9,7 @@ import { friendsErrorMessage, type FriendRow } from "../lib/friends/client";
 import { sinceLabel, weekLabel } from "../lib/friends/format";
 import { useFriends } from "../lib/friends/FriendsProvider";
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit } from "../lib/game/handleFit";
 import { listItem, listParent, press } from "../lib/motion";
 import { formatSocialCode } from "../lib/social/codes";
 import { useStore } from "../lib/store";
@@ -23,7 +24,7 @@ function FriendRowItem({ row, open, onToggle, onRemove, canRemove }: { row: Frie
       <span className="game-row__rank" aria-label={`Rank ${row.rank}`}>{row.rank}</span>
       <Flag seed={row.flagSeed} size={40} />
       <span className="game-row__name">
-        <strong>@{row.handle}{row.isMe ? " (you)" : ""}</strong>
+        <strong style={handleFit(row.isMe ? `${row.handle} (you)` : row.handle)}>@{row.handle}{row.isMe ? " (you)" : ""}</strong>
         <span>{parksText(row.uniqueParks)}</span>
       </span>
       <span className="game-row__score">

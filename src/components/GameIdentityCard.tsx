@@ -1,4 +1,5 @@
 import { useGame } from "../lib/game/GameProvider";
+import { handleFit } from "../lib/game/handleFit";
 import { formatPoints } from "../lib/game/visit";
 import { Flag } from "./Flag";
 import { Icon } from "./Icon";
@@ -11,7 +12,7 @@ export function GameIdentityCard() {
   const unavailable = game.status === "offline" || game.status === "error";
 
   return (
-    <section className="account-card card account-section" aria-labelledby="game-identity-title">
+    <section className="account-card card account-section" aria-labelledby="game-identity-title" style={handleFit(player?.handle)}>
       <span className="eyebrow" id="game-identity-title">Your flag</span>
       <div className="game-identity">
         <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={72} label={player ? `Flag of @${player.handle}` : undefined} patches={player ? game.me?.flagPatches : undefined} />
