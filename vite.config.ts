@@ -12,8 +12,12 @@ const PUBLIC_ROOT = resolve("public");
 const PUBLIC_DIRS = ["art/kip", "art/products", "icons"];
 const PUBLIC_FILES = new Set(["manifest.webmanifest", "sw.js", "maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png", ".well-known/assetlinks.json", "map/bootstrap/canada-overview.pmtiles", "map/cells.json"]);
 
+// Achievement badge art (#175) ships with the app; its sources.json provenance stays behind.
+const PUBLIC_WEBP_DIRS = ["art/achievements"];
+
 function allowedPublicPath(path: string) {
-  return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`));
+  return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`))
+    || PUBLIC_WEBP_DIRS.some((dir) => path.startsWith(`${dir}/`) && path.endsWith(".webp"));
 }
 
 async function allowlistedFiles(directory: string, prefix = ""): Promise<string[]> {
@@ -22,7 +26,8 @@ async function allowlistedFiles(directory: string, prefix = ""): Promise<string[
   for (const entry of entries) {
     const path = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
-      if (path === "art" || path === "maplibre" || path === "email" || path === ".well-known" || path === "map" || path === "map/bootstrap" || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`))) {
+      if (path === "art" || path === "maplibre" || path === "email" || path === ".well-known" || path === "map" || path === "map/bootstrap"
+        || [...PUBLIC_DIRS, ...PUBLIC_WEBP_DIRS].some((dir) => path === dir || path.startsWith(`${dir}/`))) {
         files.push(...(await allowlistedFiles(resolve(directory, entry.name), path)));
       }
     } else if (allowedPublicPath(path)) {
