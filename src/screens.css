@@ -1853,6 +1853,96 @@
   gap: 10px;
 }
 
+/* The 3:4 crop after each capture (PhotoCropper). */
+.cropper {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background: #0b1511;
+  color: #fff;
+}
+
+.cropper__title {
+  padding: calc(var(--safe-top) + 10px) 20px 6px;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.cropper__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  outline: none;
+}
+
+.cropper__stage:active {
+  cursor: grabbing;
+}
+
+.cropper__stage:focus-visible .cropper__window {
+  border-color: var(--kip);
+}
+
+.cropper__frame {
+  position: relative;
+}
+
+.cropper__image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* The frame's border, a rule-of-thirds grid, and a shade over the photo outside it. */
+.cropper__window {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 100vmax rgba(11, 21, 17, 0.68);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22) 1px, transparent 1px);
+  background-size: 33.33% 33.33%;
+  background-position: -1px -1px;
+  pointer-events: none;
+}
+
+.cropper__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px calc(var(--safe-bottom) + 16px);
+}
+
+.cropper__caption {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.cropper__hint {
+  min-height: 1.3em;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  opacity: 0.8;
+}
+
 /* ================= Claim ================= */
 
 .claim {

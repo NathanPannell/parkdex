@@ -550,8 +550,9 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               caption={`${choice.label} · ${new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`}
               onClose={() => setStep({ kind: "results" })}
               onUse={(picture) => {
-                setPhoto(picture);
-                void check(picture, choice.target);
+                // Moderation and the public cover use the player's 3:4 crop, not the whole photo.
+                setPhoto(picture.cropped);
+                void check(picture.cropped, choice.target);
               }}
             />
           )}
