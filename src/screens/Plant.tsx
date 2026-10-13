@@ -13,6 +13,7 @@ import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
 import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
+import { useKipTip } from "../lib/kipTips";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { useStore } from "../lib/store";
 import "../game.css";
@@ -333,6 +334,8 @@ export function Plant() {
   }
 
   const won = !!result && (result.outcome === "planted" || result.outcome === "took");
+  // Kip explains hourly points (#169) on the first visit result that earned any.
+  useKipTip("points", phase === "done" && !!result && result.pointsEarned > 0);
   const headline = result ? visitHeadline(result, parkName) : null;
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
   const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
