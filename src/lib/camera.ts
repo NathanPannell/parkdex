@@ -8,11 +8,15 @@ export type Facing = "environment" | "user";
  * A live camera preview in a video element, or "off" when there is none: no camera, denied
  * permission, or a stream that never delivers frames.
  */
-export function useLiveCamera(facing: Facing, idealWidth = 1280): { video: RefObject<HTMLVideoElement | null>; live: LiveCamera } {
+export function useLiveCamera(facing: Facing, idealWidth = 1280, enabled = true): { video: RefObject<HTMLVideoElement | null>; live: LiveCamera } {
   const video = useRef<HTMLVideoElement>(null);
-  const [live, setLive] = useState<LiveCamera>("pending");
+  const [live, setLive] = useState<LiveCamera>(enabled ? "pending" : "off");
 
   useEffect(() => {
+    if (!enabled) {
+      setLive("off");
+      return;
+    }
     let stream: MediaStream | null = null;
     let cancelled = false;
     setLive("pending");
@@ -37,23 +41,35 @@ export function useLiveCamera(facing: Facing, idealWidth = 1280): { video: RefOb
       cancelled = true;
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [facing, idealWidth]);
+  }, [facing, idealWidth, enabled]);
 
   return { video, live };
 }
 
-/** Hands off to the phone's own camera app. Null when the player backs out. */
-export async function takeNativePhoto(options: { width: number; quality: number }): Promise<string | null> {
+/** What came back from the phone's camera app. */
+export type NativeShot = { kind: "photo"; dataUrl: string } | { kind: "cancelled" };
+
+// The Capacitor camera plugin's message when the player backs out of the camera app.
+const CANCELLED = /cancel/i;
+
+/**
+ * Hands off to the phone's own camera app (never the gallery), so the photo gets the phone's own
+ * processing. The photo comes back at full size and upright; the app scales it down itself,
+ * because the plugin's resize skips filtering. Throws when the camera cannot open, for example
+ * when permission is denied.
+ */
+export async function takeNativePhoto(options: { quality: number }): Promise<NativeShot> {
   try {
     const shot = await NativeCamera.getPhoto({
       source: CameraSource.Camera,
       resultType: CameraResultType.DataUrl,
       quality: options.quality,
-      width: options.width,
       correctOrientation: true,
+      saveToGallery: false,
     });
-    return shot.dataUrl ?? null;
-  } catch {
-    return null;
+    return shot.dataUrl ? { kind: "photo", dataUrl: shot.dataUrl } : { kind: "cancelled" };
+  } catch (error) {
+    if (error instanceof Error && CANCELLED.test(error.message)) return { kind: "cancelled" };
+    throw error;
   }
 }

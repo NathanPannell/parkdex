@@ -375,13 +375,18 @@
 }
 
 .found-done__cover {
-  width: min(230px, 58vw);
+  width: min(196px, 50vw);
   padding-bottom: 42px;
   z-index: 2;
 }
 
+/* Covers are the player's 3:4 crop (#173), the polaroid's own shape. */
 .found-done__cover .polaroid__img {
-  aspect-ratio: 4 / 3;
+  max-height: 34vh;
+}
+
+.found-done__cover .polaroid__caption {
+  font-size: 16px;
 }
 
 .found-done__ring {
@@ -694,14 +699,10 @@
 
 .decision-sheet__cover {
   justify-self: center;
-  width: min(220px, 60vw);
+  width: min(180px, 48vw);
   padding: 10px 10px 12px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
   transform: rotate(-2deg);
-}
-
-.decision-sheet__cover .polaroid__img {
-  aspect-ratio: 4 / 3;
 }
 
 .found-sent__icon {

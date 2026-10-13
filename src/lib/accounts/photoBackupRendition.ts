@@ -51,7 +51,8 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
   return String.fromCharCode(...bytes.subarray(offset, offset + length));
 }
 
-function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+/** The stored width and height of a JPEG, from its frame header. */
+export function jpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
   const frameMarkers = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
   let offset = 2;

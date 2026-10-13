@@ -545,6 +545,50 @@ describe("durable personal progress storage", () => {
     expect(await personal.listPersonalClaims({ kind: "guest" })).toEqual([]);
   });
 
+  it("keeps a photo's crop beside the original and re-crops without touching the photo or its backup", async () => {
+    const personal = await import("./personalStore");
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const account = { kind: "account" as const, accountId };
+    const crop = { x: 0.21875, y: 0, width: 0.5625, height: 1 };
+    const claim = await personal.createPersonalClaim(account, { park: park(), photo: pngPhoto(), crop });
+    const saved = await personal.getPersonalPhoto(account, claim.claimId);
+    expect(saved?.crop).toEqual(crop);
+    expect(saved?.backupState).toBe("pending");
+
+    const recrop = { x: 0.5, y: 0.25, width: 0.28125, height: 0.5 };
+    expect(await personal.setPersonalPhotoCrop(account, claim.claimId, recrop)).toBe(true);
+    const recropped = await personal.getPersonalPhoto(account, claim.claimId);
+    expect(recropped?.crop).toEqual(recrop);
+    expect(recropped?.sha256).toBe(saved?.sha256);
+    expect(recropped?.backupState).toBe("pending");
+    expect(await personal.listPersonalOutbox(account)).toHaveLength(2);
+
+    expect(await personal.setPersonalPhotoCrop(account, claim.claimId, null)).toBe(true);
+    expect((await personal.getPersonalPhoto(account, claim.claimId))?.crop).toBeNull();
+    expect(await personal.setPersonalPhotoCrop(account, "00000000-0000-4000-8000-000000000000", recrop)).toBe(false);
+  });
+
+  it("refuses a crop outside the photo or without a photo", async () => {
+    const personal = await import("./personalStore");
+    const outside = { x: 0.6, y: 0, width: 0.5625, height: 1 };
+    await expect(personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: pngPhoto(), crop: outside })).rejects.toThrow(/crop/);
+    await expect(personal.createPersonalClaim({ kind: "guest" }, { park: park(), crop: { x: 0, y: 0, width: 1, height: 1 } })).rejects.toThrow(/crop/);
+    const claim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: pngPhoto() });
+    expect((await personal.getPersonalPhoto({ kind: "guest" }, claim.claimId))?.crop).toBeUndefined();
+    await expect(personal.setPersonalPhotoCrop({ kind: "guest" }, claim.claimId, outside)).rejects.toThrow(/crop/);
+  });
+
+  it("carries a guest photo's crop to the account copy", async () => {
+    const personal = await import("./personalStore");
+    const accountId = "89abcdef-1234-4234-8234-123456789abc";
+    const crop = { x: 0.1, y: 0.2, width: 0.5, height: 0.5 };
+    const source = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: pngPhoto(), crop });
+    expect(await personal.reserveGuestClaimsForAccount(accountId)).toBe(1);
+    expect((await personal.getPersonalPhoto({ kind: "account", accountId }, source.claimId))?.crop).toEqual(crop);
+    // The reserved guest row is hidden, so it cannot be re-cropped behind the account's back.
+    expect(await personal.setPersonalPhotoCrop({ kind: "guest" }, source.claimId, null)).toBe(false);
+  });
+
   it("does not return claim success when durable storage is unavailable", async () => {
     const personal = await import("./personalStore");
     const old = globalThis.indexedDB;

@@ -8,7 +8,7 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 
 - **Be there.** The position must be inside the outline, allowing `min(max(accuracyM, 10), 35)` metres outside its edge. Accuracy worse than 100 m is refused.
 - **Outline.** A catalogue park uses its boundary. An OpenStreetMap park uses `kip_osm.parks`, then Nominatim and Overpass. An outline that is already a Parkdex park (`catalogueMatch`) is founded as that park, never published again. Unnamed OpenStreetMap outlines cannot be founded. Hidden parks are refused.
-- **Photo.** JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
+- **Photo.** The app sends the player's 3:4 crop of the photo (#173), at most 1,280 px on the long edge, so the check and the cover see the same picture the player chose. On Android the phone's own camera app takes it. The server accepts any shape: JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
 - **Check.** One Decisions API call with six yes/no flags and no overall verdict. A photo is approved when no flag's "yes" probability is above that flag's threshold. Otherwise it is rejected, naming those flags, most likely first. The check never answers `unsure`. The thresholds (`DEFAULT_FLAG_THRESHOLDS` in `worker/founderPhoto.ts`) were chosen by the operator in `tools/photo-lab` against 100 labelled photos (#160):
 
   | Flag | Counts when yes is above |
@@ -63,7 +63,7 @@ Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys; 
   "attemptId": "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
   "position": { "lat": 49.0895, "lng": -123.059, "accuracyM": 12 },
   "target": { "osm": { "type": "way", "id": 23938892 } },
-  "photo": { "mime": "image/jpeg", "base64": "<JPEG bytes>", "width": 1280, "height": 796 }
+  "photo": { "mime": "image/jpeg", "base64": "<JPEG bytes>", "width": 960, "height": 1280 }
 }
 ```
 
