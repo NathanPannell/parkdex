@@ -7,6 +7,7 @@ import { provinceFor, provinceOfOutline } from "./provinces.ts";
 import { createProposalModerator } from "./proposalModeration.ts";
 import {
   approveThreshold,
+  createSqlProposalReviewStore,
   decide,
   QUESTIONS,
   regionFor,
@@ -437,4 +438,37 @@ test("the proposal moderator sends choice questions through the shared module an
   assert.equal(body.model, "openai/gpt-6-luna-decisions");
   assert.deepEqual(Object.keys(body.questions.park.criteria), ["approve", "reject", "unsure"]);
   assert.ok(!String(calls[0].init.body).includes("test-key-not-real"));
+});
+
+test("nearby catalogue parks include parks whose boundary box reaches the point, and fall back to pins without founders_004", async () => {
+  const row = { id: "national-far", name: "Far National Park", region: "South Shore", lat: 44.44, lng: -65.21, geometry: OUTLINE };
+  const queries: { text: string; params: unknown[] }[] = [];
+  let missing = false;
+  const db: SqlRunner = {
+    async query(text, params = []) {
+      queries.push({ text, params });
+      if (missing && text.includes("park_boundary_box")) throw Object.assign(new Error("function public.park_boundary_box(jsonb) does not exist"), { code: "42883" });
+      return [row];
+    },
+    async transaction() { throw new Error("unused"); },
+  };
+  const store = createSqlProposalReviewStore(db);
+  // A point in Kejimkujik Seaside, about 72 km from the park's pin.
+  const parks = await store.nearbyParks(43.85124, -64.82927, 5);
+  assert.deepEqual(parks.map((park) => park.id), ["national-far"]);
+  assert.equal(queries.length, 1);
+  assert.match(queries[0].text, /public\.park_boundary_box\(b\.feature\) && box\(point\(\$3, \$1\), point\(\$4, \$2\)\)/);
+  const [south, north, west, east, lat, lng] = queries[0].params as number[];
+  assert.ok(south < 43.85124 && north > 43.85124 && west < -64.82927 && east > -64.82927);
+  assert.ok(Math.abs((north - south) / 2 * 110.54 - 5) < 1e-9, "the box is the same 5 km as the pin search");
+  assert.deepEqual([lat, lng], [43.85124, -64.82927]);
+
+  missing = true;
+  queries.length = 0;
+  assert.deepEqual((await store.nearbyParks(43.85124, -64.82927, 5)).map((park) => park.id), ["national-far"]);
+  assert.equal(queries.length, 2);
+  assert.doesNotMatch(queries[1].text, /park_boundary_box/);
+
+  const failing = createSqlProposalReviewStore({ ...db, async query() { throw Object.assign(new Error("db down"), { code: "57P01" }); } });
+  await assert.rejects(failing.nearbyParks(43.85124, -64.82927, 5), /db down/);
 });
