@@ -1,0 +1,185 @@
+{
+  "schema": "parkdex.achievement-art/v1",
+  "source": {
+    "catalogueRevision": 160,
+    "catalogueIndexUrl": "https://kip-assets.parkdex.app/releases/cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df/catalogue/index.json",
+    "contentChannel": "channels/staging/current.json",
+    "contentChannelRelease": "5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744",
+    "fetchedAt": "2026-10-13"
+  },
+  "processing": "Downloaded from the public CDN, SHA-256 checked, resized to 384 x 384 and re-encoded as WebP quality 80.",
+  "badges": {
+    "parks-1": {
+      "scene": "beacon-hill-stone-bridge-flat-v2",
+      "parkId": "municipal-city-of-victoria-1442",
+      "parkName": "Beacon Hill Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/ea1b734e7bf97379f4117fc689d324937c8661034ad90332031e3cc8fba3a596/art/badges/scenes/beacon-hill-stone-bridge-flat-v2.webp",
+      "sourceSha256": "ea1b734e7bf97379f4117fc689d324937c8661034ad90332031e3cc8fba3a596",
+      "bundledSha256": "42460cebf6d5cbeaf32fbfc6ca5590290af6fe3de731bce468d7048b57f13590",
+      "bundledBytes": 40804
+    },
+    "parks-10": {
+      "scene": "goldstream-autumn-salmon-run-flat-v2",
+      "parkId": "provincial-goldstream-park",
+      "parkName": "Goldstream Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/ebf450a4fb8c821793f564afd83c67973e3cb6fc0c955af06082c5e14c2d2fdc/art/badges/scenes/goldstream-autumn-salmon-run-flat-v2.webp",
+      "sourceSha256": "ebf450a4fb8c821793f564afd83c67973e3cb6fc0c955af06082c5e14c2d2fdc",
+      "bundledSha256": "a93718b20246e0d3e2c7e57c34513dec272fcbbdedd90fd678345671dc28e031",
+      "bundledBytes": 46500
+    },
+    "parks-25": {
+      "scene": "cowichan-66-mile-trestle",
+      "parkId": "provincial-cowichan-river-park",
+      "parkName": "Cowichan River Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/0cf8abb694d424f19929f4b21fddcee322c0b74564a48fe393c528c69cafa45e/art/badges/scenes/cowichan-66-mile-trestle.webp",
+      "sourceSha256": "0cf8abb694d424f19929f4b21fddcee322c0b74564a48fe393c528c69cafa45e",
+      "bundledSha256": "e9c87ca54ce8271c5655853797c181f25e9aada368ca79fbd989a504ccc5146f",
+      "bundledBytes": 54356
+    },
+    "parks-50": {
+      "scene": "cape-scott-nels-bight-flat-v2",
+      "parkId": "provincial-cape-scott-park",
+      "parkName": "Cape Scott Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/9dbc116d090ed5fa010099b09f5f3d933ab480d6acc111cff7432584beff8a12/art/badges/scenes/cape-scott-nels-bight-flat-v2.webp",
+      "sourceSha256": "9dbc116d090ed5fa010099b09f5f3d933ab480d6acc111cff7432584beff8a12",
+      "bundledSha256": "690fd7899e3b9558950e4aec22cdbc49775ea5a33463b6105bcf502ee763340c",
+      "bundledBytes": 31810
+    },
+    "parks-100": {
+      "scene": "carmanah-sitka-spruce-giant-flat-v2",
+      "parkId": "provincial-carmanah-walbran-park",
+      "parkName": "Carmanah Walbran Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/37ab2657b90cf6ce104b044989984833c9e74f21877eb51a3b51414ad85e2148/art/badges/scenes/carmanah-sitka-spruce-giant-flat-v2.webp",
+      "sourceSha256": "37ab2657b90cf6ce104b044989984833c9e74f21877eb51a3b51414ad85e2148",
+      "bundledSha256": "356616372f3e483aa0223a79956f3f1d741cbbbfbd1a2822522fa50cec7eae0d",
+      "bundledBytes": 47504
+    },
+    "regular-3": {
+      "scene": "glacial-river-potholes",
+      "parkId": "regional-sooke-potholes-regional-park",
+      "parkName": "Sooke Potholes Regional Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/63d01fae5c282dafd8bac03354161f13ff668a57dc7bb9bb04b71b8a276876aa/art/badges/scenes/glacial-river-potholes.webp",
+      "sourceSha256": "63d01fae5c282dafd8bac03354161f13ff668a57dc7bb9bb04b71b8a276876aa",
+      "bundledSha256": "d8d17301d854d02285485efe7dbcf106d35b1c8cab65a8c73e089e9d081cdc46",
+      "bundledBytes": 37404
+    },
+    "regular-10": {
+      "scene": "wittys-lagoon-sitting-lady-falls",
+      "parkId": "regional-witty-s-lagoon-regional-park",
+      "parkName": "Witty's Lagoon Regional Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/99eef746b9e4dd56f93fc3514245192208621fae7240ca7da8da1826d8ba9ef4/art/badges/scenes/wittys-lagoon-sitting-lady-falls.webp",
+      "sourceSha256": "99eef746b9e4dd56f93fc3514245192208621fae7240ca7da8da1826d8ba9ef4",
+      "bundledSha256": "8c86054c3b22c29f3524ae099d2a1d58651cafcc4cbee50911de3fffff3cf1cd",
+      "bundledBytes": 44484
+    },
+    "regular-25": {
+      "scene": "gowlland-tod-jocelyn-arbutus-overlook",
+      "parkId": "provincial-gowlland-tod-park",
+      "parkName": "Gowlland Tod Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/ccd0b4e288de46e164d9f06aee2f7a567a8cecaeb542788be63170b22ffebe5d/art/badges/scenes/gowlland-tod-jocelyn-arbutus-overlook.webp",
+      "sourceSha256": "ccd0b4e288de46e164d9f06aee2f7a567a8cecaeb542788be63170b22ffebe5d",
+      "bundledSha256": "9e8b4858492c5019885aa525c3dceb1164953e6fa2592b05fad4f11ac1526509",
+      "bundledBytes": 39334
+    },
+    "planter-5": {
+      "scene": "john-dean-old-growth-canopy",
+      "parkId": "provincial-au-welnew-john-dean-park",
+      "parkName": "\u023d\u00e1u\u02ccwel\u1e49ew\u0331 / John Dean Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/1c38e16d52412a964b3ea2321b1f0ec321ee09518f4a8afe86035b7b20bf1e72/art/badges/scenes/john-dean-old-growth-canopy.webp",
+      "sourceSha256": "1c38e16d52412a964b3ea2321b1f0ec321ee09518f4a8afe86035b7b20bf1e72",
+      "bundledSha256": "a5a1078f60ec10f91a256f0210272b3af93d6477c07157bf9cd1b707253f8497",
+      "bundledBytes": 51858
+    },
+    "taker-5": {
+      "scene": "broughton-islets-sea-lions",
+      "parkId": "provincial-broughton-archipelago-park",
+      "parkName": "Broughton Archipelago Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/ebbdfb3893c2e48432cfbc5ca5956a14714c3598415485b2abed2125b7822139/art/badges/scenes/broughton-islets-sea-lions.webp",
+      "sourceSha256": "ebbdfb3893c2e48432cfbc5ca5956a14714c3598415485b2abed2125b7822139",
+      "bundledSha256": "f1fc7a357b28cbef427d1abb7e6a097fa0ffde9201f2e0c81857dad2f4ce42d4",
+      "bundledBytes": 35778
+    },
+    "taker-25": {
+      "scene": "cadboro-gyro-red-octopus-slide",
+      "parkId": "municipal-district-of-saanich-220",
+      "parkName": "Cadboro Gyro Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/f71a8c8da2af7c54e7fde9bfe30a2616a686e5035fb4a605e4b82d1dfdbe613c/art/badges/scenes/cadboro-gyro-red-octopus-slide.webp",
+      "sourceSha256": "f71a8c8da2af7c54e7fde9bfe30a2616a686e5035fb4a605e4b82d1dfdbe613c",
+      "bundledSha256": "41d79a8f12aacd1fd5375ded7dcd4f807800bb2d60d1b537a1d1f83a26865cad",
+      "bundledBytes": 31854
+    },
+    "hold-7": {
+      "scene": "pkols-summit-lookout-wall",
+      "parkId": "municipal-district-of-saanich-244",
+      "parkName": "PKOLS (Mount Douglas Park)",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/a8df4f0452257a2d3436545d5a3551ebf91bda022f63c3cf52ca6aa135f2eaf6/art/badges/scenes/pkols-summit-lookout-wall.webp",
+      "sourceSha256": "a8df4f0452257a2d3436545d5a3551ebf91bda022f63c3cf52ca6aa135f2eaf6",
+      "bundledSha256": "706a7024c96ede55b93abc35fdab085ab084058d3a46eb3a4a376f6938c1791a",
+      "bundledBytes": 29802
+    },
+    "hold-30": {
+      "scene": "boyle-point-chrome-island-light-flat-v2",
+      "parkId": "provincial-boyle-point-park",
+      "parkName": "Boyle Point Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/36fd8f6a16315d0ebbea633224f6984078301fea2f61a8c510bb173d36bacb25/art/badges/scenes/boyle-point-chrome-island-light-flat-v2.webp",
+      "sourceSha256": "36fd8f6a16315d0ebbea633224f6984078301fea2f61a8c510bb173d36bacb25",
+      "bundledSha256": "1b64d33a04d44aed08964f281799562e3ce5f8981b47a786d09b030599af7d33",
+      "bundledBytes": 40982
+    },
+    "crew-1": {
+      "scene": "east-sooke-aylard-point-flat-v2",
+      "parkId": "regional-east-sooke-regional-park",
+      "parkName": "East Sooke Regional Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/1409b4dff61e4da9b11ac179272d4d4c6938dcb6e5918e1e7bc2334d3f76f9cc/art/badges/scenes/east-sooke-aylard-point-flat-v2.webp",
+      "sourceSha256": "1409b4dff61e4da9b11ac179272d4d4c6938dcb6e5918e1e7bc2334d3f76f9cc",
+      "bundledSha256": "36215773e8c23c1100ba10847fed4ddf73e3df3f7677de6ed35c119637709a82",
+      "bundledBytes": 36024
+    },
+    "crew-10": {
+      "scene": "thetis-empty-main-beach-flat-v2",
+      "parkId": "regional-thetis-lake-regional-park",
+      "parkName": "Thetis Lake Regional Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/e36db4eabfd872bdd03ec9844a511be807119775591c04a2e4a6ab853f2ab208/art/badges/scenes/thetis-empty-main-beach-flat-v2.webp",
+      "sourceSha256": "e36db4eabfd872bdd03ec9844a511be807119775591c04a2e4a6ab853f2ab208",
+      "bundledSha256": "46910c503775f811797fd53cd4a163536235c328c866c11c01aa74946f4dc715",
+      "bundledBytes": 39026
+    },
+    "biomes-5": {
+      "scene": "elk-falls-canyon-bridge-flat-v3",
+      "parkId": "provincial-elk-falls-park",
+      "parkName": "Elk Falls Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/a497b0f07e5805615b8ab0fe7bad9af6b70215631df2c8fcdbd8d29f91114026/art/badges/scenes/elk-falls-canyon-bridge-flat-v3.webp",
+      "sourceSha256": "a497b0f07e5805615b8ab0fe7bad9af6b70215631df2c8fcdbd8d29f91114026",
+      "bundledSha256": "3412b084c14e58a839d32b039e4c034bdc01cf3fae5a02caf6f5e92895069d3c",
+      "bundledBytes": 36332
+    },
+    "regions-3": {
+      "scene": "clayoquot-plateau-karst-stream",
+      "parkId": "provincial-clayoquot-plateau-park",
+      "parkName": "Clayoquot Plateau Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/57f71e99de2245945179b8e72ffadfdacbc02f1072a68c6acc617b4294960d1b/art/badges/scenes/clayoquot-plateau-karst-stream.webp",
+      "sourceSha256": "57f71e99de2245945179b8e72ffadfdacbc02f1072a68c6acc617b4294960d1b",
+      "bundledSha256": "cb14ee4b740a5416752c2ebda4bff64d27fbc6327f1de509288bf3f7eb106f33",
+      "bundledBytes": 49520
+    },
+    "founder": {
+      "scene": "artlish-river-cave-flat-v2",
+      "parkId": "provincial-artlish-caves-park",
+      "parkName": "Artlish Caves Park",
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/cb646d6e774bfc172edb4d8b31d6b8023f4ed4a6786c13b2dec9f77a4626d08f/art/badges/scenes/artlish-river-cave-flat-v2.webp",
+      "sourceSha256": "cb646d6e774bfc172edb4d8b31d6b8023f4ed4a6786c13b2dec9f77a4626d08f",
+      "bundledSha256": "927b56bd43d9506ad90959c5c75c7b8fa53a3916e513f7cdbab3f6cb2f93a820",
+      "bundledBytes": 45516
+    },
+    "coast-to-coast": {
+      "scene": "coast-a",
+      "parkId": null,
+      "parkName": null,
+      "sourceUrl": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/art/badges/scenes/coast-a.webp",
+      "sourceSha256": "0d6317e5a179e6d9ad7d4d69ebfa7f950c17e60e9b25d9a77ef315d2a134e5ba",
+      "note": "Generic coast scene from the staging content channel release; no park.",
+      "bundledSha256": "57db85f10fc52377acfe0bda963272b65f87c286e064bbd798cd4b9167f136ef",
+      "bundledBytes": 29606
+    }
+  }
+}
