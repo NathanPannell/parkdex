@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 import { Icon } from "./Icon";
 import { useKipTip } from "../lib/kipTips";
-import { clampCrop, largestCrop, panCrop, roundCrop, zoomCrop, type PhotoCrop } from "../lib/photoCrop";
+import { clampCrop, CROP_ASPECT, cropFrameSize, largestCrop, panCrop, roundCrop, zoomCrop, type PhotoCrop } from "../lib/photoCrop";
 import type { OriginalPhoto } from "../lib/photoEncode";
 
 type Props = {
@@ -16,29 +16,25 @@ type Props = {
   initialCrop?: PhotoCrop | null;
   /** The secondary button's label: "Retake" for a new photo, "Cancel" for a re-crop. */
   retakeLabel?: string;
+  /** The frame's width over height: 3:4 for the Dex, the park sheet's 16:9 for a founder's cover. */
+  aspect?: number;
 };
 
 type Point = { x: number; y: number };
 
-/** Room left around the frame inside the stage, in pixels. */
-const STAGE_GUTTER = 28;
 const KEY_PAN = 0.05;
 const KEY_ZOOM = 1.15;
 
-function frameSize(stageWidth: number, stageHeight: number): { width: number; height: number } {
-  const width = Math.max(120, Math.min(stageWidth - STAGE_GUTTER * 2, ((stageHeight - STAGE_GUTTER * 2) * 3) / 4));
-  return { width, height: (width * 4) / 3 };
-}
-
 /**
- * The manual crop after each capture (#173): a fixed 3:4 frame over the photo. One finger drags
+ * The manual crop after each capture (#173): a fixed frame over the photo, 3:4 unless `aspect`
+ * says otherwise. A landscape frame on an upright phone fills the width. One finger drags
  * the photo, two fingers pinch to zoom, and it starts centred at the largest fit. A mouse wheel
  * and the arrow, plus and minus keys do the same on the web. Give each photo its own `key`, so a
  * retake starts again from the largest fit.
  */
-export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, initialCrop = null, retakeLabel = "Retake" }: Props) {
-  const [crop, setCrop] = useState<PhotoCrop>(() => (initialCrop ? clampCrop(initialCrop, photo.width, photo.height) : largestCrop(photo.width, photo.height)));
-  const [frame, setFrame] = useState({ width: 270, height: 360 });
+export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, initialCrop = null, retakeLabel = "Retake", aspect = CROP_ASPECT }: Props) {
+  const [crop, setCrop] = useState<PhotoCrop>(() => (initialCrop ? clampCrop(initialCrop, photo.width, photo.height, aspect) : largestCrop(photo.width, photo.height, aspect)));
+  const [frame, setFrame] = useState(() => cropFrameSize(326, 488, aspect));
   const stage = useRef<HTMLDivElement>(null);
   const frameEl = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
@@ -50,7 +46,7 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
   useLayoutEffect(() => {
     const element = stage.current;
     if (!element) return;
-    const measure = () => setFrame(frameSize(element.clientWidth, element.clientHeight));
+    const measure = () => setFrame(cropFrameSize(element.clientWidth, element.clientHeight, aspect));
     measure();
     if (typeof ResizeObserver !== "function") return;
     const observer = new ResizeObserver(measure);
@@ -85,7 +81,7 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
     known.set(event.pointerId, after);
     let next = latest.current;
     if (others.length === 0) {
-      next = panCrop(next, (after.x - before.x) / frame.width, (after.y - before.y) / frame.height, photo.width, photo.height);
+      next = panCrop(next, (after.x - before.x) / frame.width, (after.y - before.y) / frame.height, photo.width, photo.height, aspect);
     } else {
       // Pinch with the first other finger: zoom around the old midpoint, then follow the midpoint.
       const other = others[0];
@@ -93,8 +89,8 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
       const spanAfter = Math.hypot(after.x - other.x, after.y - other.y);
       const midBefore = { x: (before.x + other.x) / 2, y: (before.y + other.y) / 2 };
       const midAfter = { x: (after.x + other.x) / 2, y: (after.y + other.y) / 2 };
-      if (spanBefore > 4) next = zoomCrop(next, spanAfter / spanBefore, inFrame(midBefore), photo.width, photo.height);
-      next = panCrop(next, (midAfter.x - midBefore.x) / frame.width, (midAfter.y - midBefore.y) / frame.height, photo.width, photo.height);
+      if (spanBefore > 4) next = zoomCrop(next, spanAfter / spanBefore, inFrame(midBefore), photo.width, photo.height, aspect);
+      next = panCrop(next, (midAfter.x - midBefore.x) / frame.width, (midAfter.y - midBefore.y) / frame.height, photo.width, photo.height, aspect);
     }
     update(next);
   };
@@ -105,20 +101,20 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
 
   const wheel = (event: WheelEvent<HTMLDivElement>) => {
     if (busy) return;
-    update(zoomCrop(latest.current, Math.exp(-event.deltaY * 0.0015), inFrame({ x: event.clientX, y: event.clientY }), photo.width, photo.height));
+    update(zoomCrop(latest.current, Math.exp(-event.deltaY * 0.0015), inFrame({ x: event.clientX, y: event.clientY }), photo.width, photo.height, aspect));
   };
 
   const key = (event: KeyboardEvent<HTMLDivElement>) => {
     if (busy) return;
     const centre = { x: 0.5, y: 0.5 };
     const moves: Record<string, () => PhotoCrop> = {
-      ArrowLeft: () => panCrop(latest.current, KEY_PAN, 0, photo.width, photo.height),
-      ArrowRight: () => panCrop(latest.current, -KEY_PAN, 0, photo.width, photo.height),
-      ArrowUp: () => panCrop(latest.current, 0, KEY_PAN, photo.width, photo.height),
-      ArrowDown: () => panCrop(latest.current, 0, -KEY_PAN, photo.width, photo.height),
-      "+": () => zoomCrop(latest.current, KEY_ZOOM, centre, photo.width, photo.height),
-      "=": () => zoomCrop(latest.current, KEY_ZOOM, centre, photo.width, photo.height),
-      "-": () => zoomCrop(latest.current, 1 / KEY_ZOOM, centre, photo.width, photo.height),
+      ArrowLeft: () => panCrop(latest.current, KEY_PAN, 0, photo.width, photo.height, aspect),
+      ArrowRight: () => panCrop(latest.current, -KEY_PAN, 0, photo.width, photo.height, aspect),
+      ArrowUp: () => panCrop(latest.current, 0, KEY_PAN, photo.width, photo.height, aspect),
+      ArrowDown: () => panCrop(latest.current, 0, -KEY_PAN, photo.width, photo.height, aspect),
+      "+": () => zoomCrop(latest.current, KEY_ZOOM, centre, photo.width, photo.height, aspect),
+      "=": () => zoomCrop(latest.current, KEY_ZOOM, centre, photo.width, photo.height, aspect),
+      "-": () => zoomCrop(latest.current, 1 / KEY_ZOOM, centre, photo.width, photo.height, aspect),
     };
     const action = moves[event.key];
     if (!action) return;
@@ -126,7 +122,7 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
     update(action());
   };
 
-  const shown = clampCrop(crop, photo.width, photo.height);
+  const shown = clampCrop(crop, photo.width, photo.height, aspect);
   const imageWidth = frame.width / shown.width;
   const imageHeight = frame.height / shown.height;
 

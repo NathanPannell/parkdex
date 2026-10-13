@@ -298,6 +298,32 @@ function stripTail(bytes: Uint8Array): Uint8Array {
   return copy;
 }
 
+/** The fixture with its frame header (SOF0) saying another size, as a founder's 16:9 cover crop would. */
+function withJpegSize(bytes: Uint8Array, width: number, height: number): Uint8Array {
+  const copy = new Uint8Array(bytes);
+  for (let index = 2; index + 8 < copy.length; index += 1) {
+    if (copy[index] !== 0xff || copy[index + 1] !== 0xc0) continue;
+    copy[index + 5] = height >> 8;
+    copy[index + 6] = height & 0xff;
+    copy[index + 7] = width >> 8;
+    copy[index + 8] = width & 0xff;
+    return copy;
+  }
+  throw new Error("The fixture has no SOF0 header.");
+}
+
+test("a founder's 16:9 cover crop is checked and becomes the cover like any other shape", async () => {
+  const { store, photoCalls, found } = setup();
+  const wide = withJpegSize(EXIF_GPS_JPEG, 16, 9);
+  const response = await found({ photo: { ...PHOTO, base64: Buffer.from(wide).toString("base64"), width: 16, height: 9 } });
+  assert.equal(response.status, 200);
+  assert.equal((await body(response)).outcome, "founded");
+  assert.equal(photoCalls.length, 1);
+  assert.ok(store.founded.get("osm-way-23938892"));
+  // The width and height sent still have to match the JPEG itself.
+  assert.equal((await found({ photo: { ...PHOTO, base64: Buffer.from(wide).toString("base64"), width: 16, height: 12 } })).status, 400);
+});
+
 test("a second founder of the same park gets 409 already_founded, also when they race", async () => {
   const { store, found } = setup();
   assert.equal((await found()).status, 200);

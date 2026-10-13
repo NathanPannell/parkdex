@@ -1,6 +1,7 @@
 import { accountApiUrl, fetchAccountApi, fetchAuthenticated } from "./accounts/authClient";
 import { parseBadgeUnlocks, parseVisit, type BadgeUnlock, type VisitResult } from "./game/client";
 import type { LngLat } from "./geo";
+import { PARK_COVER_ASPECT } from "./photoCrop";
 
 /**
  * Client for founding parks (issue #126): scan the device position for park outlines that
@@ -326,6 +327,19 @@ export function coverImageUrl(coverUrl: string | null | undefined): string | nul
   } catch {
     return null;
   }
+}
+
+/**
+ * What the founding camera is given for a park: its labels, and the crop shape. The founder's crop
+ * is the park's public cover, so it is cropped to the shape the park sheet shows it in.
+ */
+export function founderCapture(label: string, now = new Date()): { place: string; hint: string; caption: string; aspect: number } {
+  return {
+    place: `Inside ${label}`,
+    hint: "Get the park in the shot, with no people in it. This becomes the park's cover photo.",
+    caption: `${label} · ${now.toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`,
+    aspect: PARK_COVER_ASPECT,
+  };
 }
 
 export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "review_sent" | "founded";

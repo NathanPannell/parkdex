@@ -1816,6 +1816,13 @@
   pointer-events: none;
 }
 
+/* A founder's cover is cropped landscape (PARK_COVER_ASPECT), so the viewfinder hints at that shape. */
+.camera__frame--landscape {
+  inset: auto 26px;
+  top: calc(50% - 60px);
+  transform: translateY(-50%);
+}
+
 .corner {
   position: absolute;
   width: 34px;
@@ -1977,7 +1984,7 @@
   gap: 10px;
 }
 
-/* The 3:4 crop after each capture (PhotoCropper). */
+/* The crop after each capture (PhotoCropper): 3:4 for the Dex, 16:9 for a founder cover. */
 .cropper {
   position: absolute;
   inset: 0;

@@ -7,7 +7,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { useBackHandler } from "../lib/backStack";
 import { takeNativePhoto, useLiveCamera, type Facing } from "../lib/camera";
 import { isNative } from "../lib/native";
-import type { PhotoCrop } from "../lib/photoCrop";
+import { CROP_ASPECT, type PhotoCrop } from "../lib/photoCrop";
 import { encodePhoto, originalFromBlob, originalFromDataUrl, prepareOriginal, type CapturedPhoto, type Drawable, type OriginalPhoto } from "../lib/photoEncode";
 
 type Props = {
@@ -17,6 +17,8 @@ type Props = {
   caption: string;
   onUse: (photo: CapturedPhoto) => void;
   onClose: () => void;
+  /** The crop's width over height: 3:4 for the Dex, `PARK_COVER_ASPECT` for a founder's cover. */
+  aspect?: number;
 };
 
 type Taken = { id: number; photo: OriginalPhoto; drawable: Drawable };
@@ -25,13 +27,14 @@ type Taken = { id: number; photo: OriginalPhoto; drawable: Drawable };
 const NATIVE_QUALITY = 92;
 
 /**
- * Takes one real photo, then lets the player crop it to 3:4 (#173). On Android the phone's own
- * camera app takes it, straight away and with no gallery; backing out of the camera app returns
- * to the previous screen. On the web a live preview is used when the browser grants one,
- * otherwise the browser's camera capture. The photo is kept as an upright original with the
- * crop beside it, and the cropped image is encoded for upload (see `lib/photoEncode.ts`).
+ * Takes one real photo, then lets the player crop it to `aspect`, 3:4 by default (#173). On
+ * Android the phone's own camera app takes it, straight away and with no gallery; backing out of
+ * the camera app returns to the previous screen. On the web a live preview is used when the
+ * browser grants one, otherwise the browser's camera capture. The photo is kept as an upright
+ * original with the crop beside it, and the cropped image is encoded for upload (see
+ * `lib/photoEncode.ts`).
  */
-export function PhotoCapture({ place, hint, caption, onUse, onClose }: Props) {
+export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CROP_ASPECT }: Props) {
   const [facing, setFacing] = useState<Facing>("environment");
   const { video, live } = useLiveCamera(facing, 1920, !isNative);
   const [taken, setTaken] = useState<Taken | null>(null);
@@ -122,7 +125,7 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose }: Props) {
   const use = (crop: PhotoCrop) => {
     if (!taken || busy) return;
     try {
-      const cropped = encodePhoto(taken.drawable, { crop });
+      const cropped = encodePhoto(taken.drawable, { crop, aspect });
       sfx.pop();
       onUse({ original: taken.photo, crop, cropped });
     } catch (caught) {
@@ -167,7 +170,7 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose }: Props) {
         </button>
       </div>
 
-      <div className="camera__frame">
+      <div className={`camera__frame${aspect > 1 ? " camera__frame--landscape" : ""}`} style={aspect > 1 ? { aspectRatio: String(aspect) } : undefined}>
         {["tl", "tr", "bl", "br"].map((c) => (
           <motion.span key={c} className={`corner corner--${c}`} animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 1.8, repeat: Infinity }} />
         ))}
@@ -208,6 +211,7 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose }: Props) {
             error={error}
             onRetake={retake}
             onUse={use}
+            aspect={aspect}
           />
         )}
       </AnimatePresence>

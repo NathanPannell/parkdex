@@ -9,7 +9,7 @@ vi.mock("./accounts/authClient", () => ({
 }));
 
 const {
-  FounderError, checkFlags, foundBackAction, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
+  FounderError, checkFlags, foundBackAction, founderCapture, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
   REVIEW_LABEL, markFoundingReviewsSeen, requestFoundingReview, reviewButton, reviewProblem, founderLine, flagMessage, MESSAGES, REVIEW_HINT,
 } = await import("./founders");
 type ContainingPark = import("./founders").ContainingPark;
@@ -250,6 +250,19 @@ describe("helpers", () => {
     expect(isFreshFix({ at: 1_000 }, 31_000)).toBe(true);
     expect(isFreshFix({ at: 1_000 }, 31_001)).toBe(false);
     expect(isFreshFix(null)).toBe(false);
+  });
+});
+
+describe("founderCapture", () => {
+  it("asks the camera for the park sheet's 16:9 cover crop, not the Dex's 3:4", async () => {
+    const { PARK_COVER_ASPECT, CROP_ASPECT } = await import("./photoCrop");
+    const capture = founderCapture("Paterson Park", new Date("2026-10-13T19:00:00Z"));
+    expect(capture.aspect).toBe(PARK_COVER_ASPECT);
+    expect(capture.aspect).not.toBe(CROP_ASPECT);
+    expect(capture.aspect).toBeGreaterThan(1);
+    expect(capture.place).toBe("Inside Paterson Park");
+    expect(capture.caption).toBe("Paterson Park · Oct 13");
+    expect(capture.hint).toMatch(/cover photo/);
   });
 });
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_BACKUP_PHOTO_BYTES } from "./accounts/photoBackupRendition";
-import { largestCrop } from "./photoCrop";
+import { largestCrop, PARK_COVER_ASPECT } from "./photoCrop";
 import { base64Bytes, encodePhoto, fitWithin, jpegBase64, MAX_ORIGINAL_EDGE, MAX_PHOTO_BYTES, MAX_PHOTO_EDGE, ORIGINAL_QUALITY, PHOTO_QUALITY, prepareOriginal } from "./photoEncode";
 
 describe("fitWithin", () => {
@@ -75,6 +75,19 @@ describe("encoding applies the crop", () => {
     const photo = encodePhoto({ source, width: 3024, height: 4032 }, { crop });
     expect(draws[0]).toEqual([source, 0, 0, 3024, 4032, 0, 0, 960, 1280]);
     expect([photo.width, photo.height]).toEqual([960, 1280]);
+  });
+
+  it("encodes a founder's 16:9 cover crop of an upright photo at 1,280 x 720", () => {
+    const { draws } = installCanvas();
+    const crop = largestCrop(1536, 2048, PARK_COVER_ASPECT);
+    const photo = encodePhoto({ source, width: 1536, height: 2048 }, { crop, aspect: PARK_COVER_ASPECT });
+    expect(draws[0]).toEqual([source, 0, 592, 1536, 864, 0, 0, 1280, 720]);
+    expect([photo.width, photo.height]).toEqual([1280, 720]);
+  });
+
+  it("keeps the upload size limit for a 16:9 cover too", () => {
+    installCanvas(MAX_PHOTO_BYTES + 1);
+    expect(() => encodePhoto({ source, width: 2048, height: 1536 }, { crop: largestCrop(2048, 1536, PARK_COVER_ASPECT), aspect: PARK_COVER_ASPECT })).toThrow(/too large/);
   });
 
   it("keeps the upload size limit: steps quality down, then refuses", () => {
