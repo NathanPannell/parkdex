@@ -22,6 +22,7 @@ import { startingMapView, USER_ZOOM } from "../../lib/provinces";
 import { FIELD, isNative } from "../../lib/native";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { KIP_TIP_IDS, requestKipTip } from "../../lib/kipTips";
+import { openDexOn } from "../../lib/dex/prefs";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
 import { recordParkViewed } from "../../lib/interactions";
@@ -461,12 +462,16 @@ export function MapScreen() {
       <div className="map-top">
         <motion.button
           className="counter card"
-          onClick={() => dispatch({ type: "go", screen: "parks" })}
+          onClick={() => {
+            // The score opens My Dex on the flags that earn it (#174).
+            openDexOn("flags");
+            dispatch({ type: "go", screen: "parks" });
+          }}
           initial={{ y: -80 }}
           animate={{ y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}
           whileTap={{ scale: 0.95 }}
-          aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your parks` : "Your parks"}
+          aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your flags in My Dex` : "My Dex"}
         >
           <span className={player ? "counter__kip counter__kip--flag" : "counter__kip"}>
             {player ? <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} className="is-waving" /></span> : <Kip pose="avatar" size={48} />}

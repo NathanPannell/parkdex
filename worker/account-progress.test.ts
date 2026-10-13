@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deleteAccountData, handleProgressRequest } from "./accounts/progress.js";
 import type { ProgressStore } from "./accounts/progress-store.js";
-import type { AccountAuthContext, ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./accounts/progress-types.js";
+import type { AccountAuthContext, ClaimDisplay, ClaimDisplayRecord, ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./accounts/progress-types.js";
 
 const ACCOUNT_A = "ae172e85-a8ab-4e1d-a032-901100000001";
 const ACCOUNT_B = "ae172e85-a8ab-4e1d-a032-901100000002";
@@ -75,6 +75,20 @@ class MemoryProgressStore implements ProgressStore {
   readonly deletionObjects = new Map<string, Set<string>>();
   readonly deletionAttempts = new Map<string, number>();
   readonly revisions = new Map<string, bigint>();
+  readonly displays = new Map<string, ClaimDisplayRecord>();
+  displayClock = 0;
+
+  async listClaimDisplays(accountId: string, limit: number) {
+    return [...this.displays.entries()].filter(([key]) => key.startsWith(`${accountId}:`)).map(([, row]) => structuredClone(row)).slice(0, limit);
+  }
+
+  async putClaimDisplay(accountId: string, claimId: string, display: ClaimDisplay) {
+    if (!this.claims.has(claimKey(accountId, claimId))) return { status: "claim_missing" as const };
+    this.displayClock += 1;
+    const saved: ClaimDisplayRecord = { claimId, ...structuredClone(display), updatedAt: new Date(Date.UTC(2026, 9, 1, 0, 0, this.displayClock)).toISOString() };
+    this.displays.set(claimKey(accountId, claimId), saved);
+    return { status: "saved" as const, display: structuredClone(saved) };
+  }
 
   nextRevision(accountId: string): string {
     const next = (this.revisions.get(accountId) ?? 0n) + 1n;
@@ -447,4 +461,63 @@ test("photo uploads return not found for another account and unsupported content
   const bytes = jpegBytes();
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_A, "PUT", bytes, CONTENT_TYPE), env, authB, deps))?.status, 404);
   assert.equal(photoService.putCount, 0);
+});
+
+function displayRequest(claimId: string, body: unknown): Request {
+  return jsonRequest(`https://api.example.test/api/claims/${claimId}/display`, "PUT", body);
+}
+
+test("photo display choices back up per claim, last write wins, and list per account", async () => {
+  const store = new MemoryProgressStore();
+  addClaim(store, ACCOUNT_A, CLAIM_A);
+  addClaim(store, ACCOUNT_B, CLAIM_B);
+  const deps = { createStore: () => store };
+  const crop = { x: 0.1, y: 0, width: 0.5625, height: 1 };
+
+  const saved = await handleProgressRequest(displayRequest(CLAIM_A, { crop, coverAt: "2026-09-21T10:00:00Z", removed: false }), env, authA, deps);
+  assert.equal(saved?.status, 200);
+  const savedBody = await saved?.json() as { display: Record<string, unknown> };
+  assert.deepEqual(savedBody.display, { claimId: CLAIM_A, crop, coverAt: "2026-09-21T10:00:00.000Z", removed: false, updatedAt: "2026-10-01T00:00:01.000Z" });
+
+  const replaced = await handleProgressRequest(displayRequest(CLAIM_A, { crop: null, coverAt: null, removed: true }), env, authA, deps);
+  assert.equal(replaced?.status, 200);
+
+  const listA = await handleProgressRequest(new Request("https://api.example.test/api/claims/display"), env, authA, deps);
+  assert.equal(listA?.status, 200);
+  assert.deepEqual(await listA?.json(), { displays: [{ claimId: CLAIM_A, crop: null, coverAt: null, removed: true, updatedAt: "2026-10-01T00:00:02.000Z" }] });
+  const listB = await handleProgressRequest(new Request("https://api.example.test/api/claims/display"), env, authB, deps);
+  assert.deepEqual(await listB?.json(), { displays: [] });
+
+  // Another account's claim, and a claim never backed up, are not found.
+  assert.equal((await handleProgressRequest(displayRequest(CLAIM_B, { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
+  assert.equal((await handleProgressRequest(displayRequest("be172e85-a8ab-4e1d-a032-901100000009", { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
+  assert.equal((await handleProgressRequest(displayRequest("not-a-uuid", { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
+  assert.equal((await handleProgressRequest(new Request(`https://api.example.test/api/claims/${CLAIM_A}/display`), env, authA, deps))?.status, 405);
+  assert.equal((await handleProgressRequest(jsonRequest("https://api.example.test/api/claims/display", "PUT", {}), env, authA, deps))?.status, 405);
+  assert.equal((await handleProgressRequest(new Request("https://api.example.test/api/claims/display"), env, null, deps))?.status, 401);
+});
+
+test("photo display bodies are exact and crops stay inside the photo", async () => {
+  const store = new MemoryProgressStore();
+  addClaim(store, ACCOUNT_A, CLAIM_A);
+  const deps = { createStore: () => store };
+  const good = { crop: { x: 0, y: 0.1, width: 1, height: 0.75 }, coverAt: null, removed: false };
+  assert.equal((await handleProgressRequest(displayRequest(CLAIM_A, good), env, authA, deps))?.status, 200);
+  for (const body of [
+    { ...good, extra: true },
+    { crop: good.crop, coverAt: null },
+    { ...good, removed: "no" },
+    { ...good, coverAt: "yesterday" },
+    { ...good, coverAt: "2099-01-01T00:00:00Z" },
+    { ...good, crop: { x: 0.5, y: 0, width: 0.6, height: 1 } },
+    { ...good, crop: { x: -0.1, y: 0, width: 0.5, height: 1 } },
+    { ...good, crop: { x: 0, y: 0, width: 0, height: 1 } },
+    { ...good, crop: { x: 0, y: 0, width: 0.5 } },
+    { ...good, crop: { x: 0, y: 0, width: 0.5, height: 1, z: 1 } },
+    { ...good, crop: { x: "0", y: 0, width: 0.5, height: 1 } },
+    { ...good, crop: [0, 0, 0.5, 1] },
+  ]) {
+    const response = await handleProgressRequest(displayRequest(CLAIM_A, body), env, authA, deps);
+    assert.equal(response?.status, 400, JSON.stringify(body));
+  }
 });

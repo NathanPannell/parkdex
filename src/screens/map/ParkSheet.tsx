@@ -1,6 +1,7 @@
 import { motion, type PanInfo } from "motion/react";
 import { useState } from "react";
 import { Badge } from "../../components/Badge";
+import { AddDexPhoto } from "../../components/DexPhoto";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { FlagPin } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
@@ -71,6 +72,9 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const cover = summaryCover(summary, game.flags?.founders.get(park.id)?.coverUrl ?? null);
   const [coverFailed, setCoverFailed] = useState(false);
   const showCover = !!cover && !coverFailed;
+  // "Add another photo" for parks you have visited (#174), from a claim here or visits on the server.
+  const visited = !!claim || (summary.summary?.visits.mine ?? 0) > 0 || !!game.me?.visitedToday?.includes(park.id);
+  const [adding, setAdding] = useState(false);
   const founder = founderCta(summary, insideForFounding, canFound, hasPendingReview(game.me, park.id));
   const stats = summaryStats(summary, signedIn);
   const trip = estimateTrip(user, park, content?.drive);
@@ -272,6 +276,12 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           {stats.note && <p className="park-summary__note">{stats.note}</p>}
         </motion.section>
 
+        {visited && (
+          <motion.button variants={item} className="btn btn--paper btn--block park-sheet__photo" onClick={() => setAdding(true)}>
+            <Icon name="camera" size={18} /> Add another photo
+          </motion.button>
+        )}
+
         <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
           <Icon name="chat" size={16} /> Something wrong with this park? Tell us
         </motion.button>
@@ -301,6 +311,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           </>
         )}
       </motion.div>
+      <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} />
     </motion.div>
   );
 }

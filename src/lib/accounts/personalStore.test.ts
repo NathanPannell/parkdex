@@ -589,6 +589,55 @@ describe("durable personal progress storage", () => {
     expect(await personal.setPersonalPhotoCrop({ kind: "guest" }, source.claimId, null)).toBe(false);
   });
 
+  it("keeps several photos per park with cover and removal choices, queued for display backup", async () => {
+    const personal = await import("./personalStore");
+    const account = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const first = await personal.createPersonalClaim(account, { park: park(), photo: pngPhoto(), claimedAt: "2026-06-01T17:00:00.000Z" });
+    const crop = { x: 0.1, y: 0, width: 0.5625, height: 1 };
+    const second = await personal.createPersonalClaim(account, { park: park(), photo: pngPhoto(), crop, claimedAt: "2026-06-03T17:00:00.000Z" });
+    expect((await personal.listPersonalClaims(account)).filter((claim) => claim.parkId === park().id)).toHaveLength(2);
+
+    // A photo without choices has nothing to back up; a cropped one does.
+    expect((await personal.listPendingPhotoDisplays(account)).map((item) => item.claimId)).toEqual([second.claimId]);
+    expect(await personal.setPersonalPhotoCover(account, first.claimId, "2026-06-04T10:00:00.000Z")).toBe(true);
+    const covered = await personal.getPersonalPhoto(account, first.claimId);
+    expect(covered).toMatchObject({ coverAt: "2026-06-04T10:00:00.000Z", backupState: "pending" });
+    const pending = await personal.listPendingPhotoDisplays(account);
+    expect(pending.find((item) => item.claimId === first.claimId)?.display).toEqual({ crop: null, coverAt: "2026-06-04T10:00:00.000Z", removed: false });
+
+    // Backing up version 1 while the player changes it again keeps the newer change pending.
+    const sent = pending.find((item) => item.claimId === first.claimId)!;
+    expect(await personal.removePersonalPhoto(account, first.claimId)).toBe(true);
+    expect(await personal.markPhotoDisplaySynced(account, first.claimId, sent.version)).toBe(true);
+    const removed = await personal.getPersonalPhoto(account, first.claimId);
+    expect(removed).toMatchObject({ removed: true, coverAt: null });
+    expect(personal.photoDisplayPending(removed!)).toBe(true);
+    expect(removed?.sha256).toBe(covered?.sha256);
+    const latest = (await personal.listPendingPhotoDisplays(account)).find((item) => item.claimId === first.claimId)!;
+    await personal.markPhotoDisplaySynced(account, first.claimId, latest.version);
+    expect(personal.photoDisplayPending((await personal.getPersonalPhoto(account, first.claimId))!)).toBe(false);
+    expect(await personal.setPersonalPhotoCover(account, "00000000-0000-4000-8000-000000000000")).toBe(false);
+  });
+
+  it("restores backed-up display choices without overwriting choices not yet backed up", async () => {
+    const personal = await import("./personalStore");
+    const account = { kind: "account" as const, accountId: "89abcdef-1234-4234-8234-123456789abc" };
+    const restored = await personal.createPersonalClaim(account, { park: park(), photo: pngPhoto() });
+    const edited = await personal.createPersonalClaim(account, { park: park(), photo: pngPhoto() });
+    await personal.setPersonalPhotoCover(account, edited.claimId, "2026-06-05T10:00:00.000Z");
+    const crop = { x: 0, y: 0.125, width: 1, height: 0.75 };
+    const changed = await personal.applyRemotePhotoDisplays(account, [
+      { claimId: restored.claimId.toUpperCase(), crop, coverAt: "2026-06-04T10:00:00.000Z", removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
+      { claimId: edited.claimId, crop, coverAt: null, removed: true, updatedAt: "2026-06-04T10:00:00.000Z" },
+      { claimId: "00000000-0000-4000-8000-000000000000", crop, coverAt: null, removed: true, updatedAt: "2026-06-04T10:00:00.000Z" },
+    ]);
+    expect(changed).toBe(1);
+    const restoredPhoto = await personal.getPersonalPhoto(account, restored.claimId);
+    expect(restoredPhoto).toMatchObject({ crop, coverAt: "2026-06-04T10:00:00.000Z", removed: false });
+    expect(personal.photoDisplayPending(restoredPhoto!)).toBe(false);
+    expect(await personal.getPersonalPhoto(account, edited.claimId)).toMatchObject({ coverAt: "2026-06-05T10:00:00.000Z", removed: false });
+  });
+
   it("does not return claim success when durable storage is unavailable", async () => {
     const personal = await import("./personalStore");
     const old = globalThis.indexedDB;

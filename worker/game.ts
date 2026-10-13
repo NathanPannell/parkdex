@@ -316,6 +316,25 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   });
 }
 
+/**
+ * My Dex (#174): the parks this account has visited, with every visit day and the first and last
+ * visit. A compact list the app joins with its catalogue and its own photos.
+ */
+async function getDex(env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
+  const { accountId } = await auth.account();
+  const store = getStore(env, dependencies);
+  if (!store.dex) throw new HttpError(503, "service_unavailable", "My Dex is unavailable.");
+  const serverTime = new Date(now).toISOString();
+  const parks = await store.dex(accountId, serverTime);
+  return json({
+    parks: parks.map((park) => ({
+      parkId: park.parkId, visits: park.days.length, days: park.days,
+      firstVisitAt: park.firstVisitAt, lastVisitAt: park.lastVisitAt, hidden: park.hidden,
+    })),
+    serverTime,
+  });
+}
+
 async function postTakeoversSeen(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies, now: number): Promise<Response> {
   const { accountId } = await auth.mutation();
   const at = validateSeenBody(await readJsonBody(request, MAX_BODY_BYTES), now);
@@ -374,6 +393,9 @@ export async function handleGameRequest(
     case "/api/game/me":
       requireMethod(request, "GET");
       return getMe(env, auth, dependencies, now);
+    case "/api/game/dex":
+      requireMethod(request, "GET");
+      return getDex(env, auth, dependencies, now);
     case "/api/game/takeovers/seen":
       requireMethod(request, "POST");
       return postTakeoversSeen(request, env, auth, dependencies, now);

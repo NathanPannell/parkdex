@@ -54,6 +54,8 @@ Login is rate limited to 5 attempts per email per 15 minutes, as in production.
 
 The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists), `serverTime`, and `visitedToday`, the park IDs this account already visited on the current America/Vancouver day, with `visitedTodayUntil`, the instant that day ends (null before a handle exists). `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
 
+`GET /api/game/dex` (#174) lists the parks the account has visited for My Dex: `{ parks: [{ parkId, visits, days, firstVisitAt, lastVisitAt, hidden }], serverTime }`. `days` are the distinct America/Vancouver days with a game visit or a claim, so a photo taken during a visit never adds one, and `visits` is how many there are. `hidden` marks parks hidden from the catalogue (`docs/park-visibility.md`); the app leaves them out of its totals.
+
 | Error | When |
 | --- | --- |
 | 400 `invalid_handle` | handle is not 3 to 20 of `a-z`, `0-9`, `_` after lowercasing and trimming a leading `@` |

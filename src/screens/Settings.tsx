@@ -7,6 +7,7 @@ import { formatPoints } from "../lib/game/visit";
 import { listItem, listParent, press, tabPage } from "../lib/motion";
 import "../game-ui.css";
 import { WebAppSettings } from "./WebAppSettings";
+import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
@@ -66,12 +67,16 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 28 }}
-          onClick={() => (player ? dispatch({ type: "go", screen: "parks" }) : auth.phase === "authenticated" ? game.openHandleSheet() : dispatch({ type: "go", screen: "account" }))}
+          onClick={() => {
+            if (!player) return auth.phase === "authenticated" ? game.openHandleSheet() : dispatch({ type: "go", screen: "account" });
+            openDexOn("flags");
+            dispatch({ type: "go", screen: "parks" });
+          }}
         >
           <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} className="is-waving" />
           <span className="settings-flag__text">
             <strong>{player ? `@${player.handle}` : "Your flag"}</strong>
-            <span>{player ? `${formatPoints(game.me?.score ?? 0)} · see your parks` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
+            <span>{player ? `${formatPoints(game.me?.score ?? 0)} · see your flags` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
           </span>
           <Icon name="next" size={18} />
         </motion.button>

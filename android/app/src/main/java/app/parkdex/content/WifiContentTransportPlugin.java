@@ -486,9 +486,19 @@ public class WifiContentTransportPlugin extends Plugin {
             allowed = "PUT".equals(normalizedMethod) && query == null;
         } else if (path != null && path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/photo$")) {
             allowed = ("GET".equals(normalizedMethod) || "PUT".equals(normalizedMethod)) && query == null;
+        } else if ("/api/claims/display".equals(path)) {
+            // A photo's display choices (#174): the list, and one photo's crop, cover and removal.
+            allowed = "GET".equals(normalizedMethod) && query == null;
+        } else if (path != null && path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/display$")) {
+            allowed = "PUT".equals(normalizedMethod) && query == null;
         }
         if (!allowed) throw new IllegalArgumentException("The account backup path or method is not approved");
         return uri.toURL();
+    }
+
+    /** Claim records and a photo's display choices are small JSON bodies; photos are images. */
+    static boolean isJsonAccountRoute(String path) {
+        return path != null && path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:/display)?$");
     }
 
     static void validateAccountBackupBody(URL url, String method, byte[] body) {
@@ -498,8 +508,7 @@ public class WifiContentTransportPlugin extends Plugin {
             if (body.length != 0) throw new IllegalArgumentException("Account backup GET requests cannot contain a body");
             return;
         }
-        int maximum = path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-                ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
+        int maximum = isJsonAccountRoute(path) ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
         if (!"PUT".equals(method) || body.length < 1 || body.length > maximum) {
             throw new IllegalArgumentException("The account backup request body is invalid or exceeds its byte limit");
         }
@@ -530,7 +539,7 @@ public class WifiContentTransportPlugin extends Plugin {
             String rawContentType = headerValue(headers, "content-type");
             String contentType = rawContentType == null ? "" : rawContentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
             String path = url.getPath();
-            boolean allowed = path.matches("(?i)^/api/claims/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            boolean allowed = isJsonAccountRoute(path)
                     ? "application/json".equals(contentType)
                     : "image/jpeg".equals(contentType) || "image/png".equals(contentType) || "image/webp".equals(contentType);
             if (!allowed) throw new IllegalArgumentException("Native account backup content type is not approved for this route");

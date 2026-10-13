@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Flag, FlagPin } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
@@ -28,8 +28,11 @@ function useCountUp(value: number) {
   return shown;
 }
 
-/** The player's score and the parks their flag flies over, longest-held first. */
-export function YourParks() {
+/**
+ * The player's score and the parks their flag flies over, longest-held first. My Dex shows it as
+ * its "Your flags" segment, with its own title and segment switch (#174).
+ */
+export function YourParks({ title = "Your parks", toolbar }: { title?: string; toolbar?: ReactNode } = {}) {
   const { dispatch } = useStore();
   const auth = useAuth();
   const game = useGame();
@@ -55,9 +58,10 @@ export function YourParks() {
       <header className="account-head">
         <div className="account-head__title">
           <span className="eyebrow">Parkdex</span>
-          <h1 id="your-parks-title">Your parks</h1>
+          <h1 id="your-parks-title">{title}</h1>
         </div>
       </header>
+      {toolbar}
 
       <div className="account-body">
         {!signedIn ? (

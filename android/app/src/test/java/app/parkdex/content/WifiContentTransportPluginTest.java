@@ -183,6 +183,18 @@ public class WifiContentTransportPluginTest {
                 WifiContentTransportPlugin.validateAccountBackupUrl(
                         origin + "/api/claims/" + claimId + "/photo", origin, "PUT").toString());
 
+        assertEquals(origin + "/api/claims/display",
+                WifiContentTransportPlugin.validateAccountBackupUrl(
+                        origin + "/api/claims/display", origin, "GET").toString());
+        assertEquals(origin + "/api/claims/" + claimId + "/display",
+                WifiContentTransportPlugin.validateAccountBackupUrl(
+                        origin + "/api/claims/" + claimId + "/display", origin, "PUT").toString());
+        assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupUrl(
+                origin + "/api/claims/display", origin, "PUT"));
+        assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupUrl(
+                origin + "/api/claims/" + claimId + "/display", origin, "GET"));
+        assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupUrl(
+                origin + "/api/claims/display?all=1", origin, "GET"));
         assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupUrl(
                 origin + "/api/claims", origin, "PUT"));
         assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupUrl(
@@ -228,6 +240,11 @@ public class WifiContentTransportPluginTest {
                 WifiContentTransportPlugin.validateAccountBackupUrl(photoUrl, origin, "GET"), "GET", new byte[] { 1 }));
         assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupBody(
                 WifiContentTransportPlugin.validateAccountBackupUrl(photoUrl, origin, "PUT"), "PUT", new byte[0]));
+        String displayUrl = claimUrl + "/display";
+        WifiContentTransportPlugin.validateAccountBackupBody(
+                WifiContentTransportPlugin.validateAccountBackupUrl(displayUrl, origin, "PUT"), "PUT", claimLimit);
+        assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupBody(
+                WifiContentTransportPlugin.validateAccountBackupUrl(displayUrl, origin, "PUT"), "PUT", new byte[16 * 1024 + 1]));
     }
 
     @Test
@@ -244,6 +261,13 @@ public class WifiContentTransportPluginTest {
 
         headers.put("Content-Type", "text/plain");
         assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupHeaders(headers, photoUrl, "PUT"));
+        headers.put("Content-Type", "image/jpeg");
+        java.net.URL displayUrl = WifiContentTransportPlugin.validateAccountBackupUrl(
+                "https://parkdex-kip-staging.vercel.app/api/claims/33333333-3333-4333-8333-333333333333/display",
+                "https://parkdex-kip-staging.vercel.app", "PUT");
+        assertThrows(Exception.class, () -> WifiContentTransportPlugin.validateAccountBackupHeaders(headers, displayUrl, "PUT"));
+        headers.put("Content-Type", "application/json");
+        WifiContentTransportPlugin.validateAccountBackupHeaders(headers, displayUrl, "PUT");
         headers.put("Content-Type", "image/jpeg");
 
         headers.put("Cookie", "kip_account=not-forwarded");

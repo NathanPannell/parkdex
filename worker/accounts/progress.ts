@@ -1,12 +1,17 @@
 import { HttpError } from "../validation.js";
 import { createProgressStore, type ProgressStore } from "./progress-store.js";
 import { deleteAccountData, handlePhotoRequest, isPhotoRoute, type PhotoDependencies } from "./photos.js";
-import type { AccountAuthContext, ClaimPayload, ClaimRecord, ParkSnapshot, ProgressEnv } from "./progress-types.js";
+import type { AccountAuthContext, ClaimDisplay, ClaimDisplayRecord, ClaimPayload, ClaimRecord, ParkSnapshot, PhotoCrop, ProgressEnv } from "./progress-types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_CLAIM_BYTES = 16 * 1024;
 const PAGE_SIZE = 50;
+/** Display choices are tiny; one list carries every photo an account is likely to have. */
+const DISPLAY_LIMIT = 5000;
+const CROP_KEYS = ["x", "y", "width", "height"];
+const DISPLAY_KEYS = ["crop", "coverAt", "removed"];
+const CROP_EPSILON = 1e-6;
 const CATEGORY = new Set(["national", "provincial", "regional", "municipal", "community"]);
 const BIOME = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPE = new Set(["circle", "hex", "shield", "arch", "seal"]);
@@ -105,6 +110,35 @@ function validateClaimBody(value: unknown, claimId: string): Omit<ClaimPayload, 
   const contentReleaseId = value.contentReleaseId === null ? null : boundedText(value.contentReleaseId, "content release ID", 128);
   if (contentReleaseId !== null && !/^[A-Za-z0-9._-]+$/.test(contentReleaseId)) throw new HttpError(400, "invalid_request", "Invalid content release ID.");
   return { parkId, claimedAt, parkSnapshot: validateParkSnapshot(value.parkSnapshot, parkId), contentReleaseId };
+}
+
+function validateCrop(value: unknown): PhotoCrop | null {
+  if (value === null) return null;
+  if (!record(value) || !hasExactKeys(value, CROP_KEYS)) throw new HttpError(400, "invalid_request", "Invalid photo crop.");
+  const [x, y, width, height] = CROP_KEYS.map((key) => value[key]);
+  if (![x, y, width, height].every((part) => typeof part === "number" && Number.isFinite(part))) {
+    throw new HttpError(400, "invalid_request", "Invalid photo crop.");
+  }
+  const crop = { x: x as number, y: y as number, width: width as number, height: height as number };
+  if (crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0 ||
+    crop.x + crop.width > 1 + CROP_EPSILON || crop.y + crop.height > 1 + CROP_EPSILON) {
+    throw new HttpError(400, "invalid_request", "A photo crop must lie within the photo.");
+  }
+  return crop;
+}
+
+export function validateDisplayBody(value: unknown, now = Date.now()): ClaimDisplay {
+  if (!record(value) || !hasExactKeys(value, DISPLAY_KEYS)) throw new HttpError(400, "invalid_request", "Invalid photo display.");
+  let coverAt: string | null = null;
+  if (value.coverAt !== null) {
+    if (typeof value.coverAt !== "string" || value.coverAt.length > 64 || !Number.isFinite(Date.parse(value.coverAt))) {
+      throw new HttpError(400, "invalid_request", "Invalid cover time.");
+    }
+    coverAt = new Date(value.coverAt).toISOString();
+    if (Date.parse(coverAt) > now + 10 * 60 * 1000) throw new HttpError(400, "invalid_request", "Cover time cannot be in the future.");
+  }
+  if (typeof value.removed !== "boolean") throw new HttpError(400, "invalid_request", "Invalid photo display.");
+  return { crop: validateCrop(value.crop), coverAt, removed: value.removed };
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -210,6 +244,28 @@ async function listClaims(request: Request, accountId: string, store: ProgressSt
   return json({ claims, nextCursor });
 }
 
+function apiDisplay(display: ClaimDisplayRecord) {
+  return { claimId: display.claimId, crop: display.crop, coverAt: display.coverAt, removed: display.removed, updatedAt: display.updatedAt };
+}
+
+async function listDisplays(request: Request, accountId: string, store: ProgressStore): Promise<Response> {
+  if (new URL(request.url).search) throw new HttpError(400, "invalid_query", "Invalid photo display query.");
+  if (!store.listClaimDisplays) throw new HttpError(503, "service_unavailable", "Photo display backup is unavailable.");
+  const displays = await store.listClaimDisplays(accountId, DISPLAY_LIMIT);
+  return json({ displays: displays.map(apiDisplay) });
+}
+
+async function putDisplay(request: Request, accountId: string, claimId: string, store: ProgressStore): Promise<Response> {
+  const display = validateDisplayBody(await readJson(request));
+  if (!store.putClaimDisplay) throw new HttpError(503, "service_unavailable", "Photo display backup is unavailable.");
+  const saved = await store.putClaimDisplay(accountId, claimId, display);
+  if (saved.status !== "saved") {
+    if (saved.status === "unavailable") throw new HttpError(410, "account_deleting", "This account is being deleted.");
+    throw new HttpError(404, "not_found", "Claim not found.");
+  }
+  return json({ display: apiDisplay(saved.display) });
+}
+
 async function putClaim(request: Request, accountId: string, claimId: string, store: ProgressStore): Promise<Response> {
   const body = await readJson(request);
   const payload = validateClaimBody(body, claimId);
@@ -228,7 +284,7 @@ export async function handleProgressRequest(
   dependencies: ProgressDependencies = {},
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/api/claims" && !/^\/api\/claims\/[^/]+(?:\/photo)?$/.test(url.pathname)) return null;
+  if (url.pathname !== "/api/claims" && !/^\/api\/claims\/[^/]+(?:\/photo|\/display)?$/.test(url.pathname)) return null;
   try {
     if (isPhotoRoute(request)) {
       const photoMatch = /^\/api\/claims\/([^/]+)\/photo$/.exec(url.pathname);
@@ -254,6 +310,17 @@ export async function handleProgressRequest(
     if (url.pathname === "/api/claims") {
       if (request.method !== "GET") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
       return await listClaims(request, auth.accountId.toLowerCase(), store);
+    }
+    if (url.pathname === "/api/claims/display") {
+      if (request.method !== "GET") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+      return await listDisplays(request, auth.accountId.toLowerCase(), store);
+    }
+    const displayMatch = /^\/api\/claims\/([^/]+)\/display$/.exec(url.pathname);
+    if (displayMatch) {
+      const claimId = displayMatch[1].toLowerCase();
+      if (!UUID.test(claimId)) return json({ error: { code: "not_found", message: "Claim not found." }, code: "not_found", message: "Claim not found." }, 404);
+      if (request.method !== "PUT") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+      return await putDisplay(request, auth.accountId.toLowerCase(), claimId, store);
     }
     const match = /^\/api\/claims\/([^/]+)$/.exec(url.pathname);
     if (!match) return null;

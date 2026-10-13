@@ -17,8 +17,10 @@ let nextRequestId = 0;
 const CLAIM_ID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const CLAIM_RECORD_PATH = new RegExp(`^/api/claims/${CLAIM_ID}$`, "i");
 const PHOTO_PATH = new RegExp(`^/api/claims/${CLAIM_ID}/photo$`, "i");
+const DISPLAY_PATH = new RegExp(`^/api/claims/${CLAIM_ID}/display$`, "i");
 
-type RouteKind = "claims" | "claim" | "photo";
+/** `displays` and `display` back up each photo's crop, cover and removal (#174). */
+type RouteKind = "claims" | "claim" | "photo" | "displays" | "display";
 
 /** Returns true for the account-claims namespace, including malformed routes that must fail closed. */
 export function isAccountBackupPath(url: URL): boolean {
@@ -54,6 +56,16 @@ export function assertAccountBackupRequest(url: URL, method: string, approvedApi
     return "claims";
   }
 
+  if (url.pathname === "/api/claims/display") {
+    if (normalizedMethod !== "GET" || url.href.includes("?")) throw new Error("Photo display choices only permit GET requests to the exact list route.");
+    return "displays";
+  }
+
+  if (DISPLAY_PATH.test(url.pathname)) {
+    if (normalizedMethod !== "PUT" || url.href.includes("?")) throw new Error("A photo's display choices only permit PUT requests to an exact route.");
+    return "display";
+  }
+
   if (CLAIM_RECORD_PATH.test(url.pathname)) {
     if (normalizedMethod !== "PUT" || url.href.includes("?")) throw new Error("Saved claims only permit PUT requests to an exact claim route.");
     return "claim";
@@ -87,7 +99,7 @@ export async function accountBackupFetch(
   const body = await readRequestBody(input, { ...init, method }, method, callerSignal);
   if (method === "GET" && body.byteLength !== 0) throw new TypeError("Account backup GET requests cannot contain a body.");
   if (method === "PUT" && body.byteLength === 0) throw new TypeError("Account backup PUT requests require a body.");
-  const maxRequestBytes = route === "claim" ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
+  const maxRequestBytes = route === "claim" || route === "display" ? MAX_CLAIM_JSON_BYTES : MAX_ACCOUNT_BACKUP_BYTES;
   if (body.byteLength > maxRequestBytes) throw new RangeError("The account backup request exceeds its byte limit.");
 
   if (Capacitor.isNativePlatform()) {
@@ -100,7 +112,7 @@ export async function accountBackupFetch(
 function assertAccountBackupContentType(headers: Headers, route: RouteKind, method: string): void {
   if (method !== "PUT") return;
   const contentType = headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
-  const allowed = route === "claim" ? contentType === "application/json" :
+  const allowed = route === "claim" || route === "display" ? contentType === "application/json" :
     ["image/jpeg", "image/png", "image/webp"].includes(contentType ?? "");
   if (!allowed) throw new TypeError("The account backup content type is not approved for this route.");
 }

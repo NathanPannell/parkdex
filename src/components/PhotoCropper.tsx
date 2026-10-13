@@ -12,6 +12,10 @@ type Props = {
   error: string | null;
   onRetake: () => void;
   onUse: (crop: PhotoCrop) => void;
+  /** Where a re-crop starts (#174). A new photo starts at the largest fit. */
+  initialCrop?: PhotoCrop | null;
+  /** The secondary button's label: "Retake" for a new photo, "Cancel" for a re-crop. */
+  retakeLabel?: string;
 };
 
 type Point = { x: number; y: number };
@@ -32,8 +36,8 @@ function frameSize(stageWidth: number, stageHeight: number): { width: number; he
  * and the arrow, plus and minus keys do the same on the web. Give each photo its own `key`, so a
  * retake starts again from the largest fit.
  */
-export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse }: Props) {
-  const [crop, setCrop] = useState<PhotoCrop>(() => largestCrop(photo.width, photo.height));
+export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, initialCrop = null, retakeLabel = "Retake" }: Props) {
+  const [crop, setCrop] = useState<PhotoCrop>(() => (initialCrop ? clampCrop(initialCrop, photo.width, photo.height) : largestCrop(photo.width, photo.height)));
   const [frame, setFrame] = useState({ width: 270, height: 360 });
   const stage = useRef<HTMLDivElement>(null);
   const frameEl = useRef<HTMLDivElement>(null);
@@ -158,7 +162,7 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse }: P
         <div className="cropper__hint" role={error ? "alert" : undefined}>{error ?? (busy ? "Getting your photo ready…" : "Pinch to zoom. Drag to move.")}</div>
         <div className="review__actions">
           <button className="btn btn--paper" onClick={onRetake} disabled={busy}>
-            <Icon name="refresh" size={18} /> Retake
+            <Icon name={retakeLabel === "Retake" ? "refresh" : "close"} size={18} /> {retakeLabel}
           </button>
           <button className="btn btn--glow" onClick={() => onUse(roundCrop(shown))} disabled={busy}>
             Use photo <Icon name="next" />
