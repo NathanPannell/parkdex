@@ -19,7 +19,7 @@ import type {
   StoredRelease,
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
-import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
+import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime, mapAnchorFor } from "./runtime";
 import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION, contentTransportPausedError } from "./contracts";
 import { contentGateView } from "../../components/contentGateState";
 import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
@@ -445,6 +445,18 @@ afterEach(async () => {
   mapMock.releaseNearby?.();
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.stop()));
   vi.restoreAllMocks();
+});
+
+describe("starter map anchor", () => {
+  it("follows the visitor inside a province and the nearest province's town outside them", () => {
+    const halifax: [number, number] = [-63.58, 44.65];
+    expect(mapAnchorFor(halifax, halifax)).toEqual(halifax);
+    // Toronto is nearer Nova Scotia than BC; Seattle is nearer BC.
+    expect(mapAnchorFor(null, [-79.38, 43.65])).toEqual([-63.5752, 44.6488]);
+    expect(mapAnchorFor(null, [-122.33, 47.61])).toEqual([-123.3656, 48.4284]);
+    // Before any location, Victoria as before.
+    expect(mapAnchorFor(null, null)).toEqual([-123.3656, 48.4284]);
+  });
 });
 
 describe("content runtime", () => {

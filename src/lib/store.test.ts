@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getCollectionRankProgress, getRarityProgress, setRankProgressionEnabled } from "./progression";
-import { load, persistOnboardingPreferences, reducer, type Claim } from "./store";
+import { DEMO_START, load, persistOnboardingPreferences, reducer, type Claim } from "./store";
 import type { Park, Rarity } from "./parks";
 
 type StoreState = Parameters<typeof reducer>[0];
@@ -31,6 +31,7 @@ const readyState: StoreState = {
   claimRevisionByPark: {},
   user: [-123.3656, 48.4284],
   accuracy: null,
+  located: null,
   locationError: null,
   muted: false,
   screen: "claim",
@@ -322,6 +323,32 @@ describe("claim progress hydration", () => {
     expect(afterStaleResult.claims).toEqual({});
     expect(afterStaleResult.pendingPhoto).toBeNull();
     expect(afterStaleResult.progressOwnerKey).toBe("account:new-owner");
+  });
+});
+
+describe("player location", () => {
+  const storage = (lastLocation: unknown) => ({
+    getItem: (key: string) => (key === "parkdex-last-location-v1" ? JSON.stringify(lastLocation) : JSON.stringify({ onboarded: true })),
+  });
+
+  it("starts from the last real position inside a province instead of the demo spot", () => {
+    vi.stubGlobal("localStorage", storage([-63.5752, 44.6488]));
+    expect(load()).toMatchObject({ user: [-63.5752, 44.6488], located: [-63.5752, 44.6488], accuracy: null });
+  });
+
+  it("starts from the demo spot without a saved position, or with one outside every province", () => {
+    vi.stubGlobal("localStorage", storage(null));
+    expect(load()).toMatchObject({ user: DEMO_START, located: null });
+    vi.stubGlobal("localStorage", storage([-79.38, 43.65]));
+    expect(load()).toMatchObject({ user: DEMO_START, located: null });
+  });
+
+  it("remembers real fixes but not demo moves", () => {
+    const located = reducer(readyState, { type: "move", user: [-63.57, 44.62], accuracy: 12 });
+    expect(located.located).toEqual([-63.57, 44.62]);
+    const teleported = reducer(located, { type: "move", user: [-63.6, 44.7], accuracy: null });
+    expect(teleported.user).toEqual([-63.6, 44.7]);
+    expect(teleported.located).toEqual([-63.57, 44.62]);
   });
 });
 

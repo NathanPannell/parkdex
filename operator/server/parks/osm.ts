@@ -1,7 +1,8 @@
 import { catalogueMatch, type CataloguePark, type CatalogueMatch } from "../../../worker/catalogueMatch.js";
 import { interiorPoint, simplifyMultiPolygon, type OsmFeature, type OsmRef } from "../../../worker/osmParks.js";
 import { createSqlOsmParkTable } from "../../../worker/osmParkTable.js";
-import { biomeFor, categoryFor, contentBoundary, FALLBACK_REGION, osmParkId, seedFor, type PublishablePark } from "../../../worker/parkPublish.js";
+import { biomeFor, categoryFor, contentBoundary, osmParkId, seedFor, type PublishablePark } from "../../../worker/parkPublish.js";
+import { provinceFor } from "../../../worker/provinces.js";
 import { HttpError } from "../../../worker/validation.js";
 import { publishStatements, SHAPE_FOR_CATEGORY, shortName, type SqlRunner } from "../drafts.js";
 import type { MultiPolygon } from "./geometry.js";
@@ -78,15 +79,16 @@ function distanceKm(a: [number, number], b: [number, number]): number {
   return Math.hypot(dx, dy);
 }
 
-/** The region of the nearest catalogue park within 30 km, like a published proposal gets. */
+/** The region of the nearest catalogue park in the same province within 30 km, else the province, like a published proposal gets. */
 export function regionNear(point: [number, number], catalogue: CatalogueNeighbour[]): string {
+  const province = provinceFor(point);
   let best: { region: string; km: number } | null = null;
   for (const park of catalogue) {
-    if (!park.region.trim()) continue;
+    if (!park.region.trim() || provinceFor([park.lng, park.lat]) !== province) continue;
     const km = distanceKm(point, [park.lng, park.lat]);
     if (km <= NEIGHBOUR_KM && (!best || km < best.km)) best = { region: park.region, km };
   }
-  return best?.region ?? FALLBACK_REGION;
+  return best?.region ?? province;
 }
 
 function defaultBlurb(feature: OsmFeature): string {

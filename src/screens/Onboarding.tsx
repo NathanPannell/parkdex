@@ -8,9 +8,10 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { buzz, sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
-import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
+import { saveLastLocation } from "../lib/lastLocation";
+import { onboardingStart } from "../lib/provinces";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
@@ -374,17 +375,23 @@ export function Onboarding() {
       dispatch({ type: "onboarded" });
       return;
     }
+    // A real position anywhere in a supported province is used as is; the demo spot is
+    // only for players outside them all or without a location.
+    const start = (fix: [number, number] | null, accuracy: number | null) => {
+      const decision = onboardingStart(fix);
+      if (decision.kind === "located") {
+        dispatch({ type: "move", user: decision.point, accuracy });
+        // Builds without live GPS have no other way to remember it across a reload.
+        saveLastLocation(decision.point);
+      } else {
+        toast(decision.message, "kip");
+        dispatch({ type: "move", user: DEMO_START, accuracy: null });
+      }
+      dispatch({ type: "onboarded" });
+    };
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const here: [number, number] = [pos.coords.longitude, pos.coords.latitude];
-        if (distanceKm(here, DEMO_START) > 300) toast("You're far from the Island. Using a Victoria demo spot.", "kip");
-        else dispatch({ type: "move", user: here, accuracy: pos.coords.accuracy });
-        dispatch({ type: "onboarded" });
-      },
-      () => {
-        toast("No location, no problem. Using a Victoria demo spot.", "kip");
-        dispatch({ type: "onboarded" });
-      },
+      (pos) => start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy),
+      () => start(null, null),
       { timeout: 6000 },
     );
   };
