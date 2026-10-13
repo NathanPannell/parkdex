@@ -1,5 +1,5 @@
 import { database } from "../db.js";
-import type { ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./progress-types.js";
+import type { ClaimDisplay, ClaimDisplayRecord, ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./progress-types.js";
 
 export type PutClaimResult =
   | { status: "created"; claim: ClaimRecord }
@@ -28,7 +28,14 @@ export interface ProgressStore {
   deleteAccountProgress(accountId: string): Promise<void>;
   recordPhotoDeletionFailure(receiptId: string): Promise<void>;
   clearDeletionPhotoObjects(receiptId: string): Promise<void>;
+  /** Display choices for the account's claims (#174). Absent where game_005_dex.sql has not run. */
+  listClaimDisplays?(accountId: string, limit: number): Promise<ClaimDisplayRecord[]>;
+  putClaimDisplay?(accountId: string, claimId: string, display: ClaimDisplay): Promise<PutClaimDisplayResult>;
 }
+
+export type PutClaimDisplayResult =
+  | { status: "saved"; display: ClaimDisplayRecord }
+  | { status: "claim_missing" | "unavailable" };
 
 function stringValue(value: unknown): string {
   return value instanceof Date ? value.toISOString() : String(value);
@@ -254,6 +261,45 @@ export function createNeonProgressStore(databaseUrl: string): ProgressStore {
     await sql.query("DELETE FROM kip_account.account_deletion_photo_objects WHERE receipt_id = $1::uuid", [receiptId]);
   }
 
+  function displayFromRow(row: Record<string, unknown>): ClaimDisplayRecord {
+    const crop = row.crop === null || row.crop === undefined ? null : jsonValue<ClaimDisplay["crop"]>(row.crop);
+    return {
+      claimId: stringValue(row.claim_id).toLowerCase(),
+      crop: crop ? { x: Number(crop.x), y: Number(crop.y), width: Number(crop.width), height: Number(crop.height) } : null,
+      coverAt: row.cover_at === null || row.cover_at === undefined ? null : new Date(stringValue(row.cover_at)).toISOString(),
+      removed: row.removed === true || row.removed === "t",
+      updatedAt: new Date(stringValue(row.updated_at)).toISOString(),
+    };
+  }
+
+  async function listClaimDisplays(accountId: string, limit: number): Promise<ClaimDisplayRecord[]> {
+    const rows = await sql.query(`
+      SELECT d.claim_id, d.crop, d.cover_at, d.removed, d.updated_at
+      FROM kip_account.claim_display d
+      JOIN kip_account.accounts a ON a.id = d.account_id AND a.deletion_state = 'active'
+      WHERE d.account_id = $1::uuid
+      ORDER BY d.updated_at DESC, d.claim_id
+      LIMIT $2`, [accountId, limit]);
+    return rows.map((row) => displayFromRow(row as Record<string, unknown>));
+  }
+
+  async function putClaimDisplay(accountId: string, claimId: string, display: ClaimDisplay): Promise<PutClaimDisplayResult> {
+    // Written whole; the last write wins. Only for an active account's own claim.
+    const rows = await sql.query(`
+      INSERT INTO kip_account.claim_display (account_id, claim_id, crop, cover_at, removed, updated_at)
+      SELECT c.account_id, c.claim_id, $3::jsonb, $4::timestamptz, $5, clock_timestamp()
+      FROM kip_account.claims c
+      JOIN kip_account.accounts a ON a.id = c.account_id AND a.deletion_state = 'active'
+      WHERE c.account_id = $1::uuid AND c.claim_id = $2::uuid
+      ON CONFLICT (account_id, claim_id) DO UPDATE
+        SET crop = EXCLUDED.crop, cover_at = EXCLUDED.cover_at, removed = EXCLUDED.removed, updated_at = EXCLUDED.updated_at
+      RETURNING claim_id, crop, cover_at, removed, updated_at`,
+    [accountId, claimId, display.crop ? JSON.stringify(display.crop) : null, display.coverAt, display.removed]);
+    if (rows[0]) return { status: "saved", display: displayFromRow(rows[0] as Record<string, unknown>) };
+    const active = await sql.query("SELECT id FROM kip_account.accounts WHERE id = $1::uuid AND deletion_state = 'active' LIMIT 1", [accountId]);
+    return active.length === 0 ? { status: "unavailable" } : { status: "claim_missing" };
+  }
+
   return {
     putClaim,
     listClaims,
@@ -266,6 +312,8 @@ export function createNeonProgressStore(databaseUrl: string): ProgressStore {
     deleteAccountProgress,
     recordPhotoDeletionFailure,
     clearDeletionPhotoObjects,
+    listClaimDisplays,
+    putClaimDisplay,
   };
 }
 

@@ -1,5 +1,5 @@
 import { database } from "./db.js";
-import { isParkHidden } from "./parkVisibility.js";
+import { hiddenParks, isParkHidden } from "./parkVisibility.js";
 
 export interface PlayerRecord {
   handle: string;
@@ -163,6 +163,20 @@ export interface FoundingReviewRecord {
   decidedAt: string | null;
 }
 
+/**
+ * One park in the player's Dex (#174): every America/Vancouver day they visited it, from game
+ * visits and from claims (old imported claims and photos alike), so a photo taken on the day of a
+ * visit never counts twice.
+ */
+export interface DexParkRecord {
+  parkId: string;
+  days: string[];
+  firstVisitAt: string;
+  lastVisitAt: string;
+  /** Hidden parks (docs/park-visibility.md) stay in the Dex but out of its totals. */
+  hidden: boolean;
+}
+
 export interface LeaderboardRow {
   rank: number;
   handle: string;
@@ -190,6 +204,8 @@ export interface GameStore {
   founderPoints?(accountId: string, now: string): Promise<number>;
   /** Pending review requests and unseen decisions. Empty where founders_002_reviews.sql has not run. */
   foundingReviews?(accountId: string): Promise<FoundingReviewRecord[]>;
+  /** The parks this account has visited, for My Dex. */
+  dex?(accountId: string, now: string): Promise<DexParkRecord[]>;
 }
 
 export const TAKEOVER_LIMIT = 50;
@@ -507,6 +523,30 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         if (missingFounders(error)) return [];
         throw error;
       }
+    },
+
+    async dex(accountId, now) {
+      // Claims are read directly, not only through their import into visits, so a claim backed up
+      // since the last deploy already counts. Days are distinct, so one visit day counts once.
+      const found = await rows(`
+        WITH mine AS (
+          SELECT park_id, local_day, visited_at AS at FROM kip_game.visits
+          WHERE account_id = $1::uuid AND visited_at <= $2::timestamptz
+          UNION ALL
+          SELECT park_id, kip_game.local_day(claimed_at), claimed_at FROM kip_account.claims
+          WHERE account_id = $1::uuid AND claimed_at <= $2::timestamptz
+        )
+        SELECT park_id, array_agg(DISTINCT to_char(local_day, 'YYYY-MM-DD') ORDER BY to_char(local_day, 'YYYY-MM-DD')) AS days,
+          min(at) AS first_at, max(at) AS last_at
+        FROM mine GROUP BY park_id ORDER BY park_id`, [accountId, now]);
+      const hidden = await hiddenParks(sql, found.map((row) => String(row.park_id)));
+      return found.map((row) => ({
+        parkId: String(row.park_id),
+        days: (Array.isArray(row.days) ? row.days : jsonValue(row.days) as unknown[]).map(String),
+        firstVisitAt: iso(row.first_at),
+        lastVisitAt: iso(row.last_at),
+        hidden: hidden.has(String(row.park_id)),
+      }));
     },
 
     async leaderboard(now) {

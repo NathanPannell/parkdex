@@ -117,6 +117,14 @@ class MemoryGameStore implements GameStore {
   async founderPoints() { return 24; }
   reviews: FoundingReviewRecord[] = [];
   async foundingReviews() { return this.reviews; }
+  dexCalls: Array<{ accountId: string; now: string }> = [];
+  async dex(accountId: string, now: string) {
+    this.dexCalls.push({ accountId, now });
+    return [
+      { parkId: PARK, days: ["2026-10-01", "2026-10-08"], firstVisitAt: "2026-10-01T18:00:00.000Z", lastVisitAt: "2026-10-08T17:00:00.000Z", hidden: false },
+      { parkId: "municipal-hidden", days: ["2026-09-30"], firstVisitAt: "2026-09-30T18:00:00.000Z", lastVisitAt: "2026-09-30T18:00:00.000Z", hidden: true },
+    ];
+  }
 }
 
 function setup(options: { fetch?: typeof fetch; envOverride?: Partial<WorkerEnvironment> } = {}) {
@@ -480,4 +488,27 @@ test("park crew details show the code to members only and record crew_code_shown
 test("crew routes group by park in analytics, never one route per park", () => {
   assert.equal(normalizeRoute("GET", `/api/game/parks/${PARK}/crew`), "GET /api/game/parks/:park/crew");
   assert.equal(normalizeRoute("POST", "/api/game/crews/join"), "POST /api/game/crews/join");
+
+test("GET /api/game/dex lists visited parks with their visit days for the signed-in account", async () => {
+  const { store, call } = setup();
+  assert.equal((await call("GET", "/api/game/dex", undefined, "none")).status, 401);
+  const response = await call("GET", "/api/game/dex", undefined, "cookie-no-csrf");
+  assert.equal(response.status, 200, "reads only need the session");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), {
+    parks: [
+      { parkId: PARK, visits: 2, days: ["2026-10-01", "2026-10-08"], firstVisitAt: "2026-10-01T18:00:00.000Z", lastVisitAt: "2026-10-08T17:00:00.000Z", hidden: false },
+      { parkId: "municipal-hidden", visits: 1, days: ["2026-09-30"], firstVisitAt: "2026-09-30T18:00:00.000Z", lastVisitAt: "2026-09-30T18:00:00.000Z", hidden: true },
+    ],
+    serverTime: new Date(NOW).toISOString(),
+  });
+  assert.deepEqual(store.dexCalls, [{ accountId: ACCOUNT, now: new Date(NOW).toISOString() }]);
+  assert.equal((await call("POST", "/api/game/dex", {})).status, 405);
+});
+
+test("GET /api/game/dex answers 503 where the store cannot list a Dex", async () => {
+  const { store, call } = setup();
+  (store as { dex?: unknown }).dex = undefined;
+  const response = await call("GET", "/api/game/dex");
+  assert.equal(response.status, 503);
 });
