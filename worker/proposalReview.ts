@@ -142,6 +142,31 @@ export interface ProposalReviewStore {
   sql(): SqlRunner;
 }
 
+const PARK_COLUMNS = "p.id, p.name, p.region, p.lat, p.lng, b.feature->'geometry' AS geometry";
+/** Parks whose pin is in the box around the point ($1 to $4), nearest first. */
+const NEARBY_PINS_SQL = `SELECT ${PARK_COLUMNS}
+  FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
+  WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
+  ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80`;
+/**
+ * Those parks, plus every park whose boundary reaches into the same box, found by the boundary
+ * box index (founders_004). A big park's far parts can contain the point while its pin is tens of
+ * kilometres away (Kejimkujik Seaside, #182). Boxes that contain the point come first.
+ */
+const NEARBY_PARKS_SQL = `WITH pins AS (
+    SELECT p.id FROM public.parks p
+    WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
+    ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80
+  ), reaching AS (
+    SELECT b.park_id AS id FROM public.boundaries b
+    WHERE public.park_boundary_box(b.feature) && box(point($3, $1), point($4, $2))
+    ORDER BY public.park_boundary_box(b.feature) <-> point($6, $5) LIMIT 80
+  )
+  SELECT ${PARK_COLUMNS}
+  FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
+  WHERE p.id IN (SELECT id FROM pins UNION SELECT id FROM reaching)
+  ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2`;
+
 export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore {
   return {
     async state(proposalId) {
@@ -151,13 +176,15 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
     },
     async nearbyParks(lat, lng, km) {
       const dLat = km / 110.54, dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
-      const rows = await db.query(
-        `SELECT p.id, p.name, p.region, p.lat, p.lng, b.feature->'geometry' AS geometry
-         FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
-         WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
-         ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80`,
-        [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng],
-      );
+      const params = [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng];
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.query(NEARBY_PARKS_SQL, params);
+      } catch (error) {
+        // A database without founders_004 has no boundary boxes yet: pins only, as before.
+        if ((error as { code?: unknown } | null)?.code !== "42883") throw error;
+        rows = await db.query(NEARBY_PINS_SQL, params);
+      }
       return rows.map((row) => {
         const geometry = row.geometry as MultiPolygon | null;
         return {

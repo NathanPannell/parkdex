@@ -41,6 +41,30 @@ test("the same name close by matches, the same name far away does not", () => {
   assert.equal(nameKey("Park"), "");
 });
 
+// Kejimkujik, roughly (#182): the pin is in the inland part, Seaside is a second part about 72 km
+// away. Here Seaside is a 4 km by 4 km part with a 1 km hole of private land in it.
+const ring = (west: number, south: number, east: number, north: number): Position[] =>
+  [[west, south], [east, south], [east, north], [west, north], [west, south]];
+const TWO_PARTS = park({
+  id: "national-kejimkujik", name: "Kejimkujik National Park and National Historic Site", lat: 44.43829, lng: -65.2086,
+  boundary: { type: "MultiPolygon", coordinates: [
+    [ring(-65.45, 44.25, -65.05, 44.47)],
+    [ring(-64.86, 43.83, -64.81, 43.87), ring(-64.84, 43.845, -64.83, 43.855)],
+  ] },
+});
+const outline = (id: number, name: string, geometry: MultiPolygon): OsmFeature =>
+  ({ type: "way", id, name, kind: "leisure=nature_reserve", tags: { leisure: "nature_reserve" }, geometry, areaM2: 1_000_000 });
+
+test("an outline in a part far from the catalogue park's pin is that park; one in its hole or next to it is new", () => {
+  // Kejimkujik National Park Seaside, inside the second part and outside its hole.
+  const seaside = outline(342211953, "Kejimkujik National Park Seaside", box(-64.835, 43.835, -64.82, 43.843));
+  assert.deepEqual(catalogueMatch(seaside, [TWO_PARTS]), { parkId: "national-kejimkujik", name: "Kejimkujik National Park and National Historic Site" });
+  // A park in the hole is not part of the catalogue park.
+  assert.equal(catalogueMatch(outline(1, "Hole Meadow", box(-64.838, 43.847, -64.832, 43.853)), [TWO_PARTS]), null);
+  // A genuinely new park just outside the far part, its name unrelated.
+  assert.equal(catalogueMatch(outline(2, "Neighbour Commons", box(-64.808, 43.84, -64.8, 43.846)), [TWO_PARTS]), null);
+});
+
 const SECRET = "test-session-secret-which-is-long-enough";
 
 test("GET /api/osm/parks marks candidates that are already on the map", async () => {
