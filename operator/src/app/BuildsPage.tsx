@@ -16,7 +16,9 @@ type Draft = {
 };
 
 /** One-line hints for flags current builds read. Add a flag here when a build starts reading it. */
-const FLAG_HINTS: Record<string, string> = {};
+const FLAG_HINTS: Record<string, string> = {
+  friends: "Friends by QR code and the weekly friends board (#64). Off by default.",
+};
 
 const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [
   { value: "", label: "Built-in", detail: "The server the build was made for" },
