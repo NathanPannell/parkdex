@@ -1,11 +1,19 @@
-"""Upload a signed Android App Bundle to a Google Play testing track.
+"""Upload a signed Android App Bundle to a Google Play testing track, or promote one already uploaded.
 
-Dry run by default: checks the bundle and the release notes, signs in as the publishing
-service account and prints what the track holds now. With --apply it opens an edit, uploads
-the bundle, sets the track's release to it and commits the edit.
+Dry run by default: checks the inputs, signs in as the publishing service account and prints
+what the track holds now and what would change. With --apply it opens an edit, sets the track's
+release and commits the edit.
+
+Upload a new bundle (its version code must be above the highest uploaded):
 
     python scripts/publish-play.py --aab .codex/releases/<folder>/Parkdex-<name>-vc<n>.aab \
         --notes .codex/releases/<folder>/release-notes.txt [--track internal] [--apply]
+
+Promote a version code that is already uploaded, for example from internal to closed testing
+("alpha"). The release name and notes are copied from the release that holds it on --from-track,
+unless --notes is given:
+
+    python scripts/publish-play.py --promote <n> [--from-track internal] --track alpha [--apply]
 
 The service account key is read from PLAY_SERVICE_ACCOUNT_JSON, or from
 ~/.codex/private/parkdex-android/play-publisher/service-account.json. Its values are never
@@ -82,14 +90,37 @@ def release_body(version_code: int, notes: list[dict[str, str]], status: str, ve
     return {"name": name, "versionCodes": [str(version_code)], "status": status, "releaseNotes": notes}
 
 
+def find_release(track: dict, version_code: int) -> dict | None:
+    for release in track.get("releases") or []:
+        if str(version_code) in (release.get("versionCodes") or []):
+            return release
+    return None
+
+
+def promotion_body(version_code: int, source: dict | None, notes: list[dict[str, str]] | None, status: str,
+                   from_track: str) -> dict:
+    """The target track's release: the source release's name and notes, unless notes are given."""
+    if notes is None:
+        if source is None:
+            raise PublishError(f"No release on {from_track} holds version code {version_code}. "
+                               "Pass --notes, or name the track that holds it with --from-track.")
+        notes = source.get("releaseNotes") or []
+        if not notes:
+            raise PublishError(f"The {from_track} release of version code {version_code} has no release notes. "
+                               "Pass --notes.")
+    name = (source or {}).get("name") or str(version_code)
+    return {"name": name, "versionCodes": [str(version_code)], "status": status, "releaseNotes": notes}
+
+
+def describe_release(release: dict) -> str:
+    return f"{release.get('name', '?')} [{release.get('status', '?')}] codes {','.join(release.get('versionCodes', []))}"
+
+
 def describe_track(track: dict) -> str:
     releases = track.get("releases") or []
     if not releases:
         return "no releases"
-    return "; ".join(
-        f"{release.get('name', '?')} [{release.get('status', '?')}] codes {','.join(release.get('versionCodes', []))}"
-        for release in releases
-    )
+    return "; ".join(describe_release(release) for release in releases)
 
 
 def session(key_path: Path):
@@ -113,24 +144,98 @@ def call(http, method: str, url: str, **kwargs) -> dict:
     return response.json() if response.content else {}
 
 
+def set_track_and_commit(http, edit_url: str, args, release: dict) -> None:
+    call(http, "PUT", f"{edit_url}/tracks/{args.track}", json={"track": args.track, "releases": [release]})
+    query = "?changesNotSentForReview=true" if args.changes_not_sent_for_review else ""
+    call(http, "POST", f"{edit_url}:commit{query}")
+
+
+def upload(http, edit_id: str, edit_url: str, args, notes: list[dict[str, str]], provenance: dict) -> bool:
+    """Upload the bundle and release it to args.track. Returns whether the edit was committed."""
+    bundles = call(http, "GET", f"{edit_url}/bundles").get("bundles", [])
+    highest = max((int(bundle["versionCode"]) for bundle in bundles), default=0)
+    expected = provenance.get("versionCode")
+    if expected is not None and int(expected) <= highest:
+        raise PublishError(f"Version code {expected} is not above the highest uploaded, {highest}. "
+                           "To release an uploaded version code to another track, use --promote.")
+    print(f"bundle {args.aab.name}: version {expected or '?'} ({provenance.get('versionName') or '?'}), "
+          f"source {str(provenance.get('sourceSha') or '?')[:12]}; highest uploaded {highest}")
+    if not args.apply:
+        print("dry run: nothing uploaded. Pass --apply to upload and release.")
+        return False
+
+    with args.aab.open("rb") as body:
+        uploaded = call(
+            http, "POST", f"{UPLOAD_API}/{PACKAGE_NAME}/edits/{edit_id}/bundles?uploadType=media",
+            data=body, headers={"Content-Type": "application/octet-stream"}, timeout=900,
+        )
+    version_code = int(uploaded["versionCode"])
+    if expected is not None and version_code != int(expected):
+        raise PublishError(f"Play read version code {version_code}, but the build says {expected}.")
+    print(f"uploaded version code {version_code} (sha256 {uploaded.get('sha256', '?')[:12]})")
+
+    release = release_body(version_code, notes, args.status, provenance.get("versionName"))
+    set_track_and_commit(http, edit_url, args, release)
+    print(f"released {release['name']} to {args.track} as {args.status}")
+    return True
+
+
+def promote(http, edit_url: str, args, current: dict, notes: list[dict[str, str]] | None) -> bool:
+    """Release an uploaded version code to args.track. Returns whether the edit was committed."""
+    version_code = args.promote
+    bundles = call(http, "GET", f"{edit_url}/bundles").get("bundles", [])
+    if version_code not in {int(bundle["versionCode"]) for bundle in bundles}:
+        raise PublishError(f"Version code {version_code} has not been uploaded. Upload it with --aab first.")
+
+    source = find_release(call(http, "GET", f"{edit_url}/tracks/{args.from_track}"), version_code)
+    print(f"{args.from_track} release of {version_code}: {describe_release(source) if source else 'none'}")
+    release = promotion_body(version_code, source, notes, args.status, args.from_track)
+
+    held = [(r.get("versionCodes"), r.get("status")) for r in current.get("releases") or []]
+    if held == [(release["versionCodes"], release["status"])]:
+        print(f"{args.track} already releases {version_code} as {args.status}; nothing to change.")
+        return False
+
+    origin = "from --notes" if notes is not None else f"copied from {args.from_track}"
+    languages = ", ".join(f"{note['language']} ({len(note['text'])} chars)" for note in release["releaseNotes"])
+    print(f"{args.track} would become: {describe_release(release)}; notes {origin}: {languages}")
+    if not args.apply:
+        print("dry run: nothing changed. Pass --apply to promote.")
+        return False
+
+    set_track_and_commit(http, edit_url, args, release)
+    print(f"promoted {release['name']} to {args.track} as {args.status}")
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--aab", required=True, type=Path)
-    parser.add_argument("--notes", required=True, type=Path, help="release notes in Play's <lang>...</lang> format")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--aab", type=Path, help="signed bundle to upload")
+    source.add_argument("--promote", type=int, metavar="VERSION_CODE", help="already uploaded version code to release")
+    parser.add_argument("--notes", type=Path, help="release notes in Play's <lang>...</lang> format; required with --aab")
     parser.add_argument("--track", default="internal", choices=TRACKS)
+    parser.add_argument("--from-track", default="internal", choices=TRACKS,
+                        help="with --promote, the track whose release name and notes are copied")
     parser.add_argument("--status", default="completed", choices=("completed", "draft"))
-    parser.add_argument("--apply", action="store_true", help="upload and commit; without it nothing changes")
+    parser.add_argument("--apply", action="store_true", help="change and commit; without it nothing changes")
     parser.add_argument("--allow-production", action="store_true")
     parser.add_argument("--changes-not-sent-for-review", action="store_true",
                         help="commit without sending changes for review, when Play asks for it")
     args = parser.parse_args(argv)
+    if args.aab and not args.notes:
+        parser.error("--notes is required with --aab")
 
     try:
         if args.track == "production" and not args.allow_production:
             raise PublishError("Refusing the production track without --allow-production.")
-        check_bundle(args.aab)
-        notes = parse_release_notes(args.notes.read_text(encoding="utf-8-sig"))
-        provenance = read_provenance(args.aab)
+        if args.promote is not None and args.from_track == args.track:
+            raise PublishError(f"--from-track and --track are both {args.track}.")
+        notes = parse_release_notes(args.notes.read_text(encoding="utf-8-sig")) if args.notes else None
+        provenance = {}
+        if args.aab:
+            check_bundle(args.aab)
+            provenance = read_provenance(args.aab)
         key_path = Path(os.environ.get("PLAY_SERVICE_ACCOUNT_JSON") or DEFAULT_KEY)
         http = session(key_path)
 
@@ -141,33 +246,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             current = call(http, "GET", f"{edit_url}/tracks/{args.track}")
             print(f"{args.track} now: {describe_track(current)}")
-            bundles = call(http, "GET", f"{edit_url}/bundles").get("bundles", [])
-            highest = max((int(bundle["versionCode"]) for bundle in bundles), default=0)
-            expected = provenance.get("versionCode")
-            if expected is not None and int(expected) <= highest:
-                raise PublishError(f"Version code {expected} is not above the highest uploaded, {highest}.")
-            print(f"bundle {args.aab.name}: version {expected or '?'} ({provenance.get('versionName') or '?'}), "
-                  f"source {str(provenance.get('sourceSha') or '?')[:12]}; highest uploaded {highest}")
-            if not args.apply:
-                print("dry run: nothing uploaded. Pass --apply to upload and release.")
-                return 0
-
-            with args.aab.open("rb") as body:
-                uploaded = call(
-                    http, "POST", f"{UPLOAD_API}/{PACKAGE_NAME}/edits/{edit['id']}/bundles?uploadType=media",
-                    data=body, headers={"Content-Type": "application/octet-stream"}, timeout=900,
-                )
-            version_code = int(uploaded["versionCode"])
-            if expected is not None and version_code != int(expected):
-                raise PublishError(f"Play read version code {version_code}, but the build says {expected}.")
-            print(f"uploaded version code {version_code} (sha256 {uploaded.get('sha256', '?')[:12]})")
-
-            release = release_body(version_code, notes, args.status, provenance.get("versionName"))
-            call(http, "PUT", f"{edit_url}/tracks/{args.track}", json={"track": args.track, "releases": [release]})
-            query = "?changesNotSentForReview=true" if args.changes_not_sent_for_review else ""
-            call(http, "POST", f"{edit_url}:commit{query}")
-            committed = True
-            print(f"released {release['name']} to {args.track} as {args.status}")
+            if args.aab:
+                committed = upload(http, edit["id"], edit_url, args, notes, provenance)
+            else:
+                committed = promote(http, edit_url, args, current, notes)
             return 0
         finally:
             if not committed:
