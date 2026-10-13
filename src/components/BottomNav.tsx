@@ -10,7 +10,7 @@ import { Icon, type IconName } from "./Icon";
 type Tab = "map" | "parks" | "leaderboard" | "settings";
 const TABS: Record<Tab, { icon: IconName; label: string }> = {
   map: { icon: "map", label: "Explore" },
-  parks: { icon: "flag", label: "Your parks" },
+  parks: { icon: "book", label: "My Dex" },
   leaderboard: { icon: "trophy", label: "Leaders" },
   settings: { icon: "gear", label: "Settings" },
 };

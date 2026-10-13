@@ -1,5 +1,6 @@
 import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { AddDexPhoto } from "../components/DexPhoto";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
@@ -19,6 +20,7 @@ import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsP
 import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
 import { useKipTip } from "../lib/kipTips";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
+import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
 import "../game.css";
 
@@ -100,6 +102,8 @@ export function Plant() {
   const [score, setScore] = useState<Score | null>(null);
   const [joinedCrew, setJoinedCrew] = useState<Crew | null>(null);
   const [alreadyMember, setAlreadyMember] = useState(false);
+  // "Add a photo" after the visit (#174): the camera, the crop, then the photo joins My Dex.
+  const [adding, setAdding] = useState(false);
 
   const progress = useMotionValue(0);
   const ring = useTransform(progress, (p) => 289 * (1 - p));
@@ -389,6 +393,7 @@ export function Plant() {
   };
 
   function leave(screen: "map" | "parks") {
+    if (screen === "parks") openDexOn("flags");
     for (const action of leavePlant(park ? park.id : null, screen)) dispatch(action);
   }
 
@@ -592,9 +597,16 @@ export function Plant() {
                   ))}
                 </motion.div>
               )}
+              {park && (
+                <motion.div variants={pop} className="claim__row">
+                  <button className="btn btn--sm btn--glow" onClick={() => { sfx.pop(); setAdding(true); }}>
+                    <Icon name="camera" size={18} /> Add a photo
+                  </button>
+                </motion.div>
+              )}
               <motion.div variants={pop} className="claim__row">
                 <button className="btn btn--sm btn--sun" onClick={() => leave("parks")}>
-                  <Icon name="flag" size={18} /> Your parks
+                  <Icon name="flag" size={18} /> Your flags
                 </button>
                 <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>
                   <Icon name="map" size={18} /> Back to map
@@ -651,6 +663,7 @@ export function Plant() {
           )}
         </AnimatePresence>
       </div>
+      {park && <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} />}
     </motion.div>
   );
 }

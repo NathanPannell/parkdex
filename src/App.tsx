@@ -43,7 +43,7 @@ import { Plant } from "./screens/Plant";
 import { backCanLeavePlant, leavePlant } from "./lib/game/plantExit";
 import { FoundingDecisionSheet, useFoundingDecisions } from "./screens/FoundingDecisionSheet";
 import { TakeoverMessages } from "./screens/TakeoverSheet";
-import { YourParks } from "./screens/YourParks";
+import { MyDex } from "./screens/MyDex";
 import { Splash } from "./screens/Splash";
 
 export function App() {
@@ -291,7 +291,7 @@ function Screens() {
           <MapScreen />
         </div>
       )}
-      <AnimatePresence>{screen === "parks" && <YourParks key="parks" />}</AnimatePresence>
+      <AnimatePresence>{screen === "parks" && <MyDex key="parks" />}</AnimatePresence>
       <AnimatePresence>{screen === "leaderboard" && <Leaderboard key="leaderboard" />}</AnimatePresence>
       <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}</AnimatePresence>
       <AnimatePresence>{screen === "settings" && <Settings key="settings" tabbed />}</AnimatePresence>
