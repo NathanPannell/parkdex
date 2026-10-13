@@ -147,6 +147,13 @@ export function formatFlagAge(ageMs: number): string {
   return `${Math.floor(age / DAY_MS)}d`;
 }
 
+/** The same age in words, for screen readers: "35 minutes", "3 hours", "2 days". */
+export function describeFlagAge(ageMs: number): string {
+  const age = Number.isFinite(ageMs) ? Math.max(0, ageMs) : 0;
+  const [count, unit] = age < HOUR_MS ? [Math.floor(age / MINUTE_MS), "minute"] : age < DAY_MS ? [Math.floor(age / HOUR_MS), "hour"] : [Math.floor(age / DAY_MS), "day"];
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+}
+
 function mix(hex: string, toward: string, amount: number): string {
   if (amount <= 0) return hex;
   const value = [1, 3, 5].map((offset) => Math.round(channel(hex, offset) * (1 - amount) + channel(toward, offset) * amount));

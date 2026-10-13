@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contrast, flagAgeDays, flagAgeMs, flagBody, flagOutline, flagSpec, flagSvg, formatFlagAge, weatherForDays } from "./flag";
+import { contrast, describeFlagAge, flagAgeDays, flagAgeMs, flagBody, flagOutline, flagSpec, flagSvg, formatFlagAge, weatherForDays } from "./flag";
 
 const seeds = Array.from({ length: 400 }, (_, index) => `seed-${index.toString(16)}-${(index * 2654435761) >>> 0}`);
 
@@ -94,5 +94,18 @@ describe("flag age", () => {
     expect(flagAgeMs("2026-10-01T12:00:00Z", "2026-10-01T12:35:00Z")).toBe(35 * minute);
     expect(flagAgeMs("2026-10-01T12:00:00Z", "2026-10-01T11:00:00Z")).toBe(0);
     expect(flagAgeMs("nonsense", Date.now())).toBe(0);
+  });
+
+  it("says a flag's age in words", () => {
+    const minute = 60_000;
+    const hour = 60 * minute;
+    expect(describeFlagAge(0)).toBe("0 minutes");
+    expect(describeFlagAge(minute)).toBe("1 minute");
+    expect(describeFlagAge(12 * minute + 30_000)).toBe("12 minutes");
+    expect(describeFlagAge(hour)).toBe("1 hour");
+    expect(describeFlagAge(3 * hour + 59 * minute)).toBe("3 hours");
+    expect(describeFlagAge(24 * hour)).toBe("1 day");
+    expect(describeFlagAge(2 * 24 * hour + 23 * hour)).toBe("2 days");
+    expect(describeFlagAge(Number.NaN)).toBe("0 minutes");
   });
 });
