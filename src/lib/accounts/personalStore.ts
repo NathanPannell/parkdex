@@ -1,4 +1,5 @@
 import type { Park } from "../parks";
+import { isPhotoCrop, type PhotoCrop } from "../photoCrop";
 import { MAX_BACKUP_PHOTO_BYTES, type ConvertedPhotoRendition, type SupportedPhotoType as SupportedPhotoTypeInternal } from "./photoBackupRendition";
 
 const DATABASE = "parkdex-personal-v1";
@@ -46,6 +47,12 @@ export type PersonalPhoto = {
   backupState: PhotoBackupState;
   unsupportedReason: "type" | "size" | "magic" | null;
   backupRendition?: PhotoBackupRendition | null;
+  /**
+   * The player's 3:4 crop of this photo (#173), normalised 0–1 to the upright photo
+   * (`lib/photoCrop.ts`). Missing or null on photos saved before crops: show the largest centred
+   * 3:4 fit. It is display metadata only: the blob, its digest and its backup never change with it.
+   */
+  crop?: PhotoCrop | null;
 };
 
 export type PhotoBackupRendition = ConvertedPhotoRendition & {
@@ -527,6 +534,8 @@ export type CreatePersonalClaimInput = {
   claimedAt?: string;
   contentReleaseId?: string | null;
   photo?: Blob | string | null;
+  /** The crop of `photo`, kept beside the original photo. */
+  crop?: PhotoCrop | null;
 };
 
 /** The resolved promise means claim metadata, local photo, and account outbox committed together. */
@@ -542,7 +551,9 @@ export async function createPersonalClaim(owner: ProgressOwner, input: CreatePer
     syncState: owner.kind === "guest" ? "local" : "pending", photoIssue: null, remotePhoto: { status: "missing" },
   };
   let photo: PersonalPhoto | null = null;
+  if (input.crop != null && (input.photo == null || !isPhotoCrop(input.crop))) throw new Error("A photo crop needs a photo and must lie within it.");
   if (input.photo != null) photo = await preparePhoto(owner, claimId, typeof input.photo === "string" ? dataUrlToBlob(input.photo) : input.photo);
+  if (photo && input.crop) photo.crop = { x: input.crop.x, y: input.crop.y, width: input.crop.width, height: input.crop.height };
   await withDatabase((db) => transaction(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
     const claims = tx.objectStore(CLAIMS);
     const request = claims.get([key, claimId]);
@@ -702,6 +713,35 @@ export async function getPersonalPhoto(owner: ProgressOwner, claimId: string): P
       if (!photo || owner.kind !== "guest") { complete(photo); return; }
       const reservationRequest = tx.objectStore(META).get(guestReservationKey(claimId)) as IDBRequest<Meta | undefined>;
       reservationRequest.onsuccess = () => complete(reservationRequest.result ? null : photo);
+      reservationRequest.onerror = () => fail(reservationRequest.error);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+/**
+ * Re-crops a saved photo (#174): changes only its crop, never the photo, its digest or its backup
+ * state. Null goes back to the default centred fit. False when this owner has no such photo.
+ */
+export async function setPersonalPhotoCrop(owner: ProgressOwner, claimId: string, crop: PhotoCrop | null): Promise<boolean> {
+  if (crop !== null && !isPhotoCrop(crop)) throw new Error("A photo crop must lie within the photo.");
+  await initializePersonalStore();
+  const key = ownerKey(owner);
+  const stores = owner.kind === "guest" ? [PHOTOS, META] : PHOTOS;
+  return withDatabase((db) => transaction<boolean>(db, stores, "readwrite", (tx, complete, fail) => {
+    const request = tx.objectStore(PHOTOS).get([key, claimId]);
+    request.onsuccess = () => {
+      const photo = request.result as PersonalPhoto | undefined;
+      if (!photo) { complete(false); return; }
+      const save = () => {
+        photo.crop = crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null;
+        tx.objectStore(PHOTOS).put(photo);
+        complete(true);
+      };
+      if (owner.kind !== "guest") { save(); return; }
+      // A guest photo reserved for an account is hidden from the guest.
+      const reservationRequest = tx.objectStore(META).get(guestReservationKey(claimId)) as IDBRequest<Meta | undefined>;
+      reservationRequest.onsuccess = () => (reservationRequest.result ? complete(false) : save());
       reservationRequest.onerror = () => fail(reservationRequest.error);
     };
     request.onerror = () => fail(request.error);

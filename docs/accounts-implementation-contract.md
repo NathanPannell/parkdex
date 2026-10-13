@@ -81,6 +81,8 @@ The separate per-account `last-complete-sync` marker supports the visible **Last
 
 Local and server claim validators accept the catalogue's five categories: national, provincial, regional, municipal, and community. Unknown categories remain invalid.
 
+A photo taken in the app (#173) is stored as its upright original, re-encoded as JPEG without metadata at most 2,048 px on the long edge and 2.5 MiB, with the player's crop beside it in the local photo row: `crop: {x, y, width, height}`, normalised 0–1 to the original's width and height, 3:4 in pixels (`src/lib/photoCrop.ts`). A missing or null crop means the largest centred 3:4 fit. Re-cropping changes only `crop` (`setPersonalPhotoCrop`); the photo bytes, digest, backup state and upload rules never change with it. The crop is local today; its backup is part of #174.
+
 Recover legacy demo SVG photos only when their bytes exactly match the app-generated scene for the claim's frozen park snapshot. A bounded raster conversion may also recover oversized JPEG, PNG, or WebP photos. Persist the resulting JPEG as a separate upload rendition; preserve the original blob, hash, owner, claim UUID, and frozen claim metadata. Reuse the saved rendition on retry and compare its hash with remote photo metadata. Unsupported or conflicting images stay local with an honest error, and server photo format, size, and overwrite restrictions remain unchanged.
 
 ### Progress and photo HTTP surface
