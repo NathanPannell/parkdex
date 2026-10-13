@@ -18,13 +18,15 @@ type ViewProps = {
 /** The shelf itself: the player's flag with its patches, then every badge, earned or locked. */
 export function BadgeShelfView({ items, patches, flagSeed, seen, onOpen, children }: ViewProps) {
   const earned = items.filter((item) => item.unlocked).length;
+  // Earned badges first, so the start of the row is what the player has; then the rest in order.
+  const ordered = [...items.filter((item) => item.unlocked), ...items.filter((item) => !item.unlocked)];
   return (
     <section className="account-card card badge-shelf" aria-labelledby="badge-shelf-title">
       <header className="badge-shelf__head">
         <div className="badge-shelf__title">
           <span className="eyebrow" id="badge-shelf-title">Badges</span>
           <strong>{earned} of {items.length} earned</strong>
-          <span className="badge-shelf__help">Tap a badge to sew it onto your flag.</span>
+          <span className="badge-shelf__help">Tap a badge to sew it onto your flag. Swipe for more.</span>
         </div>
         <div className="badge-shelf__flag">
           <Flag seed={flagSeed} size={76} patches={patches} className="is-waving" label={`Your flag with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}`} />
@@ -32,7 +34,7 @@ export function BadgeShelfView({ items, patches, flagSeed, seen, onOpen, childre
         </div>
       </header>
       <ul className="badge-shelf__grid">
-        {items.map((item) => {
+        {ordered.map((item) => {
           const sewn = patches.includes(item.id);
           const fresh = item.unlocked && !seen.has(item.id);
           return (

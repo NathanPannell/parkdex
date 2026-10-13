@@ -494,13 +494,27 @@
   font-weight: 800;
 }
 
+/* One row that scrolls sideways, so the shelf stays short above the collection. */
 .badge-shelf__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 6px;
+  grid-auto-flow: column;
+  grid-auto-columns: 82px;
+  gap: 4px;
   margin: 0;
-  padding: 0;
+  padding: 4px 0 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
   list-style: none;
+}
+
+.badge-shelf__grid::-webkit-scrollbar {
+  display: none;
+}
+
+.badge-shelf__grid > li {
+  scroll-snap-align: start;
 }
 
 .badge-shelf__item {
@@ -585,7 +599,7 @@
 
 .achievement__art--locked {
   filter: brightness(0);
-  opacity: 0.22;
+  opacity: 0.32;
 }
 
 .badge-detail__body {
