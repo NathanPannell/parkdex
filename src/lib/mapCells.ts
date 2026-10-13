@@ -187,6 +187,15 @@ export function writeSavedSquares(keys: Iterable<string>, storage: Pick<Storage,
   }
 }
 
+/** Forget every saved square, for this map or an older one. Their files are deleted with old content. */
+export function clearSavedSquares(storage: Pick<Storage, "removeItem"> | undefined = safeStorage()): void {
+  try {
+    storage?.removeItem(SAVED_KEY);
+  } catch {
+    // Without storage there is nothing saved to forget.
+  }
+}
+
 function safeStorage(): Storage | undefined {
   try {
     return globalThis.localStorage;

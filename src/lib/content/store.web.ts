@@ -1,4 +1,4 @@
-import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentMapInventory, type ContentMapPointer, type ContentStore, type DeleteFileOptions, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { archivedSceneStorageKey, assertArchivedSceneDescriptor } from "./archived-art";
 
 const DATABASE = "parkdex-content-v1";
@@ -17,7 +17,7 @@ const ACTIVE_KEY = "activeReleaseId";
 type MetaRecord = { key: string; value: string | null };
 type FileRecord = { hash: string; size: number; bytes: Blob };
 type RetainedRecord = { parkId: string; park: RetainedPark["park"]; sceneFile?: RetainedPark["sceneFile"] };
-type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | "boundary" | "drive" | "asset" | "hubs" | "map"; id: string; value: unknown; position: number };
+type SyncRow = { key: string; environment: ContentEnvironment; entity: "park" | "boundary" | "drive" | "asset" | "hubs" | "map" | "catalogue"; id: string; value: unknown; position: number };
 type SyncCursor = { environment: ContentEnvironment; revision: number; sourceId: string; readerVersion?: number };
 
 // Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
@@ -45,6 +45,8 @@ function contentRows(environment: ContentEnvironment, state: ContentSyncState): 
   state.assets.forEach((value, position) => rows.push({ key: syncKey(environment, "asset", value.path), environment, entity: "asset", id: value.path, value, position }));
   rows.push({ key: syncKey(environment, "hubs", "default"), environment, entity: "hubs", id: "default", value: state.drive.hubs, position: 0 });
   if (state.map) rows.push({ key: syncKey(environment, "map", "default"), environment, entity: "map", id: "default", value: state.map, position: 0 });
+  // Older builds skip this row; without it they read the stored boundaries as incomplete and fetch a fresh snapshot.
+  if (state.catalogue) rows.push({ key: syncKey(environment, "catalogue", "default"), environment, entity: "catalogue", id: "default", value: state.catalogue, position: 0 });
   return rows;
 }
 
@@ -360,9 +362,10 @@ export class WebContentStore implements ContentStore {
     });
   }
 
-  async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
+  async deleteFile(hash: string, options: DeleteFileOptions = {}): Promise<void> {
     const key = assertHash(hash);
-    const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path));
+    // Optional copies (map chunks, badge art) may go even while current content lists them.
+    const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path)) && !(options.optionalArt && path.startsWith("art/badges/scenes/"));
     const db = await this.database();
     await waitForTransaction<void>(db, [FILES, META, RELEASES, RETAINED_PARKS, ARCHIVED_SCENES, SYNC_ROWS, MAP_INVENTORIES, CACHED_MAP_POINTERS], "readwrite", (tx, complete, fail) => {
       const activeRequest = tx.objectStore(META).get(ACTIVE_KEY) as IDBRequest<MetaRecord | undefined>;
@@ -396,7 +399,7 @@ export class WebContentStore implements ContentStore {
           return;
         }
         const archivedReferencesFile = archivedScenes.some((scene) => scene.file.sha256 === key);
-        const syncReferencesFile = syncRows.some((row) => row.entity === "asset" && (row.value as { sha256?: unknown }).sha256 === key);
+        const syncReferencesFile = !options.optionalArt && syncRows.some((row) => row.entity === "asset" && (row.value as { sha256?: unknown }).sha256 === key);
         const currentMapVersions = new Set(cachedPointers.map((entry) => entry.pointer.version));
         for (const row of syncRows) if (row.entity === "map" && row.value) currentMapVersions.add((row.value as ContentMapPointer).version);
         const mapReferencesFile = inventories.some((entry) => currentMapVersions.has(entry.version) && entry.inventory.files.some((file) => file.sha256 === key && required(file.path)));
@@ -551,7 +554,7 @@ export class WebContentStore implements ContentStore {
       const finish = () => {
         if (!rows || (cursor === undefined && cursorRequest.readyState !== "done")) return;
         if (!cursor || !Number.isSafeInteger(cursor.revision) || typeof cursor.sourceId !== "string") { complete(null); return; }
-        const knownEntities = new Set(["park", "boundary", "drive", "asset", "hubs", "map"]);
+        const knownEntities = new Set(["park", "boundary", "drive", "asset", "hubs", "map", "catalogue"]);
         const local = rows.filter((row) => row?.environment === environment && knownEntities.has(row.entity));
         if (local.some((row) => typeof row.id !== "string" || !Number.isSafeInteger(row.position) || !row.value || typeof row.value !== "object")) {
           complete(null);
@@ -570,9 +573,10 @@ export class WebContentStore implements ContentStore {
         }
         const assets = local.filter((row) => row.entity === "asset").map((row) => row.value as ContentSyncState["assets"][number]);
         const map = local.find((row) => row.entity === "map")?.value as ContentSyncState["map"] | undefined;
+        const catalogue = local.find((row) => row.entity === "catalogue")?.value as ContentSyncState["catalogue"] | undefined;
         const parkOrder = new Map(parks.map((park, index) => [park.id, index]));
         boundaries.sort((a, b) => (parkOrder.get(a.properties.id) ?? Number.MAX_SAFE_INTEGER) - (parkOrder.get(b.properties.id) ?? Number.MAX_SAFE_INTEGER));
-        complete({ revision: cursor.revision, sourceId: cursor.sourceId, parks, boundaries: { type: "FeatureCollection", features: boundaries }, drive: { hubs, parks: drives }, assets, map: map ?? null });
+        complete({ revision: cursor.revision, sourceId: cursor.sourceId, parks, boundaries: { type: "FeatureCollection", features: boundaries }, drive: { hubs, parks: drives }, assets, map: map ?? null, ...(catalogue ? { catalogue } : {}) });
       };
       rowsRequest.onsuccess = () => { rows = rowsRequest.result; finish(); };
       rowsRequest.onerror = () => fail(rowsRequest.error);

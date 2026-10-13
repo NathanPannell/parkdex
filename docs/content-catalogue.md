@@ -15,10 +15,24 @@ Neither new table has content triggers, so changing them emits no content revisi
 ### What each reader gets
 
 - **Readers 1 and 2** (every build installed before this change): `snapshot` and `changes` as before, without floored parks. A change batch whose every change is a floored park arrives as an upsert of the unchanged hub list, because readers reject empty batches and applying the same hubs is a no-op.
-- **Reader 3** (this build, `CONTENT_READER_VERSION = 3`): `snapshot?reader=3` returns `{ schema, revision, catalogue: { schema, version, indexUrl, indexSha256, indexBytes, parkCount } }` while a pointer exists, its revision is not ahead of the database, and the changes feed still covers everything after it (`retention_floor <= revision`). The app downloads the index and every chunk over any connection, checks each file's size and SHA-256, puts boundaries back in park order and validates the result exactly like an API snapshot. Then it applies `/api/content/changes?after=<release revision>` as usual, so parks published after the release (proposals, corrections) still arrive. Without a usable pointer, reader 3 gets one snapshot body, which fails with 503 once the full catalogue is over 4 MiB.
+- **Reader 3** (this build, `CONTENT_READER_VERSION = 3`): `snapshot?reader=3` returns `{ schema, revision, catalogue: { schema, version, indexUrl, indexSha256, indexBytes, parkCount } }` while a pointer exists, its revision is not ahead of the database, and the changes feed still covers everything after it (`retention_floor <= revision`). The app downloads the index and the chunks near the player over any connection (see below), checks each file's size and SHA-256, puts boundaries back in park order and validates the result exactly like an API snapshot. Then it applies `/api/content/changes?after=<release revision>` as usual, so parks published after the release (proposals, corrections) still arrive. Without a usable pointer, reader 3 gets one snapshot body, which fails with 503 once the full catalogue is over 4 MiB.
 - A reader 3 build that is already synced and is behind a batch over 4 MiB (such as a large import) gets HTTP 413 from `changes` and takes a fresh snapshot, which is the CDN release.
 
-All boundaries are downloaded up front rather than near the map viewport. About 9 MB of chunks compress to roughly a quarter on the CDN, the local store, validation, search, the nearby list and the check-in boundary test stay as they are, and every park is available offline once synced, as before. The chunks carry a bounding box, so loading them by area can be added later without a new release format.
+### Only the boundaries near the player stay on the device
+
+Parkdex needs the internet for now, so a reader 3 build keeps a lean catalogue (`src/lib/content/leanCache.ts`):
+
+- Every park, drive time and badge descriptor from the index stays on the device (about 1 MB), so search, pins and the nearby list work as before.
+- Only the boundary chunks holding a park within 50 km of the player download with the index. Chunks are picked by their parks, not their bounding boxes, because some chunks span the country.
+- Other chunks load when the player zooms the map in on them (zoom 8 or more, at most 3 per view) or opens one of their parks. Loaded chunks are kept least recently used first and evicted above 3 MB; nearby chunks are never evicted. Park guides stay under 5 MB.
+- The stored state remembers the release's chunk list (`catalogue` in `ContentSyncState`, a `catalogue` sync row). A boundary that arrives through `changes` after the release is pinned and never evicted, because the release only has the older copy.
+- Builds before this one read a lean cache as incomplete and fetch one fresh snapshot, so rolling back an over-the-air bundle is safe.
+
+A catalogue that came as one API snapshot (no pointer) is kept whole, as before.
+
+### Old content is cleaned up after an update
+
+When the app bundle (web deploy, over-the-air bundle or Play build) or the pinned map changes, the first sync after the update replaces a catalogue saved whole with a lean one and then deletes data that belongs to old releases: the first-format release and its files, older map inventories and their chunks, saved map squares, map detail that is not around the player and badge art that is not near the player or claimed. Retained and archived badges, claims, photos, the account and the personal store are never touched. Every step can be repeated; a marker (`parkdex-cache-generation-v1`) is written only when all of them finish, so an interrupted cleanup runs again on the next start.
 
 ## Publish a release
 
@@ -54,5 +68,6 @@ Build a new release when the changes after the current one grow large (every rea
 - `worker/content_sync.test.ts`: pointer responses, fallbacks and the no-op hub batch.
 - `scripts/test_content_catalogue.py`: deterministic, content-addressed releases, chunk sizes and the uploader layout.
 - `scripts/qa-content-catalogue-sql.mjs` (part of `npm run test:sql`): floors in the real SQL, the builder and pointer tool against PostgreSQL, and the app's reader assembling the release.
-- `src/lib/content/runtime.test.ts`: the app loading a release and refusing a tampered chunk.
+- `src/lib/content/runtime.test.ts`: the app loading a release, refusing a tampered chunk, keeping only nearby boundaries, loading others on demand and cleaning up old content after an update.
+- `src/lib/content/leanCache.test.ts`: nearby selection, the LRU cap and the cleanup rules.
 - `src/lib/content/catalogue-release.test.ts`: the legacy BC release against the claim and account validators and both readers.

@@ -60,15 +60,42 @@ export type ContentChangesResponse = {
   hasMore: boolean;
   batches: ContentChangeBatch[];
 };
+/** One boundary file of a CDN catalogue release, as this device remembers it. */
+export type CatalogueChunkRef = {
+  path: string;
+  url: string;
+  sha256: string;
+  byte_size: number;
+  parkIds: string[];
+  /** West, south, east, north of the boundaries in the file, when the release lists it. */
+  bbox: [number, number, number, number] | null;
+};
+/**
+ * Which boundaries of a CDN catalogue release this device keeps. Boundaries near the
+ * player stay on the device; others load when the player looks at them and are
+ * evicted again, least recently used first (see leanCache.ts).
+ */
+export type CatalogueCache = {
+  version: string;
+  revision: number;
+  chunks: CatalogueChunkRef[];
+  /** Paths of the chunks whose boundaries are stored, least recently used first. */
+  loaded: string[];
+  /** Boundaries that arrived through content changes after the release. They are never evicted. */
+  pinned: string[];
+};
 export type ContentSyncState = {
   revision: number;
   /** Local source binding persisted beside the cursor, never sent by the API. */
   sourceId?: string;
   parks: Park[];
+  /** Every park's boundary, or with `catalogue` only the boundaries this device keeps. */
   boundaries: ContentBoundaries;
   drive: DriveData;
   assets: ContentFile[];
   map: ContentMapPointer | null;
+  /** Present when the catalogue came from a CDN release and boundaries load by area. */
+  catalogue?: CatalogueCache;
 };
 /**
  * `readerVersion` is the CONTENT_READER_VERSION of the build that last replaced
@@ -87,6 +114,13 @@ export type StoredRelease = {
 // They are never a replacement for, or a deletion boundary for, personal claims/photos.
 export type RetainedPark = { park: Park; sceneFile?: ContentFile };
 
+export type DeleteFileOptions = {
+  /** Also allow a detailed map chunk the current map still lists. */
+  optionalMapChunk?: boolean;
+  /** Also allow badge art the current catalogue lists; it loads from the CDN again when shown. */
+  optionalArt?: boolean;
+};
+
 export interface ContentStore {
   initialize(): Promise<void>;
   getActiveId(): Promise<string | null>;
@@ -103,9 +137,10 @@ export interface ContentStore {
   listFiles(): Promise<{ hash: string; size: number }[]>;
   /**
    * Delete an unreferenced file. optionalMapChunk also allows a detailed map chunk the
-   * current map still lists, since chunks are optional coverage that can be fetched again.
+   * current map still lists, and optionalArt badge art the current catalogue lists, since
+   * both are optional copies that can be fetched again. Retained and archived badges stay.
    */
-  deleteFile(hash: string, options?: { optionalMapChunk?: boolean }): Promise<void>;
+  deleteFile(hash: string, options?: DeleteFileOptions): Promise<void>;
   getRetainedParks(): Promise<RetainedPark[]>;
   retainParks(parks: RetainedPark[]): Promise<void>;
   getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined>;
@@ -279,6 +314,12 @@ export interface ContentRuntime {
   listStoredFiles?(): Promise<StoredFileSummary[]>;
   /** Delete saved files the current content no longer uses. Files still referenced are kept. */
   deleteUnusedFiles?(): Promise<number>;
+  /** Approximate bytes of the park catalogue kept on this device: parks, boundaries and drive times. */
+  getCatalogueBytes?(): number;
+  /** Load park boundaries for a map view the player is looking at (west, south, east, north). */
+  loadBoundariesInView?(bounds: MapBox, zoom: number): void;
+  /** Load one park's boundary, for a park the player opened. */
+  loadParkBoundary?(parkId: string): Promise<void>;
   getSceneAssetVersion(parkId: string, expectedScene?: string | null): string | null;
   /** Save one park's badge art now, for a claim made before nearby art finished. */
   ensureParkArt?(parkId: string): Promise<void>;
@@ -301,6 +342,10 @@ export type ContentRuntimeOptions = {
   mapPointer?: ContentMapPointer;
   /** False when nothing shows badge art, so no scene file is required or fetched near the visitor. */
   badgeArt?: boolean;
+  /** The app bundle's build. A new one (a web deploy or an over-the-air bundle) cleans up old content once. */
+  appBuild?: string;
+  /** Remembers which build and map old content was last cleaned up for. Without it no cleanup runs. */
+  cacheMarker?: { read(): string | null; write(value: string): void };
 };
 
 /**
@@ -310,6 +355,13 @@ export type ContentRuntimeOptions = {
  * The server's minimumReaderVersion compares against the same number.
  */
 export const CONTENT_READER_VERSION = 3;
+/**
+ * Offline downloads: chosen map squares, the block of squares around the player and
+ * the "Allow downloads on mobile data" switch that governs them. Off for now, because
+ * Parkdex needs the internet and keeps only what is near the player. Offline downloads
+ * come back with #199; the code stays in place behind this constant.
+ */
+export const OFFLINE_DOWNLOADS = false;
 export const VICTORIA: MapPoint = [-123.3656, 48.4284];
 export const HALIFAX: MapPoint = [-63.5752, 44.6488];
 /** West, south, east, north in degrees. */

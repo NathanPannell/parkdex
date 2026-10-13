@@ -1,6 +1,6 @@
 # Detailed map releases
 
-The detailed map is a Protomaps archive split into chunks on R2. New builds pin the map they use in `BUILD_MAP_POINTER` (`src/lib/content/contracts.ts`) instead of reading the map pointer from the content API. The app streams this archive straight from the CDN while online and reads downloaded map squares only when offline. The server pointer stays on the 96 MB island archive. Builds installed before 2026-10-01 download the whole map they are given, so they must never receive a BC or combined archive.
+The detailed map is a Protomaps archive split into chunks on R2. New builds pin the map they use in `BUILD_MAP_POINTER` (`src/lib/content/contracts.ts`) instead of reading the map pointer from the content API. The app streams this archive straight from the CDN while online and reads saved map detail only when offline. It keeps only the detail for the view around the player; whole squares are offline downloads (#199). The server pointer stays on the 96 MB island archive. Builds installed before 2026-10-01 download the whole map they are given, so they must never receive a BC or combined archive.
 
 ## Current pin: BC and Nova Scotia
 
@@ -67,8 +67,8 @@ A web update over the air is enough. The pin, the areas, the map squares and the
 
 What a new pin changes on installed devices:
 
-- **Release ID.** Every installed build's map release ID changes on its next start. Nearby squares then download again from the new archive. Files from the old archive become unused, and "Delete unused files" in Manage downloads frees them.
-- **Saved squares.** Squares saved for the old map are no longer shown as saved, because their files belong to the old archive. Download maps opens with them selected, so one download saves them again.
+- **Release ID.** Every installed build's map release ID changes on its next start. Map detail around the player then downloads again from the new archive. Builds from the lean cache change (`docs/content-catalogue.md`) delete the old archive's files and inventory automatically after the update.
+- **Saved squares.** Choosing map squares is hidden until offline downloads return (#199, `OFFLINE_DOWNLOADS` in `src/lib/content/contracts.ts`). Squares saved by earlier builds are forgotten and their files deleted after the update. With the flag on, squares saved for an old map are offered again in Download maps.
 - **Server pointer.** Never point the content API's map pointer (`content_map`) at a BC or combined archive. Builds installed before 2026-10-01 read it and download the whole map.
 
 Mention the new download in the tester notes for the release.

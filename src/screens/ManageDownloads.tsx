@@ -13,12 +13,16 @@ import {
 } from "../lib/mapCells";
 import { summarizeLocalStorage, type LocalStorageSummary } from "../lib/localStorageSummary";
 import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../lib/downloadPreferences";
-import { mapFolder } from "../lib/content/contracts";
+import { mapFolder, OFFLINE_DOWNLOADS } from "../lib/content/contracts";
 import { mapChunkPath } from "../lib/offlineTiles";
 import { useStore } from "../lib/store";
 import "../download-maps.css";
 
-/** Everything Parkdex keeps on this phone: saved map squares, cached map detail and park content. */
+/**
+ * Everything Parkdex keeps on this phone. For now Parkdex needs the internet and caches only
+ * what is near the player; the map squares card and the mobile data switch return with
+ * offline downloads (#199, OFFLINE_DOWNLOADS).
+ */
 export function ManageDownloads() {
   const { dispatch } = useStore();
   const content = useContent();
@@ -108,7 +112,7 @@ export function ManageDownloads() {
           </dl>
         </section>
 
-        <section className="account-card card account-section" aria-label="Download settings">
+        {OFFLINE_DOWNLOADS && <section className="account-card card account-section" aria-label="Download settings">
           <label className="account-setting account-setting--row">
             <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
             <span className="account-setting__text">
@@ -124,9 +128,9 @@ export function ManageDownloads() {
               aria-label="Allow downloads on mobile data"
             />
           </label>
-        </section>
+        </section>}
 
-        <section className="account-card card account-section" aria-labelledby="downloads-squares">
+        {OFFLINE_DOWNLOADS && <section className="account-card card account-section" aria-labelledby="downloads-squares">
           <span className="eyebrow" id="downloads-squares">Map squares</span>
           <p className="account-help">
             {saved.length
@@ -142,7 +146,7 @@ export function ManageDownloads() {
           >
             <Icon name="map" size={18} /> {saved.length ? "Add or remove squares" : "Choose map squares"}
           </button>
-        </section>
+        </section>}
 
         <section className="account-card card account-section" aria-labelledby="downloads-cached">
           <span className="eyebrow" id="downloads-cached">Cached automatically</span>
@@ -158,8 +162,8 @@ export function ManageDownloads() {
             </li>
             <li>
               <span className="downloads-list__text">
-                <strong>Park guides</strong>
-                <span>{summary ? formatMegabytes(summary.parkContentBytes) : "…"} · needed to show parks offline</span>
+                <strong>Park guides around you</strong>
+                <span>{summary ? formatMegabytes(summary.parkContentBytes) : "…"} · other parks load when you look at them</span>
               </span>
             </li>
             <li>
@@ -180,7 +184,9 @@ export function ManageDownloads() {
               </li>
             )}
           </ul>
-          <p className="account-help">Your claimed badges and photos are never removed here.</p>
+          <p className="account-help">
+            Parkdex keeps only what is near you and clears old content after updates. Your claimed badges and photos are never removed here.
+          </p>
         </section>
       </div>
     </motion.main>

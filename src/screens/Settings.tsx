@@ -11,6 +11,7 @@ import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
 import { formatMegabytes, readSavedSquares } from "../lib/mapCells";
 import { useContentRuntime } from "../lib/content/provider";
+import { OFFLINE_DOWNLOADS } from "../lib/content/contracts";
 import { summarizeLocalStorage } from "../lib/localStorageSummary";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { settingsAccountSubtitle } from "../lib/accounts/backupPresentation";
@@ -26,7 +27,8 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
   const runtime = useContentRuntime();
   const toast = useToast();
   const tipsOn = useSyncExternalStore(subscribeKipTips, kipTipsEnabled, kipTipsEnabled);
-  const [savedSquares] = useState(() => readSavedSquares().length);
+  // Saved squares return with offline downloads (#199).
+  const [savedSquares] = useState(() => OFFLINE_DOWNLOADS ? readSavedSquares().length : 0);
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
 
   useEffect(() => {
