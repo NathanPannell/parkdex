@@ -1651,19 +1651,26 @@
   }
 }
 
+/*
+ * The park-state caption ("Plant!", "Tomorrow") sits on the button's lower rim, inside the bar,
+ * so it never floats over the page behind the nav.
+ */
 .fab__label {
   position: absolute;
-  top: -14px;
-  right: -18px;
+  left: 50%;
+  bottom: -9px;
+  translate: -50% 0;
   background: var(--sun);
   color: var(--ink);
   border: 2px solid var(--ink);
   border-radius: 99px;
   font-family: var(--display);
   font-weight: 800;
-  font-size: 13px;
-  padding: 2px 8px;
-  rotate: 10deg;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 0 7px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .fab__hint {
