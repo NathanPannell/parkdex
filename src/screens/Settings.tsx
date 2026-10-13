@@ -3,6 +3,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { useGame } from "../lib/game/GameProvider";
+import { formatPoints } from "../lib/game/visit";
 import { listItem, listParent, press, tabPage } from "../lib/motion";
 import "../game-ui.css";
 import { useStore } from "../lib/store";
@@ -69,7 +70,7 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
           <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} className="is-waving" />
           <span className="settings-flag__text">
             <strong>{player ? `@${player.handle}` : "Your flag"}</strong>
-            <span>{player ? `${game.me?.score ?? 0} ${game.me?.score === 1 ? "point" : "points"} · see your parks` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
+            <span>{player ? `${formatPoints(game.me?.score ?? 0)} · see your parks` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
           </span>
           <Icon name="next" size={18} />
         </motion.button>

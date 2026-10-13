@@ -31,6 +31,12 @@ describe("map pins", () => {
     expect([...images.keys()].sort()).toEqual([EMPTY_PIN, pinIconId("robin", 0, "2d"), pinIconId("sam", 2, "25d")].sort());
   });
 
+  it("tags a young flag with minutes or hours", () => {
+    const flags = new Map([["a", flag("a", "robin", 35 / 1440)], ["b", flag("b", "sam", 3.5 / 24)]]);
+    const { collection } = buildPins(parks, flags, now);
+    expect(collection.features.slice(0, 2).map((feature) => feature.properties.icon)).toEqual([pinIconId("robin", 0, "35m"), pinIconId("sam", 0, "3h")]);
+  });
+
   it("shares one image between parks with the same flag and age", () => {
     const flags = new Map([["a", flag("a", "robin", 3)], ["b", flag("b", "robin", 3)]]);
     const { images } = buildPins(parks, flags, now);

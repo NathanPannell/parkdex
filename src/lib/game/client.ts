@@ -7,7 +7,8 @@ import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
  */
 
 export type GamePlayer = { handle: string; flagSeed: string };
-export type HeldPark = { parkId: string; since: string; days: number };
+/** `days` is the flag's age for weathering; `hours` is this player's holding points on it (additive, #169). */
+export type HeldPark = { parkId: string; since: string; days: number; hours: number };
 export type Takeover = { parkId: string; byHandle: string; byFlagSeed: string; at: string };
 /** A founding photo the player sent for manual review, still waiting (#153). */
 export type PendingFoundingReview = { requestId: string; parkId: string | null; parkName: string; createdAt: string };
@@ -42,11 +43,14 @@ export type GameMe = {
 };
 
 export type VisitOutcome = "planted" | "took" | "held" | "already_today";
+/** pointsEarned in parts: the outcome's base points and a take's day bonus (additive, #169). */
+export type PointsBreakdown = { base: number; days: number };
 export type VisitResult = {
   visitId: string;
   parkId: string;
   outcome: VisitOutcome;
   pointsEarned: number;
+  pointsBreakdown: PointsBreakdown;
   previousHolder: GamePlayer | null;
   flagSince: string | null;
 };
@@ -136,7 +140,10 @@ export function parseMe(body: unknown): GameMe {
     parks: list(row.parks, (park) => {
       const parkId = text(park.parkId);
       const since = text(park.since);
-      return parkId && since ? { parkId, since, days: count(park.days) } : null;
+      if (!parkId || !since) return null;
+      const days = count(park.days);
+      // A server from before #169 sends no hours; a whole day is at least 24 of them.
+      return { parkId, since, days, hours: typeof park.hours === "number" ? count(park.hours) : days * 24 };
     }),
     takeovers: list(row.takeovers, (takeover) => {
       const parkId = text(takeover.parkId);
@@ -191,11 +198,15 @@ export function parseVisit(body: unknown): VisitResult {
   if (!visit || !visitId || !parkId || typeof outcome !== "string" || !OUTCOMES.has(outcome as VisitOutcome)) {
     throw new GameError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
   }
+  const pointsEarned = count(visit.pointsEarned);
+  const breakdown = record(visit.pointsBreakdown);
   return {
     visitId,
     parkId,
     outcome: outcome as VisitOutcome,
-    pointsEarned: count(visit.pointsEarned),
+    pointsEarned,
+    // A server from before #169 sends no breakdown: show the whole amount as the base.
+    pointsBreakdown: breakdown ? { base: count(breakdown.base), days: count(breakdown.days) } : { base: pointsEarned, days: 0 },
     previousHolder: parsePlayer(visit.previousHolder),
     flagSince: text(visit.flagSince),
   };

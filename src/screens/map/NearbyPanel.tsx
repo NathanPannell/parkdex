@@ -9,7 +9,7 @@ import { searchParks } from "../../lib/parkSearch";
 import { formatFlagAge } from "../../lib/game/flag";
 import type { ParkHolder } from "../../lib/game/visit";
 
-type Item = { park: Park; km: number; holder: ParkHolder; days: number };
+type Item = { park: Park; km: number; holder: ParkHolder; days: number; ageMs: number };
 
 type Props = {
   nearby: Item[];
@@ -93,7 +93,7 @@ export function NearbyPanel({ nearby, all, onSelect }: Props) {
 }
 
 function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSelect: (id: string) => void }) {
-  const { park, km, holder, days } = item;
+  const { park, km, holder, days, ageMs } = item;
   const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
   const owner = holder.kind === "mine" ? "Yours" : flag ? `@${flag.handle}` : holder.kind === "empty" ? "No flag" : null;
   const status = owner ? `${owner} · ${formatDistance(km)}` : `${formatDistance(km)} away`;
@@ -102,7 +102,7 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
       layout
       className={`nearby__card card ${holder.kind === "mine" ? "is-mine" : ""}`}
       onClick={() => onSelect(park.id)}
-      aria-label={`${park.name}. ${flag ? `${holder.kind === "mine" ? "Your flag" : `Flag of @${flag.handle}`}, ${formatFlagAge(days)}` : holder.kind === "empty" ? "No flag yet" : "Flag unknown"}. ${formatDistance(km)} away`}
+      aria-label={`${park.name}. ${flag ? `${holder.kind === "mine" ? "Your flag" : `Flag of @${flag.handle}`}, ${formatFlagAge(ageMs)}` : holder.kind === "empty" ? "No flag yet" : "Flag unknown"}. ${formatDistance(km)} away`}
       initial={{ y: 60, opacity: 0, rotate: 4 }}
       animate={{ y: 0, opacity: 1, rotate: 0 }}
       exit={{ y: 40, opacity: 0, transition: { duration: 0.15 } }}
@@ -110,7 +110,7 @@ function ParkCard({ item, index, onSelect }: { item: Item; index: number; onSele
       whileTap={{ scale: 0.94, rotate: -2 }}
     >
       <span className="nearby__badge">
-        <FlagPin seed={flag?.flagSeed ?? null} days={days} size={52} />
+        <FlagPin seed={flag?.flagSeed ?? null} days={days} ageMs={ageMs} size={52} />
       </span>
       <span className="nearby__name">{park.short}</span>
       <span className="nearby__meta">{status}</span>

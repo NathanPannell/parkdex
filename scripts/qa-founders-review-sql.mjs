@@ -247,7 +247,7 @@ try {
     [a.id, attemptId, 'osm_new', stored.photo_sha256, new Date(clock).toISOString()]);
   assert.equal(founder.moderation.review.requestId, meadow.requestId);
   assert.equal((await pool.query('SELECT founder_account_id FROM kip_proposals.parks WHERE published_park_id = $1', [parkId])).rows[0].founder_account_id, a.id);
-  assert.equal(await score(a.id), scoreBefore + 10, 'the founder bonus counts');
+  assert.equal(await score(a.id), scoreBefore + 24, 'the founder bonus counts');
   assert.equal(await count('SELECT count(*) FROM kip_game.visits WHERE account_id = $1', [a.id]), visitsBefore, 'no visit is recorded');
   assert.equal(await count('SELECT count(*) FROM kip_game.tenures WHERE park_id = $1', [parkId]), 0, 'no flag is planted');
   const after = await requestRow(meadow.requestId);

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { createFeedbackWorker, type WorkerEnvironment } from "./index.js";
 import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.js";
-import type { FoundingReviewRecord, GameStore, PlayerRecord, RecordVisitResult, VisitRecord } from "./game-store.js";
+import { visitFromJson, type FoundingReviewRecord, type GameStore, type PlayerRecord, type RecordVisitResult, type VisitRecord } from "./game-store.js";
 import { FOUNDING_DECISIONS_LIMIT, flagSeedFor, visitEvents, type GameEvent } from "./game.js";
 
 const origin = "https://kip.example.test";
@@ -41,7 +41,7 @@ const authStore = {
 
 const player: PlayerRecord = { handle: "sam", flagSeed: "0123456789abcdef", createdAt: "2026-10-01T00:00:00.000Z", takeoversSeenAt: null };
 const tookVisit: VisitRecord = {
-  visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 4, previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" },
+  visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 7, pointsBreakdown: { base: 4, days: 3 }, previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" },
   flagSince: "2026-10-08T17:00:00.000Z", visitedAt: "2026-10-08T17:00:00.000Z", fell: false,
 };
 
@@ -68,7 +68,7 @@ class MemoryGameStore implements GameStore {
     return this.visitResult;
   }
   async summary() {
-    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }], visitedToday: [PARK], visitedTodayUntil: "2026-10-09T07:00:00.000Z" };
+    return { score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7, hours: 185 }], takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }], visitedToday: [PARK], visitedTodayUntil: "2026-10-09T07:00:00.000Z" };
   }
   async markTakeoversSeen(_accountId: string, at: string) {
     this.seenAt = at;
@@ -77,7 +77,7 @@ class MemoryGameStore implements GameStore {
   async flags() { return [{ parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z" }]; }
   async leaderboard() { return [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1 }]; }
   async founders() { return [{ parkId: PARK, handle: "sam", photoSha256: "a".repeat(64) }]; }
-  async founderPoints() { return 10; }
+  async founderPoints() { return 24; }
   reviews: FoundingReviewRecord[] = [];
   async foundingReviews() { return this.reviews; }
 }
@@ -149,7 +149,7 @@ test("a visit uses the server clock and returns the contract shape", async () =>
   const body = await response.json() as { visit: Record<string, unknown> };
   assert.deepEqual(Object.keys(body), ["visit"]);
   assert.deepEqual(body.visit, {
-    visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 4,
+    visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 7, pointsBreakdown: { base: 4, days: 3 },
     previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: "2026-10-08T17:00:00.000Z",
   });
   assert.deepEqual(store.visitCalls, [{ accountId: ACCOUNT, visitId: VISIT, parkId: PARK, visitedAt: new Date(NOW).toISOString() }]);
@@ -173,10 +173,10 @@ test("visit store outcomes map to the documented errors", async () => {
 });
 
 test("visit events cover falls and skip replays", () => {
-  const fell: RecordVisitResult = { status: "recorded", visit: { ...tookVisit, outcome: "planted", pointsEarned: 0, previousHolder: null, fell: true } };
+  const fell: RecordVisitResult = { status: "recorded", visit: { ...tookVisit, outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, fell: true } };
   assert.deepEqual(visitEvents(fell, ACCOUNT).map((event) => event.name), ["flag_fell", "flag_planted"]);
   assert.deepEqual(visitEvents({ status: "replayed", visit: tookVisit }, ACCOUNT), []);
-  assert.deepEqual(visitEvents({ status: "already_today", visit: { ...tookVisit, outcome: "already_today", pointsEarned: 0 } }, ACCOUNT).map((event) => event.name), ["visit_already_today"]);
+  assert.deepEqual(visitEvents({ status: "already_today", visit: { ...tookVisit, outcome: "already_today", pointsEarned: 0, pointsBreakdown: { base: 0, days: 0 } } }, ACCOUNT).map((event) => event.name), ["visit_already_today"]);
   assert.deepEqual(visitEvents({ status: "handle_required" }, ACCOUNT), []);
 });
 
@@ -232,9 +232,10 @@ test("me returns the player summary, or a flag seed and empty state before a han
   const response = await call("GET", "/api/game/me");
   assert.deepEqual(await response.json(), {
     player: { handle: "sam", flagSeed: player.flagSeed }, flagSeed: player.flagSeed, score: 12,
-    parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7 }],
+    // days drives flag weathering; hours is the holding points so far (#169).
+    parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7, hours: 185 }],
     takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }],
-    founderPoints: 10,
+    founderPoints: 24,
     foundingReviews: { pending: [], decided: [] },
     visitedToday: [PARK],
     visitedTodayUntil: "2026-10-09T07:00:00.000Z",
@@ -313,4 +314,11 @@ test("a game event hook failure never breaks a visit", async () => {
     body: JSON.stringify({ visitId: VISIT, parkId: PARK }),
   }), env);
   assert.equal(response.status, 200);
+});
+
+test("stored visits parse their points breakdown, and game_001's shape falls back to the base", () => {
+  const stored = { visitId: VISIT.toUpperCase(), parkId: PARK, outcome: "took", pointsEarned: 7, previousHolder: null, flagSince: null, visitedAt: "2026-10-08T17:00:00Z", fell: false };
+  assert.deepEqual(visitFromJson({ ...stored, pointsBreakdown: { base: 4, days: 3 } }).pointsBreakdown, { base: 4, days: 3 });
+  assert.deepEqual(visitFromJson(stored).pointsBreakdown, { base: 7, days: 0 });
+  assert.equal(visitFromJson(stored).visitId, VISIT);
 });

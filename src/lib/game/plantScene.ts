@@ -5,8 +5,9 @@ import type { ParkHolder } from "./visit";
 /**
  * The planting scene's choreography, kept apart from the animation code so what each outcome
  * plays is testable. A take yanks the rival flag out and throws it away; planting and taking
- * slam the flag in hard and pay off with confetti and a points counter; a revisit gets a
- * smaller re-plant; a second visit the same day settles the flag back with a wiggle and a wave from Kip.
+ * slam the flag in hard and pay off with confetti; a revisit gets a smaller re-plant; each of
+ * those counts up the points it earned. A second visit the same day settles the flag back with
+ * a wiggle and a wave from Kip.
  */
 
 export type PlantPlan = {
@@ -20,14 +21,16 @@ export type PlantPlan = {
   count: number | null;
 };
 
+const earned = (points: number) => (points > 0 ? points : null);
+
 export function plantPlan(visit: Pick<VisitResult, "outcome" | "pointsEarned">): PlantPlan {
   switch (visit.outcome) {
     case "took":
-      return { yank: true, slam: "big", settle: false, payoff: "big", count: visit.pointsEarned };
+      return { yank: true, slam: "big", settle: false, payoff: "big", count: earned(visit.pointsEarned) };
     case "planted":
-      return { yank: false, slam: "big", settle: false, payoff: "big", count: null };
+      return { yank: false, slam: "big", settle: false, payoff: "big", count: earned(visit.pointsEarned) };
     case "held":
-      return { yank: false, slam: "small", settle: false, payoff: "small", count: null };
+      return { yank: false, slam: "small", settle: false, payoff: "small", count: earned(visit.pointsEarned) };
     case "already_today":
       return { yank: false, slam: null, settle: true, payoff: "tiny", count: null };
   }

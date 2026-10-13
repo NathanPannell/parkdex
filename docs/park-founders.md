@@ -2,7 +2,7 @@
 
 A signed-in player with a handle, standing in a park, takes a photo. When the photo check approves it straight away, the player becomes the park's founder, the photo becomes the park's public cover, today's visit is recorded (planting or taking the flag) and the player earns a one-time 10 point founder bonus. Everything is online. Design: issue #126.
 
-`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place the 10 lives) and the two analytics event types. `founders_002_reviews.sql` adds manual review ([below](#manual-review)): `kip_founders.check_photos` (the photo and position of a rejected or unsure check, kept for 24 hours) and `kip_founders.review_requests`. `founders_003_park_removed.sql` adds the `park_removed` analytics event for [Remove from map](#remove-from-map). Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founding.ts` (the founding transaction, shared with review approvals), `worker/founding-reviews.ts` (the operator's review store and retention), `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
+`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place it lives; `game_002_points.sql` redefines it as 24, from 10, for hourly points, #169) and the two analytics event types. `founders_002_reviews.sql` adds manual review ([below](#manual-review)): `kip_founders.check_photos` (the photo and position of a rejected or unsure check, kept for 24 hours) and `kip_founders.review_requests`. `founders_003_park_removed.sql` adds the `park_removed` analytics event for [Remove from map](#remove-from-map). Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founding.ts` (the founding transaction, shared with review approvals), `worker/founding-reviews.ts` (the operator's review store and retention), `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
 
 ## Rules
 
@@ -74,8 +74,8 @@ Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys; 
   "outcome": "founded",
   "park": { "id": "osm-way-23938892", "name": "Paterson Park" },
   "coverUrl": "https://web.parkdex.app/api/parks/osm-way-23938892/cover/<sha256>.jpg",
-  "visit": { "visitId": "…", "parkId": "osm-way-23938892", "outcome": "planted", "pointsEarned": 0, "previousHolder": null, "flagSince": "2026-10-09T04:46:43.368Z" },
-  "founderPoints": 10
+  "visit": { "visitId": "…", "parkId": "osm-way-23938892", "outcome": "planted", "pointsEarned": 6, "pointsBreakdown": { "base": 6, "days": 0 }, "previousHolder": null, "flagSince": "2026-10-09T04:46:43.368Z" },
+  "founderPoints": 24
 }
 ```
 
@@ -250,7 +250,7 @@ What a new founding of the outline checks, and what the removal does about each:
 
 | A founding checks | Remove from map |
 | --- | --- |
-| No founder row for the park (`already_founded`) | Deletes the `kip_founders.parks` row: the founder, the cover photo and, because `kip_game.player_scores` derives the bonus from that row (`kip_founders.founder_points`), the 10 points. A new founding pays the bonus once. |
+| No founder row for the park (`already_founded`) | Deletes the `kip_founders.parks` row: the founder, the cover photo and, because `kip_game.player_scores` derives the bonus from that row (`kip_founders.founder_points`), the 24 points. A new founding pays the bonus once. |
 | The outline's `osm-<type>-<id>` is not in `public.parks`, and `catalogueMatch` pairs it with no catalogue park nearby | Deletes the park with the same statements as Delete (draft, park, and by cascade its boundary, drive data, reader floor and hidden row), in one content revision whose park, boundary and drive tombstones phones apply on their next sync. |
 | The outline is in `kip_osm.parks` and named | Keeps the outline. The in-app search marks it `inCatalogue: null` again. |
 | No published draft holds the id (`founding_blocked`) | Deletes the draft. |

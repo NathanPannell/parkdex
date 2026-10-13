@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
 import { fetchGameLeaderboard, gameErrorMessage, isOfflineError, type LeaderboardRow } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
+import { formatScore } from "../lib/game/visit";
 import { bouncy, listItem, listParent, press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
 import "../game.css";
@@ -35,7 +36,7 @@ function Podium({ players, myHandle }: { players: LeaderboardRow[]; myHandle: st
               <FlagPin seed={row.flagSeed} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
             </span>
             <strong className="game-podium__handle">@{row.handle}</strong>
-            <span className="game-podium__score">{row.score} {row.score === 1 ? "pt" : "pts"}</span>
+            <span className="game-podium__score">{formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}</span>
             <motion.span
               className={`game-podium__block game-podium__block--${place + 1}`}
               initial={{ height: 0 }}
@@ -123,7 +124,7 @@ export function Leaderboard() {
                           <span>{row.parksHeld} {row.parksHeld === 1 ? "park" : "parks"} held</span>
                         </span>
                         <span className="game-row__score">
-                          <strong>{row.score}</strong>
+                          <strong>{formatScore(row.score)}</strong>
                           <span>{row.score === 1 ? "point" : "points"}</span>
                         </span>
                       </div>

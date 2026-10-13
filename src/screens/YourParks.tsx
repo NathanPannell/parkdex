@@ -66,7 +66,7 @@ export function YourParks() {
               <Kip pose="cheer" size={72} />
             </motion.div>
             <h2>Plant your flag in parks</h2>
-            <p className="account-help">Go to a park and your flag goes up. You earn a point for every day it flies.</p>
+            <p className="account-help">Go to a park and your flag goes up. You earn a point for every hour it flies.</p>
             <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in to plant your flag</motion.button>
           </section>
         ) : game.status === "loading" && !game.me ? (
@@ -90,7 +90,7 @@ export function YourParks() {
           </section>
         ) : (
           <>
-            <motion.section className="account-card card game-score" initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
+            <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""}`} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
               <span className="game-score__rays" aria-hidden="true" />
               <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" label={`Flag of @${player.handle}`} />
               <div className="game-score__text">
@@ -118,17 +118,19 @@ export function YourParks() {
               <motion.ul className="game-list" aria-label="Parks you hold" variants={listParent} initial="hidden" animate="show">
                 {parks.map((held, index) => {
                   const park = content?.parkById.get(held.parkId);
+                  // Days once the flag has flown one; before that, the hours it has earned.
+                  const [age, unit] = held.days > 0 ? [held.days, held.days === 1 ? "day" : "days"] : [held.hours, held.hours === 1 ? "hour" : "hours"];
                   return (
                     <motion.li key={held.parkId} variants={listItem}>
-                      <motion.button whileTap={press} className={`game-row card ${index === 0 && held.days > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
+                      <motion.button whileTap={press} className={`game-row card ${index === 0 && held.hours > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
                         <FlagPin seed={player.flagSeed} days={held.days} size={44} showAge={false} />
                         <span className="game-row__name">
                           <strong>{park?.name ?? held.parkId}</strong>
-                          <span>{index === 0 && held.days > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
+                          <span>{index === 0 && held.hours > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
                         </span>
                         <span className="game-row__days">
-                          <strong>{held.days}</strong>
-                          <span>{held.days === 1 ? "day" : "days"}</span>
+                          <strong>{age}</strong>
+                          <span>{unit}</span>
                         </span>
                       </motion.button>
                     </motion.li>

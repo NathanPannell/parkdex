@@ -122,16 +122,29 @@ export function weatherForDays(days: number): FlagWeather {
   return days >= 21 ? 2 : days >= 7 ? 1 : 0;
 }
 
-/** Whole days a flag has flown, from its planting time to the server's clock. */
-export function flagAgeDays(since: string, now: string | number | Date): number {
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/** How long a flag has flown, in milliseconds, from its planting time to the server's clock. */
+export function flagAgeMs(since: string, now: string | number | Date): number {
   const start = Date.parse(since);
   const end = now instanceof Date ? now.getTime() : typeof now === "number" ? now : Date.parse(now);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
-  return Math.max(0, Math.floor((end - start) / 86_400_000));
+  return Math.max(0, end - start);
 }
 
-export function formatFlagAge(days: number): string {
-  return days < 1 ? "new" : `${days}d`;
+/** Whole days a flag has flown, for weathering. */
+export function flagAgeDays(since: string, now: string | number | Date): number {
+  return Math.floor(flagAgeMs(since, now) / DAY_MS);
+}
+
+/** The age tag on a flag pin: minutes in its first hour, hours in its first day, then days. */
+export function formatFlagAge(ageMs: number): string {
+  const age = Number.isFinite(ageMs) ? Math.max(0, ageMs) : 0;
+  if (age < HOUR_MS) return `${Math.floor(age / MINUTE_MS)}m`;
+  if (age < DAY_MS) return `${Math.floor(age / HOUR_MS)}h`;
+  return `${Math.floor(age / DAY_MS)}d`;
 }
 
 function mix(hex: string, toward: string, amount: number): string {

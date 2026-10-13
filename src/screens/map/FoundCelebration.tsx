@@ -157,7 +157,7 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
                 <motion.div className={`found-done__visit${visitWon ? " is-won" : ""}`} variants={pop}>
                   {flagSeed ? <Flag seed={flagSeed} size={40} className="is-waving" /> : <Icon name="flag" size={22} />}
                   <span>
-                    <strong>{headline.title}{visit && visit.outcome === "took" && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}</strong>
+                    <strong>{headline.title}{visit && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}</strong>
                     <em>{headline.detail}</em>
                   </span>
                 </motion.div>

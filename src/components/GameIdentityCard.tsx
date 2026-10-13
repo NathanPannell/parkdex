@@ -1,4 +1,5 @@
 import { useGame } from "../lib/game/GameProvider";
+import { formatPoints } from "../lib/game/visit";
 import { Flag } from "./Flag";
 import { Icon } from "./Icon";
 import "../game.css";
@@ -18,7 +19,7 @@ export function GameIdentityCard() {
           <strong>{player ? `@${player.handle}` : game.status === "loading" ? "Loading…" : "No handle yet"}</strong>
           <span>
             {player
-              ? `${game.me?.score ?? 0} ${game.me?.score === 1 ? "point" : "points"} · ${game.me?.parks.length ?? 0} ${game.me?.parks.length === 1 ? "park" : "parks"} held`
+              ? `${formatPoints(game.me?.score ?? 0)} · ${game.me?.parks.length ?? 0} ${game.me?.parks.length === 1 ? "park" : "parks"} held`
               : unavailable
                 ? game.status === "offline" ? "Connect to the internet to see your flag." : game.error ?? "Your flag is unavailable right now."
                 : "Pick a handle to get your flag and start planting."}

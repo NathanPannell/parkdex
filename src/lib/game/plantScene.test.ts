@@ -5,13 +5,15 @@ import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsP
 const flag = { parkId: "p", handle: "sam", flagSeed: "s", since: "2026-10-01T00:00:00Z" };
 
 describe("plant scene", () => {
-  it("yanks the rival out before a take and counts the bounty", () => {
+  it("yanks the rival out before a take and counts the points", () => {
     expect(plantPlan({ outcome: "took", pointsEarned: 12 })).toEqual({ yank: true, slam: "big", settle: false, payoff: "big", count: 12 });
-    expect(plantPlan({ outcome: "planted", pointsEarned: 0 })).toEqual({ yank: false, slam: "big", settle: false, payoff: "big", count: null });
+    expect(plantPlan({ outcome: "planted", pointsEarned: 6 })).toEqual({ yank: false, slam: "big", settle: false, payoff: "big", count: 6 });
+    // A visit replayed from before #169 may have earned nothing.
+    expect(plantPlan({ outcome: "planted", pointsEarned: 0 })).toMatchObject({ count: null });
   });
 
   it("gives revisits a smaller version and leaves a second visit today unplanted", () => {
-    expect(plantPlan({ outcome: "held", pointsEarned: 0 })).toMatchObject({ slam: "small", payoff: "small", count: null });
+    expect(plantPlan({ outcome: "held", pointsEarned: 1 })).toMatchObject({ slam: "small", payoff: "small", count: 1 });
     expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({ yank: false, slam: null, settle: true, payoff: "tiny", count: null });
   });
 

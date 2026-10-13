@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contrast, flagAgeDays, flagBody, flagOutline, flagSpec, flagSvg, formatFlagAge, weatherForDays } from "./flag";
+import { contrast, flagAgeDays, flagAgeMs, flagBody, flagOutline, flagSpec, flagSvg, formatFlagAge, weatherForDays } from "./flag";
 
 const seeds = Array.from({ length: 400 }, (_, index) => `seed-${index.toString(16)}-${(index * 2654435761) >>> 0}`);
 
@@ -79,7 +79,20 @@ describe("flag age", () => {
   });
 
   it("labels fresh and older flags", () => {
-    expect(formatFlagAge(0)).toBe("new");
-    expect(formatFlagAge(12)).toBe("12d");
+    const minute = 60_000;
+    const hour = 60 * minute;
+    expect(formatFlagAge(0)).toBe("0m");
+    expect(formatFlagAge(35 * minute + 59_000)).toBe("35m");
+    expect(formatFlagAge(hour - 1)).toBe("59m");
+    expect(formatFlagAge(hour)).toBe("1h");
+    expect(formatFlagAge(3 * hour + 59 * minute)).toBe("3h");
+    expect(formatFlagAge(24 * hour - 1)).toBe("23h");
+    expect(formatFlagAge(24 * hour)).toBe("1d");
+    expect(formatFlagAge(2 * 24 * hour + 23 * hour)).toBe("2d");
+    expect(formatFlagAge(-5)).toBe("0m");
+    expect(formatFlagAge(Number.NaN)).toBe("0m");
+    expect(flagAgeMs("2026-10-01T12:00:00Z", "2026-10-01T12:35:00Z")).toBe(35 * minute);
+    expect(flagAgeMs("2026-10-01T12:00:00Z", "2026-10-01T11:00:00Z")).toBe(0);
+    expect(flagAgeMs("nonsense", Date.now())).toBe(0);
   });
 });

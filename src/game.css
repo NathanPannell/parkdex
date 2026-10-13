@@ -296,6 +296,15 @@
   line-height: 1;
 }
 
+/* Hourly points reach four and five digits; keep room for the handle beside them. */
+.game-score.is-long .game-score__text strong {
+  font-size: 18px;
+}
+
+.game-score.is-long .game-score__points strong {
+  font-size: 26px;
+}
+
 .game-stale {
   margin: -4px 4px 0;
 }

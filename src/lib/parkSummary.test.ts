@@ -14,8 +14,8 @@ const founded: ParkSummary = { parkId: "p", founder: { handle: "robin", foundedA
 
 describe("founderCta", () => {
   it("offers founding inside a park with no founder, and a hint outside", () => {
-    expect(founderCta({ status: "ready", summary: open }, true)).toEqual({ kind: "found", points: 10 });
-    expect(founderCta({ status: "ready", summary: open }, false)).toEqual({ kind: "hint", text: FOUNDER_HINT, points: 10 });
+    expect(founderCta({ status: "ready", summary: open }, true)).toEqual({ kind: "found", points: 24 });
+    expect(founderCta({ status: "ready", summary: open }, false)).toEqual({ kind: "hint", text: FOUNDER_HINT, points: 24 });
   });
 
   it("offers nothing for a founded park, while loading, offline or when switched off", () => {
