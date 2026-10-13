@@ -342,7 +342,8 @@
   container-type: inline-size;
 }
 
-.game-score.has-long-handle > .flag-pin {
+.game-score.has-long-handle > .flag-pin,
+.game-score.has-long-handle > .game-score__flag {
   grid-area: pin;
 }
 

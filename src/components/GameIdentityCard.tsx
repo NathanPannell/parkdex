@@ -1,7 +1,9 @@
 import { useGame } from "../lib/game/GameProvider";
 import { handleFit } from "../lib/game/handleFit";
 import { formatPoints } from "../lib/game/visit";
+import { useState } from "react";
 import { Flag } from "./Flag";
+import { MyFlagViewer } from "./FlagViewer";
 import { Icon } from "./Icon";
 import "../game.css";
 
@@ -10,12 +12,19 @@ export function GameIdentityCard() {
   const game = useGame();
   const player = game.me?.player ?? null;
   const unavailable = game.status === "offline" || game.status === "error";
+  const [viewingFlag, setViewingFlag] = useState(false);
 
   return (
     <section className="account-card card account-section" aria-labelledby="game-identity-title" style={handleFit(player?.handle)}>
       <span className="eyebrow" id="game-identity-title">Your flag</span>
       <div className="game-identity">
-        <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={72} label={player ? `Flag of @${player.handle}` : undefined} patches={player ? game.me?.flagPatches : undefined} />
+        {player ? (
+          <button className="viewer-open" onClick={() => setViewingFlag(true)} aria-label={`Show the flag of @${player.handle} full screen`}>
+            <Flag seed={player.flagSeed} size={72} patches={game.me?.flagPatches} />
+          </button>
+        ) : (
+          <Flag seed={game.me?.flagSeed ?? null} size={72} />
+        )}
         <div className="game-identity__text">
           <strong>{player ? `@${player.handle}` : game.status === "loading" ? "Loading…" : "No handle yet"}</strong>
           <span>
@@ -36,6 +45,7 @@ export function GameIdentityCard() {
           {player ? "Change handle" : "Pick your handle"}
         </button>
       )}
+      <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </section>
   );
 }

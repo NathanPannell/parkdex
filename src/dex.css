@@ -642,3 +642,10 @@
   align-items: center;
   gap: 8px;
 }
+
+/* The cover opens full screen (FullscreenViewer). */
+.dex-detail__hero-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
