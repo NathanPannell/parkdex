@@ -23,6 +23,10 @@ describe("installOffer", () => {
     expect(installOffer({ ...androidTab, appleMobile: true, fullscreenEnabled: false })).toBe("apple-hint");
   });
 
+  it("leaves desktops out even when Chrome offers the prompt", () => {
+    expect(installOffer({ ...androidTab, promptReady: true, coarsePointer: false })).toBeNull();
+  });
+
   it("offers nothing once installed or in a native build", () => {
     expect(installOffer({ ...androidTab, promptReady: true, installed: true })).toBeNull();
     expect(installOffer({ ...androidTab, appleMobile: true, installed: true })).toBeNull();

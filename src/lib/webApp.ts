@@ -31,10 +31,13 @@ export type WebAppEnv = {
 
 export type InstallOffer = "prompt" | "apple-hint" | null;
 
-/** What "Install Parkdex" does here: Chrome's prompt, the iPhone hint, or nothing. */
+/**
+ * What "Install Parkdex" does here: Chrome's prompt, the iPhone hint, or nothing. Phones only:
+ * a desktop that offers the prompt in a narrow window is not where Parkdex is played.
+ */
 export function installOffer(env: WebAppEnv): InstallOffer {
   if (env.native || env.installed) return null;
-  if (env.promptReady) return "prompt";
+  if (env.promptReady && env.coarsePointer) return "prompt";
   if (env.appleMobile) return "apple-hint";
   return null;
 }

@@ -21,7 +21,8 @@ import { Camera } from "./screens/Camera";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { PortraitOnly } from "./components/PortraitOnly";
-import { usePortraitPanel } from "./lib/webApp";
+import { installOffer, usePortraitPanel, useWebApp } from "./lib/webApp";
+import { useKipTip } from "./lib/kipTips";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
 import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
@@ -212,6 +213,11 @@ function Screens() {
   // Messages on open: review decisions first, then parks taken while away.
   const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
   const decisions = useFoundingDecisions(messagesAllowed);
+
+  // On a phone's browser, Kip suggests the home screen version once it can be installed.
+  // Settings keeps the Install Parkdex row for later.
+  const webApp = useWebApp();
+  useKipTip("install-web", state.startupReady && onboarded && screen === "map" && installOffer(webApp) !== null);
 
   return (
     <>
