@@ -360,6 +360,16 @@ describe("crews (#170, #171)", () => {
     await expect(fetchParkCrew(ACCOUNT, "beacon-hill")).resolves.toMatchObject({ crew: null });
   });
 
+  it("reads each crew member's badge patches, none from an older server (#175)", async () => {
+    const members = [
+      { handle: "tom", flagSeed: "s1", joinedAt: "2026-10-13T17:00:00Z", leader: true, patches: ["hold-7", "nope!", "crew-1", "parks-1", "founder"] },
+      { handle: "sara", flagSeed: "s2", joinedAt: "2026-10-13T17:10:00Z", leader: false },
+    ];
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew: { ...crew, members }, serverTime: "2026-10-13T17:30:00Z" }));
+    const answer = await fetchParkCrew(ACCOUNT, "beacon-hill");
+    expect(answer.crew?.members.map((member) => member.patches)).toEqual([["hold-7", "crew-1", "parks-1"], []]);
+  });
+
   it("joins a crew, and reads a second scan as already a member", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, {
       status: "joined",

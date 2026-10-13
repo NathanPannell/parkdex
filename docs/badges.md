@@ -40,7 +40,7 @@ The frame is the park badge's: the shapes and rarity rims from `src/components/B
 
 - `kip_game.players.flag_patches text[]`: at most 3 (a table check), and `kip_game.set_flag_patches` only accepts unlocked badges, in the order sewn on.
 - Patches are drawn on top of the generated flag (`src/lib/game/patches.ts`). `src/lib/game/flag.ts` is never changed, so every seed still draws the same flag. Patches sit along the bottom of the cloth from the fly; flags under 40 px wide show 2, under 28 px 1.
-- They show on the identity card, the badge shelf, the park sheet holder row and the leaderboard. Map pins show the holder's first patch from zoom 13.5, as a separate pin-sized image over the pin.
+- They show on the identity card, the badge shelf, the park sheet holder row, the leaderboard and crew lists (the park's crew panel, crew sheets and the join result). Map pins show the holder's first patch from zoom 13.5, as a separate pin-sized image over the pin.
 
 ## API
 
