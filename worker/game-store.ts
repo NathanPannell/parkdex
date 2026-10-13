@@ -41,9 +41,30 @@ export interface PointsBreakdown {
   days: number;
 }
 
+/** A badge a request unlocked (#175). */
+export interface BadgeUnlock {
+  id: string;
+  unlockedAt: string;
+}
+
+/** One badge as its player sees it (#175): progress toward the goal, and when it unlocked. */
+export interface BadgeRecord {
+  id: string;
+  progress: number;
+  goal: number;
+  unlockedAt: string | null;
+}
+
+export type SetPatchesResult =
+  | { status: "saved"; patches: string[] }
+  | { status: "too_many" | "duplicate" | "locked" | "handle_required" | "account_unavailable" };
+
 export type RecordVisitResult =
-  /** protected: the visit was logged during someone else's protected hour (#170). */
-  | { status: "recorded" | "protected" | "replayed" | "already_today"; visit: VisitRecord }
+  /**
+   * protected: the visit was logged during someone else's protected hour (#170). `badges` are the
+   * badges this visit unlocked (#175), empty where game_004_badges.sql has not run.
+   */
+  | { status: "recorded" | "protected" | "replayed" | "already_today"; visit: VisitRecord; badges?: BadgeUnlock[] }
   | { status: "park_not_found" | "handle_required" | "account_unavailable" | "conflict" };
 
 export type SetHandleResult =
@@ -97,6 +118,8 @@ export interface FlagRecord {
   flagSeed: string;
   since: string;
   crew: FlagCrew;
+  /** The badges the holder wears on their flag (#175), at most 3. */
+  patches?: string[];
 }
 
 /** A flag's crew for map pins (#170). The leader is the flag's own handle and seed. */
@@ -113,12 +136,14 @@ export interface CrewMemberRecord {
   flagSeed: string;
   joinedAt: string;
   leader: boolean;
+  /** Badges worn on this member's flag (#175). */
+  patches?: string[];
 }
 
 /** A crew as one account sees it (#170). The code is only there for members during the hour. */
 export interface CrewRecord {
   parkId: string;
-  leader: { handle: string; flagSeed: string };
+  leader: { handle: string; flagSeed: string; patches?: string[] };
   /** Leader first, then by joinedAt. */
   members: CrewMemberRecord[];
   size: number;
@@ -135,7 +160,7 @@ export type JoinCrewFailure = "code_not_found" | "code_expired" | "crew_full" | 
   | "account_unavailable" | "conflict" | "park_not_found";
 
 export type JoinCrewResult =
-  | { status: "joined" | "replayed"; visit: VisitRecord; crew: CrewRecord }
+  | { status: "joined" | "replayed"; visit: VisitRecord; crew: CrewRecord; badges?: BadgeUnlock[] }
   | { status: "already_member"; crew: CrewRecord }
   | { status: JoinCrewFailure };
 
@@ -183,6 +208,8 @@ export interface LeaderboardRow {
   flagSeed: string;
   score: number;
   parksHeld: number;
+  /** Badges worn on the player's flag (#175). */
+  patches?: string[];
 }
 
 export interface GameStore {
@@ -206,10 +233,19 @@ export interface GameStore {
   foundingReviews?(accountId: string): Promise<FoundingReviewRecord[]>;
   /** The parks this account has visited, for My Dex. */
   dex?(accountId: string, now: string): Promise<DexParkRecord[]>;
+  /**
+   * Badges (#175). awardBadges checks every rule at `now` and returns the badges it unlocked;
+   * badges lists them all with progress, plus the badges worn on the flag. Absent or empty where
+   * game_004_badges.sql has not run.
+   */
+  awardBadges?(accountId: string, now: string): Promise<BadgeUnlock[]>;
+  badges?(accountId: string, now: string): Promise<{ badges: BadgeRecord[]; patches: string[] }>;
+  setFlagPatches?(accountId: string, patches: string[]): Promise<SetPatchesResult>;
 }
 
 export const TAKEOVER_LIMIT = 50;
 const VISIT_OUTCOMES = new Set(["planted", "took", "held", "joined", "logged", "already_today"]);
+const PATCH_REFUSALS = new Set<string>(["too_many", "duplicate", "locked", "handle_required", "account_unavailable"]);
 const JOIN_FAILURES = new Set<string>(["code_not_found", "code_expired", "crew_full", "already_today", "handle_required", "account_unavailable", "conflict"]);
 
 function iso(value: unknown): string {
@@ -284,9 +320,9 @@ export function crewFromJson(value: unknown): CrewRecord {
   const members = Array.isArray(crew.members) ? crew.members as Array<Record<string, unknown>> : [];
   return {
     parkId: String(crew.parkId),
-    leader: { handle: String(leader.handle), flagSeed: String(leader.flagSeed) },
+    leader: { handle: String(leader.handle), flagSeed: String(leader.flagSeed), patches: [] },
     members: members.map((member) => ({
-      handle: String(member.handle), flagSeed: String(member.flagSeed), joinedAt: iso(member.joinedAt), leader: member.leader === true,
+      handle: String(member.handle), flagSeed: String(member.flagSeed), joinedAt: iso(member.joinedAt), leader: member.leader === true, patches: [],
     })),
     size: Number(crew.size),
     cap: Number(crew.cap),
@@ -309,6 +345,20 @@ function truthy(value: unknown): boolean {
   return value === true || value === "t";
 }
 
+// Undefined function, column or table: a database without game_004_badges.sql.
+function missingBadges(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return code === "42883" || code === "42703" || code === "42P01";
+}
+
+export function badgeUnlocksFromJson(value: unknown): BadgeUnlock[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const row = item as Record<string, unknown> | null;
+    return row && typeof row.id === "string" ? [{ id: row.id, unlockedAt: iso(row.unlockedAt) }] : [];
+  });
+}
+
 function uniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
 }
@@ -318,6 +368,45 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
   const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
 
   const playerColumns = "handle, flag_seed, created_at, takeovers_seen_at";
+
+  /** The patches each handle wears (#175). Empty where game_004_badges.sql has not run. */
+  async function patchesFor(handles: string[]): Promise<Map<string, string[]>> {
+    if (!handles.length) return new Map();
+    try {
+      const found = await rows(
+        "SELECT handle, flag_patches FROM kip_game.players WHERE handle = ANY($1::text[]) AND cardinality(flag_patches) > 0",
+        [[...new Set(handles)]],
+      );
+      return new Map(found.map((row) => [String(row.handle), textArray(row.flag_patches)]));
+    } catch (error) {
+      if (missingBadges(error)) return new Map();
+      throw error;
+    }
+  }
+
+  async function withCrewPatches(crew: CrewRecord): Promise<CrewRecord> {
+    const patches = await patchesFor([crew.leader.handle, ...crew.members.map((member) => member.handle)]);
+    return {
+      ...crew,
+      leader: { ...crew.leader, patches: patches.get(crew.leader.handle) ?? [] },
+      members: crew.members.map((member) => ({ ...member, patches: patches.get(member.handle) ?? [] })),
+    };
+  }
+
+  /**
+   * Runs a game function through its game_004 wrapper, which adds the badges it unlocked, or the
+   * function itself on a database without game_004_badges.sql (a preview before its migration).
+   */
+  async function withBadges(wrapper: string, plain: string, params: unknown[]): Promise<Record<string, unknown>> {
+    try {
+      const result = await rows(`SELECT ${wrapper} AS result`, params);
+      return jsonValue(result[0]?.result) as Record<string, unknown>;
+    } catch (error) {
+      if (!missingBadges(error)) throw error;
+      const result = await rows(`SELECT ${plain} AS result`, params);
+      return jsonValue(result[0]?.result) as Record<string, unknown>;
+    }
+  }
 
   return {
     async getPlayer(accountId) {
@@ -353,10 +442,13 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
         if (!stored.length) return { status: "park_not_found" };
       }
-      const result = await rows("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result", [visitId, accountId, parkId, visitedAt]);
-      const body = jsonValue(result[0]?.result) as { status: string; visit?: unknown };
+      const body = await withBadges(
+        "kip_game.record_visit_with_badges($1::uuid, $2::uuid, $3, $4::timestamptz)",
+        "kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz)",
+        [visitId, accountId, parkId, visitedAt],
+      ) as { status: string; visit?: unknown; badges?: unknown };
       if (body.status === "recorded" || body.status === "protected" || body.status === "replayed" || body.status === "already_today") {
-        return { status: body.status, visit: visitFromJson(body.visit) };
+        return { status: body.status, visit: visitFromJson(body.visit), badges: badgeUnlocksFromJson(body.badges) };
       }
       if (body.status === "park_not_found" || body.status === "handle_required" || body.status === "account_unavailable" || body.status === "conflict") {
         return { status: body.status };
@@ -430,6 +522,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         FROM kip_game.flags_up($1::timestamptz) f
         LEFT JOIN kip_game.flag_crews($1::timestamptz) c ON c.park_id = f.park_id
         ORDER BY f.park_id`, [now]);
+      const patches = await patchesFor(found.map((row) => String(row.handle)));
       return found.map((row) => ({
         parkId: String(row.park_id), handle: String(row.handle), flagSeed: String(row.flag_seed), since: iso(row.since),
         crew: {
@@ -437,6 +530,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
           memberSeeds: textArray(row.member_seeds),
           protectedUntil: nullableIso(row.protected_until),
         },
+        patches: patches.get(String(row.handle)) ?? [],
       }));
     },
 
@@ -449,12 +543,17 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
         if (!stored.length) return { status: "park_not_found" };
       }
-      const result = await rows("SELECT kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz) AS result", [accountId, code, visitId, now]);
-      const body = jsonValue(result[0]?.result) as { status: string; visit?: unknown; crew?: unknown };
+      const body = await withBadges(
+        "kip_game.join_crew_with_badges($1::uuid, $2, $3::uuid, $4::timestamptz)",
+        "kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz)",
+        [accountId, code, visitId, now],
+      ) as { status: string; visit?: unknown; crew?: unknown; badges?: unknown };
       if (body.status === "joined" || body.status === "replayed") {
-        return { status: body.status, visit: visitFromJson(body.visit), crew: crewFromJson(body.crew) };
+        return {
+          status: body.status, visit: visitFromJson(body.visit), crew: await withCrewPatches(crewFromJson(body.crew)), badges: badgeUnlocksFromJson(body.badges),
+        };
       }
-      if (body.status === "already_member") return { status: body.status, crew: crewFromJson(body.crew) };
+      if (body.status === "already_member") return { status: body.status, crew: await withCrewPatches(crewFromJson(body.crew)) };
       if (JOIN_FAILURES.has(body.status)) return { status: body.status as JoinCrewFailure };
       throw new Error("unexpected join_crew status");
     },
@@ -462,7 +561,7 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     async parkCrew(parkId, accountId, now) {
       const found = await rows("SELECT kip_game.park_crew($1, $2::uuid, $3::timestamptz) AS crew", [parkId, accountId, now]);
       const crew = jsonValue(found[0]?.crew);
-      return crew ? crewFromJson(crew) : null;
+      return crew ? withCrewPatches(crewFromJson(crew)) : null;
     },
 
     async founders() {
@@ -551,9 +650,47 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
 
     async leaderboard(now) {
       const found = await rows("SELECT rank, handle, flag_seed, score, parks_held FROM kip_game.leaderboard($1::timestamptz)", [now]);
+      const patches = await patchesFor(found.map((row) => String(row.handle)));
       return found.map((row) => ({
         rank: Number(row.rank), handle: String(row.handle), flagSeed: String(row.flag_seed), score: Number(row.score), parksHeld: Number(row.parks_held),
+        patches: patches.get(String(row.handle)) ?? [],
       }));
+    },
+
+    async awardBadges(accountId, now) {
+      try {
+        const found = await rows("SELECT kip_game.award_badges($1::uuid, $2::timestamptz, NULL) AS badges", [accountId, now]);
+        return badgeUnlocksFromJson(jsonValue(found[0]?.badges));
+      } catch (error) {
+        if (missingBadges(error)) return [];
+        throw error;
+      }
+    },
+
+    async badges(accountId, now) {
+      try {
+        const found = await rows(`
+          SELECT kip_game.badges_json($1::uuid, $2::timestamptz) AS badges,
+            (SELECT flag_patches FROM kip_game.players WHERE account_id = $1::uuid) AS patches`, [accountId, now]);
+        const listed = jsonValue(found[0]?.badges);
+        return {
+          badges: (Array.isArray(listed) ? listed as Array<Record<string, unknown>> : []).map((row) => ({
+            id: String(row.id), progress: Number(row.progress), goal: Number(row.goal), unlockedAt: nullableIso(row.unlockedAt),
+          })),
+          patches: textArray(found[0]?.patches),
+        };
+      } catch (error) {
+        if (missingBadges(error)) return { badges: [], patches: [] };
+        throw error;
+      }
+    },
+
+    async setFlagPatches(accountId, patches) {
+      const found = await rows("SELECT kip_game.set_flag_patches($1::uuid, $2::text[]) AS result", [accountId, patches]);
+      const body = jsonValue(found[0]?.result) as { status: string; patches?: unknown };
+      if (body.status === "saved") return { status: "saved", patches: textArray(body.patches) };
+      if (PATCH_REFUSALS.has(body.status)) return { status: body.status as Exclude<SetPatchesResult["status"], "saved"> };
+      throw new Error("unexpected set_flag_patches status");
     },
   };
 }
