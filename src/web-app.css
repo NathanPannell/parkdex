@@ -53,6 +53,25 @@
   font-size: 17px;
 }
 
+.portrait-only__card--desktop .portrait-only__dev {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--paper-3);
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.portrait-only__dev kbd {
+  font-family: var(--body);
+  font-size: 13px;
+  white-space: nowrap;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 1px 6px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
 .portrait-only__qr {
   display: flex;
   flex-direction: column;

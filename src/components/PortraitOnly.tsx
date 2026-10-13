@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Kip } from "./Kip";
 import { QrCode } from "./QrCode";
+import { DEMO_TOOLS } from "../lib/demo";
 import type { PortraitPanel } from "../lib/webApp";
 import "../web-app.css";
 
@@ -26,6 +27,12 @@ function DesktopPanel() {
         <span className="eyebrow">Parkdex</span>
         <h1 id="portrait-only-title">Parkdex is made for phones held upright</h1>
         <p>Plant your flag in real parks. Open Parkdex on your phone to play where you are.</p>
+        {DEMO_TOOLS && (
+          // `npm run dev` on a desktop lands here first, so the demo hints live here.
+          <p className="portrait-only__dev">
+            Development build: make the window taller than it is wide to run the app. Then open <kbd>Demo controls</kbd> in the map menu, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
+          </p>
+        )}
       </div>
       <figure className="portrait-only__qr">
         <QrCode value={url} size={200} label="QR code that opens Parkdex on your phone" />
