@@ -124,7 +124,7 @@ class MemoryFoundersStore implements FoundersStore {
     const visit = {
       visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const,
       pointsEarned: planted ? 6 : 4, pointsBreakdown: { base: planted ? 6 : 4, days: 0 },
-      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false,
+      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false, protected: null,
     };
     this.visits.push({ accountId: input.accountId, parkId, at: input.at });
     for (const request of this.requests) if (request.parkId === parkId && request.status === "pending") request.status = "superseded";
@@ -241,7 +241,7 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.deepEqual(result.park, { id: "osm-way-23938892", name: "Paterson Park" });
   assert.match(result.coverUrl, new RegExp(`^${origin}/api/parks/osm-way-23938892/cover/[0-9a-f]{64}\\.jpg$`));
   assert.equal(result.founderPoints, 24);
-  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsBreakdown", "pointsEarned", "previousHolder", "visitId"]);
+  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsBreakdown", "pointsEarned", "previousHolder", "protected", "visitId"]);
   assert.equal(result.visit.outcome, "planted");
   assert.equal(result.visit.visitId, await founderVisitId(attemptId));
 

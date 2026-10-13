@@ -67,3 +67,5 @@ The routes follow the contract in issue #76. Additive fields beyond the contract
 Time rules are in `database/migrations/game_001_init.sql`. Visits use server time. Local days are America/Vancouver. A flag falls 720 hours after its holder's last visit.
 
 Points (#169) are in `database/migrations/game_002_points.sql`: 1 per whole hour a flag flies, +6 for planting, +4 plus 1 per whole day the taken flag flew for a take, +1 for visiting your own flag, and +24 for founding. `GET /api/game/me` lists each held park with `days` (the flag's age, for weathering) and `hours` (the holding points so far), and visits carry `pointsBreakdown: { base, days }`, where `days` is a take's day bonus.
+
+Crews (#170) are in `database/migrations/game_003_crews.sql`: each plant or take starts a 60-minute protected hour with a 6-character crew code. Outsiders' visits during it are `logged` (+1), friends join with `POST /api/game/crews/join` (+2, up to 8 people) and hold the park together. Contract in [crews.md](crews.md). To try it locally, plant with one seed account, read the code from `GET /api/game/parks/<park>/crew` and join with another.

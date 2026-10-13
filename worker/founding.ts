@@ -102,7 +102,8 @@ function founderStatement(input: FoundCommon, parkId: string, source: "osm_new" 
 function visitStatement(input: FoundCommon, parkId: string): Statement {
   return {
     // Founding counts as today's visit. Anything but a recorded (or same-day) visit rolls it all back.
-    text: `SELECT kip_park_drafts.require((v.r->>'status') IN ('recorded', 'already_today', 'replayed'), 'visit_' || coalesce(v.r->>'status', 'failed')) AS visit_ok,
+    // During someone else's protected hour (#170) the visit is logged, and the founding still stands.
+    text: `SELECT kip_park_drafts.require((v.r->>'status') IN ('recorded', 'protected', 'already_today', 'replayed'), 'visit_' || coalesce(v.r->>'status', 'failed')) AS visit_ok,
         v.r AS visit_result
       FROM (SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS r) v`,
     params: [input.visitId, input.accountId, parkId, input.at],

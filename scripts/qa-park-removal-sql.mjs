@@ -334,7 +334,9 @@ try {
   assert.ok([200, 404].includes(raceFounding.status), `founding during removal answered ${raceFounding.status}`);
   assert.equal(await count('SELECT count(*) FROM public.parks WHERE id = $1', [RACE]), 0);
   assert.equal(await count('SELECT count(*) FROM kip_founders.parks WHERE park_id = $1', [RACE]), 0);
-  assert.equal(await score(racer.id), 0, 'no bonus survives the removal');
+  // The founder bonus never survives. A founding that landed first keeps its visit's +6 plant
+  // bonus, because removal keeps visits as history (#169).
+  assert.equal(await score(racer.id), raceFounding.status === 200 ? 6 : 0, 'no founder bonus survives the removal');
   log(`a removal and a founding of the same park never interleave (the founding answered ${raceFounding.status})`);
 } finally {
   await Promise.all(pending.splice(0)).catch(() => undefined);
