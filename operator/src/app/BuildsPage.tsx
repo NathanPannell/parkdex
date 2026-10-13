@@ -19,6 +19,7 @@ type Draft = {
 const FLAG_HINTS: Record<string, string> = {
   crews: "Crew flags: the protected hour, crew codes and joining (#170, #171). Off by default.",
   friends: "Friends by QR code and the weekly friends board (#64). Off by default.",
+  crews: "Crew flags: the protected hour, crew codes and joining (#170, #171). Off by default.",
 };
 
 const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [

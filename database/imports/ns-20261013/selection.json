@@ -1,0 +1,149 @@
+{
+  "schema": "parkdex.ns-import-selection.v1",
+  "selectedCount": 112,
+  "categories": {
+    "provincial": 109,
+    "national": 3
+  },
+  "minimumReader": 3,
+  "delivery": "Every new park gets reader floor 3: readers 1 and 2 keep today's snapshot, and reader 3 loads the whole catalogue from a CDN release.",
+  "scope": {
+    "provincial": "Features of the Parks and Protected Areas System layer with PROT_TYPE 'Provincial Park', designated under the Provincial Parks Act (1989), grouped by name.",
+    "national": [
+      "Cape Breton Highlands National Park",
+      "Kejimkujik National Park and National Historic Site",
+      "Sable Island National Park Reserve"
+    ]
+  },
+  "excluded": {
+    "otherProtectedAreaTypes": {
+      "reason": "Wilderness areas, nature reserves, land trust properties and national wildlife areas are out of scope for now.",
+      "featureCounts": {
+        "Land Trust or Conservation Easement": 794,
+        "National Park": 6,
+        "National Park, Migratory Bird Sanctuary": 1,
+        "National Wildlife Area": 9,
+        "National Wildlife Area, Migratory Bird Sanctuary": 1,
+        "Nature Reserve": 142,
+        "Nature Reserve, Conservation Easement": 3,
+        "Nature Reserve, Land Trust": 7,
+        "Nature Reserve, Wilderness Area": 3,
+        "Wilderness Area": 173,
+        "Wilderness Area, Conservation Easement": 7,
+        "Wilderness Area, Land Trust": 6
+      }
+    },
+    "featuresWithoutGeometry": {
+      "reason": "The source feature has no geometry; its park keeps its other features.",
+      "features": [
+        {
+          "objectId": 78,
+          "sourceFeatureId": "6a695076-d3b2-41ca-bfa2-3363b858f39f",
+          "name": "Bayfield Beach Provincial Park",
+          "officialHectares": 6.429999737702307e-10,
+          "reason": "The source feature has no geometry."
+        }
+      ]
+    },
+    "entrancePointsWithoutOutline": {
+      "reason": "The province lists a day-use or camping entrance but no Provincial Parks Act outline, so there is no boundary to check a visit against.",
+      "names": [
+        "Balmoral Mills Provincial Park",
+        "Black Duck Cove Provincial Park",
+        "Blomidon Lookoff Provincial Park",
+        "Bras d'Or Provincial Park",
+        "Burnt Island Provincial Park",
+        "Caddell Rapids Lookoff Provincial Park",
+        "Chebogue Meadows Provincial Park",
+        "Cookville Provincial Park",
+        "Elderbank Provincial Park",
+        "Hubbards Provincial Park",
+        "Irish Cove Provincial Park",
+        "Louisdale Provincial Park",
+        "MacCormack Provincial Park",
+        "MacCormacks Beach Provincial Park",
+        "MacElmons Pond Provincial Park",
+        "Marble Mountain Provincial Park",
+        "Marie Joseph Provincial Park",
+        "Mickey Hill Provincial Park",
+        "Point Michaud Beach Provincial Park",
+        "Port L'Hebert Provincial Park",
+        "Port Shoreham Beach Provincial Park",
+        "Ross Ferry Provincial Park",
+        "Scots Bay North Provincial Park",
+        "Sherbrooke Provincial Park",
+        "Shubenacadie Canal Provincial Park",
+        "Spry Bay Provincial Park",
+        "Tor Bay Provincial Park",
+        "Trout Brook Provincial Park",
+        "Tusket River Lookoff Provincial Park",
+        "Usige Ban Falls Provincial Park"
+      ]
+    },
+    "nationalHistoricSites": {
+      "reason": "National historic sites, such as Louisbourg, are out of scope."
+    },
+    "duplicates": {
+      "reason": "At least 50% of both footprints overlap a live catalogue park.",
+      "ids": []
+    }
+  },
+  "regions": {
+    "names": [
+      "Halifax Metro",
+      "South Shore",
+      "Yarmouth and Acadian Shores",
+      "Bay of Fundy and Annapolis Valley",
+      "Northumberland Shore",
+      "Eastern Shore",
+      "Cape Breton Island"
+    ],
+    "countyRegions": {
+      "Annapolis": "Bay of Fundy and Annapolis Valley",
+      "Antigonish": "Northumberland Shore",
+      "Cape Breton": "Cape Breton Island",
+      "Colchester": "split",
+      "Cumberland": "split",
+      "Digby": "Bay of Fundy and Annapolis Valley",
+      "Guysborough": "Eastern Shore",
+      "Halifax": "split",
+      "Hants": "Bay of Fundy and Annapolis Valley",
+      "Inverness": "Cape Breton Island",
+      "Kings": "Bay of Fundy and Annapolis Valley",
+      "Lunenburg": "South Shore",
+      "Pictou": "Northumberland Shore",
+      "Queens": "South Shore",
+      "Richmond": "Cape Breton Island",
+      "Shelburne": "South Shore",
+      "Victoria": "Cape Breton Island",
+      "Yarmouth": "Yarmouth and Acadian Shores"
+    },
+    "splitRules": {
+      "Halifax": "Eastern Shore when the pin is east of 63.45° W (from Lawrencetown on), otherwise Halifax Metro.",
+      "Colchester": "Northumberland Shore when the pin is north of 45.55° N (the Northumberland Strait side of the Cobequid Hills), otherwise Bay of Fundy and Annapolis Valley.",
+      "Cumberland": "Northumberland Shore when the pin is north of 45.55° N (the Northumberland Strait side of the Cobequid Hills), otherwise Bay of Fundy and Annapolis Valley."
+    },
+    "municipalityRegions": {
+      "Clare (Digby)": "Yarmouth and Acadian Shores",
+      "Barrington (Shelburne)": "Yarmouth and Acadian Shores",
+      "Clark's Harbour (Shelburne)": "Yarmouth and Acadian Shores"
+    },
+    "parkOverrides": {
+      "national-sable-island-national-park-reserve": {
+        "county": "Halifax",
+        "municipality": "Halifax",
+        "region": "Halifax Metro",
+        "reason": "Offshore and in no municipality polygon; part of the Halifax Regional Municipality and reached only from Halifax."
+      }
+    }
+  },
+  "idClashCheck": {
+    "live staging catalogue": 1057,
+    "live production catalogue": 1067,
+    "database/imports/legacy-bc-20261007/park-ids.txt": 1273,
+    "database/imports/legacy-bc-20261007/sources/staging-rev158-snapshot.json.gz": 334,
+    "database/imports/provincial-regional-20260929/sources/baseline-snapshot.json": 100,
+    "database/imports/provincial-regional-20260929/selection.json": 270,
+    "database/imports/legacy-boundaries-20260928/boundaries.geojson": 11
+  }
+}

@@ -24,6 +24,8 @@ export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   crews: false,
   /** Friends by QR code and the weekly friends board (#64). Off until the operator turns it on. */
   friends: false,
+  /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
+  crews: false,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;

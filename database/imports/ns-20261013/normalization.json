@@ -1,0 +1,633 @@
+{
+  "methods": {
+    "planar-face-even-odd-all-rings": "An invalid source feature is rebuilt from the planar faces of all its rings; a face is inside when an odd number of rings contain it.",
+    "source-feature-union": "The source features of one park touch or overlap, so the park is their union."
+  },
+  "parks": [
+    {
+      "parkId": "provincial-barrachois-provincial-park",
+      "sourceFeatureId": "1391eb55-6091-47d6-9c00-8acb1d2f7dd5",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 7,
+        "holes": 0,
+        "rings": 7,
+        "positions": 556
+      },
+      "planarFaces": 7,
+      "includedFaces": 5,
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 2,
+        "rings": 7,
+        "positions": 556
+      }
+    },
+    {
+      "parkId": "provincial-battery-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "04b8f2f2-9c11-489e-b914-aa97b1f507da",
+        "fb865e1f-2be5-42bb-a733-bb66458d1549"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 2,
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 0,
+        "rings": 1,
+        "positions": 221
+      }
+    },
+    {
+      "parkId": "provincial-beaver-mountain-provincial-park",
+      "sourceFeatureId": "7428e1c0-886a-4c46-9fee-521a6b02a9bd",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 221
+      },
+      "planarFaces": 5,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 2,
+        "rings": 4,
+        "positions": 221
+      }
+    },
+    {
+      "parkId": "provincial-blomidon-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "85ad1d45-93c2-4e2d-992d-62178c19a70c",
+        "67a206af-a2bc-414e-b6d3-46b663e61f9a",
+        "44fa73b4-ce96-4673-bc09-4e5ee01f28bd"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 3,
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 1,
+        "rings": 2,
+        "positions": 1342
+      }
+    },
+    {
+      "parkId": "provincial-blue-sea-beach-provincial-park",
+      "sourceFeatureId": "d70b66f0-7a39-4f34-91d9-6bd95635fcab",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 624
+      },
+      "planarFaces": 6,
+      "includedFaces": 4,
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 2,
+        "rings": 6,
+        "positions": 624
+      }
+    },
+    {
+      "parkId": "provincial-cape-chignecto-provincial-park",
+      "sourceFeatureId": "727ed9dd-f45c-4410-bf85-a39b0c98a8ee",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 8,
+        "holes": 0,
+        "rings": 8,
+        "positions": 2444
+      },
+      "planarFaces": 8,
+      "includedFaces": 5,
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 3,
+        "rings": 8,
+        "positions": 2444
+      }
+    },
+    {
+      "parkId": "provincial-cape-chignecto-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "de5a5804-f6b6-408e-b26a-09fd95901f48",
+        "727ed9dd-f45c-4410-bf85-a39b0c98a8ee"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 7,
+      "normalizedCounts": {
+        "polygons": 5,
+        "holes": 9,
+        "rings": 14,
+        "positions": 2484
+      }
+    },
+    {
+      "parkId": "provincial-cape-smokey-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "0e497dd5-7ca1-4304-b8a4-190f3ac2bb33",
+        "1c2a63c3-6faf-43f3-9fae-d530a4484c73"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 2,
+      "normalizedCounts": {
+        "polygons": 1,
+        "holes": 0,
+        "rings": 1,
+        "positions": 562
+      }
+    },
+    {
+      "parkId": "provincial-clam-harbour-beach-provincial-park",
+      "sourceFeatureId": "9bd0f282-9393-40bf-91eb-f35098423566",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 9,
+        "holes": 0,
+        "rings": 9,
+        "positions": 1263
+      },
+      "planarFaces": 9,
+      "includedFaces": 3,
+      "normalizedCounts": {
+        "polygons": 3,
+        "holes": 6,
+        "rings": 9,
+        "positions": 1263
+      }
+    },
+    {
+      "parkId": "provincial-cole-harbour-lawrencetown-provincial-park",
+      "sourceFeatureId": "68fd99b7-248c-4478-bf96-a86f535bf84a",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 42,
+        "holes": 0,
+        "rings": 42,
+        "positions": 7066
+      },
+      "planarFaces": 42,
+      "includedFaces": 28,
+      "normalizedCounts": {
+        "polygons": 28,
+        "holes": 14,
+        "rings": 42,
+        "positions": 7066
+      }
+    },
+    {
+      "parkId": "provincial-crystal-crescent-beach-provincial-park",
+      "sourceFeatureId": "24e22151-340d-4321-9d07-904409c04ec3",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 1749
+      },
+      "planarFaces": 6,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 4,
+        "rings": 6,
+        "positions": 1749
+      }
+    },
+    {
+      "parkId": "provincial-crystal-crescent-beach-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "24e22151-340d-4321-9d07-904409c04ec3",
+        "eeb0d7a4-f0dd-425a-a00f-0af664854f0d"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 5,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 4,
+        "rings": 6,
+        "positions": 1793
+      }
+    },
+    {
+      "parkId": "provincial-dalem-lake-provincial-park",
+      "sourceFeatureId": "0a9be352-ffe4-4127-8a3d-ab4aade1cec4",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 141
+      },
+      "planarFaces": 3,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 141
+      }
+    },
+    {
+      "parkId": "provincial-dollar-lake-provincial-park",
+      "sourceFeatureId": "e1566911-257e-4c06-8862-866b3ebe6b6d",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 1328
+      },
+      "planarFaces": 4,
+      "includedFaces": 3,
+      "normalizedCounts": {
+        "polygons": 3,
+        "holes": 1,
+        "rings": 4,
+        "positions": 1328
+      }
+    },
+    {
+      "parkId": "provincial-dollar-lake-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "e1566911-257e-4c06-8862-866b3ebe6b6d",
+        "aaff5954-e551-4f5f-a591-97e66bcde5c3"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 4,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 2,
+        "rings": 4,
+        "positions": 2429
+      }
+    },
+    {
+      "parkId": "provincial-five-islands-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "a1269bdd-0bbf-4a88-98c7-0ed259f45554",
+        "d27c1e34-cc89-43fd-a89f-54895ad8f5dd"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 8,
+      "normalizedCounts": {
+        "polygons": 6,
+        "holes": 0,
+        "rings": 6,
+        "positions": 799
+      }
+    },
+    {
+      "parkId": "provincial-fox-harbour-provincial-park",
+      "sourceFeatureId": "7786846f-1803-415f-a83b-d0c6dba3b19b",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 158
+      },
+      "planarFaces": 3,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 158
+      }
+    },
+    {
+      "parkId": "provincial-long-lake-provincial-park",
+      "sourceFeatureId": "1dce5f0e-9b4d-4ee4-a308-819e9a9aea3f",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 17,
+        "holes": 0,
+        "rings": 17,
+        "positions": 5382
+      },
+      "planarFaces": 17,
+      "includedFaces": 8,
+      "normalizedCounts": {
+        "polygons": 8,
+        "holes": 9,
+        "rings": 17,
+        "positions": 5382
+      }
+    },
+    {
+      "parkId": "provincial-martinique-beach-provincial-park",
+      "sourceFeatureId": "98cac493-40f4-424b-9cb3-419089f7b436",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 827
+      },
+      "planarFaces": 3,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 827
+      }
+    },
+    {
+      "parkId": "provincial-mcnabs-and-lawlor-island-provincial-park",
+      "sourceFeatureId": "dcbf982f-521d-4232-9b96-5c9e8520d40c",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 14,
+        "holes": 0,
+        "rings": 14,
+        "positions": 5344
+      },
+      "planarFaces": 14,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 12,
+        "rings": 14,
+        "positions": 5344
+      }
+    },
+    {
+      "parkId": "provincial-mira-river-provincial-park",
+      "sourceFeatureId": "34b51168-1ced-4396-ba08-878cf6f2e401",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 952
+      },
+      "planarFaces": 4,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 2,
+        "rings": 4,
+        "positions": 952
+      }
+    },
+    {
+      "parkId": "provincial-owls-head-provincial-park",
+      "sourceFeatureId": "08483b26-a12e-41f4-9fb0-3208842db27a",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Ring Self-intersection",
+      "sourceCounts": {
+        "polygons": 14,
+        "holes": 0,
+        "rings": 14,
+        "positions": 1535
+      },
+      "planarFaces": 15,
+      "includedFaces": 13,
+      "normalizedCounts": {
+        "polygons": 13,
+        "holes": 2,
+        "rings": 15,
+        "positions": 1536
+      }
+    },
+    {
+      "parkId": "provincial-pomquet-beach-provincial-park",
+      "sourceFeatureId": "4caf346e-06a7-43cb-ba04-19b482bbc4d2",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 5,
+        "holes": 0,
+        "rings": 5,
+        "positions": 579
+      },
+      "planarFaces": 5,
+      "includedFaces": 3,
+      "normalizedCounts": {
+        "polygons": 3,
+        "holes": 2,
+        "rings": 5,
+        "positions": 579
+      }
+    },
+    {
+      "parkId": "provincial-porters-lake-provincial-park",
+      "sourceFeatureId": "7700c20a-8d21-4369-bfa6-b10cd2f3b80d",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 8,
+        "holes": 0,
+        "rings": 8,
+        "positions": 885
+      },
+      "planarFaces": 8,
+      "includedFaces": 6,
+      "normalizedCounts": {
+        "polygons": 6,
+        "holes": 2,
+        "rings": 8,
+        "positions": 885
+      }
+    },
+    {
+      "parkId": "provincial-salt-springs-provincial-park",
+      "sourceFeatureId": "91fe41a2-f69f-47a1-bf79-677f774a01e3",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 4,
+        "holes": 0,
+        "rings": 4,
+        "positions": 359
+      },
+      "planarFaces": 4,
+      "includedFaces": 3,
+      "normalizedCounts": {
+        "polygons": 3,
+        "holes": 1,
+        "rings": 4,
+        "positions": 359
+      }
+    },
+    {
+      "parkId": "provincial-st-anns-provincial-park",
+      "sourceFeatureId": "63d77ba3-bf44-4f49-b374-bf05a127c198",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 108
+      },
+      "planarFaces": 3,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 108
+      }
+    },
+    {
+      "parkId": "provincial-taylor-head-provincial-park",
+      "sourceFeatureId": "ba1d1f3e-460a-4422-b239-e6d4b9dc2f44",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 8,
+        "holes": 0,
+        "rings": 8,
+        "positions": 3334
+      },
+      "planarFaces": 8,
+      "includedFaces": 4,
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 4,
+        "rings": 8,
+        "positions": 3334
+      }
+    },
+    {
+      "parkId": "provincial-thomas-raddall-provincial-park",
+      "sourceFeatureId": "0e8e4c91-751d-4623-9a51-27572dd76be3",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 7,
+        "holes": 0,
+        "rings": 7,
+        "positions": 1503
+      },
+      "planarFaces": 7,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 5,
+        "rings": 7,
+        "positions": 1503
+      }
+    },
+    {
+      "parkId": "provincial-thomas-raddall-provincial-park",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "0e8e4c91-751d-4623-9a51-27572dd76be3",
+        "f001be1e-f9c2-4390-baaf-3ae11cc404fa"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 4,
+      "normalizedCounts": {
+        "polygons": 3,
+        "holes": 5,
+        "rings": 8,
+        "positions": 1713
+      }
+    },
+    {
+      "parkId": "provincial-waterside-beach-provincial-park",
+      "sourceFeatureId": "152fbbbe-014f-4c24-b867-85c5cb243b98",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 8,
+        "holes": 0,
+        "rings": 8,
+        "positions": 679
+      },
+      "planarFaces": 8,
+      "includedFaces": 4,
+      "normalizedCounts": {
+        "polygons": 4,
+        "holes": 4,
+        "rings": 8,
+        "positions": 679
+      }
+    },
+    {
+      "parkId": "provincial-wentworth-provincial-park",
+      "sourceFeatureId": "9a2305a5-df61-4de2-bfa8-5e7678cacbce",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 3,
+        "holes": 0,
+        "rings": 3,
+        "positions": 148
+      },
+      "planarFaces": 3,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 1,
+        "rings": 3,
+        "positions": 148
+      }
+    },
+    {
+      "parkId": "provincial-west-mabou-beach-provincial-park",
+      "sourceFeatureId": "e24fadb6-230f-4ad1-a1fe-da89cfcf01eb",
+      "method": "planar-face-even-odd-all-rings",
+      "sourceProblem": "Nested shells",
+      "sourceCounts": {
+        "polygons": 7,
+        "holes": 0,
+        "rings": 7,
+        "positions": 724
+      },
+      "planarFaces": 7,
+      "includedFaces": 2,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 5,
+        "rings": 7,
+        "positions": 724
+      }
+    },
+    {
+      "parkId": "national-sable-island-national-park-reserve",
+      "method": "source-feature-union",
+      "sourceFeatureIds": [
+        "8344f342-289e-438c-b60d-1145be27f489",
+        "70414a84-a74f-4918-a54f-97cc6ce0d930"
+      ],
+      "reason": "Source features of one park touch or overlap, so the park is their union.",
+      "partsBefore": 3,
+      "normalizedCounts": {
+        "polygons": 2,
+        "holes": 0,
+        "rings": 2,
+        "positions": 20572
+      }
+    }
+  ]
+}

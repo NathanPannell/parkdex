@@ -107,6 +107,7 @@ class AccountReleaseGates(unittest.TestCase):
             "game_003_crews.sql",
             "social_001_friends.sql",
             "osm_parks_002_sources.sql",
+            "game_003_crews.sql",
         ])
 
     def test_account_code_without_any_migration_fails_closed(self):

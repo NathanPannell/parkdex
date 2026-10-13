@@ -106,6 +106,7 @@ export function normalizeRoute(method: string | undefined, path: string): string
     if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";
     // Handles in DELETE /api/friends/:handle would make one route per friend.
     if (index === 2 && all[0] === "api" && all[1] === "friends" && segment !== "code") return ":handle";
+    if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";
     if (UUID.test(segment)) return ":id";
     if (HEX_ID.test(segment)) return ":hash";
     if (/^\d+$/.test(segment)) return ":n";
