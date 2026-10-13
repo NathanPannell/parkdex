@@ -9,6 +9,8 @@ export type PhotoCrop = { x: number; y: number; width: number; height: number };
 
 /** Width over height, in pixels: the polaroid shape used in the Dex. */
 export const CROP_ASPECT = 3 / 4;
+/** Width over height of the park cover photo on the park sheet: a 16:9 landscape. */
+export const PARK_COVER_ASPECT = 16 / 9;
 /** The crop can zoom in at most this far from the largest fit. */
 export const MAX_CROP_ZOOM = 4;
 /** A crop never gets narrower than this many pixels of the original, so a cover is never a smudge. */

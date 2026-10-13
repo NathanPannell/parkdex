@@ -12,7 +12,7 @@ import { estimateTrip } from "../../lib/drive";
 import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, RARITY, type Park } from "../../lib/parks";
-import { takeLabel, takePoints, type ParkHolder } from "../../lib/game/visit";
+import { takeLabel, takePoints, VISITED_TODAY_LABEL, type ParkHolder } from "../../lib/game/visit";
 import { handleFit } from "../../lib/game/handleFit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
@@ -25,6 +25,9 @@ import { crewMatchesFlag, crewPhase, isProtectedPhase } from "../../lib/game/cre
 import { useCrew } from "../../lib/game/CrewProvider";
 import { useParkCrew, useServerClock } from "../../lib/game/useParkCrew";
 import { useKipTip } from "../../lib/kipTips";
+import { buzz } from "../../lib/feedback";
+import { PARK_COVER_ASPECT } from "../../lib/photoCrop";
+import { CrewList } from "../../components/CrewList";
 import { CrewPanel } from "./CrewPanel";
 import "../../found-park.css";
 
@@ -76,6 +79,8 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   // "Add another photo" for parks you have visited (#174), from a claim here or visits on the server.
   const visited = !!claim || (summary.summary?.visits.mine ?? 0) > 0 || !!game.me?.visitedToday?.includes(park.id);
   const [adding, setAdding] = useState(false);
+  // Tapping "Visited today, back tomorrow" only nudges the button: it already says why.
+  const [nudged, setNudged] = useState(false);
   const founder = founderCta(summary, insideForFounding, canFound, hasPendingReview(game.me, park.id));
   const stats = summaryStats(summary, signedIn);
   const trip = estimateTrip(user, park, content?.drive);
@@ -100,6 +105,9 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   useKipTip("crew-leader", phase.kind === "leader");
   useKipTip("crew-outsider", phase.kind === "outsider" && !phase.logged);
   const holderLine = flagStatus(holder, flagDays, phase.kind === "outsider");
+  // The button reads "Visited today, back tomorrow" exactly when today's visit is spent.
+  const restingToday = visitLabel === VISITED_TODAY_LABEL;
+  const crewList = crew && crew.members.length > 0 ? crew : null;
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
@@ -117,8 +125,8 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
     </a>
   );
   const badge = claim
-    ? <EarnedBadge park={park} claim={claim} size={176} animated state="earned" />
-    : <Badge park={park} size={176} animated state="preview" />;
+    ? <EarnedBadge park={park} claim={claim} size={160} animated state="earned" />
+    : <Badge park={park} size={160} animated state="preview" />;
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) onClose();
@@ -138,164 +146,169 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
       // The holder line is "@handle" or "@handle's crew"; it and the take button fit that line.
       style={handleFit(holderLine.title.startsWith("@") ? holderLine.title.slice(1) : null)}
     >
-      <div className={`park-sheet__hero${showCover ? " has-cover" : ""}`} style={{ background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}>
+      {/* The page scrolls under a finger, so the strip at the top is where the sheet drags down. */}
+      <div className="park-sheet__grab" aria-hidden="true">
         <div className="sheet__handle" />
-        <button className="park-sheet__close" onClick={onClose} aria-label="Close">
-          <Icon name="close" size={18} stroke={3} />
-        </button>
-        {showCover ? (
-          // The founder's approved photo replaces the badge as the park's face.
-          <motion.div className="park-sheet__cover" initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}>
-            <img src={cover} alt={`${park.name}, photographed by its founder`} onError={() => setCoverFailed(true)} />
-          </motion.div>
-        ) : (
-          <>
-            <div className="park-sheet__rays">
-              <Rays color="#FFFFFF" size={460} opacity={0.35} />
-            </div>
-            <motion.div
-              className="park-sheet__badge"
-              layoutId={`badge-${park.id}`}
-              initial={{ scale: 0.3, rotate: -25, y: 60 }}
-              animate={{ scale: 1, rotate: 0, y: 0 }}
-              transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
-            >
-              {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
-              {isNative ? badge : <Tilt>{badge}</Tilt>}
+      </div>
+      <button className="park-sheet__close" onClick={onClose} aria-label="Close">
+        <Icon name="close" size={18} stroke={3} />
+      </button>
+
+      {/* The hero scrolls away with the page, so nothing ever sits underneath it. */}
+      <div className="park-sheet__scroll scroll">
+        <div
+          className={`park-sheet__hero${showCover ? " has-cover" : ""}`}
+          style={{ aspectRatio: PARK_COVER_ASPECT, background: `linear-gradient(180deg, ${pal.skyTop}, ${pal.skyBottom})` }}
+        >
+          {showCover ? (
+            // The founder's approved photo replaces the badge as the park's face.
+            <motion.div className="park-sheet__cover" initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}>
+              <img src={cover} alt={`${park.name}, photographed by its founder`} onError={() => setCoverFailed(true)} />
             </motion.div>
-          </>
-        )}
-        <motion.div className="park-sheet__earn" initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: -4 }} transition={{ type: "spring", delay: 0.35, stiffness: 500, damping: 15 }}>
-          {holder.kind === "mine" ? (holder.member ? "Your crew's flag flies here" : "Your flag flies here") : holder.kind === "other" ? `@${holder.flag.handle}'s park` : holder.kind === "empty" ? "No flag yet" : "Flags need a connection"}
+          ) : (
+            <>
+              <div className="park-sheet__rays">
+                <Rays color="#FFFFFF" size={460} opacity={0.35} />
+              </div>
+              <motion.div
+                className="park-sheet__badge"
+                layoutId={`badge-${park.id}`}
+                initial={{ scale: 0.3, rotate: -25, y: 60 }}
+                animate={{ scale: 1, rotate: 0, y: 0 }}
+                transition={{ type: "spring", stiffness: 260, damping: 15, delay: 0.08 }}
+              >
+                {/* Android WebView mispaints SVG badge text under Tilt's 3D transform. */}
+                {isNative ? badge : <Tilt>{badge}</Tilt>}
+              </motion.div>
+            </>
+          )}
+        </div>
+
+        <motion.div className="park-sheet__body" variants={stagger} initial="hidden" animate="show">
+          <motion.div className="park-sheet__pills" variants={item}>
+            <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
+              {"★".repeat(rarity.stars)} {rarity.label}
+            </span>
+            {!live && <span className="pill park-sheet__art-pill">Badge art coming soon</span>}
+          </motion.div>
+          <motion.h2 variants={item} className="park-sheet__name">
+            {park.name}
+          </motion.h2>
+          <motion.p variants={item} className="park-sheet__meta">
+            {CATEGORY_LABEL[park.category]} · {park.region}
+          </motion.p>
+
+          {/* One status block: who holds the flag and, during the protected hour, the crew. */}
+          <motion.section variants={item} className={`park-status is-${holder.kind}`} aria-label="Flag">
+            <div className="park-sheet__holder">
+              <FlagPin
+                seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null}
+                patches={holder.kind === "mine" || holder.kind === "other" ? holder.flag.patches : undefined}
+                days={flagDays}
+                size={44}
+                showAge={false}
+                className="is-waving-pin"
+              />
+              <span>
+                <strong>{holderLine.title}</strong>
+                <em>{holderLine.detail}</em>
+              </span>
+              {holder.kind === "other" && phase.kind !== "outsider" && (
+                <motion.span
+                  className="park-sheet__bounty"
+                  initial={{ scale: 0, rotate: -12 }}
+                  animate={{ scale: 1, rotate: -4 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 14 }}
+                  aria-label={`Worth ${takePoints(flagDays)} points`}
+                >
+                  +{takePoints(flagDays)}
+                </motion.span>
+              )}
+            </div>
+            {flag && phase.kind !== "none" && (
+              <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />
+            )}
+          </motion.section>
+
+          <motion.section variants={item} className={`park-summary park-facts${stats.pending ? " is-pending" : ""}`} aria-label="Park stats" aria-busy={stats.pending}>
+            <ul className="park-facts__chips">
+              <li>
+                <Icon name="pin" size={16} /> {inside ? "You're here" : `${formatDistance(straightKm)} away`}
+              </li>
+              <li>
+                <Icon name="corners" size={16} /> {areaKm2 > 0 ? formatArea(areaKm2) : "Area unknown"}
+              </li>
+              <li style={{ background: tint.bg, color: tint.ink }}>
+                <Icon name={landscape === "legendary" ? "sparkle" : landscape} size={16} /> {landscapeLabel(park)}
+              </li>
+            </ul>
+            <p className="park-summary__founder">
+              <Icon name="flagPlus" size={18} /> {stats.founder}
+            </p>
+            <dl className="park-summary__counts">
+              <div>
+                <dt>Your visits</dt>
+                <dd>{stats.mine}</dd>
+              </div>
+              <div>
+                <dt>All visits</dt>
+                <dd>{stats.total}</dd>
+              </div>
+              <div>
+                <dt>Last 30 days</dt>
+                <dd>{stats.last30Days}</dd>
+              </div>
+            </dl>
+            {stats.note && <p className="park-summary__note">{stats.note}</p>}
+          </motion.section>
+
+          {founder.kind === "pending" && (
+            <motion.div variants={item} className="founder-review" role="status">
+              <span className="founder-review__icon"><Icon name="image" size={18} /></span>
+              <span className="founder-review__text">
+                <strong>{founder.text}</strong>
+                <em>We'll let you know when it's checked.</em>
+              </span>
+            </motion.div>
+          )}
+
+          {(founder.kind === "found" || founder.kind === "hint") && (
+            <motion.button
+              variants={item}
+              className="founder-cta"
+              onClick={onFound}
+              disabled={founder.kind !== "found"}
+              aria-label={founder.kind === "found" ? `Become the founder of ${park.name}, plus ${founder.points} points` : founder.text}
+            >
+              <span className="founder-cta__icon"><Icon name="camera" size={22} /></span>
+              <span className="founder-cta__text">
+                <strong>Become the founder</strong>
+                <em>{founder.kind === "found" ? "Take its first photo. It becomes the park's cover." : founder.text}</em>
+              </span>
+              <span className="founder-cta__points">+{founder.points}</span>
+            </motion.button>
+          )}
+
+          {/* The crew list, the photo button and the report link wait behind one row. */}
+          <motion.details variants={item} className="park-sheet__more">
+            <summary>
+              More about this park <Icon name="next" size={16} />
+            </summary>
+            <div className="park-sheet__more-body">
+              {crewList && <CrewList members={crewList.members} flagSince={crewList.flagSince} myHandle={myHandle} />}
+              {SHOW_BADGE_ART && <p className="park-sheet__blurb">{park.blurb}</p>}
+              {visited && (
+                <button className="btn btn--paper btn--sm btn--block park-sheet__photo" onClick={() => setAdding(true)}>
+                  <Icon name="camera" size={18} /> Add another photo
+                </button>
+              )}
+              <button className="fb-link park-sheet__report" onClick={onFeedback}>
+                <Icon name="chat" size={16} /> Something wrong with this park? Tell us
+              </button>
+            </div>
+          </motion.details>
         </motion.div>
       </div>
-
-      <motion.div className="park-sheet__body scroll" variants={stagger} initial="hidden" animate="show">
-        <motion.div className="park-sheet__pills" variants={item}>
-          <span className="pill" style={{ background: rarity.color, color: rarity.ink }}>
-            {"★".repeat(rarity.stars)} {rarity.label}
-          </span>
-          {!live && <span className="pill park-sheet__art-pill">Badge art coming soon</span>}
-        </motion.div>
-        <motion.h2 variants={item} className="park-sheet__name">
-          {park.name}
-        </motion.h2>
-        <motion.p variants={item} className="park-sheet__meta">
-          {CATEGORY_LABEL[park.category]} · {park.region}
-        </motion.p>
-        <motion.div variants={item} className={`park-sheet__holder is-${holder.kind}`}>
-          <FlagPin
-            seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null}
-            patches={holder.kind === "mine" || holder.kind === "other" ? holder.flag.patches : undefined}
-            days={flagDays}
-            size={44}
-            showAge={false}
-            className="is-waving-pin"
-          />
-          <span>
-            <strong>{holderLine.title}</strong>
-            <em>{holderLine.detail}</em>
-          </span>
-          {holder.kind === "other" && phase.kind !== "outsider" && (
-            <motion.span
-              className="park-sheet__bounty"
-              initial={{ scale: 0, rotate: -12 }}
-              animate={{ scale: [1, 1.08, 1], rotate: -4 }}
-              transition={{ scale: { duration: 1.6, repeat: Infinity, delay: 0.6 }, rotate: { type: "spring", stiffness: 500, damping: 14 } }}
-              aria-label={`Worth ${takePoints(flagDays)} points`}
-            >
-              +{takePoints(flagDays)}
-            </motion.span>
-          )}
-        </motion.div>
-
-        {flag && phase.kind !== "none" && (
-          <motion.div variants={item}>
-            <CrewPanel phase={phase} flag={flag} crew={crew} now={now} myHandle={myHandle} onShowCode={() => crewUi.openCodeSheet(park.id)} />
-          </motion.div>
-        )}
-
-        {founder.kind === "pending" && (
-          <motion.div variants={item} className="founder-review" role="status">
-            <span className="founder-review__icon"><Icon name="image" size={18} /></span>
-            <span className="founder-review__text">
-              <strong>{founder.text}</strong>
-              <em>We'll let you know when it's checked.</em>
-            </span>
-          </motion.div>
-        )}
-
-        {(founder.kind === "found" || founder.kind === "hint") && (
-          <motion.button
-            variants={item}
-            className="founder-cta"
-            onClick={onFound}
-            disabled={founder.kind !== "found"}
-            aria-label={founder.kind === "found" ? `Become the founder of ${park.name}, plus ${founder.points} points` : founder.text}
-          >
-            <span className="founder-cta__icon"><Icon name="camera" size={22} /></span>
-            <span className="founder-cta__text">
-              <strong>Become the founder</strong>
-              <em>{founder.kind === "found" ? "Take its first photo. It becomes the park's cover." : founder.text}</em>
-            </span>
-            <span className="founder-cta__points">+{founder.points}</span>
-          </motion.button>
-        )}
-
-        <motion.div variants={item} className="stats">
-          <div className="stat">
-            <Icon name="pin" size={18} />
-            <strong>{inside ? "Here!" : formatDistance(straightKm)}</strong>
-            <span>{inside ? "you made it" : "from you"}</span>
-          </div>
-          <div className="stat">
-            <Icon name="corners" size={18} />
-            <strong>{areaKm2 > 0 ? formatArea(areaKm2) : "Unknown"}</strong>
-            <span>park area</span>
-          </div>
-          <div className="stat stat--landscape" style={{ background: tint.bg, color: tint.ink }}>
-            <Icon name={landscape === "legendary" ? "sparkle" : landscape} size={18} />
-            <strong>{landscapeLabel(park)}</strong>
-          </div>
-        </motion.div>
-
-        {SHOW_BADGE_ART && (
-          <motion.p variants={item} className="park-sheet__blurb">
-            {park.blurb}
-          </motion.p>
-        )}
-
-        <motion.section variants={item} className={`park-summary${stats.pending ? " is-pending" : ""}`} aria-label="Park stats" aria-busy={stats.pending}>
-          <p className="park-summary__founder">
-            <Icon name="flagPlus" size={18} /> {stats.founder}
-          </p>
-          <dl className="park-summary__counts">
-            <div>
-              <dt>Your visits</dt>
-              <dd>{stats.mine}</dd>
-            </div>
-            <div>
-              <dt>All visits</dt>
-              <dd>{stats.total}</dd>
-            </div>
-            <div>
-              <dt>Last 30 days</dt>
-              <dd>{stats.last30Days}</dd>
-            </div>
-          </dl>
-          {stats.note && <p className="park-summary__note">{stats.note}</p>}
-        </motion.section>
-
-        {visited && (
-          <motion.button variants={item} className="btn btn--paper btn--block park-sheet__photo" onClick={() => setAdding(true)}>
-            <Icon name="camera" size={18} /> Add another photo
-          </motion.button>
-        )}
-
-        <motion.button variants={item} className="fb-link park-sheet__report" onClick={onFeedback}>
-          <Icon name="chat" size={16} /> Something wrong with this park? Tell us
-        </motion.button>
-      </motion.div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
         {inside && phase.kind === "outsider" ? (
@@ -308,6 +321,19 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
               {phase.logged ? "Logged" : "Log visit"}
             </button>
           </>
+        ) : inside && restingToday ? (
+          // Today's visit is spent: a quiet, clearly disabled button. A tap only nudges it.
+          <button
+            className={`btn btn--block btn--rest${nudged ? " is-nudged" : ""}`}
+            aria-disabled="true"
+            onClick={() => {
+              buzz(20);
+              setNudged(true);
+            }}
+            onAnimationEnd={() => setNudged(false)}
+          >
+            <Icon name="check" /> {visitLabel}
+          </button>
         ) : inside ? (
           <button className="btn btn--block btn--glow" onClick={onCheckIn}>
             <Icon name="flag" /> {visitLabel}

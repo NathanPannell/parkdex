@@ -597,20 +597,23 @@ button.game-row:active {
 /* Inside a park already visited today: no pulse, and the tag reads as a note, not a call. */
 .fab--visited .fab__label {
   background: var(--paper);
-  rotate: 0deg;
 }
 
 /* ---------- Park sheet: who holds the park ---------- */
+
+/* One status block: the flag holder, then the crew during and after the protected hour. */
+.park-status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+}
 
 .park-sheet__holder {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 0 4px;
-  padding: 10px 14px;
-  border: 2.5px solid var(--ink);
-  border-radius: var(--r-md);
-  background: #fff;
 }
 
 .park-sheet__holder > span:last-child {
