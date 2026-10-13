@@ -488,6 +488,7 @@ test("park crew details show the code to members only and record crew_code_shown
 test("crew routes group by park in analytics, never one route per park", () => {
   assert.equal(normalizeRoute("GET", `/api/game/parks/${PARK}/crew`), "GET /api/game/parks/:park/crew");
   assert.equal(normalizeRoute("POST", "/api/game/crews/join"), "POST /api/game/crews/join");
+});
 
 test("GET /api/game/dex lists visited parks with their visit days for the signed-in account", async () => {
   const { store, call } = setup();
