@@ -9,8 +9,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const PUBLIC_ROOT = resolve("public");
-const PUBLIC_DIRS = ["art/kip", "art/products"];
-const PUBLIC_FILES = new Set(["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png", ".well-known/assetlinks.json", "map/bootstrap/canada-overview.pmtiles", "map/cells.json"]);
+const PUBLIC_DIRS = ["art/kip", "art/products", "icons"];
+const PUBLIC_FILES = new Set(["manifest.webmanifest", "sw.js", "maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs", "release.json", "email/kip-wave.png", ".well-known/assetlinks.json", "map/bootstrap/canada-overview.pmtiles", "map/cells.json"]);
 
 function allowedPublicPath(path: string) {
   return PUBLIC_FILES.has(path) || PUBLIC_DIRS.some((dir) => path === dir || path.startsWith(`${dir}/`));
@@ -61,9 +61,11 @@ function allowlistedPublicAssets(): Plugin {
         void readFile(file).then((data) => {
           const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
           const mime = extension === "webp" ? "image/webp"
-            : extension === "mjs" ? "text/javascript; charset=utf-8"
-              : extension === "json" ? "application/json; charset=utf-8"
-                : "application/octet-stream";
+            : extension === "png" ? "image/png"
+              : extension === "mjs" || extension === "js" ? "text/javascript; charset=utf-8"
+                : extension === "webmanifest" ? "application/manifest+json"
+                  : extension === "json" ? "application/json; charset=utf-8"
+                    : "application/octet-stream";
           res.statusCode = 200;
           res.setHeader("Content-Type", mime);
           res.setHeader("Content-Length", data.byteLength);

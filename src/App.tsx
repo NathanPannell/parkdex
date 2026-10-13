@@ -20,6 +20,9 @@ import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type 
 import { Camera } from "./screens/Camera";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
+import { PortraitOnly } from "./components/PortraitOnly";
+import { installOffer, usePortraitPanel, useWebApp } from "./lib/webApp";
+import { useKipTip } from "./lib/kipTips";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
 import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
@@ -37,18 +40,22 @@ import { Splash } from "./screens/Splash";
 
 export function App() {
   const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
+  // On the web a sideways screen is covered by the portrait panel. The app stays mounted behind it.
+  const portraitPanel = usePortraitPanel();
+  const covered = updateStatus === "required" || !!portraitPanel;
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
         <GameProvider>
           <StoreProvider>
-            <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
+            <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
               <ContentProvider><Stage /></ContentProvider>
             </div>
             <UpdateGate status={updateStatus} />
           </StoreProvider>
         </GameProvider>
       </AuthProvider>
+      <PortraitOnly panel={portraitPanel} />
     </MotionConfig>
   );
 }
@@ -206,6 +213,11 @@ function Screens() {
   // Messages on open: review decisions first, then parks taken while away.
   const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
   const decisions = useFoundingDecisions(messagesAllowed);
+
+  // On a phone's browser, Kip suggests the home screen version once it can be installed.
+  // Settings keeps the Install Parkdex row for later.
+  const webApp = useWebApp();
+  useKipTip("install-web", state.startupReady && onboarded && screen === "map" && installOffer(webApp) !== null);
 
   return (
     <>
