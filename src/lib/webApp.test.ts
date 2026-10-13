@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canGoFullscreen, fullscreenOffer, installOffer, isAppleMobile, portraitPanel, type WebAppEnv } from "./webApp";
-import { qrPath } from "./qr";
+import { qrMatrix } from "../components/QrCode";
 
 const androidTab: WebAppEnv = {
   native: false,
@@ -78,14 +78,15 @@ describe("portraitPanel", () => {
   });
 });
 
-describe("qrPath", () => {
+describe("qrMatrix", () => {
   it("draws a square code with a quiet border", () => {
-    const qr = qrPath("https://web.parkdex.app/");
+    const qr = qrMatrix("https://web.parkdex.app/");
     // Version 2 (25 modules) with M correction fits this URL; the border adds 2 on each side.
     expect(qr.size).toBe(29);
-    expect(qr.d).toMatch(/^M2 2h1v1h-1z/);
-    expect(qr.d).not.toMatch(/M0 0h/);
-    expect(qrPath("https://web.parkdex.app/")).toEqual(qr);
+    // The top-left finder pattern starts as a run of 7 dark modules inside the border.
+    expect(qr.path).toMatch(/^M2 2h7v1h-7z/);
+    expect(qr.path).not.toMatch(/M0 0h/);
+    expect(qrMatrix("https://web.parkdex.app/")).toEqual(qr);
   });
 });
 

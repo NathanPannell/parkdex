@@ -14,7 +14,8 @@
     { "source": "/map/island/:path*", "destination": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/island/:path*" },
     { "source": "/map/fonts/:path*", "destination": "https://kip-assets.parkdex.app/releases/5f0d137050ac8f83a0dd42f98291010577fae75a7538d62127690fd0f7630744/map/fonts/:path*" },
     { "source": "/account", "destination": "/index.html" },
-    { "source": "/account/:path*", "destination": "/index.html" }
+    { "source": "/account/:path*", "destination": "/index.html" },
+    { "source": "/friend/:path*", "destination": "/index.html" }
   ],
   "headers": [
     { "source": "/account/:path*", "headers": [
@@ -28,6 +29,11 @@
     { "source": "/manifest.webmanifest", "headers": [
       { "key": "Content-Type", "value": "application/manifest+json" },
       { "key": "Cache-Control", "value": "no-cache" }
+    ] },
+    { "source": "/friend/:path*", "headers": [
+      { "key": "Cache-Control", "value": "no-store" },
+      { "key": "Referrer-Policy", "value": "no-referrer" },
+      { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
     ] },
     { "source": "/(.*)", "headers": [
       { "key": "Strict-Transport-Security", "value": "max-age=31536000" },
