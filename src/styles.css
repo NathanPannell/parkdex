@@ -81,14 +81,10 @@ p {
   margin: 0;
 }
 
-/* ---------- Device stage ---------- */
+/* ---------- App root ---------- */
 
-.stage {
-  height: 100%;
-  width: 100%;
-  position: relative;
-}
-
+/* The app fills the viewport edge to edge at every width. Wider-than-tall windows are covered
+   by the portrait-only panel (web-app.css), and the safe areas come from the real insets. */
 .device {
   position: relative;
   width: 100%;
@@ -96,82 +92,6 @@ p {
   overflow: hidden;
   background: var(--paper);
   isolation: isolate;
-}
-
-@media (min-width: 560px) {
-  body {
-    background: radial-gradient(1200px 700px at 20% 10%, #ffe2c2 0, transparent 60%),
-      radial-gradient(900px 700px at 90% 90%, #cfeedd 0, transparent 60%), #fbefdc;
-  }
-  .stage {
-    display: grid;
-    place-items: center;
-    padding: 24px;
-  }
-  .device {
-    width: 393px;
-    height: min(852px, calc(100vh - 48px));
-    border-radius: 56px;
-    box-shadow: 0 0 0 11px #111, 0 0 0 13px #3a3a3a, 0 40px 80px -20px rgba(20, 35, 28, 0.45),
-      0 20px 40px -20px rgba(20, 35, 28, 0.35);
-  }
-  .device::after {
-    content: "";
-    position: absolute;
-    top: 11px;
-    left: 50%;
-    width: 120px;
-    height: 34px;
-    translate: -50% 0;
-    background: #0a0a0a;
-    border-radius: 20px;
-    z-index: 1000;
-    pointer-events: none;
-  }
-  .device {
-    --safe-top: 54px;
-    --safe-bottom: 22px;
-  }
-}
-
-.stage-note {
-  display: none;
-}
-
-@media (min-width: 1100px) {
-  .stage-note {
-    display: block;
-    position: absolute;
-    left: 56px;
-    top: 50%;
-    translate: 0 -50%;
-    max-width: 300px;
-  }
-  .stage-note h1 {
-    font-size: 56px;
-    font-weight: 800;
-  }
-  .stage-note p {
-    margin-top: 14px;
-    color: var(--ink-soft);
-    font-size: 16px;
-    line-height: 1.5;
-  }
-  .stage-note kbd {
-    font-family: var(--body);
-    font-size: 13px;
-    background: var(--paper);
-    border: 2px solid var(--ink);
-    border-radius: 8px;
-    padding: 2px 7px;
-    box-shadow: 0 2px 0 var(--ink);
-  }
-  .stage-note a {
-    color: var(--ink);
-    font-weight: 800;
-    text-decoration-thickness: 2px;
-    text-underline-offset: 3px;
-  }
 }
 
 .screen {

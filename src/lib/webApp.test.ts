@@ -128,6 +128,18 @@ describe("web app files", () => {
     expect(html).toContain('<meta name="theme-color" content="#FFF8EC" />');
   });
 
+  it("fills the screen at every width, with real safe-area insets and no mock phone frame", () => {
+    const html = read("index.html").toString("utf8");
+    const styles = read("src/styles.css").toString("utf8");
+    expect(html).toMatch(/name="viewport" content="[^"]*viewport-fit=cover/);
+    expect(styles).toContain("--safe-top: max(env(safe-area-inset-top), 14px);");
+    expect(styles).toContain("--safe-bottom: max(env(safe-area-inset-bottom), 14px);");
+    // The safe areas are only ever set from env(), never a fixed notch size.
+    expect(styles.match(/--safe-(top|bottom):[^;]*;/g)?.every((rule) => rule.includes("env(safe-area-inset-"))).toBe(true);
+    expect(styles).not.toMatch(/\.device::(after|before)|\.stage\b|border-radius: 56px/);
+    expect(read("src/App.tsx").toString("utf8")).not.toMatch(/stage-note|className="stage"/);
+  });
+
   it("keeps the service worker free of caches, so it never serves stale app or content files", () => {
     const worker = read("public/sw.js").toString("utf8");
     expect(worker).not.toMatch(/\bcaches\.|CacheStorage|importScripts|indexedDB/);
