@@ -67,6 +67,9 @@ GROUP BY 1, 2 ORDER BY 3 DESC;
   | `found_park_started` | `entry`: `menu` or `sheet` |
   | `found_park_photo_rejected` | `outcome`: `rejected` or `unsure`; `flags`: the flag codes shown |
   | `found_park_completed` | `source`: `osm` (new park) or `catalogue`; `visit`: the visit outcome |
+  | `tip_shown` | `tip_id` and `tip_version` of the Kip's Tip on screen (`src/lib/kipTips.ts`) |
+  | `tip_skipped` | `tip_id`, `tip_version`; `page` and `pages` (1-based page it closed on, of how many); `via`: `skip`, `back` (system back or Escape) or `outside` (tap outside) |
+  | `tip_completed` | `tip_id`, `tip_version`, `page`, `pages`: closed with Got it on the last page |
 
 ## Schema
 
