@@ -101,8 +101,8 @@ try {
     'migrations/accounts_001_init.sql', 'migrations/progress_001_init.sql', 'migrations/game_001_init.sql',
     'migrations/park_drafts_001_init.sql', 'migrations/park_drafts_002_proposals.sql',
     'migrations/park_proposals_001_init.sql', 'migrations/park_proposals_002_moderation.sql',
-    // The game store reads holdings and scores from game_002, which builds on founders_001.
-    'migrations/founders_001_init.sql', 'migrations/game_002_points.sql']) {
+    // The game store reads holdings and scores from game_002, which builds on founders_001, and crews from game_003.
+    'migrations/founders_001_init.sql', 'migrations/game_002_points.sql', 'migrations/game_003_crews.sql']) {
     await adapter.applyMigration(join(root, 'database', name));
   }
   await inTransaction(async (client) => {
