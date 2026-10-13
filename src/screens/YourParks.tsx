@@ -66,7 +66,7 @@ export function YourParks() {
               <Kip pose="cheer" size={72} />
             </motion.div>
             <h2>Plant your flag in parks</h2>
-            <p className="account-help">Go to a park and your flag goes up. You earn a point for every day it flies.</p>
+            <p className="account-help">Go to a park and your flag goes up. You earn a point for every hour it flies.</p>
             <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in to plant your flag</motion.button>
           </section>
         ) : game.status === "loading" && !game.me ? (
@@ -90,7 +90,7 @@ export function YourParks() {
           </section>
         ) : (
           <>
-            <motion.section className="account-card card game-score" initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
+            <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""}`} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
               <span className="game-score__rays" aria-hidden="true" />
               <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" label={`Flag of @${player.handle}`} />
               <div className="game-score__text">
