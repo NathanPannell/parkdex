@@ -196,7 +196,7 @@ function RegionView({ region, collapsed, onToggle, onOpen }: { region: DexRegion
   );
 }
 
-const TILE_ROW_PX = 196;
+const TILE_ROW_PX = 244;
 
 /**
  * Draws a region's tiles once it scrolls near the screen. With "Only my visits" off a region can
@@ -213,7 +213,7 @@ function LazyTiles({ id, tiles, onOpen }: { id: string; tiles: DexTile[]; onOpen
     observer.observe(holder.current);
     return () => observer.disconnect();
   }, [near]);
-  if (!near) return <div ref={holder} id={id} className="dex-grid dex-grid--waiting" style={{ height: Math.ceil(tiles.length / 3) * TILE_ROW_PX }} aria-busy="true" />;
+  if (!near) return <div ref={holder} id={id} className="dex-grid dex-grid--waiting" style={{ height: Math.ceil(tiles.length / 2) * TILE_ROW_PX }} aria-busy="true" />;
   return (
     <ul id={id} className="dex-grid">
       {tiles.map((item) => <TileView key={item.park.id} tile={item} onOpen={onOpen} />)}
@@ -231,7 +231,7 @@ const TileView = memo(function TileView({ tile, onOpen }: { tile: DexTile; onOpe
         <span className="dex-tile__art">
           {image.kind === "photo"
             ? <CroppedPhoto blob={image.photo.blob} crop={image.photo.crop} alt="" />
-            : <Badge park={tile.park} size={88} state={visited ? "earned" : "silhouette"} remoteArt={false} />}
+            : <Badge park={tile.park} size={104} state={visited ? "earned" : "silhouette"} remoteArt={false} />}
           {tile.photos.length > 1 && <span className="dex-tile__more">{tile.photos.length}</span>}
         </span>
         <span className="dex-tile__name">{name}</span>

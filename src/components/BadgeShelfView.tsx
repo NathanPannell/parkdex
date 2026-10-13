@@ -26,10 +26,10 @@ export function BadgeShelfView({ items, patches, flagSeed, seen, onOpen, childre
         <div className="badge-shelf__title">
           <span className="eyebrow" id="badge-shelf-title">Badges</span>
           <strong>{earned} of {items.length} earned</strong>
-          <span className="badge-shelf__help">Tap a badge to sew it onto your flag. Swipe for more.</span>
+          <span className="badge-shelf__help">Swipe for more</span>
         </div>
         <div className="badge-shelf__flag">
-          <Flag seed={flagSeed} size={76} patches={patches} className="is-waving" label={`Your flag with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}`} />
+          <Flag seed={flagSeed} size={60} patches={patches} className="is-waving" label={`Your flag with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}`} />
           <span>{patches.length} of {MAX_PATCHES} sewn on</span>
         </div>
       </header>
