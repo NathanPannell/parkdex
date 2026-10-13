@@ -66,7 +66,7 @@ Run the full command before every push. If any part cannot run locally, say exac
 - `main` is production. It changes only through a PR from `staging` to `main`, and only when production is requested.
 - One issue per PR. Each agent works in its own worktree under the workspace `.codex/worktrees/`. Do not switch branches in a shared checkout.
 - Open PRs as drafts and push freely while they are drafts. Mark ready only after the release checks pass locally and the preview has been verified.
-- **Merge rule:** do not merge until `PR checks` is green on the current head. The repository is on the GitHub free plan, so GitHub cannot enforce this. Every agent must follow it.
+- **Merge rule:** do not merge until `PR checks` is green on the current head. The repository is on the GitHub free plan, so GitHub cannot enforce this. Every agent must follow it. The skipped run from the draft does not count. After `gh pr ready`, wait for the new run on the head; watching "the latest run" too early can return the skipped one.
 - Merge one PR at a time. After a merge, any other ready PR rebases or merges `staging` and reruns its checks.
 - Keep before-and-after cropped screenshots for UI changes in the PR thread.
 
@@ -133,3 +133,4 @@ Read the matching file before you change these areas. Format and how to add one:
 | Release dispatch provider errors | `docs/learnings/production-dispatch-transient-get.md` |
 | SQL QA scripts and their pools | `docs/learnings/sql-qa-pool-teardown.md` |
 | Merging several PRs into staging | `docs/learnings/staging-merge-sequence.md` |
+| Outbound calls from the operator dashboard | `docs/learnings/operator-edge-fetch.md` |
