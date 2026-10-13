@@ -38,15 +38,17 @@ function DesktopPanel() {
 function SidewaysPanel() {
   return (
     <div className="portrait-only__card portrait-only__card--sideways">
-      <motion.div
-        className="portrait-only__phone"
-        aria-hidden="true"
-        initial={{ rotate: -90 }}
-        animate={{ rotate: [-90, -90, 0, 0, -90] }}
-        transition={{ duration: 3.6, times: [0, 0.2, 0.45, 0.85, 1], repeat: Infinity, ease: "easeInOut" }}
-      >
-        <Kip pose="point" size={84} />
-      </motion.div>
+      {/* A square slot, so the phone can turn without overlapping the text. */}
+      <div className="portrait-only__turn" aria-hidden="true">
+        <motion.div
+          className="portrait-only__phone"
+          initial={{ rotate: -90 }}
+          animate={{ rotate: [-90, -90, 0, 0, -90] }}
+          transition={{ duration: 3.6, times: [0, 0.2, 0.45, 0.85, 1], repeat: Infinity, ease: "easeInOut" }}
+        >
+          <Kip pose="point" size={84} />
+        </motion.div>
+      </div>
       <div className="portrait-only__text">
         <h1 id="portrait-only-title">Turn your phone upright</h1>
         <p>Parkdex is made for phones held upright.</p>

@@ -60,21 +60,16 @@ describe("isAppleMobile", () => {
 });
 
 describe("portraitPanel", () => {
-  const web = { native: false, landscapeViewport: true, coarsePointer: false, screenLandscape: true };
+  const web = { native: false, landscapeViewport: true, coarsePointer: false };
 
   it("shows the desktop panel in a wide desktop window and nothing in a narrow one", () => {
     expect(portraitPanel(web)).toBe("desktop");
     expect(portraitPanel({ ...web, landscapeViewport: false })).toBeNull();
   });
 
-  it("asks a phone held sideways to turn upright", () => {
+  it("asks a phone held sideways to turn upright, and steps aside when it is upright", () => {
     expect(portraitPanel({ ...web, coarsePointer: true })).toBe("sideways");
-    expect(portraitPanel({ ...web, coarsePointer: true, screenLandscape: null })).toBe("sideways");
     expect(portraitPanel({ ...web, coarsePointer: true, landscapeViewport: false })).toBeNull();
-  });
-
-  it("ignores a short viewport on an upright phone, such as an open keyboard", () => {
-    expect(portraitPanel({ ...web, coarsePointer: true, screenLandscape: false })).toBeNull();
   });
 
   it("never shows in a native build", () => {

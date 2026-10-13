@@ -61,14 +61,17 @@ export type PortraitPanel = "desktop" | "sideways" | null;
 
 /**
  * The Kip panel shows on the web while the viewport is wider than it is tall. It checks the
- * screen shape, not the device, so a narrow desktop window still runs the app. On touch
- * screens the screen itself must also be sideways, so a keyboard that shortens the viewport
- * never covers the app.
+ * screen shape, not the device, so a narrow desktop window still runs the app. Touch screens
+ * get "turn upright"; anything else gets the desktop panel with a QR code.
+ *
+ * The viewport alone decides. Browsers report screen.orientation inconsistently (iPhones never
+ * swap screen.width and height, and emulators can leave the type stale), and an open keyboard
+ * does not resize the layout viewport in Chrome or Safari, so it cannot turn an upright phone
+ * landscape.
  */
-export function portraitPanel(input: { native: boolean; landscapeViewport: boolean; coarsePointer: boolean; screenLandscape: boolean | null }): PortraitPanel {
+export function portraitPanel(input: { native: boolean; landscapeViewport: boolean; coarsePointer: boolean }): PortraitPanel {
   if (input.native || !input.landscapeViewport) return null;
-  if (!input.coarsePointer) return "desktop";
-  return input.screenLandscape === false ? null : "sideways";
+  return input.coarsePointer ? "sideways" : "desktop";
 }
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
@@ -212,12 +215,10 @@ export function startWebApp(): void {
 
 function readPanel(): PortraitPanel {
   if (isNative || typeof window === "undefined") return null;
-  const type = typeof screen !== "undefined" ? screen.orientation?.type : undefined;
   return portraitPanel({
     native: false,
     landscapeViewport: media("(orientation: landscape)"),
     coarsePointer: media("(pointer: coarse)"),
-    screenLandscape: type ? type.startsWith("landscape") : null,
   });
 }
 

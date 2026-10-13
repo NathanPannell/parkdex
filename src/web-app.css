@@ -82,10 +82,17 @@
   max-width: 560px;
 }
 
-.portrait-only__phone {
+.portrait-only__turn {
   display: grid;
   place-items: center;
   flex: none;
+  width: 156px;
+  height: 156px;
+}
+
+.portrait-only__phone {
+  display: grid;
+  place-items: center;
   width: 96px;
   height: 150px;
   border: 3px solid var(--ink);
