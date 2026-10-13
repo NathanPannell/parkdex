@@ -1,5 +1,5 @@
 import { database, type SqlClient } from "./db.js";
-import { visitFromJson } from "./game-store.js";
+import { badgeUnlocksFromJson, visitFromJson } from "./game-store.js";
 import { runFounding, type FoundedRecord, type FoundExistingInput, type FoundOsmInput, type FoundResult } from "./founding.js";
 import type { MultiPolygon, OsmFeature } from "./osmParks.js";
 import { hiddenParks } from "./parkVisibility.js";
@@ -205,10 +205,14 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
       ]);
       const row = founded[0];
       const visit = row ? jsonValue(row.visit) : null;
+      // The badges the founding unlocked (#175), for a replay. None before game_004_badges.sql.
+      const badges = row ? await rows("SELECT kip_game.visit_badges($1::uuid, $2::uuid) AS badges", [accountId, visitId])
+        .then((found) => badgeUnlocksFromJson(jsonValue(found[0]?.badges)))
+        .catch(() => []) : [];
       return {
         founded: row ? {
           parkId: String(row.park_id), parkName: String(row.name), photoSha256: String(row.photo_sha256),
-          founderPoints: Number(row.founder_points), visit: visit ? visitFromJson(visit) : null,
+          founderPoints: Number(row.founder_points), visit: visit ? visitFromJson(visit) : null, badges,
         } : null,
         check: checks[0] ? {
           outcome: String(checks[0].outcome) as CheckRecord["outcome"],

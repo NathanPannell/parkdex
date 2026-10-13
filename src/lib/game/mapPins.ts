@@ -1,4 +1,5 @@
 import type { ParkFlag } from "./client";
+import { drawablePatches } from "./badges";
 import { flagAgeDays, flagAgeMs, flagPinSvg, flagSpec, formatFlagAge, weatherForDays, type FlagWeather } from "./flag";
 
 /**
@@ -9,6 +10,9 @@ import { flagAgeDays, flagAgeMs, flagPinSvg, flagSpec, formatFlagAge, weatherFor
  * Crew flags (#171): the leader's flag flies on top, with up to 3 small pennants in members'
  * colours below it and a "+N" tag for bigger crews, and a shield while the protected hour runs.
  * The flag drawing itself stays in `flag.ts`; pennants and the shield are drawn here.
+ *
+ * A holder's first badge patch (#175) is a second, shared image per badge that the map draws
+ * over the pin only when zoomed in close.
  */
 
 export const EMPTY_PIN = "pin:empty";
@@ -25,7 +29,8 @@ export type PinImage = {
   /** The protected hour is running. */
   shield?: boolean;
 };
-export type PinProperties = { id: string; icon: string; dot: string; held: 0 | 1; sort: number };
+/** `patch` is the image ID of the holder's first badge patch, or "" for none. */
+export type PinProperties = { id: string; icon: string; dot: string; held: 0 | 1; sort: number; patch: string };
 export type PinFeature = { type: "Feature"; id: number; properties: PinProperties; geometry: { type: "Point"; coordinates: [number, number] } };
 export type PinCollection = { type: "FeatureCollection"; features: PinFeature[] };
 
@@ -47,13 +52,29 @@ export function pinCrew(flag: ParkFlag, now: number): { pennants: string[]; size
   return { pennants, size, extra: Math.max(0, size - 1 - pennants.length), shield: Number.isFinite(until) && now < until };
 }
 
-export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<string, ParkFlag> | null, now: number, options: PinOptions = {}): { collection: PinCollection; images: Map<string, PinImage> } {
+export function patchIconId(badgeId: string): string {
+  return `patch:${badgeId}`;
+}
+
+export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<string, ParkFlag> | null, now: number, options: PinOptions = {}): {
+  collection: PinCollection;
+  images: Map<string, PinImage>;
+  /** Patch image ID to badge ID, for every patch a pin shows. */
+  patches: Map<string, string>;
+} {
   const images = new Map<string, PinImage>([[EMPTY_PIN, { seed: null, weather: 0, label: null }]]);
+  const patches = new Map<string, string>();
   const features = parks.map((park, index): PinFeature => {
     const flag = flags?.get(park.id);
     let icon = EMPTY_PIN;
     let dot = "#FFF8EC";
+    let patch = "";
     if (flag) {
+      const first = drawablePatches(flag.patches)[0];
+      if (first) {
+        patch = patchIconId(first);
+        patches.set(patch, first);
+      }
       const days = flagAgeDays(flag.since, now);
       const weather = weatherForDays(days);
       const label = formatFlagAge(flagAgeMs(flag.since, now));
@@ -70,11 +91,11 @@ export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<strin
       type: "Feature",
       id: index,
       // Held parks draw above empty ones where pins overlap.
-      properties: { id: park.id, icon, dot, held: flag ? 1 : 0, sort: flag ? 1 : 0 },
+      properties: { id: park.id, icon, dot, held: flag ? 1 : 0, sort: flag ? 1 : 0, patch },
       geometry: { type: "Point", coordinates: [park.lng, park.lat] },
     };
   });
-  return { collection: { type: "FeatureCollection", features }, images };
+  return { collection: { type: "FeatureCollection", features }, images, patches };
 }
 
 /** Pins are drawn at twice their size so they stay sharp on high-density screens. */

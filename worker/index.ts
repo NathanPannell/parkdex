@@ -110,7 +110,7 @@ function errorResponse(error: unknown): Response {
 
 /** Game outcomes become analytics events on the request that caused them. */
 function recordGameEvent(event: GameEvent): void {
-  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned, crewSize: event.crewSize });
+  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned, crewSize: event.crewSize, badgeId: event.badgeId, patches: event.patches });
 }
 
 function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): FeedbackStore {

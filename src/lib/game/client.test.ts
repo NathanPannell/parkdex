@@ -8,7 +8,7 @@ vi.mock("../accounts/authClient", () => ({
 }));
 
 const {
-  GameError, createVisitId, fetchFlags, fetchGameLeaderboard, fetchGameMe, fetchParkCrew, handleProblem, isOfflineError, joinCrew, markTakeoversSeen,
+  GameError, createVisitId, fetchFlags, fetchGameLeaderboard, fetchGameMe, fetchParkCrew, handleProblem, isOfflineError, joinCrew, markTakeoversSeen, savePatches,
   normalizeHandle, saveHandle, sendVisit,
 } = await import("./client");
 
@@ -81,8 +81,44 @@ describe("player state", () => {
       visitedTodayUntil: null,
       loggedToday: [],
       foundingReviews: { pending: [], decided: [] },
+      // A server from before #175 sends no badges: undefined, so the app hides the shelf.
+      badges: undefined,
+      flagPatches: [],
+      newBadges: [],
     });
     expect(fetchAuthenticated).toHaveBeenCalledWith("/api/game/me", expect.anything(), ACCOUNT);
+  });
+
+  it("reads badges, flag patches and new badges, dropping malformed ones (#175)", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
+      player: { handle: "robin", flagSeed: "abc" }, score: 0, parks: [], takeovers: [],
+      badges: [
+        { id: "parks-1", progress: 1, goal: 1, unlockedAt: "2026-10-01T00:00:00Z" },
+        { id: "parks-10", progress: 14, goal: 10, unlockedAt: null },
+        { id: "Bad Id", progress: 1, goal: 1, unlockedAt: null },
+        { progress: 1 },
+      ],
+      flagPatches: ["parks-1", "parks-1", "<script>", "hold-7", "crew-1", "founder"],
+      newBadges: [{ id: "hold-7", unlockedAt: "2026-10-08T00:00:00Z" }, { id: "x", unlockedAt: "never" }],
+    }));
+    const me = await fetchGameMe(ACCOUNT);
+    expect(me.badges).toEqual([
+      { id: "parks-1", progress: 1, goal: 1, unlockedAt: "2026-10-01T00:00:00Z" },
+      { id: "parks-10", progress: 10, goal: 10, unlockedAt: null },
+    ]);
+    expect(me.flagPatches).toEqual(["parks-1", "hold-7", "crew-1"]);
+    expect(me.newBadges).toEqual([{ id: "hold-7", unlockedAt: "2026-10-08T00:00:00Z" }]);
+  });
+
+  it("saves flag patches and reads back what the server kept (#175)", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { patches: ["hold-7", "parks-1"] }));
+    await expect(savePatches(ACCOUNT, ["hold-7", "parks-1"])).resolves.toEqual(["hold-7", "parks-1"]);
+    const [path, init] = fetchAuthenticated.mock.calls[0];
+    expect(path).toBe("/api/game/me/patches");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({ patches: ["hold-7", "parks-1"] });
+    fetchAuthenticated.mockResolvedValueOnce(reply(409, { code: "badge_locked" }));
+    await expect(savePatches(ACCOUNT, ["hold-30"])).rejects.toMatchObject({ code: "badge_locked", status: 409 });
   });
 
   it("reads pending founding reviews and unseen decisions, dropping malformed ones", async () => {
@@ -162,6 +198,14 @@ describe("visits", () => {
     expect(JSON.parse(init.body)).toEqual({ visitId: "v1", parkId: "blueberry" });
   });
 
+  it("reads the badges a visit unlocked (#175)", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
+      visit: { visitId: "v3", parkId: "blueberry", outcome: "planted", pointsEarned: 6, previousHolder: null, flagSince: null },
+      newBadges: [{ id: "parks-1", unlockedAt: "2026-10-07T00:00:00Z" }, { id: 3 }],
+    }));
+    await expect(sendVisit(ACCOUNT, { visitId: "v3", parkId: "blueberry" })).resolves.toMatchObject({ newBadges: [{ id: "parks-1", unlockedAt: "2026-10-07T00:00:00Z" }] });
+  });
+
   it("reads the points breakdown of a take", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, {
       visit: { visitId: "v2", parkId: "blueberry", outcome: "took", pointsEarned: 14, pointsBreakdown: { base: 4, days: 10 }, previousHolder: null, flagSince: null },
@@ -202,11 +246,19 @@ describe("visits", () => {
 describe("public reads", () => {
   it("reads flags without an account and drops malformed rows", async () => {
     fetchAccountApi.mockResolvedValueOnce(reply(200, {
-      flags: [{ parkId: "a", handle: "robin", flagSeed: "s", since: "2026-10-01T00:00:00Z" }, { parkId: "b" }],
+      flags: [
+        { parkId: "a", handle: "robin", flagSeed: "s", since: "2026-10-01T00:00:00Z" },
+        { parkId: "c", handle: "sam", flagSeed: "t", since: "2026-10-01T00:00:00Z", patches: ["hold-7", "parks-1", "crew-1", "founder"] },
+        { parkId: "b" },
+      ],
       serverTime: "2026-10-07T00:00:00Z",
     }));
     await expect(fetchFlags()).resolves.toEqual({
-      flags: [{ parkId: "a", handle: "robin", flagSeed: "s", since: "2026-10-01T00:00:00Z", crew: null }],
+      // patches are additive (#175): none from an older server, at most 3.
+      flags: [
+        { parkId: "a", handle: "robin", flagSeed: "s", since: "2026-10-01T00:00:00Z", crew: null, patches: [] },
+        { parkId: "c", handle: "sam", flagSeed: "t", since: "2026-10-01T00:00:00Z", crew: null, patches: ["hold-7", "parks-1", "crew-1"] },
+      ],
       founders: [],
       serverTime: "2026-10-07T00:00:00Z",
     });
@@ -306,6 +358,16 @@ describe("crews (#170, #171)", () => {
     expect(fetchAuthenticated.mock.calls[0][0]).toBe("/api/game/parks/beacon-hill/crew");
     fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew: null, serverTime: "2026-10-13T17:30:00Z" }));
     await expect(fetchParkCrew(ACCOUNT, "beacon-hill")).resolves.toMatchObject({ crew: null });
+  });
+
+  it("reads each crew member's badge patches, none from an older server (#175)", async () => {
+    const members = [
+      { handle: "tom", flagSeed: "s1", joinedAt: "2026-10-13T17:00:00Z", leader: true, patches: ["hold-7", "nope!", "crew-1", "parks-1", "founder"] },
+      { handle: "sara", flagSeed: "s2", joinedAt: "2026-10-13T17:10:00Z", leader: false },
+    ];
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew: { ...crew, members }, serverTime: "2026-10-13T17:30:00Z" }));
+    const answer = await fetchParkCrew(ACCOUNT, "beacon-hill");
+    expect(answer.crew?.members.map((member) => member.patches)).toEqual([["hold-7", "crew-1", "parks-1"], []]);
   });
 
   it("joins a crew, and reads a second scan as already a member", async () => {

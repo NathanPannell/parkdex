@@ -1,5 +1,5 @@
 import { accountApiUrl, fetchAccountApi, fetchAuthenticated } from "./accounts/authClient";
-import { parseVisit, type VisitResult } from "./game/client";
+import { parseBadgeUnlocks, parseVisit, type BadgeUnlock, type VisitResult } from "./game/client";
 import type { LngLat } from "./geo";
 
 /**
@@ -37,7 +37,7 @@ export type FoundRequest = { attemptId: string; position: { lat: number; lng: nu
 
 export type PhotoFlag = { code: string; message: string };
 export type FoundResult =
-  | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number }
+  | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number; newBadges?: BadgeUnlock[] }
   | {
     outcome: "rejected" | "unsure";
     flags: PhotoFlag[];
@@ -232,6 +232,8 @@ export function parseFoundResult(body: unknown): FoundResult {
     coverUrl: text(row.coverUrl),
     visit,
     founderPoints: typeof row.founderPoints === "number" && Number.isFinite(row.founderPoints) ? Math.max(0, Math.round(row.founderPoints)) : FOUNDER_POINTS,
+    // The badges the founding unlocked (additive, #175).
+    ...(Array.isArray(row.newBadges) ? { newBadges: parseBadgeUnlocks(row.newBadges) } : {}),
   };
 }
 

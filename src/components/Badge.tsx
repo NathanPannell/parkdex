@@ -42,7 +42,7 @@ function hex() {
   return `M${pts.join(" L")}Z`;
 }
 
-const SHAPES: Record<Shape, string> = {
+export const SHAPES: Record<Shape, string> = {
   circle: "M100 6 A94 94 0 1 1 99.9 6Z",
   hex: hex(),
   shield: "M100 5 C130 16 160 17 186 11 C194 88 178 152 100 196 C22 152 6 88 14 11 C40 17 70 16 100 5Z",
@@ -50,7 +50,7 @@ const SHAPES: Record<Shape, string> = {
   seal: scallop(),
 };
 
-const RIM: Record<string, string[]> = {
+export const RIM: Record<string, string[]> = {
   common: ["#FFF8EC", "#FFF8EC"],
   uncommon: ["#BDEBFF", "#7FD3F7"],
   rare: ["#F3F5FF", "#A9B3D6"],
@@ -58,7 +58,7 @@ const RIM: Record<string, string[]> = {
   legendary: ["#FFF1A8", "#E9A800"],
 };
 
-function Star({ x, y, r, fill }: { x: number; y: number; r: number; fill: string }) {
+export function Star({ x, y, r, fill }: { x: number; y: number; r: number; fill: string }) {
   const pts = Array.from({ length: 10 }, (_, i) => {
     const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
     const rr = i % 2 ? r * 0.45 : r;
@@ -67,7 +67,7 @@ function Star({ x, y, r, fill }: { x: number; y: number; r: number; fill: string
   return <polygon points={pts.join(" ")} fill={fill} stroke="#14231C" strokeWidth={1.6} strokeLinejoin="round" />;
 }
 
-function Ribbon({ text, p }: { text: string; p: Palette }) {
+export function Ribbon({ text, p }: { text: string; p: Palette }) {
   const upper = text.toUpperCase();
   const size = Math.max(9.5, Math.min(17, 190 / Math.max(upper.length, 1) + 1.2));
   const fit = upper.length > 13;

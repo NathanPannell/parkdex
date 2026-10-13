@@ -46,6 +46,7 @@
     "database/migrations/social_001_friends.sql",
     "database/migrations/osm_parks_002_sources.sql",
     "database/migrations/game_003_crews.sql",
+    "database/migrations/game_004_badges.sql",
     "database/migrations/game_005_dex.sql"
   ],
   "contentSync": {

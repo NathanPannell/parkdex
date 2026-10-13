@@ -35,7 +35,7 @@ function Podium({ players, myHandle }: { players: LeaderboardRow[]; myHandle: st
             transition={{ ...bouncy, delay: 0.1 + column * 0.08 + (place === 0 ? 0.15 : 0) }}
           >
             <span className="game-podium__flag">
-              <FlagPin seed={row.flagSeed} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
+              <FlagPin seed={row.flagSeed} patches={row.patches} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
             </span>
             <strong className="game-podium__handle">@{row.handle}</strong>
             <span className="game-podium__score">{formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}</span>
@@ -160,7 +160,7 @@ export function Leaderboard() {
                     <motion.li key={row.handle} variants={listItem}>
                       <div className={`game-row card ${mine ? "is-me" : ""}`} aria-current={mine ? "true" : undefined}>
                         <span className="game-row__rank" aria-label={`Rank ${row.rank || index + 4}`}>{row.rank || index + 4}</span>
-                        <Flag seed={row.flagSeed} size={40} />
+                        <Flag seed={row.flagSeed} patches={row.patches} size={40} />
                         <span className="game-row__name">
                           <strong>@{row.handle}{mine ? " (you)" : ""}</strong>
                           <span>{row.parksHeld} {row.parksHeld === 1 ? "park" : "parks"} held</span>

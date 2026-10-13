@@ -181,7 +181,14 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
           {CATEGORY_LABEL[park.category]} · {park.region}
         </motion.p>
         <motion.div variants={item} className={`park-sheet__holder is-${holder.kind}`}>
-          <FlagPin seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null} days={flagDays} size={44} showAge={false} className="is-waving-pin" />
+          <FlagPin
+            seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null}
+            patches={holder.kind === "mine" || holder.kind === "other" ? holder.flag.patches : undefined}
+            days={flagDays}
+            size={44}
+            showAge={false}
+            className="is-waving-pin"
+          />
           <span>
             <strong>{holderLine.title}</strong>
             <em>{holderLine.detail}</em>

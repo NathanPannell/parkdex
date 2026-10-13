@@ -26,7 +26,7 @@ The rules run on the server for every build. The `crews` feature flag (off by de
 
 ## API
 
-All routes are under `/api/game`. Errors use the usual `{ error: { code, message }, code, message }` body.
+All routes are under `/api/game`. Badges (#175) add `patches` to the crew's `leader` and `members`, and `newBadges` to a join ([badges.md](badges.md)). Errors use the usual `{ error: { code, message }, code, message }` body.
 
 ### `POST /api/game/visits`
 

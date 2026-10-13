@@ -448,3 +448,186 @@
 .park-sheet__photo {
   margin-top: -4px;
 }
+
+/* ---------- Badge shelf (#175) ---------- */
+
+.badge-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.badge-shelf__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.badge-shelf__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.badge-shelf__title strong {
+  font-family: var(--display);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.badge-shelf__help {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badge-shelf__flag {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+/* One row that scrolls sideways, so the shelf stays short above the collection. */
+.badge-shelf__grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 82px;
+  gap: 4px;
+  margin: 0;
+  padding: 4px 0 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  list-style: none;
+}
+
+.badge-shelf__grid::-webkit-scrollbar {
+  display: none;
+}
+
+.badge-shelf__grid > li {
+  scroll-snap-align: start;
+}
+
+.badge-shelf__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+}
+
+.badge-shelf__item:focus-visible {
+  outline: 3px solid var(--sun);
+}
+
+.badge-shelf__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.badge-shelf__item.is-sewn .badge-shelf__art::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2.5px dashed var(--ink);
+  border-radius: 50%;
+}
+
+.badge-shelf__sewn,
+.badge-shelf__new {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  background: var(--sun);
+  color: var(--ink);
+}
+
+.badge-shelf__sewn {
+  right: -4px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.badge-shelf__new {
+  top: -4px;
+  left: -6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--kip);
+  color: var(--paper);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+}
+
+.badge-shelf__name {
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.badge-shelf__hint {
+  color: var(--ink-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.badge-shelf__item.is-locked .badge-shelf__name {
+  color: var(--ink-2);
+}
+
+.achievement__art--locked {
+  filter: brightness(0);
+  opacity: 0.32;
+}
+
+.badge-detail__body {
+  align-items: center;
+  text-align: center;
+}
+
+.badge-detail__hero {
+  display: grid;
+  place-items: center;
+  padding: 4px 0;
+}
+
+.badge-detail__hint {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 18px;
+}
+
+.badge-detail__status {
+  margin: 0;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+
+.badge-detail__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}

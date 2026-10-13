@@ -6,8 +6,8 @@ the badge, and share it. No accounts and no network sync: everything stays on th
 
 - Parks on Vancouver Island come from the downloaded content catalogue. Only parks with
   published badge art appear on the map, and the Dex starts empty.
-- Collector ranks: visiting 2, 5 and 10 unique parks opens Uncommon, Rare and Legendary
-  parks. See `docs/rarity-progression.md`.
+- Badges: achievements made from park art, worn as patches on your flag. See
+  `docs/badges.md`.
 - Older installed builds keep reading new content. Content API changes must be additive;
   see `docs/content-compatibility.md`.
 - Maps: a bundled low-detail Protomaps base map of Canada (zoom 0 to 6). Detailed tiles

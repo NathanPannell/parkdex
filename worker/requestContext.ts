@@ -32,6 +32,9 @@ export const GAME_EVENT_TYPES = [
   "crew_joined",
   "crew_code_shown",
   "visit_logged_protected",
+  // Badges (#175); game_004_badges.sql adds these to the table's checks.
+  "badge_unlocked",
+  "flag_patches_set",
 ] as const;
 export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 export type DbEventType = "db_read" | "db_write";

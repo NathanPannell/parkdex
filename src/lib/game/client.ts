@@ -1,4 +1,5 @@
 import { fetchAccountApi, fetchAuthenticated } from "../accounts/authClient";
+import type { BadgeStatus } from "./badges";
 
 /**
  * Client for the flag game routes (`/api/game/*`, contract in issue #76).
@@ -50,7 +51,19 @@ export type GameMe = {
   loggedToday?: string[];
   /** Manual reviews of founding photos: those waiting, and unseen decisions (additive, #153). */
   foundingReviews?: FoundingReviews;
+  /**
+   * Every badge with its progress (additive, #175). Undefined from a server without badges, so
+   * the app can hide them there; an empty list means the server has badges and none apply.
+   */
+  badges?: BadgeStatus[];
+  /** Badges sewn on the player's flag, at most 3 (additive, #175). */
+  flagPatches?: string[];
+  /** Badges this read unlocked, such as a flag reaching 7 days (additive, #175). */
+  newBadges?: BadgeUnlock[];
 };
+
+/** A badge a request unlocked (#175). */
+export type BadgeUnlock = { id: string; unlockedAt: string };
 
 /**
  * `joined` and `logged` come from crews (#170) and reach every build, whatever the `crews` flag
@@ -71,14 +84,17 @@ export type VisitResult = {
   flagSince: string | null;
   /** Set for a logged visit, and for already_today during someone else's protected hour (additive, #170). */
   protected: ProtectedHour | null;
+  /** Badges this visit unlocked (additive, #175). */
+  newBadges?: BadgeUnlock[];
 };
 
 /** A flag's crew for map pins (#170). The leader is the flag's own holder; `memberSeeds` has up to 3 more, earliest first. */
 export type FlagCrew = { size: number; memberSeeds: string[]; protectedUntil: string | null };
-/** `crew` is additive (#170); a server from before it sends none. */
-export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string; crew?: FlagCrew | null };
+/** `crew` (#170) and `patches`, the holder's badges drawn on their flag (#175), are additive; older servers send neither. */
+export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string; crew?: FlagCrew | null; patches?: string[] };
 
-export type CrewMember = { handle: string; flagSeed: string; joinedAt: string; leader: boolean };
+/** `patches` are the member's badges, drawn on their flag (additive, #175). */
+export type CrewMember = { handle: string; flagSeed: string; joinedAt: string; leader: boolean; patches?: string[] };
 /** A crew as the signed-in player sees it (#170). `code` is set only for members during the protected hour. */
 export type Crew = {
   parkId: string;
@@ -100,18 +116,21 @@ export type JoinCrewResult =
 /** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
 export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
 export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
-export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number };
+export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; score: number; parksHeld: number; patches?: string[] };
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
 export type GameErrorCode =
   | "handle_taken" | "handle_rejected" | "handle_required" | "invalid_handle" | "park_not_found" | "visit_id_reused" | "invalid_request"
   | "unauthenticated" | "unavailable" | "offline" | "account_deleting"
+  // Badge patches (#175).
+  | "badge_locked" | "invalid_patches"
   // Crew joins (#170).
   | "invalid_code" | "code_not_found" | "code_expired" | "crew_full" | "already_today";
 
 const KNOWN_CODES = new Set<GameErrorCode>([
   "handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request",
   "unauthenticated", "unavailable", "offline", "account_deleting", "invalid_code", "code_not_found", "code_expired", "crew_full", "already_today",
+  "badge_locked", "invalid_patches",
 ]);
 const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "joined", "logged", "already_today"]);
 const DECISIONS = new Set<FoundingDecisionStatus>(["approved", "rejected", "superseded"]);
@@ -173,6 +192,31 @@ function list<T>(value: unknown, parse: (item: Record<string, unknown>) => T | n
   });
 }
 
+/** Badge and patch IDs: lower-case words joined by hyphens. */
+const BADGE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function badgeIds(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === "string" && id.length <= 40 && BADGE_ID.test(id)))] : [];
+}
+
+export function parseBadgeUnlocks(value: unknown): BadgeUnlock[] {
+  return list(value, (item) => {
+    const id = text(item.id);
+    const unlockedAt = instant(item.unlockedAt);
+    return id && BADGE_ID.test(id) && unlockedAt ? { id, unlockedAt } : null;
+  });
+}
+
+function parseBadgeStatuses(value: unknown): BadgeStatus[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return list(value, (item) => {
+    const id = text(item.id);
+    if (!id || !BADGE_ID.test(id)) return null;
+    const goal = Math.max(1, count(item.goal));
+    return { id, progress: Math.min(count(item.progress), goal), goal, unlockedAt: instant(item.unlockedAt) };
+  });
+}
+
 function parsePlayer(value: unknown): GamePlayer | null {
   const row = record(value);
   const handle = text(row?.handle);
@@ -205,6 +249,9 @@ export function parseMe(body: unknown): GameMe {
     visitedTodayUntil: instant(row.visitedTodayUntil),
     loggedToday: ids(row.loggedToday),
     foundingReviews: parseFoundingReviews(row.foundingReviews),
+    badges: parseBadgeStatuses(row.badges),
+    flagPatches: badgeIds(row.flagPatches).slice(0, 3),
+    newBadges: parseBadgeUnlocks(row.newBadges),
   };
 }
 
@@ -269,6 +316,8 @@ export function parseVisit(body: unknown): VisitResult {
     previousHolder: parsePlayer(visit.previousHolder),
     flagSince: text(visit.flagSince),
     protected: parseProtected(visit.protected),
+    // Only a visit answer from a server with badges (#175) has newBadges beside the visit.
+    ...(Array.isArray(record(body)?.newBadges) ? { newBadges: parseBadgeUnlocks(record(body)?.newBadges) } : {}),
   };
 }
 
@@ -295,7 +344,7 @@ export function parseCrew(value: unknown): Crew | null {
   const members = list(row.members, (member): CrewMember | null => {
     const player = parsePlayer(member);
     const joinedAt = instant(member.joinedAt);
-    return player && joinedAt ? { ...player, joinedAt, leader: member.leader === true } : null;
+    return player && joinedAt ? { ...player, joinedAt, leader: member.leader === true, patches: badgeIds(member.patches).slice(0, 3) } : null;
   });
   return {
     parkId,
@@ -335,7 +384,7 @@ export function parseFlags(body: unknown): FlagsResponse {
       const handle = text(flag.handle);
       const flagSeed = text(flag.flagSeed);
       const since = text(flag.since);
-      return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since, crew: parseFlagCrew(flag.crew) } : null;
+      return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since, crew: parseFlagCrew(flag.crew), patches: badgeIds(flag.patches).slice(0, 3) } : null;
     }),
     founders: list(row.founders, (founder) => {
       const parkId = text(founder.parkId);
@@ -351,7 +400,9 @@ export function parseLeaderboard(body: unknown): LeaderboardResponse {
     players: list(row.players, (player) => {
       const handle = text(player.handle);
       const flagSeed = text(player.flagSeed);
-      return handle && flagSeed ? { rank: count(player.rank), handle, flagSeed, score: count(player.score), parksHeld: count(player.parksHeld) } : null;
+      return handle && flagSeed
+        ? { rank: count(player.rank), handle, flagSeed, score: count(player.score), parksHeld: count(player.parksHeld), patches: badgeIds(player.patches).slice(0, 3) }
+        : null;
     }),
     serverTime: text(row.serverTime) ?? new Date().toISOString(),
   };
@@ -375,6 +426,8 @@ const MESSAGES: Record<GameErrorCode, string> = {
   park_not_found: "Parkdex doesn't know this park yet. Update the app and try again.",
   visit_id_reused: "That visit was already used for another park. Try again.",
   invalid_request: "Parkdex couldn't use that request.",
+  badge_locked: "Earn that badge before you sew it on.",
+  invalid_patches: "Your flag has room for 3 badges.",
   unauthenticated: "Sign in again to keep playing.",
   unavailable: "Parkdex is unavailable right now. Try again shortly.",
   offline: "You need a connection for this.",
@@ -432,6 +485,12 @@ export async function saveHandle(accountId: string, handle: string): Promise<Gam
 
 export async function sendVisit(accountId: string, visit: { visitId: string; parkId: string }): Promise<VisitResult> {
   return parseVisit(await request(authenticated(accountId), "/api/game/visits", { method: "POST", body: JSON.stringify(visit) }));
+}
+
+/** Sews up to 3 unlocked badges onto the flag (#175). Returns the patches the server saved. */
+export async function savePatches(accountId: string, patches: string[]): Promise<string[]> {
+  const body = record(await request(authenticated(accountId), "/api/game/me/patches", { method: "PUT", body: JSON.stringify({ patches }) }));
+  return badgeIds(body?.patches).slice(0, 3);
 }
 
 /**

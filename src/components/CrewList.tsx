@@ -11,7 +11,7 @@ export function CrewList({ members, flagSince, myHandle, className }: { members:
     <ul className={["crew-list", className].filter(Boolean).join(" ")} aria-label="Crew">
       {members.map((member) => (
         <li key={member.handle} className={member.handle === myHandle ? "is-me" : undefined}>
-          <Flag seed={member.flagSeed} size={34} />
+          <Flag seed={member.flagSeed} size={34} patches={member.patches} />
           <strong>@{member.handle}{member.handle === myHandle ? " (you)" : ""}</strong>
           <em>{crewMemberNote(member, flagSince)}</em>
         </li>

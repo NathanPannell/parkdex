@@ -3,7 +3,6 @@ import { Capacitor } from "@capacitor/core";
 import { bakedApiPointer, setApiPointerOverride, type ApiPointer } from "./apiPointer";
 import { setContentChannelOverride, type ContentChannel } from "./contentChannel";
 import { getNativePackageInstallInfo } from "./native";
-import { setRankProgressionEnabled } from "./progression";
 import { KIP_PRODUCTION_ORIGIN } from "./userDataDestination";
 import { bakedAnalyticsConfig, parseRemoteAnalytics, startProductAnalytics, type ProductAnalyticsConfig } from "./productAnalytics";
 import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./requestContext";
@@ -18,7 +17,6 @@ import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./req
 
 /** Every remotely controlled feature this build reads, and its built-in default. */
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
-  rankProgression: false,
   parkProposals: true,
   /** Friends by QR code and the weekly friends board (#64). Off until the operator turns it on. */
   friends: false,
@@ -264,7 +262,6 @@ export async function initAppConfig(): Promise<AppConfig> {
   if (buildInfo?.platform === "android" && baked) await signOutIfServerChanged(pointer ?? baked);
   setApiPointerOverride(pointer);
   setContentChannelOverride(pointer === "production" ? "main" : pointer === "staging" ? "staging" : null);
-  setRankProgressionEnabled(active.flags.rankProgression);
   setUpdateStatus(active.platform === "android" ? active.update : "none");
   await settleWithin(installation, INSTALLATION_WAIT_MS);
   void startProductAnalytics(active.analytics ?? bakedAnalyticsConfig());
