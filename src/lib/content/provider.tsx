@@ -5,6 +5,7 @@ import { contentChannelOverride } from "../contentChannel";
 import { createContentRuntime } from "./runtime";
 import { createContentStore } from "./store";
 import { localCacheMarker } from "./leanCache";
+import { readLastLocation } from "../lastLocation";
 import { readAllowMobileMapData, subscribeAllowMobileMapData } from "../downloadPreferences";
 import { contentFetch, getContentApiOrigin, subscribeContentConnectivity } from "./transport";
 import { BUILD_MAP_POINTER, OFFLINE_DOWNLOADS, type ContentEnvironment, type ContentRuntime, type ContentStatus } from "./contracts";
@@ -74,6 +75,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       mapPointer: BUILD_MAP_POINTER,
       appBuild: typeof __APP_BUILD__ === "undefined" ? "unknown" : __APP_BUILD__,
       cacheMarker: localCacheMarker(),
+      lastLocation: readLastLocation(),
     });
   }
   const runtime = runtimeRef.current;

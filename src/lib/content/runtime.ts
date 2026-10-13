@@ -76,6 +76,7 @@ import {
   chunksToEvict,
   cleanupKeepSet,
   filesToDelete,
+  NEARBY_GUIDE_KM,
   VIEW_GUIDE_MIN_ZOOM,
 } from "./leanCache";
 
@@ -326,6 +327,7 @@ class ContentRuntimeController implements ContentRuntime {
       throw error;
     })) as typeof fetch;
     this.environment = options.environment;
+    if (options.lastLocation && validMapPoint(options.lastLocation)) this.lastLocation = [options.lastLocation[0], options.lastLocation[1]];
     this.scheduler = new ContentDownloadScheduler(this.currentPolicy());
   }
 
@@ -958,6 +960,9 @@ class ContentRuntimeController implements ContentRuntime {
       else this.startBulkMap(this.status.snapshot.releaseId);
       this.scheduleNearbyPrefetch(false);
     }
+    // Old content is cleaned up from what is on the device, so it also happens when the app
+    // starts in the background, offline or behind a hidden tab, where no sync runs.
+    this.startCacheCleanup();
   }
 
   private hasSyncApi(): boolean {
@@ -1132,7 +1137,7 @@ class ContentRuntimeController implements ContentRuntime {
     // After an update, a catalogue saved whole (every boundary) is replaced once by a
     // fresh snapshot, which keeps only the boundaries near the player when the API
     // names a CDN catalogue. The cache stays on screen until that commits.
-    if (state && !state.catalogue && this.cleanupDue()) {
+    if (state && (state.catalogue?.version === null || (!state.catalogue && this.cleanupDue()))) {
       previous = state;
       state = null;
       resetCursor = true;
@@ -1196,7 +1201,7 @@ class ContentRuntimeController implements ContentRuntime {
     const parkPoints = new Map((index.body.parks as { id?: unknown; lng?: unknown; lat?: unknown }[])
       .filter((park) => typeof park?.id === "string" && typeof park.lng === "number" && typeof park.lat === "number")
       .map((park) => [park.id as string, { lng: park.lng as number, lat: park.lat as number }]));
-    const near = new Set(chunksNear(index.chunks.map((chunk) => ({ ...chunk, bbox: chunk.bbox ?? null })), parkPoints, this.mapAnchor()));
+    const near = new Set(chunksNear(index.chunks.map((chunk) => ({ ...chunk, bbox: chunk.bbox ?? null })), parkPoints, this.guideAnchor()));
     const wanted = index.chunks.filter((chunk) => near.has(chunk.path));
     const features = new Map<string, unknown[]>();
     let next = 0;
@@ -2333,6 +2338,9 @@ class ContentRuntimeController implements ContentRuntime {
    * be interrupted and run again; the marker is written only once all of them finish.
    */
   private async cleanUpOldContent(): Promise<void> {
+    // A sync in progress may be replacing the catalogue; clean up after it.
+    if (this.syncPromise) await this.syncPromise.catch(() => {});
+    await this.trimWholeCatalogue();
     const state = this.syncState;
     if (!state || this.stopped) return;
     const generation = this.cacheGeneration();
@@ -2386,6 +2394,39 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.stopped) return;
     if (!OFFLINE_DOWNLOADS) clearSavedSquares();
     this.options.cacheMarker?.write(generation);
+  }
+
+  /**
+   * A catalogue saved whole by an earlier build keeps every boundary (about 11 MB for
+   * 1,168 parks). Keep only those near the player now, without waiting for the network;
+   * the next sync replaces the trimmed catalogue with the release's, which can load the
+   * others again.
+   */
+  private async trimWholeCatalogue(): Promise<void> {
+    const state = this.syncState;
+    if (!state || state.catalogue || this.stopped || state.parks.length === 0) return;
+    const anchor = this.guideAnchor();
+    const near = new Set(state.parks.filter((park) => distanceKm(anchor, [park.lng, park.lat]) <= NEARBY_GUIDE_KM).map((park) => park.id));
+    const trimmed = validateContentSyncState({
+      ...state,
+      boundaries: { type: "FeatureCollection", features: state.boundaries.features.filter((feature) => near.has(feature.properties.id)) },
+      catalogue: { version: null, revision: state.revision, chunks: [], loaded: [], pinned: [] },
+    });
+    // A sync that started meanwhile brings its own catalogue; never overwrite it with this one.
+    if (this.syncState !== state || this.syncPromise || this.stopped) return;
+    await this.persistSyncState(trimmed);
+    if (this.syncState !== state) return;
+    this.syncState = trimmed;
+    this.catalogueBytes = null;
+    const snapshot = this.status.snapshot;
+    if (snapshot && snapshot.generation === trimmed.revision) this.setStatus({ snapshot: { ...snapshot, boundaries: trimmed.boundaries } });
+  }
+
+  /** Where nearby park guides are centred: the player, else their last saved position, else the map anchor. */
+  private guideAnchor(): MapPoint {
+    if (this.currentLocation) return this.currentLocation;
+    if (this.lastLocation && isPointInsideContentBounds(this.lastLocation)) return this.lastLocation;
+    return this.mapAnchor();
   }
 
   private forgetLocalFile(hash: string): void {

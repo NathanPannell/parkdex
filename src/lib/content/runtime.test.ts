@@ -2359,4 +2359,58 @@ describe("lean device cache", () => {
     await vi.waitFor(() => expect(marker.value).toBe("v1|build-3|none"));
     expect(store.files.size).toBe(0);
   });
+
+  it("trims a catalogue saved whole and cleans up old content without a sync, then replaces it on the next sync", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const store = new MemoryContentStore();
+    // Saved whole by an earlier build: both boundaries, an older map's inventory and its labels.
+    const whole = parseContentSnapshot({
+      ...contentSyncSnapshot(7, near, []),
+      parks: [near, far],
+      boundaries: { type: "FeatureCollection", features: [near, far].map((park) => ({
+        type: "Feature", properties: { id: park.id, biome: park.biome },
+        geometry: { type: "MultiPolygon", coordinates: [[[[park.lng, park.lat], [park.lng + 0.01, park.lat], [park.lng + 0.01, park.lat + 0.01], [park.lng, park.lat]]]] },
+      })) },
+      drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [near.id]: { drive: [null], walkM: 0 }, [far.id]: { drive: [null], walkM: 0 } } },
+    } as ReturnType<typeof contentSyncSnapshot>);
+    store.sync.set("staging", { ...whole, sourceId: SOURCE });
+    const oldMap = await makeRelease("d".repeat(64), 1, "municipal-old-map", "old-map-scene");
+    const oldGlyph = oldMap.rawManifest.files.find((file) => file.path.startsWith("map/fonts/"))!;
+    store.files.set(oldGlyph.sha256, oldMap.content.get(oldGlyph.url)!.slice(0));
+    store.inventories.set("e".repeat(64), {
+      schema: "parkdex.content-map/v1", version: "e".repeat(64), mapManifest: oldMap.rawManifest.mapManifest,
+      files: oldMap.rawManifest.files.filter((file) => file.path.startsWith("map/")),
+    });
+    const marker = memoryMarker("v1|build-1|none");
+    const options = {
+      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
+      claimedParkIds: () => [], connectivity: { connected: true, wifi: true }, badgeArt: false,
+      appBuild: "build-2", cacheMarker: marker, lastLocation: [near.lng, near.lat] as [number, number],
+    };
+
+    // A hidden tab, a background start or no network: no sync runs.
+    const hidden = track(createContentRuntime(options));
+    hidden.setForeground(false);
+    await hidden.start();
+    await vi.waitFor(() => expect(marker.value).toBe("v1|build-2|none"));
+    expect(server.calls).toEqual([]);
+    const trimmed = await store.getSyncState("staging");
+    expect(trimmed?.boundaries.features.map((feature) => feature.properties.id)).toEqual([near.id]);
+    expect(trimmed?.parks).toHaveLength(2);
+    expect(trimmed?.catalogue?.version).toBeNull();
+    expect(boundaryIds(hidden)).toEqual([near.id]);
+    expect(store.inventories.size).toBe(0);
+    expect(store.files.has(oldGlyph.sha256)).toBe(false);
+    await hidden.stop();
+
+    // The next sync swaps in the release's catalogue, which can load far boundaries again.
+    const visible = track(createContentRuntime(options));
+    await visible.start();
+    await vi.waitFor(async () => expect((await store.getSyncState("staging"))?.catalogue?.version).toMatch(/^[0-9a-f]{64}$/));
+    expect(server.calls.filter((url) => url.includes("/api/content/snapshot"))).toHaveLength(1);
+    await visible.loadParkBoundary?.(far.id);
+    expect(boundaryIds(visible)).toEqual([near.id, far.id]);
+  });
 });

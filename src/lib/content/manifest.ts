@@ -596,8 +596,8 @@ function parseChunkRef(value: unknown, label: string): CatalogueChunkRef {
 function parseCatalogueCache(value: unknown, payload: ContentPayload): CatalogueCache {
   const cache = record(value, "catalogue cache");
   requireKeys(cache, ["version", "revision", "chunks", "loaded", "pinned"], "catalogue cache");
-  const version = string(cache.version, "catalogue cache version");
-  if (!SHA256.test(version)) throw new ContentValidationError("catalogue cache version is invalid");
+  const version = cache.version === null ? null : string(cache.version, "catalogue cache version");
+  if (version !== null && !SHA256.test(version)) throw new ContentValidationError("catalogue cache version is invalid");
   const revision = nonNegativeSafeInteger(cache.revision, "catalogue cache revision");
   if (!Array.isArray(cache.chunks)) throw new ContentValidationError("catalogue cache chunks must be an array");
   const chunks = cache.chunks.map((chunk, index) => parseChunkRef(chunk, `catalogue cache chunks[${index}]`));
