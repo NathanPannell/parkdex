@@ -20,6 +20,8 @@ import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type 
 import { Camera } from "./screens/Camera";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
+import { PortraitOnly } from "./components/PortraitOnly";
+import { usePortraitPanel } from "./lib/webApp";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
 import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
@@ -37,18 +39,22 @@ import { Splash } from "./screens/Splash";
 
 export function App() {
   const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
+  // On the web a sideways screen is covered by the portrait panel. The app stays mounted behind it.
+  const portraitPanel = usePortraitPanel();
+  const covered = updateStatus === "required" || !!portraitPanel;
   return (
     <MotionConfig reducedMotion="user">
       <AuthProvider>
         <GameProvider>
           <StoreProvider>
-            <div inert={updateStatus === "required"} aria-hidden={updateStatus === "required"} style={{ display: "contents" }}>
+            <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
               <ContentProvider><Stage /></ContentProvider>
             </div>
             <UpdateGate status={updateStatus} />
           </StoreProvider>
         </GameProvider>
       </AuthProvider>
+      <PortraitOnly panel={portraitPanel} />
     </MotionConfig>
   );
 }
