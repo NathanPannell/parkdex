@@ -1,7 +1,11 @@
 import {
   CONTENT_CDN_ORIGIN,
   CONTENT_READER_VERSION,
+  isMapChunkPath,
+  isMapLayoutPath,
   isRemoteContentPath,
+  mapChunkIndex,
+  mapChunkPath,
   type ContentBoundaries,
   type ContentChannel,
   type ContentEnvironment,
@@ -191,7 +195,7 @@ function isSupportedManifestPath(path: string): boolean {
     /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(path) ||
     /^art\/kip\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.webp$/.test(path) ||
     /^art\/products\/[A-Za-z0-9._ -]+\.webp$/.test(path) ||
-    /^map\/island\/manifest\.json$/.test(path) || /^map\/island\/\d{3,}\.bin$/.test(path) ||
+    isMapLayoutPath(path) || isMapChunkPath(path) ||
     /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path);
 }
 
@@ -255,9 +259,10 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
     if (knownSize !== undefined && knownSize !== file.byte_size) throw new ContentValidationError("one file hash is declared with multiple sizes");
     hashSizes.set(file.sha256, file.byte_size);
   }
-  for (const required of ["data/parks.json", "data/drive.json", "boundaries.geojson", "map/island/manifest.json"]) {
+  for (const required of ["data/parks.json", "data/drive.json", "boundaries.geojson"]) {
     if (!paths.has(required)) throw new ContentValidationError(`manifest is missing ${required}`);
   }
+  if (!files.some((file) => isMapLayoutPath(file.path))) throw new ContentValidationError("manifest is missing its map chunk layout");
   const parkIds = uniqueStringArray(manifest.parkIds, "manifest.parkIds", PARK_ID);
   const boundaryIds = uniqueStringArray(manifest.boundaryIds, "manifest.boundaryIds", PARK_ID);
   const mapManifestValue = record(manifest.mapManifest, "manifest.mapManifest");
@@ -268,14 +273,7 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
     count: positiveInteger(mapManifestValue.count, "manifest.mapManifest.count"),
   };
   if (mapManifest.count !== Math.ceil(mapManifest.size / mapManifest.chunkBytes)) throw new ContentValidationError("map manifest chunk count does not match its size");
-  const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
-  if (chunks.length !== mapManifest.count) throw new ContentValidationError("map chunk inventory does not match its manifest");
-  for (let index = 0; index < mapManifest.count; index++) {
-    const path = `map/island/${String(index).padStart(3, "0")}.bin`;
-    const chunk = files.find((file) => file.path === path);
-    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
-    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
-  }
+  assertMapChunks(files, mapManifest, "map chunk inventory does not match its manifest");
   if (!files.some((file) => file.path.startsWith("map/fonts/") && file.path.endsWith(".pbf"))) {
     throw new ContentValidationError("manifest is missing map glyphs");
   }
@@ -732,6 +730,25 @@ export function assembleCatalogueSnapshot(index: ContentCatalogueIndex, chunkFea
   });
 }
 
+/**
+ * A map has one chunk layout file and every chunk beside it, in map/island/ for
+ * releases before the combined map and map/detail/ from it (see mapFolder).
+ */
+function assertMapChunks(files: readonly ContentFile[], mapManifest: MapManifest, mismatch: string): void {
+  const layouts = files.filter((file) => isMapLayoutPath(file.path));
+  if (layouts.length !== 1) throw new ContentValidationError(mismatch);
+  const folder = layouts[0]!.path.split("/")[1]!;
+  const chunks = files.filter((file) => isMapChunkPath(file.path));
+  if (chunks.length !== mapManifest.count) throw new ContentValidationError(mismatch);
+  const byPath = new Map(chunks.map((file) => [file.path, file]));
+  for (let index = 0; index < mapManifest.count; index += 1) {
+    const path = mapChunkPath(index, folder);
+    const chunk = byPath.get(path);
+    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
+    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
+  }
+}
+
 export function parseContentMapInventory(value: unknown, expectedVersion: string): ContentMapInventory {
   const manifest = record(value, "content map manifest");
   requireKeys(manifest, ["schema", "version", "mapManifest", "files"], "content map manifest");
@@ -741,20 +758,12 @@ export function parseContentMapInventory(value: unknown, expectedVersion: string
   const mapManifest = parseMapManifestLayout(manifest.mapManifest, "map manifest.mapManifest");
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) throw new ContentValidationError("map manifest.files must be a non-empty array");
   const files = manifest.files.map((file, index) => parseSyncFile(file, `map manifest.files[${index}]`, (path) =>
-    path === "map/island/manifest.json" || /^map\/island\/\d{3,}\.bin$/.test(path) || /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)));
+    isMapLayoutPath(path) || isMapChunkPath(path) || /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)));
   if (new Set(files.map((file) => file.path)).size !== files.length) throw new ContentValidationError("map manifest contains duplicate paths");
-  const mapFile = files.find((file) => file.path === "map/island/manifest.json");
-  const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
-  if (!mapFile || chunks.length !== mapManifest.count) throw new ContentValidationError("map manifest chunk inventory does not match its layout");
-  for (let index = 0; index < mapManifest.count; index += 1) {
-    const path = `map/island/${String(index).padStart(3, "0")}.bin`;
-    const chunk = files.find((file) => file.path === path);
-    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
-    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
-  }
-  if (chunks.some((file) => Number(file.path.match(/\/(\d+)\.bin$/)?.[1]) >= mapManifest.count)) {
+  if (files.some((file) => isMapChunkPath(file.path) && mapChunkIndex(file.path)! >= mapManifest.count)) {
     throw new ContentValidationError("map manifest contains an out-of-range chunk");
   }
+  assertMapChunks(files, mapManifest, "map manifest chunk inventory does not match its layout");
   if (!files.some((file) => file.path.startsWith("map/fonts/") && file.path.endsWith(".pbf"))) {
     throw new ContentValidationError("map manifest is missing map glyphs");
   }
@@ -913,11 +922,11 @@ export function remoteFiles(manifest: ContentManifest): ContentFile[] {
 }
 
 export function coreFiles(manifest: ContentManifest): ContentFile[] {
-  return remoteFiles(manifest).filter((file) => !/^map\/island\/\d{3,}\.bin$/.test(file.path));
+  return remoteFiles(manifest).filter((file) => !isMapChunkPath(file.path));
 }
 
 export function mapChunkFiles(manifest: ContentManifest): ContentFile[] {
-  return manifest.files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
+  return manifest.files.filter((file) => isMapChunkPath(file.path));
 }
 
 export function fileByPath(manifest: ContentManifest, path: string): ContentFile {

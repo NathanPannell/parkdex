@@ -313,6 +313,14 @@ describe("WebContentStore", () => {
     await store.deleteFile(chunkHash, { optionalMapChunk: true });
     expect(await store.hasFile(chunkHash, chunkBytes.byteLength)).toBe(false);
     expect(await store.hasFile(glyphHash, glyphBytes.byteLength)).toBe(true);
+
+    // Maps from the combined BC and Nova Scotia release keep their chunks in map/detail/.
+    await store.putFile(chunkHash, chunkBytes);
+    active.manifest.files[0] = file("map/detail/0123.bin", chunkHash, chunkBytes.byteLength, "application/octet-stream");
+    await store.putRelease(active);
+    await expect(store.deleteFile(chunkHash)).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(chunkHash, { optionalMapChunk: true });
+    expect(await store.hasFile(chunkHash, chunkBytes.byteLength)).toBe(false);
   });
 
   it("pins archived scene blobs by release and scene across recreation", async () => {

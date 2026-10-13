@@ -1,9 +1,12 @@
 import {
   canDownloadContent,
-  CONTENT_BOUNDS,
   CONTENT_READER_VERSION,
   isContentTransportPaused,
+  isMapChunkPath,
+  isMapLayoutPath,
+  isPointInsideContentBounds,
   isWaitingForContentWifi,
+  mapChunkIndex,
   VICTORIA,
   type Connectivity,
   type ContentChannel,
@@ -103,7 +106,16 @@ function fileKey(hash: string, size: number) {
 }
 
 function isMapChunk(path: string) {
-  return /^map\/island\/\d{3,}\.bin$/.test(path);
+  return isMapChunkPath(path);
+}
+
+/** Chunk numbers of map chunk files, skipping any other path. */
+function chunkIndices(files: readonly ContentFile[]): number[] {
+  return files.map((file) => mapChunkIndex(file.path)).filter((index): index is number => index !== null);
+}
+
+function mapLayoutFile<T extends { path?: unknown }>(files: readonly T[]): T | undefined {
+  return files.find((file) => typeof file?.path === "string" && isMapLayoutPath(file.path));
 }
 
 function versionFromAssetKey(file: ContentFile, scene: string): string | null {
@@ -129,13 +141,6 @@ function assertUnredirected(response: Response, requestedUrl: string, label: str
 
 function parseEnvironment(value: unknown, expected: ContentEnvironment) {
   return parseContentChannel(value, expected);
-}
-
-function isPointInsideContentBounds(point: MapPoint): boolean {
-  const [lng, lat] = point;
-  return Number.isFinite(lng) && Number.isFinite(lat) &&
-    lng >= CONTENT_BOUNDS[0] && lng <= CONTENT_BOUNDS[2] &&
-    lat >= CONTENT_BOUNDS[1] && lat <= CONTENT_BOUNDS[3];
 }
 
 function validMapPoint(point: MapPoint | null): point is MapPoint {
@@ -164,14 +169,14 @@ function requestPriority(purpose: "core" | "nearby" | "bulk" | "update", path: s
 
 function parseMapFile(bytes: ArrayBuffer, expected: ContentManifest["mapManifest"]) {
   const value = parseJsonBytes(bytes);
-  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new ContentValidationError("map/island/manifest.json must be an object");
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new ContentValidationError("map chunk layout must be an object");
   const map = value as Record<string, unknown>;
   const keys = Object.keys(map).sort();
   if (keys.length !== 3 || keys[0] !== "chunkBytes" || keys[1] !== "count" || keys[2] !== "size") {
-    throw new ContentValidationError("map/island/manifest.json has an unsupported shape");
+    throw new ContentValidationError("map chunk layout has an unsupported shape");
   }
   if (map.size !== expected.size || map.chunkBytes !== expected.chunkBytes || map.count !== expected.count) {
-    throw new ContentValidationError("map/island/manifest.json disagrees with the immutable release manifest");
+    throw new ContentValidationError("map chunk layout disagrees with the immutable release manifest");
   }
 }
 
@@ -642,8 +647,8 @@ class ContentRuntimeController implements ContentRuntime {
     const file = fileByPath(manifest, path);
     this.invalidateLocalFile(file);
     await this.options.store.deleteFile(file.sha256, { optionalMapChunk: true });
-    const index = Number(path.match(/\/(\d{3,})\.bin$/)?.[1]);
-    if (Number.isSafeInteger(index)) removeAllowedMapChunks(releaseId, [index]);
+    const index = mapChunkIndex(path);
+    if (index !== null) removeAllowedMapChunks(releaseId, [index]);
   }
 
   async listStoredFiles(): Promise<StoredFileSummary[]> {
@@ -1443,7 +1448,7 @@ class ContentRuntimeController implements ContentRuntime {
   private async hydrateCachedMapChunks(state: ContentSyncState, releaseId: string): Promise<void> {
     const manifest = this.syncManifests.get(releaseId);
     if (!manifest || !manifest.files.some((file) => file.path.startsWith("map/"))) return;
-    const mapFile = manifest.files.find((file) => file.path === "map/island/manifest.json");
+    const mapFile = mapLayoutFile(manifest.files);
     if (!mapFile || !(await this.hasVerifiedLocalFile(mapFile))) return;
     try {
       parseMapFile(await this.options.store.readFile(mapFile.sha256), manifest.mapManifest);
@@ -1461,9 +1466,7 @@ class ContentRuntimeController implements ContentRuntime {
       catch { return null; }
     });
     if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
-    const allowed = checked.filter((file): file is ContentFile => file !== null)
-      .map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]))
-      .filter(Number.isSafeInteger);
+    const allowed = chunkIndices(checked.filter((file): file is ContentFile => file !== null));
     setAllowedMapChunks(releaseId, allowed);
     this.setStatus({ fullMapReady: chunks.length > 0 && allowed.length === chunks.length });
   }
@@ -1515,14 +1518,14 @@ class ContentRuntimeController implements ContentRuntime {
     if (!cached) return null;
     try {
       const inventory = parseContentMapInventory(cached, version);
-      const manifestFile = inventory.files.find((file) => file.path === "map/island/manifest.json");
+      const manifestFile = mapLayoutFile(inventory.files);
       if (!manifestFile || !(await this.hasVerifiedLocalFile(manifestFile))) return null;
       parseMapFile(await this.options.store.readFile(manifestFile.sha256), inventory.mapManifest);
       return inventory;
     } catch {
       let manifestFile: ContentFile | undefined;
       try {
-        if (cached && Array.isArray(cached.files)) manifestFile = cached.files.find((file) => file?.path === "map/island/manifest.json");
+        if (cached && Array.isArray(cached.files)) manifestFile = mapLayoutFile(cached.files);
       } catch {
         // The cache descriptor itself can be malformed.
       }
@@ -1566,8 +1569,8 @@ class ContentRuntimeController implements ContentRuntime {
       const bytes = await response.arrayBuffer();
       if ((await sha256Hex(bytes)) !== pointer.manifestSha256) throw new ContentValidationError("map inventory failed SHA-256 verification");
       inventory = parseContentMapInventory(parseJsonBytes(bytes), pointer.version);
-      const innerManifest = inventory.files.find((file) => file.path === "map/island/manifest.json");
-      if (!innerManifest) throw new ContentValidationError("map inventory has no island manifest");
+      const innerManifest = mapLayoutFile(inventory.files);
+      if (!innerManifest) throw new ContentValidationError("map inventory has no chunk layout");
       await this.scheduleFileDownload(innerManifest, "bulk", signal);
       parseMapFile(await this.options.store.readFile(innerManifest.sha256), inventory.mapManifest);
       await this.options.store.putMapInventory(inventory);
@@ -1778,9 +1781,7 @@ class ContentRuntimeController implements ContentRuntime {
       this.updateWaitingStatus();
       await this.ensureFiles(files, candidate.id, "update");
       const snapshot = await this.prepareSnapshot(candidate, payload);
-      const chunkIds = mapChunkFiles(manifest)
-        .map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1]))
-        .filter(Number.isSafeInteger);
+      const chunkIds = chunkIndices(mapChunkFiles(manifest));
       setAllowedMapChunks(candidate.id, chunkIds);
       await prefetchMapArea(this, candidate.id, this.mapAnchor(), "starter", undefined, snapshot);
       candidate = { ...candidate, readiness: "complete" };
@@ -1808,7 +1809,9 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private async readAndValidatePayload(release: StoredRelease, manifest: ContentManifest): Promise<ContentPayload> {
-    const mapManifestBytes = await this.readFile(release.id, "map/island/manifest.json");
+    const layout = mapLayoutFile(manifest.files);
+    if (!layout) throw new ContentValidationError("content manifest has no map chunk layout");
+    const mapManifestBytes = await this.readFile(release.id, layout.path);
     parseMapFile(mapManifestBytes, manifest.mapManifest);
     const parks = parseJsonBytes(await this.readFile(release.id, "data/parks.json"));
     const boundaries = parseJsonBytes(await this.readFile(release.id, "boundaries.geojson"));
@@ -1922,7 +1925,7 @@ class ContentRuntimeController implements ContentRuntime {
       if (await this.hasVerifiedLocalFile(file)) locallyPresentChunks.push(file);
     }
     if (locallyPresentChunks.length) {
-      setAllowedMapChunks(release.id, locallyPresentChunks.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
+      setAllowedMapChunks(release.id, chunkIndices(locallyPresentChunks));
     }
     const retainedSceneUrls = new Map<string, string>();
     for (const entry of retained) {
@@ -2122,7 +2125,7 @@ class ContentRuntimeController implements ContentRuntime {
     const chunks = mapChunkFiles(manifest);
     const missing = new Set((await this.missingFiles(chunks)).map((file) => file.path));
     const local = chunks.filter((file) => !missing.has(file.path));
-    setAllowedMapChunks(releaseId, local.map((file) => Number(file.path.match(/\/(\d{3,})\.bin$/)?.[1])).filter(Number.isSafeInteger));
+    setAllowedMapChunks(releaseId, chunkIndices(local));
     this.waitingForBulkWifi = false;
     await this.refreshMapReadinessForManifest(releaseId, manifest);
     this.updateWaitingStatus();
