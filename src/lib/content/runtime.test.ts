@@ -2204,7 +2204,8 @@ describe("lean device cache", () => {
   async function twoParks() {
     const release = await makeRelease("a".repeat(64), 1, "municipal-lean-near", "scene-lean-near");
     const near: TestSyncPark = { ...release.park, scene: null };
-    const far: TestSyncPark = { ...release.park, id: "provincial-lean-far", name: "Far", short: "Far", ...HALIFAX_PARK, scene: null };
+    // The fixture types its coordinates as Victoria's literals; this park is in Halifax.
+    const far = { ...release.park, id: "provincial-lean-far", name: "Far", short: "Far", ...HALIFAX_PARK, scene: null } as unknown as TestSyncPark;
     return { near, far };
   }
 
