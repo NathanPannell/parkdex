@@ -58,6 +58,8 @@ test("keywords inside literals and comments are ignored", () => {
 test("calls to listed write functions count as writes, other functions as reads", () => {
   const result = classifySql("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result");
   assert.deepEqual(result, { operation: "write", tables: ["kip_game.record_visit"] });
+  assert.deepEqual(classifySql("SELECT kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz) AS result"), { operation: "write", tables: ["kip_game.join_crew"] });
+  assert.deepEqual(classifySql("SELECT kip_game.park_crew($1, $2::uuid, $3::timestamptz) AS crew").operation, "read");
   assert.deepEqual(classifySql("SELECT rank, handle FROM kip_game.leaderboard($1::timestamptz)"), { operation: "read", tables: ["kip_game.leaderboard"] });
   assert.deepEqual(classifySql(`SELECT t.park_id, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
     FROM kip_game.tenures t WHERE kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)`).operation, "read");

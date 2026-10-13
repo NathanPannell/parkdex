@@ -41,7 +41,7 @@ const COVER_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/cover\/([0-9a-f]{
 const SUMMARY_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/summary$/;
 
 export type FounderEventName = "park_founded" | "founder_photo_checked" | "founding_review_requested"
-  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell";
+  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell" | "visit_logged_protected";
 
 export interface FoundersHandlers {
   store(): FoundersStore;
@@ -327,7 +327,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   handlers.emit("park_founded", { parkId: result.record.parkId, source });
   if (result.record.visit) {
     for (const event of visitEvents({ status: "recorded", visit: result.record.visit }, accountId)) {
-      handlers.emit(event.name as FounderEventName, { parkId: event.parkId, pointsEarned: event.pointsEarned });
+      handlers.emit(event.name as FounderEventName, { parkId: event.parkId, pointsEarned: event.pointsEarned, crewSize: event.crewSize });
     }
   }
   return foundedResponse(handlers.publicOrigin, result.record);

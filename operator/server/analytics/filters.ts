@@ -9,6 +9,7 @@ export const EVENT_TYPES = [
   "flag_planted", "flag_taken", "flag_held", "visit_already_today", "flag_fell",
   "leaderboard_viewed", "takeover_message_seen", "handle_set",
   "park_founded", "founder_photo_checked", "founding_review_requested", "founding_review_decided", "park_removed",
+  "crew_joined", "crew_code_shown", "visit_logged_protected",
   "park_viewed", "directions_opened", "park_claimed",
   ...DB_EVENT_TYPES,
 ] as const;

@@ -20,6 +20,8 @@ import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./req
 export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   rankProgression: false,
   parkProposals: true,
+  /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
+  crews: false,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;
