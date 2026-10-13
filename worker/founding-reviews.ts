@@ -363,7 +363,7 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
           outcome = await existing(listed.parkId);
         } else {
           const marker = markerPoint(feature.geometry, position);
-          const region = await regionFor(catalogue, nearby, marker);
+          const region = await regionFor(catalogue, nearby, marker, feature.geometry);
           const proposalId = crypto.randomUUID();
           const park = parkFromProposal(feature, { id: proposalId, name: feature.name ?? "", note: "", point: marker, createdAt: input.at }, region, marker);
           const distanceM = Math.round(positionInside(position, feature.geometry).distanceM);

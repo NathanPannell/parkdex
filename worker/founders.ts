@@ -284,7 +284,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   if (resolved.kind === "osm") {
     const feature = resolved.feature;
     const marker = markerPoint(feature.geometry, input.position);
-    const region = await regionFor({ nearbyParks: (lat, lng, km) => handlers.nearbyParks(lat, lng, km) }, resolved.nearby, marker);
+    const region = await regionFor({ nearbyParks: (lat, lng, km) => handlers.nearbyParks(lat, lng, km) }, resolved.nearby, marker, feature.geometry);
     const proposalId = handlers.uuid();
     const park = parkFromProposal(feature, { id: proposalId, name: feature.name ?? "", note: "", point: marker, createdAt: at }, region, marker);
     const distanceM = Math.round(where.distanceM);

@@ -1,6 +1,7 @@
 import { database } from "./db.js";
 import { distanceToMultiPolygon, interiorPoint, pointInMultiPolygon, type MultiPolygon, type OsmClient, type OsmFeature, type OsmRef } from "./osmParks.js";
-import { FALLBACK_REGION, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { provinceFor, provinceOfOutline } from "./provinces.js";
 import { HttpError } from "./validation.js";
 import { catalogueMatch } from "./catalogueMatch.js";
 
@@ -220,13 +221,27 @@ function overlaps(feature: OsmFeature, park: NearbyPark): boolean {
   return park.boundary !== null && pointInMultiPolygon(interiorPoint(feature.geometry), park.boundary);
 }
 
-function regionFrom(parks: NearbyPark[], point: [number, number]): string | null {
-  return parks.find((park) => park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM)?.region ?? null;
+function regionFrom(parks: NearbyPark[], point: [number, number], province: string): string | null {
+  return parks.find((park) =>
+    park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM && provinceFor([park.lng, park.lat]) === province,
+  )?.region ?? null;
 }
 
-/** The region of the nearest catalogue park that has one, looking up to REGION_KM away, else the fallback. */
-export async function regionFor(store: Pick<ProposalReviewStore, "nearbyParks">, nearby: NearbyPark[], point: [number, number]): Promise<string> {
-  return regionFrom(nearby, point) ?? regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point) ?? FALLBACK_REGION;
+/**
+ * The region of the nearest catalogue park in the same province that has one, looking up to
+ * REGION_KM away, else the province's name. The province is the one that holds the outline
+ * when there is one, else the point's.
+ */
+export async function regionFor(
+  store: Pick<ProposalReviewStore, "nearbyParks">,
+  nearby: NearbyPark[],
+  point: [number, number],
+  outline?: MultiPolygon,
+): Promise<string> {
+  const province = outline ? provinceOfOutline(outline) : provinceFor(point);
+  return regionFrom(nearby, point, province) ??
+    regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point, province) ??
+    province;
 }
 
 /**
@@ -291,7 +306,7 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     await deps.store.record(proposal.id, verdict.decision, record);
     return { decision: "pending" };
   }
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point), proposal.point);
+  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
   try {
     const published = await publishProposalPark(deps.store.sql(), park, proposal.id);
     if (published.status === "blocked") {
@@ -321,7 +336,7 @@ export async function publishProposalByOperator(proposal: ReviewInput, deps: Pic
   const feature = await deps.osm.feature(proposal.osm);
   if (!feature) throw new HttpError(422, "osm_missing", "That OpenStreetMap outline no longer exists or is not a park.");
   const nearby = await deps.store.nearbyParks(proposal.point[1], proposal.point[0], NEARBY_KM);
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point), proposal.point);
+  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
   const published = await publishProposalPark(deps.store.sql(), park, proposal.id).catch((error: unknown) => {
     // PostgreSQL errors can include connection details; pass on only the guard name.
     const guard = error instanceof Error ? /park_exists|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;

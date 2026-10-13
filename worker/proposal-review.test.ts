@@ -3,11 +3,13 @@ import { test } from "node:test";
 import type { MultiPolygon, OsmClient, OsmFeature } from "./osmParks.ts";
 import { categoryFor, MAX_BOUNDARY_POSITIONS, osmParkId, parkFromProposal, publishProposalPark, seedFor, type SqlRunner } from "./parkPublish.ts";
 import { positionCount } from "./osmParks.ts";
+import { provinceFor, provinceOfOutline } from "./provinces.ts";
 import { createProposalModerator } from "./proposalModeration.ts";
 import {
   approveThreshold,
   decide,
   QUESTIONS,
+  regionFor,
   reviewProposal,
   type ChoiceAnswer,
   type Decision,
@@ -311,6 +313,80 @@ test("with no catalogue park close by, the region comes from one up to 30 km awa
   store.wide = [{ id: "regional-metro-vancouver-bou", name: "Boundary Bay Regional Park", region: "Metro Vancouver", lat: 48.55, lng: -123.4, boundary: null }];
   assert.equal((await reviewProposal(PROPOSAL, deps)).decision, "approved");
   assert.equal(store.db.inserted[0][7], "Metro Vancouver");
+});
+
+// Point Pleasant Park in Halifax, and a Nova Scotia proposal for it.
+const HALIFAX_OUTLINE: MultiPolygon = { type: "MultiPolygon", coordinates: [[square(-63.575, 44.62, 0.01)]] };
+const HALIFAX_FEATURE: OsmFeature = { ...FEATURE, id: 654321, name: "Point Pleasant Park", tags: { leisure: "park", name: "Point Pleasant Park" }, geometry: HALIFAX_OUTLINE };
+const HALIFAX_PROPOSAL: ReviewInput = { ...PROPOSAL, name: "Point Pleasant Park", point: [-63.57, 44.625], osm: { type: "way", id: 654321 } };
+
+test("a Nova Scotia park takes the region of the nearest Nova Scotia park, else Nova Scotia", async () => {
+  const { store, deps } = setup(APPROVE, HALIFAX_FEATURE);
+  store.nearby = [{ id: "provincial-ns-york-redoubt", name: "York Redoubt", region: "Halifax Metro", lat: 44.6, lng: -63.55, boundary: null }];
+  assert.equal((await reviewProposal(HALIFAX_PROPOSAL, deps)).decision, "approved");
+  assert.equal(store.db.inserted[0][7], "Halifax Metro");
+
+  const alone = setup(APPROVE, HALIFAX_FEATURE);
+  assert.equal((await reviewProposal(HALIFAX_PROPOSAL, alone.deps)).decision, "approved");
+  assert.equal(alone.store.db.inserted[0][7], "Nova Scotia");
+
+  // An empty region falls back to the province that holds the outline, not British Columbia.
+  const park = parkFromProposal(HALIFAX_FEATURE, { id: PROPOSAL.id, name: "Point Pleasant Park", note: "", point: HALIFAX_PROPOSAL.point, createdAt: PROPOSAL.createdAt }, " ", HALIFAX_PROPOSAL.point);
+  assert.equal(park.region, "Nova Scotia");
+});
+
+test("a region is only borrowed from a park in the same province", async () => {
+  const nearbyParks = async () => [] as NearbyPark[];
+  const bc: NearbyPark = { id: "regional-thetis-lake", name: "Thetis Lake", region: "Capital Region", lat: 48.47, lng: -123.46, boundary: null };
+  const ns: NearbyPark = { id: "provincial-ns-york-redoubt", name: "York Redoubt", region: "Halifax Metro", lat: 44.6, lng: -63.55, boundary: null };
+  assert.equal(await regionFor({ nearbyParks }, [ns, bc], [-63.57, 44.625], HALIFAX_OUTLINE), "Halifax Metro");
+  assert.equal(await regionFor({ nearbyParks }, [ns], PROPOSAL.point, OUTLINE), "British Columbia");
+  assert.equal(await regionFor({ nearbyParks }, [bc], [-63.57, 44.625]), "Nova Scotia");
+  // Near Thunder Bay, where the nearest province changes from BC to Nova Scotia, a park
+  // 15 km west belongs to BC and does not lend its region to a point that belongs to Nova Scotia.
+  const west: NearbyPark = { id: "west", name: "West Park", region: "West Region", lat: 49, lng: -90.04, boundary: null };
+  assert.equal(await regionFor({ nearbyParks }, [west], [-89.84, 49]), "Nova Scotia");
+  assert.equal(await regionFor({ nearbyParks }, [west], [-90.0, 49]), "West Region");
+  // The outline decides the province, even when the pin beside it is outside every box.
+  assert.equal(await regionFor({ nearbyParks }, [], [-70, 44.625], HALIFAX_OUTLINE), "Nova Scotia");
+  // Outside every province, the nearest one: Toronto is closer to Nova Scotia, Seattle to BC.
+  const toronto: MultiPolygon = { type: "MultiPolygon", coordinates: [[square(-79.39, 43.64, 0.01)]] };
+  assert.equal(await regionFor({ nearbyParks }, [], [-79.385, 43.645], toronto), "Nova Scotia");
+  assert.equal(await regionFor({ nearbyParks }, [], [-122.33, 47.61]), "British Columbia");
+});
+
+test("provinces resolve every point, in a box or nearest to one", () => {
+  assert.equal(provinceFor([-123.3656, 48.4284]), "British Columbia");
+  assert.equal(provinceFor([-60.65, 46.73]), "Nova Scotia");
+  assert.equal(provinceFor([-79.38, 43.65]), "Nova Scotia");
+  assert.equal(provinceFor([-113.49, 53.55]), "British Columbia");
+  assert.equal(provinceFor([Number.NaN, 0]), "British Columbia");
+  assert.equal(provinceOfOutline(HALIFAX_OUTLINE), "Nova Scotia");
+});
+
+test("categories recognise Nova Scotia's park names and operators and keep BC's", () => {
+  const park = (name: string | null, tags: Record<string, string> = {}) => categoryFor({ name, tags });
+  // BC.
+  assert.equal(park("Goldstream Provincial Park", { leisure: "park" }), "provincial");
+  assert.equal(park("Race Rocks Ecological Reserve", { boundary: "protected_area" }), "provincial");
+  assert.equal(park("Mount Work", { boundary: "protected_area", operator: "BC Parks" }), "provincial");
+  assert.equal(park("Thetis Lake Regional Park", { boundary: "protected_area" }), "regional");
+  assert.equal(park("Mount Work", { boundary: "protected_area", operator: "CRD" }), "regional");
+  assert.equal(park("Pacific Rim National Park Reserve", { boundary: "national_park" }), "national");
+  // Nova Scotia.
+  assert.equal(park("Cape Breton Highlands National Park", { boundary: "protected_area" }), "national");
+  assert.equal(park("Sable Island National Park Reserve", {}), "national");
+  assert.equal(park("Kejimkujik", { boundary: "protected_area", operator: "Parks Canada" }), "national");
+  assert.equal(park("Kejimkujik", { boundary: "protected_area", operator: "Parcs Canada" }), "national");
+  assert.equal(park("Blomidon Provincial Park", { leisure: "park" }), "provincial");
+  assert.equal(park("Shubenacadie Provincial Wildlife Park", { leisure: "park" }), "provincial");
+  assert.equal(park("Waverley - Salmon River Long Lake Wilderness Area", { boundary: "protected_area" }), "provincial");
+  assert.equal(park("Abraham Lake", { leisure: "nature_reserve", operator: "Nova Scotia Environment and Climate Change" }), "provincial");
+  assert.equal(park("Dollar Lake", { leisure: "park", operator: "Province of Nova Scotia" }), "provincial");
+  assert.equal(park("Blue Mountain-Birch Cove Lakes Regional Park", { leisure: "park" }), "regional");
+  // Halifax Regional Municipality is a town, not a regional park.
+  assert.equal(park("Shubie Park", { leisure: "park", operator: "Halifax Regional Municipality" }), "municipal");
+  assert.equal(park("Victoria Park", { leisure: "park" }), "municipal");
 });
 
 test("a huge outline is thinned to the content size budget but keeps every part and hole", () => {
