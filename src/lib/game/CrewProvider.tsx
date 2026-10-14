@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { isFeatureEnabled } from "../appConfig";
+import { useFeatureFlag } from "../appConfig";
 import { createVisitId } from "./client";
 import type { CrewCodeTarget } from "./crew";
 import { useGame } from "./GameProvider";
@@ -36,7 +36,7 @@ type CrewContextValue = {
 const CrewContext = createContext<CrewContextValue | null>(null);
 
 export function CrewProvider({ children }: { children: ReactNode }) {
-  const enabled = isFeatureEnabled("crews");
+  const enabled = useFeatureFlag("crews");
   const game = useGame();
   const [scanner, setScanner] = useState<{ parkId: string | null } | null>(null);
   const [join, setJoin] = useState<CrewJoinTarget | null>(null);

@@ -37,7 +37,9 @@ vi.mock("./native", () => ({ getNativePackageInstallInfo: mocks.getNativePackage
 vi.mock("./accounts/authClient", () => ({ clearLocalNativeSession: mocks.clearLocalNativeSession }));
 
 import { FEATURE_FLAGS } from "../../worker/appConfig";
-import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeUpdateStatus } from "./appConfig";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, isFeatureEnabled, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeFeatureFlags, subscribeUpdateStatus, useFeatureFlag, useRemoteFlag } from "./appConfig";
 import { apiEnvironment, apiPointerOverride } from "./apiPointer";
 import { contentChannelOverride } from "./contentChannel";
 
@@ -137,7 +139,8 @@ describe("app config", () => {
 
     expect(String(vi.mocked(fetcher).mock.calls[0]?.[0])).toContain("platform=android&build=42");
     expect(currentUpdateStatus()).toBe("available");
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: false } });
+    // Flags apply as soon as the answer arrives; the content channel waits for the next launch.
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: true } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(42);
 
     await initAppConfig();
@@ -177,19 +180,53 @@ describe("app config", () => {
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(cacheBuild);
   });
 
-  it("applies a saved check-in on the next launch, not mid-session", async () => {
+  it("applies a check-in's flags at once and its content channel on the next launch", async () => {
     await initAppConfig();
     const fetcher = respond(answer({ contentChannel: "main", flags: { crews: true } }));
     const fresh = await checkInAppConfig(fetcher);
     expect(fresh?.flags.crews).toBe(true);
     expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42&env=staging");
-    expect(activeAppConfig().flags.crews).toBe(false);
+    expect(activeAppConfig().flags.crews).toBe(true);
+    expect(activeAppConfig().contentChannel).toBeNull();
+    expect(contentChannelOverride()).toBeNull();
 
     await initAppConfig();
     expect(activeAppConfig().flags.crews).toBe(true);
-    expect(activeAppConfig().flags.crews).toBe(true);
     // This test build is a staging build, so a main answer is a switch.
     expect(contentChannelOverride()).toBe("main");
+  });
+
+  it("turns a feature on without a relaunch: a fresh install sees the operator's flags (vc17 had no Friends tab)", async () => {
+    // A fresh install has nothing saved, so it starts on the build's defaults.
+    await initAppConfig();
+    expect(isFeatureEnabled("friends")).toBe(false);
+    const listener = vi.fn();
+    const stop = subscribeFeatureFlags(listener);
+    const Friends = () => createElement("span", null, useFeatureFlag("friends") ? "Friends tab" : "no tab");
+    const Future = () => createElement("span", null, String(useRemoteFlag("futureThing")));
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>no tab</span>");
+
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(isFeatureEnabled("friends")).toBe(true);
+    expect(isFeatureEnabled("crews")).toBe(true);
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>Friends tab</span>");
+    expect(renderToStaticMarkup(createElement(Future))).toBe("<span>true</span>");
+
+    // The same answer again changes nothing, so nothing re-renders.
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // And the operator can turn it off again mid-session.
+    await checkInAppConfig(respond(answer({ flags: { friends: false } })));
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>no tab</span>");
+    expect(remoteFlag("futureThing")).toBeUndefined();
+
+    // A failed check-in keeps what the player has.
+    await checkInAppConfig(respond({ error: "down" }, 503));
+    expect(listener).toHaveBeenCalledTimes(2);
+    stop();
   });
 
   it("ignores a saved answer for a different build", async () => {
@@ -267,9 +304,13 @@ describe("app config", () => {
     await initAppConfig();
     expect(apiPointerOverride()).toBeNull();
     expect(apiEnvironment()).not.toBe("main");
-    await checkInAppConfig(respond(answer({ apiPointer: "production", contentChannel: "main" })));
-    // Nothing changes mid-session.
+    await checkInAppConfig(respond(answer({ apiPointer: "production", contentChannel: "main", flags: { friends: true } })));
+    // The server does not change mid-session, even though the flags in the same answer do.
+    expect(isFeatureEnabled("friends")).toBe(true);
     expect(apiPointerOverride()).toBeNull();
+    expect(apiEnvironment()).not.toBe("main");
+    expect(contentChannelOverride()).toBeNull();
+    expect(activeAppConfig().apiPointer).toBeNull();
     expect(mocks.clearLocalNativeSession).not.toHaveBeenCalled();
 
     await initAppConfig();

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../accounts/AuthProvider";
-import { isFeatureEnabled } from "../appConfig";
+import { useFeatureFlag } from "../appConfig";
 import {
   FriendsError,
   fetchFriendsBoard,
@@ -61,7 +61,7 @@ const FriendsContext = createContext<FriendsContextValue | null>(null);
 
 export function FriendsProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const enabled = isFeatureEnabled("friends");
+  const enabled = useFeatureFlag("friends");
   const accountId = enabled ? auth.ownerAccountId : null;
   const onlineAccount = enabled && auth.phase === "authenticated" ? auth.account?.id ?? null : null;
   const [board, setBoard] = useState<FriendsBoard | null>(null);
