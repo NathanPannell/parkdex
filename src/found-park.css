@@ -254,14 +254,6 @@
 }
 
 /* Camera */
-.found-camera__picker {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .found-camera__polaroid .polaroid__img {
   max-height: 50vh;
 }

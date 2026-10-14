@@ -9,6 +9,7 @@ import { useAuth } from "../../lib/accounts/AuthProvider";
 import { handleBack, useBackHandler } from "../../lib/backStack";
 import { insidePark } from "../../lib/boundaries";
 import { buzz, sfx } from "../../lib/feedback";
+import { startPhotoCapture } from "../../lib/captureMode";
 import {
   canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderCapture, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, requestFoundingReview,
   REVIEW_HINT, reviewButton, reviewProblem, scanParks, targetFor,
@@ -405,6 +406,8 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   function openCamera() {
     if (!choice) return;
     sfx.tap();
+    // In a phone browser the camera app opens from this tap; PhotoCapture collects the photo.
+    startPhotoCapture();
     // A new photo is a new attempt; only a retry of the same photo reuses its ID.
     attemptId.current = createVisitId();
     setPhoto(null);
