@@ -77,7 +77,7 @@
 
 .crew-list li {
   display: grid;
-  grid-template-columns: 34px 1fr auto;
+  grid-template-columns: 38px 1fr auto;
   align-items: center;
   gap: 10px;
   min-width: 0;

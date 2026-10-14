@@ -5,57 +5,111 @@ import { BadgeShelfView } from "../../components/BadgeShelfView";
 import { Flag, FlagPin } from "../../components/Flag";
 import { shelfBadges } from "./badges";
 import { FLAG_HEIGHT, FLAG_WIDTH, flagPinSvg, flagSpec, flagSvg } from "./flag";
-import { patchesMarkup, patchSlots, PIN_CLOTH_TRANSFORM, pinPatchesMarkup, visiblePatchCount, withPatches } from "./patches";
+import { CLOTH_RECT, drawPatches, flagPatchesMarkup, MIN_PATCH_CLOTH_PX, patchesFit, patchesSvg, patchLayout, PIN_CLOTH_RECT, PIN_CLOTH_TRANSFORM, pinPatchesMarkup, placePatches, withPatches } from "./patches";
 
 const SEED = "0f6c1d2e9a7b4c3d";
 const THREE = ["parks-1", "hold-7", "coast-to-coast"];
 const count = (markup: string) => (markup.match(/class="flag-patch"/g) ?? []).length;
 
 describe("flag patches", () => {
-  // Every size a flag is drawn at in the app: map pins, lists, cards and the handle reveal.
-  it.each([
-    [24, 1], [28, 2], [36, 2], [40, 3], [56, 3], [72, 3], [76, 3], [176, 3],
-  ])("a flag %ipx wide shows %i of 3 patches", (size, shown) => {
-    expect(visiblePatchCount(size)).toBe(shown);
-    const markup = patchesMarkup(THREE, { sizePx: size, idPrefix: "t" });
-    expect(count(markup)).toBe(shown);
-    expect(markup).toContain('href="/art/achievements/parks-1.webp"');
-    // The first patch sewn on always shows, in the fly's bottom corner.
-    expect(markup.indexOf('data-badge="parks-1"')).toBeGreaterThan(-1);
+  it("draws every patch at every size that has room for patches, and none below it", () => {
+    // Every size a flag with patches is drawn at: crew lists, leaderboard rows, the score chip,
+    // the badge shelf, cards and the full-screen flag.
+    for (const size of [38, 40, 46, 60, 64, 72, 176, 320]) {
+      const markup = flagPatchesMarkup(THREE, { sizePx: size, idPrefix: "t" });
+      expect(count(markup)).toBe(3);
+      expect(markup).toContain('href="/art/achievements/parks-1.webp"');
+    }
+    // A 34px flag's cloth is under 36px: plain, with no smudged patches.
+    expect(patchesFit(MIN_PATCH_CLOTH_PX)).toBe(true);
+    expect(patchesFit(MIN_PATCH_CLOTH_PX - 0.5)).toBe(false);
+    expect(flagPatchesMarkup(THREE, { sizePx: 34 })).toBe("");
+    // Pins: the park sheet's 48px pin and the podium's 56px have room, a 44px pin does not.
+    expect(count(pinPatchesMarkup(THREE, { sizePx: 48 }))).toBe(3);
+    expect(count(pinPatchesMarkup(THREE, { sizePx: 56 }))).toBe(3);
+    expect(pinPatchesMarkup(THREE, { sizePx: 44 })).toBe("");
   });
 
-  it("keeps every patch on the cloth", () => {
+  it("lays patches out as fractions of the flag, so every view is a scaled copy", () => {
     for (const shown of [1, 2, 3]) {
-      for (const slot of patchSlots(shown)) {
+      const layout = patchLayout(shown);
+      expect(layout).toHaveLength(shown);
+      const onCloth = placePatches(shown, CLOTH_RECT);
+      const onPin = placePatches(shown, PIN_CLOTH_RECT);
+      const scale = PIN_CLOTH_RECT.width / CLOTH_RECT.width;
+      onCloth.forEach((slot, index) => {
+        // On the cloth, inside its edges.
         expect(slot.x - slot.r).toBeGreaterThanOrEqual(0);
         expect(slot.x + slot.r).toBeLessThanOrEqual(FLAG_WIDTH);
+        expect(slot.y - slot.r).toBeGreaterThanOrEqual(0);
         expect(slot.y + slot.r).toBeLessThanOrEqual(FLAG_HEIGHT);
-      }
+        // The pin's cloth is the same flag, scaled and moved.
+        expect(onPin[index].x).toBeCloseTo(PIN_CLOTH_RECT.x + slot.x * scale, 6);
+        expect(onPin[index].y).toBeCloseTo(PIN_CLOTH_RECT.y + slot.y * scale, 6);
+        expect(onPin[index].r).toBeCloseTo(slot.r * scale, 6);
+        // Patches never overlap; the first sewn on sits in the fly's bottom corner.
+        if (index > 0) expect(onCloth[index - 1].x - slot.x).toBeGreaterThan(onCloth[index - 1].r + slot.r);
+      });
+      expect(onCloth[0].x).toBeGreaterThan(FLAG_WIDTH / 2);
     }
+    expect(patchLayout(5)).toHaveLength(3);
+    expect(patchLayout(0)).toEqual([]);
+  });
+
+  it("draws a plain circle with a thin rarity rim: no stitching and no dark border", () => {
+    const markup = patchesSvg(["coast-to-coast"], CLOTH_RECT, "p");
+    expect(markup).not.toContain("stroke-dasharray");
+    expect(markup).not.toContain("stroke=");
+    // Legendary rim colour, then the art clipped inside it.
+    expect(markup).toContain('fill="#E9A800"');
+    expect(markup).toMatch(/<image [^>]*clip-path="url\(#p-patch0\)"/);
+  });
+
+  it("draws the same circles on a canvas as in SVG", () => {
+    const calls: string[] = [];
+    const context = {
+      save: () => calls.push("save"),
+      restore: () => calls.push("restore"),
+      beginPath: () => {},
+      arc: (x: number, y: number, r: number) => calls.push(`arc ${x.toFixed(2)} ${y.toFixed(2)} ${r.toFixed(2)}`),
+      fill: () => calls.push("fill"),
+      clip: () => calls.push("clip"),
+      drawImage: () => calls.push("image"),
+      set fillStyle(value: string) { calls.push(`fill ${value}`); },
+    } as unknown as CanvasRenderingContext2D;
+    const art = {} as CanvasImageSource;
+    drawPatches(context, [{ id: "parks-1", art }, { id: "hold-7", art }], PIN_CLOTH_RECT);
+    const svg = patchesSvg(["parks-1", "hold-7"], PIN_CLOTH_RECT, "x");
+    const [first, second] = placePatches(2, PIN_CLOTH_RECT);
+    for (const slot of [first, second]) {
+      expect(calls).toContain(`arc ${slot.x.toFixed(2)} ${slot.y.toFixed(2)} ${slot.r.toFixed(2)}`);
+      expect(svg).toContain(`r="${Math.round(slot.r * 100) / 100}"`);
+    }
+    expect(calls.filter((call) => call === "image")).toHaveLength(2);
+    expect(calls).toContain("fill #FFF8EC");
+    expect(calls).toContain("fill #7FD3F7");
   });
 
   it("never changes the generated flag: patches are only appended on top", () => {
     const before = flagSpec(SEED);
     const plain = flagSvg(SEED, { weather: 1, idPrefix: "x" });
-    const patched = withPatches(plain, patchesMarkup(THREE, { sizePx: 72, idPrefix: "x" }));
+    const patched = withPatches(plain, flagPatchesMarkup(THREE, { sizePx: 72, idPrefix: "x" }));
     expect(patched.startsWith(plain.slice(0, -"</svg>".length))).toBe(true);
     expect(patched.endsWith("</svg>")).toBe(true);
     expect(flagSpec(SEED)).toEqual(before);
     expect(flagSvg(SEED, { weather: 1, idPrefix: "x" })).toBe(plain);
-    expect(withPatches(plain, patchesMarkup([], { sizePx: 72 }))).toBe(plain);
+    expect(withPatches(plain, flagPatchesMarkup([], { sizePx: 72 }))).toBe(plain);
   });
 
   it("skips unknown badges, and never draws one twice", () => {
-    expect(count(patchesMarkup(["nope", "parks-1", "parks-1"], { sizePx: 72 }))).toBe(1);
-    expect(patchesMarkup(["<script>"], { sizePx: 72 })).toBe("");
+    expect(count(flagPatchesMarkup(["nope", "parks-1", "parks-1"], { sizePx: 72 }))).toBe(1);
+    expect(flagPatchesMarkup(["<script>"], { sizePx: 72 })).toBe("");
   });
 
   it("draws pin patches on the pin's cloth, where flag.ts puts it", () => {
     expect(flagPinSvg(SEED)).toContain(`<g transform="${PIN_CLOTH_TRANSFORM}">`);
-    const markup = pinPatchesMarkup(THREE, { sizePx: 70, idPrefix: "p" });
-    expect(markup.startsWith(`<g transform="${PIN_CLOTH_TRANSFORM}">`)).toBe(true);
-    // A 44px pin's cloth is about 34px wide: room for 2.
-    expect(count(pinPatchesMarkup(THREE, { sizePx: 44 }))).toBe(2);
+    expect(PIN_CLOTH_TRANSFORM).toBe(`translate(${PIN_CLOTH_RECT.x} ${PIN_CLOTH_RECT.y}) scale(${PIN_CLOTH_RECT.width / FLAG_WIDTH})`);
+    expect(PIN_CLOTH_RECT.height / FLAG_HEIGHT).toBeCloseTo(PIN_CLOTH_RECT.width / FLAG_WIDTH, 9);
   });
 
   it("renders patches in the Flag and FlagPin components, and none without them", () => {

@@ -1,5 +1,6 @@
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { useSyncExternalStore } from "react";
 import { bakedApiPointer, setApiPointerOverride, type ApiPointer } from "./apiPointer";
 import { setContentChannelOverride, type ContentChannel } from "./contentChannel";
 import { getNativePackageInstallInfo } from "./native";
@@ -10,9 +11,15 @@ import { loadInstallationId, requestContextHeaders, setNativeBuild } from "./req
 /**
  * Remote per-build configuration. Every build checks in with the production API
  * (`/api/app-config`) to learn which server it talks to (its API pointer) and which features
- * are on. A fresh answer is saved and takes effect on the next launch, so nothing switches
- * mid-session. Update prompts apply as soon as they are known. Offline or before the first
- * check-in, the build uses its own defaults below.
+ * are on. A fresh answer is saved for the next launch.
+ *
+ * - Feature flags and update prompts apply as soon as an answer arrives: screens read flags
+ *   through `useFeatureFlag` and `useRemoteFlag`, which re-render when they change. So a fresh
+ *   install shows a feature the operator turned on without a second launch.
+ * - The API pointer (and its content channel) only switches at the next launch, because moving
+ *   to another server mid-session would sign the player out.
+ *
+ * Offline or before the first check-in, the build uses the saved answer or its own defaults below.
  */
 
 /** Every remotely controlled feature this build reads, and its built-in default. */
@@ -73,6 +80,25 @@ let buildInfo: BuildInfo | null = { platform: "web", build: 0 };
 let active: AppConfig = defaults({ platform: "web", build: 0 });
 let updateStatus: UpdateStatus = "none";
 const updateListeners = new Set<() => void>();
+const flagListeners = new Set<() => void>();
+
+function sameFlags(a: Record<string, boolean>, b: Record<string, boolean>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
+
+/** Switches to `next`'s flags, telling every reader when anything changed. */
+function applyFlags(next: Pick<AppConfig, "flags" | "remoteFlags">): void {
+  if (sameFlags(active.flags, next.flags) && sameFlags(active.remoteFlags, next.remoteFlags)) return;
+  active = { ...active, flags: { ...next.flags }, remoteFlags: { ...next.remoteFlags } };
+  for (const listener of flagListeners) listener();
+}
+
+/** Called whenever a feature flag changes, for example when a check-in turns one on. */
+export function subscribeFeatureFlags(listener: () => void): () => void {
+  flagListeners.add(listener);
+  return () => flagListeners.delete(listener);
+}
 
 function setUpdateStatus(next: UpdateStatus): void {
   if (next === updateStatus) return;
@@ -80,7 +106,7 @@ function setUpdateStatus(next: UpdateStatus): void {
   for (const listener of updateListeners) listener();
 }
 
-/** Update prompts apply as soon as they are known, unlike the pointer and flags. */
+/** Update prompts apply as soon as they are known, like flags and unlike the pointer. */
 export function currentUpdateStatus(): UpdateStatus {
   return updateStatus;
 }
@@ -253,7 +279,12 @@ export async function initAppConfig(): Promise<AppConfig> {
   buildInfo = await readBuildInfo();
   setNativeBuild(buildInfo?.platform === "android" ? buildInfo.build : null);
   const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
-  active = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
+  const launch = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
+  const previous = active;
+  active = launch;
+  if (!sameFlags(previous.flags, launch.flags) || !sameFlags(previous.remoteFlags, launch.remoteFlags)) {
+    for (const listener of flagListeners) listener();
+  }
   // Only native production and staging builds switch servers; web pages always use their own host.
   const baked = bakedApiPointer();
   const pointer = buildInfo?.platform === "android" && baked && active.apiPointer && active.apiPointer !== baked
@@ -272,6 +303,7 @@ export function activeAppConfig(): AppConfig {
   return active;
 }
 
+/** A flag's current value, outside React. Screens use `useFeatureFlag` so they follow changes. */
 export function isFeatureEnabled(flag: FeatureFlag): boolean {
   return active.flags[flag];
 }
@@ -279,6 +311,18 @@ export function isFeatureEnabled(flag: FeatureFlag): boolean {
 /** Any flag the server sent, for features newer than the list above. */
 export function remoteFlag(name: string): boolean | undefined {
   return active.remoteFlags[name];
+}
+
+/** A feature flag that re-renders its component as soon as a check-in changes it. */
+export function useFeatureFlag(flag: FeatureFlag): boolean {
+  const read = () => isFeatureEnabled(flag);
+  return useSyncExternalStore(subscribeFeatureFlags, read, read);
+}
+
+/** `remoteFlag`, live like `useFeatureFlag`. */
+export function useRemoteFlag(name: string): boolean | undefined {
+  const read = () => remoteFlag(name);
+  return useSyncExternalStore(subscribeFeatureFlags, read, read);
 }
 
 /** Where builds check in. Native builds always ask production; web pages ask their own host. */
@@ -297,7 +341,10 @@ export function appConfigOrigin(): string | null {
   return typeof location === "undefined" ? null : location.origin;
 }
 
-/** Ask the server for this build's configuration and save it for the next launch. */
+/**
+ * Ask the server for this build's configuration. Its flags apply now; the whole answer, pointer
+ * included, is saved for the next launch.
+ */
 export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch): Promise<AppConfig | null> {
   const origin = appConfigOrigin();
   if (!origin) return null;
@@ -331,10 +378,13 @@ export async function checkInAppConfig(fetcher: typeof fetch = globalThis.fetch)
     if (!remote) return null;
     const fetchedAt = new Date().toISOString();
     writeCache(remote, fetchedAt);
+    const fresh = toAppConfig(remote, fetchedAt);
+    // Flags apply now; the API pointer and content channel wait for the next launch.
+    applyFlags(fresh);
     if (currentBuildInfo.platform === "android") setUpdateStatus(remote.update);
     // Analytics may start as soon as a key is known; it never switches servers mid-session.
     if (remote.analytics) void startProductAnalytics(remote.analytics);
-    return toAppConfig(remote, fetchedAt);
+    return fresh;
   } catch {
     return null;
   } finally {

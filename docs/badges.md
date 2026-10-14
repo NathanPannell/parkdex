@@ -39,8 +39,8 @@ The frame is the park badge's: the shapes and rarity rims from `src/components/B
 ## Flag patches
 
 - `kip_game.players.flag_patches text[]`: at most 3 (a table check), and `kip_game.set_flag_patches` only accepts unlocked badges, in the order sewn on.
-- Patches are drawn on top of the generated flag (`src/lib/game/patches.ts`). `src/lib/game/flag.ts` is never changed, so every seed still draws the same flag. Patches sit along the bottom of the cloth from the fly; flags under 40 px wide show 2, under 28 px 1.
-- They show on the identity card, the badge shelf, the park sheet holder row, the leaderboard and crew lists (the park's crew panel, crew sheets and the join result). Map pins show the holder's first patch from zoom 13.5, as a separate pin-sized image over the pin.
+- Patches are drawn on top of the generated flag (`src/lib/game/patches.ts`). `src/lib/game/flag.ts` is never changed, so every seed still draws the same flag. One layout (`patchLayout`, fractions of the flag rectangle for 1 to 3 patches) feeds both renderers, SVG for screens and canvas for map pins, so every view is a scaled copy of the same flag: the badge art in a plain circle with a thin rim in its rarity colour, along the bottom of the cloth from the fly. A flag whose cloth is drawn under 36 px wide shows no patches rather than smudges.
+- They show on the score chip, the full-screen flag, the identity card, the badge shelf, Your flags, Settings, the park sheet holder row, the leaderboard and crew lists (the park's crew panel, crew sheets and the join result). Map pins have a second image with the holder's patches, shown only where the pin's cloth is 36 px or wider: the selected pin at every zoom that shows flags, every other pin from zoom 14.4 (`patchMinZoom` in `src/lib/game/mapPins.ts`). Elsewhere pins show the plain flag.
 
 ## API
 

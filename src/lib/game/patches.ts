@@ -1,79 +1,130 @@
 import { badgeArtUrl, badgeById, drawablePatches } from "./badges";
-import { FLAG_WIDTH, PIN_HEIGHT, PIN_WIDTH } from "./flag";
+import { FLAG_HEIGHT, FLAG_WIDTH, PIN_WIDTH } from "./flag";
 import type { Rarity } from "../parks";
 
 /**
  * Badge patches (#175), drawn on top of a generated flag. The flag itself comes from flag.ts and
- * is never changed here: patches are extra SVG appended after the cloth, so every flag still
- * draws exactly as its seed says, with or without patches.
+ * is never changed here: patches are drawn after the cloth, so every flag still draws exactly as
+ * its seed says, with or without patches.
  *
- * Coordinates are the flag's own 60 by 40 cloth. Patches sit along the bottom edge from the fly
- * (the right), the first one sewn on in the corner. Small flags show fewer, so each stays legible.
+ * One layout and one look for every view. `patchLayout` places 1 to 3 patches as fractions of the
+ * flag rectangle, along the bottom edge from the fly (the right), the first one sewn on in the
+ * corner. `patchesSvg` (lists, cards, the full-screen flag) and `drawPatches` (map pins, on a
+ * canvas) both draw from it: the badge art in a plain circle with a thin rim in the badge's
+ * rarity colour. So a flag looks like a scaled copy of itself wherever it shows.
+ *
+ * A flag drawn too small for patches to read shows none, rather than smudges: see `patchesFit`.
  */
 
+/** A flag's cloth in some coordinate space. Always the cloth's own 3:2. */
+export type FlagRect = { x: number; y: number; width: number; height: number };
+/** One patch as fractions of the flag rectangle: `cx` of its width, `cy` and `r` of its height. */
+export type PatchFraction = { cx: number; cy: number; r: number };
+/** One patch in the coordinates of a FlagRect. */
 export type PatchSlot = { x: number; y: number; r: number };
 
-const OUTLINE = "#14231C";
-const STITCH = "#FFF8EC";
+/** The cloth in flag.ts's own 60 by 40 coordinates, as the Flag component draws it. */
+export const CLOTH_RECT: FlagRect = { x: 0, y: 0, width: FLAG_WIDTH, height: FLAG_HEIGHT };
+/** Where flag.ts draws the cloth inside a pin; kept in step by patches.test.ts. */
+export const PIN_CLOTH_TRANSFORM = "translate(9.5 5.5) scale(0.62)";
+export const PIN_CLOTH_RECT: FlagRect = { x: 9.5, y: 5.5, width: FLAG_WIDTH * 0.62, height: FLAG_HEIGHT * 0.62 };
+
+/**
+ * The narrowest cloth, in CSS pixels, that shows patches. Below it a patch is a few pixels of
+ * mush, so the flag is drawn plain. Every list and card draws flags at least this wide.
+ */
+export const MIN_PATCH_CLOTH_PX = 36;
+
+export function patchesFit(clothWidthPx: number): boolean {
+  return clothWidthPx >= MIN_PATCH_CLOTH_PX;
+}
+
+// Fewer patches are drawn a little larger. All in fractions of the flag's height.
+const RADIUS = [0, 0.25, 0.215, 0.19];
+const MARGIN = 0.05;
+const GAP = 0.04;
+/** The rim's width as a fraction of the patch radius. */
+const RIM = 0.13;
+
+const ASPECT = FLAG_WIDTH / FLAG_HEIGHT;
+
+/** Where each of `count` patches (at most 3) goes on a flag. */
+export function patchLayout(count: number): PatchFraction[] {
+  const shown = Math.max(0, Math.min(3, Math.floor(count)));
+  const r = RADIUS[shown];
+  return Array.from({ length: shown }, (_, index) => ({
+    // Worked out in heights, so circles stay round on the 3:2 cloth.
+    cx: (ASPECT - MARGIN - r - index * (2 * r + GAP)) / ASPECT,
+    cy: 1 - MARGIN - r,
+    r,
+  }));
+}
+
+/** The patches' places inside `rect`. */
+export function placePatches(count: number, rect: FlagRect): PatchSlot[] {
+  return patchLayout(count).map(({ cx, cy, r }) => ({
+    x: rect.x + cx * rect.width,
+    y: rect.y + cy * rect.height,
+    r: r * rect.height,
+  }));
+}
+
 // The outer colour of each rarity rim in components/Badge.tsx.
-const RIM: Record<Rarity, string> = {
+const RIM_COLOUR: Record<Rarity, string> = {
   common: "#FFF8EC",
   uncommon: "#7FD3F7",
   rare: "#A9B3D6",
   epic: "#9B7BFF",
   legendary: "#E9A800",
 };
+const FALLBACK_RIM = "#FFF8EC";
 
-/** How many patches a flag drawn `sizePx` wide has room for. */
-export function visiblePatchCount(sizePx: number): number {
-  if (sizePx >= 40) return 3;
-  if (sizePx >= 28) return 2;
-  return 1;
-}
-
-/** Where each of `count` patches goes on the cloth. Fewer patches are drawn a little larger. */
-export function patchSlots(count: number): PatchSlot[] {
-  const r = count >= 3 ? 7 : count === 2 ? 8 : 9.5;
-  const gap = 2;
-  return Array.from({ length: Math.max(0, Math.min(3, count)) }, (_, index) => ({
-    x: FLAG_WIDTH - 2 - r - index * (2 * r + gap),
-    y: 40 - 2 - r,
-    r,
-  }));
+function rimColour(id: string): string {
+  const badge = badgeById(id);
+  return badge ? RIM_COLOUR[badge.rarity] : FALLBACK_RIM;
 }
 
 function n(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
-/** One patch: a rim in its rarity colour, the badge art clipped to a circle, and a stitched edge. */
-function patchMarkup(id: string, slot: PatchSlot, clipId: string): string {
-  const badge = badgeById(id);
-  if (!badge) return "";
+/** One patch as SVG: a rim-coloured disc with the badge art clipped to a circle inside it. */
+function patchSvg(id: string, slot: PatchSlot, clipId: string): string {
   const { x, y, r } = slot;
+  const art = r * (1 - RIM);
   return `<g class="flag-patch" data-badge="${id}">`
-    + `<clipPath id="${clipId}"><circle cx="${n(x)}" cy="${n(y)}" r="${n(r)}"/></clipPath>`
-    + `<circle cx="${n(x)}" cy="${n(y + 0.6)}" r="${n(r + 1.4)}" fill="${OUTLINE}" fill-opacity="0.3"/>`
-    + `<circle cx="${n(x)}" cy="${n(y)}" r="${n(r + 1.2)}" fill="${RIM[badge.rarity]}" stroke="${OUTLINE}" stroke-width="0.9"/>`
-    + `<image href="${badgeArtUrl(id)}" x="${n(x - r)}" y="${n(y - r)}" width="${n(2 * r)}" height="${n(2 * r)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
-    + `<circle cx="${n(x)}" cy="${n(y)}" r="${n(r - 0.9)}" fill="none" stroke="${STITCH}" stroke-opacity="0.85" stroke-width="0.5" stroke-dasharray="1.2 0.9"/>`
+    + `<clipPath id="${clipId}"><circle cx="${n(x)}" cy="${n(y)}" r="${n(art)}"/></clipPath>`
+    + `<circle cx="${n(x)}" cy="${n(y)}" r="${n(r)}" fill="${rimColour(id)}"/>`
+    + `<image href="${badgeArtUrl(id)}" x="${n(x - art)}" y="${n(y - art)}" width="${n(2 * art)}" height="${n(2 * art)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
     + `</g>`;
 }
 
+/** The patches as SVG inside `rect`, or "" for none. Unknown and repeated IDs are skipped. */
+export function patchesSvg(patches: readonly string[] | null | undefined, rect: FlagRect, idPrefix = "flag"): string {
+  const known = drawablePatches(patches);
+  if (!known.length) return "";
+  const prefix = idPrefix.replace(/[^A-Za-z0-9_-]/g, "");
+  const slots = placePatches(known.length, rect);
+  return known.map((id, index) => patchSvg(id, slots[index], `${prefix}-patch${index}`)).join("");
+}
+
 export type PatchOptions = {
-  /** The width the flag is drawn at, in CSS pixels; small flags show fewer patches. */
+  /** The width the whole flag (or pin) is drawn at, in CSS pixels. */
   sizePx: number;
   /** Unique per inline SVG, like the flag's own clip paths. */
   idPrefix?: string;
 };
 
-/** The patches as SVG in the flag's cloth coordinates, or "" for none. Unknown IDs are skipped. */
-export function patchesMarkup(patches: readonly string[] | null | undefined, options: PatchOptions): string {
-  const known = drawablePatches(patches).slice(0, visiblePatchCount(options.sizePx));
-  if (!known.length) return "";
-  const prefix = (options.idPrefix ?? "flag").replace(/[^A-Za-z0-9_-]/g, "");
-  const slots = patchSlots(known.length);
-  return known.map((id, index) => patchMarkup(id, slots[index], `${prefix}-patch${index}`)).join("");
+/** Patches for a Flag drawn `sizePx` wide (its view box has a 1-unit margin round the cloth). */
+export function flagPatchesMarkup(patches: readonly string[] | null | undefined, options: PatchOptions): string {
+  const clothPx = (options.sizePx * FLAG_WIDTH) / (FLAG_WIDTH + 2);
+  return patchesFit(clothPx) ? patchesSvg(patches, CLOTH_RECT, options.idPrefix) : "";
+}
+
+/** Patches for a flag pin drawn `sizePx` wide: the cloth is a smaller part of the pin. */
+export function pinPatchesMarkup(patches: readonly string[] | null | undefined, options: PatchOptions): string {
+  const clothPx = (options.sizePx * PIN_CLOTH_RECT.width) / PIN_WIDTH;
+  return patchesFit(clothPx) ? patchesSvg(patches, PIN_CLOTH_RECT, options.idPrefix) : "";
 }
 
 /** Appends patch markup on top of a finished flag or pin SVG. */
@@ -83,45 +134,28 @@ export function withPatches(svg: string, markup: string): string {
   return end === -1 ? svg : `${svg.slice(0, end)}${markup}${svg.slice(end)}`;
 }
 
-/** Where flag.ts draws the cloth inside a pin; kept in step by patches.test.ts. */
-export const PIN_CLOTH_TRANSFORM = "translate(9.5 5.5) scale(0.62)";
-const PIN_CLOTH_SCALE = 0.62;
-
-/** Patches for a flag pin drawn `sizePx` wide: the cloth is a smaller part of the pin. */
-export function pinPatchesMarkup(patches: readonly string[] | null | undefined, options: PatchOptions): string {
-  const clothPx = options.sizePx * ((FLAG_WIDTH * PIN_CLOTH_SCALE) / PIN_WIDTH);
-  const markup = patchesMarkup(patches, { ...options, sizePx: clothPx });
-  return markup ? `<g transform="${PIN_CLOTH_TRANSFORM}">${markup}</g>` : "";
-}
+/** A badge to draw on a canvas, with its art already loaded. */
+export type LoadedPatch = { id: string; art: CanvasImageSource };
 
 /**
- * The map draws a pin's first patch as its own image, the size of a whole pin and transparent
- * apart from the patch, so it lines up with the pin under the same anchor, offset and size.
+ * Draws patches on a canvas inside `rect`, the same way patchesSvg does: for the map's pin
+ * images, where an SVG image cannot load the badge art itself. The context's transform maps
+ * `rect`'s coordinates to pixels.
  */
-// On the cloth's lower fly corner: clear of the crew shield above (#171) and the pennants below.
-export const MAP_PATCH_SLOT: PatchSlot = { x: 37, y: 21.5, r: 7 };
-
-/** Draws a map patch image: the badge art in a rimmed circle at MAP_PATCH_SLOT, scaled by `ratio`. */
-export function drawMapPatch(context: CanvasRenderingContext2D, art: CanvasImageSource, id: string, ratio: number): void {
-  const badge = badgeById(id);
-  const { x, y, r } = MAP_PATCH_SLOT;
-  context.save();
-  context.scale(ratio, ratio);
-  context.clearRect(0, 0, PIN_WIDTH, PIN_HEIGHT);
-  context.beginPath();
-  context.arc(x, y + 0.8, r + 1.8, 0, Math.PI * 2);
-  context.fillStyle = "rgba(20, 35, 28, 0.3)";
-  context.fill();
-  context.beginPath();
-  context.arc(x, y, r + 1.5, 0, Math.PI * 2);
-  context.fillStyle = badge ? RIM[badge.rarity] : STITCH;
-  context.fill();
-  context.lineWidth = 1.2;
-  context.strokeStyle = OUTLINE;
-  context.stroke();
-  context.beginPath();
-  context.arc(x, y, r, 0, Math.PI * 2);
-  context.clip();
-  context.drawImage(art, x - r, y - r, 2 * r, 2 * r);
-  context.restore();
+export function drawPatches(context: CanvasRenderingContext2D, patches: readonly LoadedPatch[], rect: FlagRect): void {
+  const slots = placePatches(patches.length, rect);
+  patches.slice(0, slots.length).forEach(({ id, art }, index) => {
+    const { x, y, r } = slots[index];
+    const inner = r * (1 - RIM);
+    context.save();
+    context.beginPath();
+    context.arc(x, y, r, 0, Math.PI * 2);
+    context.fillStyle = rimColour(id);
+    context.fill();
+    context.beginPath();
+    context.arc(x, y, inner, 0, Math.PI * 2);
+    context.clip();
+    context.drawImage(art, x - inner, y - inner, 2 * inner, 2 * inner);
+    context.restore();
+  });
 }

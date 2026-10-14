@@ -33,7 +33,7 @@ import { FoundPark } from "./FoundPark";
 import { forgetSummaries } from "../../lib/parkSummary";
 import { DownloadMaps } from "./DownloadMaps";
 import { consumeDownloadMapsRequest, subscribeDownloadMapsRequest } from "../../lib/mapCells";
-import { isFeatureEnabled } from "../../lib/appConfig";
+import { useFeatureFlag } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
 import { NearbyPanel } from "./NearbyPanel";
 import { NEARBY_LIST_KM, NEARBY_LIST_SIZE, nearestParks } from "../../lib/nearbyParks";
@@ -51,6 +51,7 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 
 export function MapScreen() {
   const { state, dispatch } = useStore();
+  const parkProposals = useFeatureFlag("parkProposals");
   const content = useContent();
   const contentStatus = useContentStatus();
   const mapRef = useRef<MLMap | null>(null);
@@ -473,7 +474,7 @@ export function MapScreen() {
           {/* Your flag opens big; the rest of the chip opens My Dex. */}
           {player && (
             <motion.button className="counter__kip counter__kip--flag viewer-open" onClick={() => setViewingFlag(true)} whileTap={{ scale: 0.92 }} aria-label={`Show the flag of @${player.handle} full screen`}>
-              <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} className="is-waving" /></span>
+              <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} patches={game.me?.flagPatches} className="is-waving" /></span>
             </motion.button>
           )}
           <motion.button
@@ -570,7 +571,7 @@ export function MapScreen() {
             <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
               <Icon name="feedback" size={20} /> Send feedback
             </button>
-            {isFeatureEnabled("parkProposals") && (
+            {parkProposals && (
               <button role="menuitem" onClick={() => { select(null); startFounding(null); }}>
                 <Icon name="flagPlus" size={20} /> Become a founder
               </button>
@@ -734,7 +735,7 @@ export function MapScreen() {
               visitLabel={visit.labelFor(selected.id)}
               signedIn={visit.signedIn}
               insideForFounding={insidePark(user, bounds?.byId.get(selected.id), hasUsableGpsFix ? state.accuracy ?? 0 : 0)}
-              canFound={isFeatureEnabled("parkProposals")}
+              canFound={parkProposals}
               onFound={() => startFounding(selected.id)}
               onClose={() => select(null)}
               onGo={startTrip}
