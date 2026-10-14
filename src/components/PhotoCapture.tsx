@@ -92,15 +92,18 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
 
   /**
    * Waits for a photo from the browser's camera capture. With `leaveOnCancel`, backing out of the
-   * first shot leaves the capture; from a retake, the earlier photo stays. Only the latest capture
-   * counts, so a shutter tap after a camera that never reported back replaces it.
+   * camera leaves the capture, back to the previous screen. Backing out of a retake returns to
+   * this screen, whose close button leaves: the web has no back button to leave the crop with.
+   * Only the latest capture counts, so a shutter tap after a camera that never reported back
+   * replaces it.
    */
   function receiveBrowserPhoto(shot: Promise<File | null>, leaveOnCancel: boolean) {
     const request = (requests.current += 1);
     void shot.then((file) => {
       if (request !== requests.current || !mounted.current) return;
       if (file) void prepare(() => originalFromBlob(file));
-      else if (leaveOnCancel && !takenRef.current) closeRef.current();
+      else if (leaveOnCancel) closeRef.current();
+      else setTaken(null);
     });
   }
 
