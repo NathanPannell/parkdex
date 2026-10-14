@@ -254,6 +254,12 @@
 }
 
 /* Camera */
+/* Above the claim screen (60), so "Add a photo" after a visit shows its crop rather than opening
+   behind the flag. Sheets, Kip's tips and toasts stay above it. */
+.camera.found-camera {
+  z-index: 65;
+}
+
 .found-camera__polaroid .polaroid__img {
   max-height: 50vh;
 }
