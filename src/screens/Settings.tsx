@@ -77,7 +77,7 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
             dispatch({ type: "go", screen: "parks" });
           }}
         >
-          <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} className="is-waving" />
+          <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} patches={game.me?.flagPatches} className="is-waving" />
           <span className="settings-flag__text">
             <strong>{player ? `@${player.handle}` : "Your flag"}</strong>
             <span>{player ? `${formatPoints(game.me?.score ?? 0)} · see your flags` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>

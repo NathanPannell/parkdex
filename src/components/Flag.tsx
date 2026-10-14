@@ -1,6 +1,6 @@
 import { useId, useMemo } from "react";
 import { blankFlagSvg, flagPinSvg, flagSvg, FLAG_HEIGHT, FLAG_WIDTH, formatFlagAge, PIN_HEIGHT, PIN_WIDTH, weatherForDays } from "../lib/game/flag";
-import { patchesMarkup, pinPatchesMarkup, withPatches } from "../lib/game/patches";
+import { flagPatchesMarkup, pinPatchesMarkup, withPatches } from "../lib/game/patches";
 
 type Props = {
   /** The player's public flag seed; null draws an empty outline. */
@@ -11,7 +11,7 @@ type Props = {
   days?: number;
   label?: string;
   className?: string;
-  /** Badges sewn on this flag (#175), drawn on top of it. Never changes the flag itself. */
+  /** Badges sewn on this flag (#175), drawn on top of it when the flag is big enough. Never changes the flag itself. */
   patches?: readonly string[];
 };
 
@@ -23,7 +23,7 @@ export function Flag({ seed, size = 48, days = 0, label, className, patches }: P
   // patches only ever name badges from the bundled list.
   const markup = useMemo(
     () => (seed
-      ? withPatches(flagSvg(seed, { weather, idPrefix: `flag${id}` }), patchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `flag${id}` }))
+      ? withPatches(flagSvg(seed, { weather, idPrefix: `flag${id}` }), flagPatchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `flag${id}` }))
       : blankFlagSvg()),
     [seed, weather, id, patchKey, size],
   );

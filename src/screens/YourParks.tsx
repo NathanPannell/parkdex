@@ -102,7 +102,7 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
             <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""} ${hasLongHandle(player.handle) ? "has-long-handle" : ""}`} style={handleFit(player.handle)} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
               <span className="game-score__rays" aria-hidden="true" />
               <button className="viewer-open game-score__flag" onClick={() => setViewingFlag(true)} aria-label={`Show the flag of @${player.handle} full screen`}>
-                <FlagPin seed={player.flagSeed} size={64} showAge={false} className="is-waving-pin" />
+                <FlagPin seed={player.flagSeed} size={64} showAge={false} patches={game.me.flagPatches} className="is-waving-pin" />
               </button>
               <div className="game-score__text">
                 <strong>@{player.handle}</strong>

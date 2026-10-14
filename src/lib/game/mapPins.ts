@@ -1,6 +1,7 @@
 import type { ParkFlag } from "./client";
 import { drawablePatches } from "./badges";
 import { flagAgeDays, flagAgeMs, flagPinSvg, flagSpec, formatFlagAge, weatherForDays, type FlagWeather } from "./flag";
+import { MIN_PATCH_CLOTH_PX, PIN_CLOTH_RECT } from "./patches";
 
 /**
  * Park pins for the map's symbol layer. Each pin names a shared image (empty pole, or a
@@ -11,8 +12,9 @@ import { flagAgeDays, flagAgeMs, flagPinSvg, flagSpec, formatFlagAge, weatherFor
  * colours below it and a "+N" tag for bigger crews, and a shield while the protected hour runs.
  * The flag drawing itself stays in `flag.ts`; pennants and the shield are drawn here.
  *
- * A holder's first badge patch (#175) is a second, shared image per badge that the map draws
- * over the pin only when zoomed in close.
+ * A holder's badge patches (#175) are drawn into a second image of the same pin, which the map
+ * shows only where the pin is drawn big enough for patches to read (see `patchMinZoom`): zoomed
+ * in close, or the selected pin. Everywhere else the pin is the plain flag.
  */
 
 export const EMPTY_PIN = "pin:empty";
@@ -28,9 +30,11 @@ export type PinImage = {
   extra?: number;
   /** The protected hour is running. */
   shield?: boolean;
+  /** Badges sewn on the flag, drawn on the cloth (#175). Only in the `patched` image. */
+  patches?: readonly string[];
 };
-/** `patch` is the image ID of the holder's first badge patch, or "" for none. */
-export type PinProperties = { id: string; icon: string; dot: string; held: 0 | 1; sort: number; patch: string };
+/** `icon` is the plain pin; `patched` the same pin with the holder's patches, or `icon` without any. */
+export type PinProperties = { id: string; icon: string; patched: string; dot: string; held: 0 | 1; sort: number };
 export type PinFeature = { type: "Feature"; id: number; properties: PinProperties; geometry: { type: "Point"; coordinates: [number, number] } };
 export type PinCollection = { type: "FeatureCollection"; features: PinFeature[] };
 
@@ -52,54 +56,86 @@ export function pinCrew(flag: ParkFlag, now: number): { pennants: string[]; size
   return { pennants, size, extra: Math.max(0, size - 1 - pennants.length), shield: Number.isFinite(until) && now < until };
 }
 
-export function patchIconId(badgeId: string): string {
-  return `patch:${badgeId}`;
+/** The pin image with patches sewn on: the plain pin's ID plus the badges it draws, in order. */
+export function patchedPinIconId(icon: string, patches: readonly string[]): string {
+  return patches.length ? `${icon}:patches:${patches.join(",")}` : icon;
 }
 
 export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<string, ParkFlag> | null, now: number, options: PinOptions = {}): {
   collection: PinCollection;
   images: Map<string, PinImage>;
-  /** Patch image ID to badge ID, for every patch a pin shows. */
-  patches: Map<string, string>;
 } {
   const images = new Map<string, PinImage>([[EMPTY_PIN, { seed: null, weather: 0, label: null }]]);
-  const patches = new Map<string, string>();
   const features = parks.map((park, index): PinFeature => {
     const flag = flags?.get(park.id);
     let icon = EMPTY_PIN;
+    let patched = EMPTY_PIN;
     let dot = "#FFF8EC";
-    let patch = "";
     if (flag) {
-      const first = drawablePatches(flag.patches)[0];
-      if (first) {
-        patch = patchIconId(first);
-        patches.set(patch, first);
-      }
       const days = flagAgeDays(flag.since, now);
       const weather = weatherForDays(days);
       const label = formatFlagAge(flagAgeMs(flag.since, now));
       const crew = options.crews ? pinCrew(flag, now) : null;
       icon = pinIconId(flag.flagSeed, weather, label, crew ?? undefined);
       dot = flagSpec(flag.flagSeed).field;
-      if (!images.has(icon)) {
-        images.set(icon, crew && (crew.pennants.length || crew.shield)
-          ? { seed: flag.flagSeed, weather, label, pennants: crew.pennants, extra: crew.extra, shield: crew.shield }
-          : { seed: flag.flagSeed, weather, label });
-      }
+      const image: PinImage = crew && (crew.pennants.length || crew.shield)
+        ? { seed: flag.flagSeed, weather, label, pennants: crew.pennants, extra: crew.extra, shield: crew.shield }
+        : { seed: flag.flagSeed, weather, label };
+      if (!images.has(icon)) images.set(icon, image);
+      const patches = drawablePatches(flag.patches);
+      patched = patchedPinIconId(icon, patches);
+      if (!images.has(patched)) images.set(patched, { ...image, patches });
     }
     return {
       type: "Feature",
       id: index,
       // Held parks draw above empty ones where pins overlap.
-      properties: { id: park.id, icon, dot, held: flag ? 1 : 0, sort: flag ? 1 : 0, patch },
+      properties: { id: park.id, icon, patched, dot, held: flag ? 1 : 0, sort: flag ? 1 : 0 },
       geometry: { type: "Point", coordinates: [park.lng, park.lat] },
     };
   });
-  return { collection: { type: "FeatureCollection", features }, images, patches };
+  return { collection: { type: "FeatureCollection", features }, images };
 }
 
 /** Pins are drawn at twice their size so they stay sharp on high-density screens. */
 export const PIN_PIXEL_RATIO = 2;
+/** Pins with patches only show drawn large, so they get more pixels for the badge art. */
+export const PATCHED_PIN_PIXEL_RATIO = 3;
+
+/** Below this zoom the map shows dots; from it, flags on poles. */
+export const FLAG_PIN_ZOOM = 10.5;
+
+/** How big the map draws a pin at a zoom, plain and selected; linear in between, flat outside. */
+export const PIN_SCALE_STOPS: readonly (readonly [zoom: number, plain: number, selected: number])[] = [
+  // The selected pin is drawn big enough for its patches at every zoom that shows flags.
+  [FLAG_PIN_ZOOM, 0.62, 0.97],
+  [13, 0.9, 1.3],
+  [16, 1.05, 1.45],
+];
+
+export function pinScale(zoom: number, selected: boolean): number {
+  const pick = (stop: readonly [number, number, number]) => (selected ? stop[2] : stop[1]);
+  const first = PIN_SCALE_STOPS[0];
+  if (zoom <= first[0]) return pick(first);
+  for (let index = 1; index < PIN_SCALE_STOPS.length; index += 1) {
+    const low = PIN_SCALE_STOPS[index - 1];
+    const high = PIN_SCALE_STOPS[index];
+    if (zoom <= high[0]) return pick(low) + ((pick(high) - pick(low)) * (zoom - low[0])) / (high[0] - low[0]);
+  }
+  return pick(PIN_SCALE_STOPS[PIN_SCALE_STOPS.length - 1]);
+}
+
+/**
+ * The zoom, to a tenth, from which a pin's cloth is drawn at least MIN_PATCH_CLOTH_PX wide, so
+ * its patches read: the same rule as every other flag in the app.
+ */
+export function patchMinZoom(selected: boolean): number {
+  const last = PIN_SCALE_STOPS[PIN_SCALE_STOPS.length - 1][0];
+  for (let tenth = Math.round(FLAG_PIN_ZOOM * 10); tenth <= Math.round(last * 10); tenth += 1) {
+    if (PIN_CLOTH_RECT.width * pinScale(tenth / 10, selected) >= MIN_PATCH_CLOTH_PX) return tenth / 10;
+  }
+  return Number.POSITIVE_INFINITY;
+}
 
 const INK = "#14231C";
 const PAPER = "#FFF8EC";
@@ -136,13 +172,14 @@ export function pennantSvg(seed: string): string {
 const SHIELD = `<path d="M42.5 1.2 47 3v3.7c0 2.9-1.9 4.7-4.5 5.8-2.6-1.1-4.5-2.9-4.5-5.8V3Z" fill="#FFC93C" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/>`
   + `<path d="M40.6 6.6 42 8l2.5-2.8" fill="none" stroke="${INK}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`;
 
-export function pinImageSvg(image: PinImage): string {
+/** The pin without its patches, `ratio` times its size; patches are drawn over it on a canvas. */
+export function pinImageSvg(image: PinImage, ratio = PIN_PIXEL_RATIO): string {
   const pennants = image.pennants ?? [];
   if (!image.seed || (!pennants.length && !image.shield)) {
-    return flagPinSvg(image.seed, { weather: image.weather, label: image.label ?? undefined, idPrefix: "pin", scale: PIN_PIXEL_RATIO });
+    return flagPinSvg(image.seed, { weather: image.weather, label: image.label ?? undefined, idPrefix: "pin", scale: ratio });
   }
   // The leader's flag on its pole, drawn by flag.ts without its age tag; the tag moves below the pennants.
-  const base = flagPinSvg(image.seed, { weather: image.weather, idPrefix: "pin", scale: PIN_PIXEL_RATIO }).replace(/<\/svg>$/, "");
+  const base = flagPinSvg(image.seed, { weather: image.weather, idPrefix: "pin", scale: ratio }).replace(/<\/svg>$/, "");
   let overlay = "";
   pennants.forEach((seed, index) => {
     overlay += pennantShape(seed, 10.5 + index * 8, 31);

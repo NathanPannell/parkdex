@@ -220,7 +220,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
                 seed={holder.kind === "mine" || holder.kind === "other" ? holder.flag.flagSeed : null}
                 patches={holder.kind === "mine" || holder.kind === "other" ? holder.flag.patches : undefined}
                 days={flagDays}
-                size={44}
+                size={48}
                 showAge={false}
                 className="is-waving-pin"
               />
