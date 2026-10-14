@@ -8,6 +8,7 @@ import { Kip } from "../components/Kip";
 import { Rays } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
+import { startPhotoCapture } from "../lib/captureMode";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { useContent } from "../lib/content/provider";
 import { createVisitId, GameError, gameErrorMessage, joinCrew, sendVisit, type Crew, type GameErrorCode, type VisitResult } from "../lib/game/client";
@@ -635,7 +636,7 @@ export function Plant() {
               )}
               <motion.div variants={pop} className="claim__row">
                 {park && (
-                  <button className="btn btn--sm btn--sun" onClick={() => { sfx.pop(); setAdding(true); }}>
+                  <button className="btn btn--sm btn--sun" onClick={() => { sfx.pop(); startPhotoCapture(); setAdding(true); }}>
                     <Icon name="camera" size={18} /> Add a photo
                   </button>
                 )}

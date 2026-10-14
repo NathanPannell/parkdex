@@ -6,6 +6,7 @@ import { FullscreenViewer, useViewer } from "../components/FullscreenViewer";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toast";
 import { useBackHandler } from "../lib/backStack";
+import { startPhotoCapture } from "../lib/captureMode";
 import { visitCountLabel, type DexPhoto, type DexTile } from "../lib/dex/collection";
 import { sfx } from "../lib/feedback";
 import type { PhotoCrop } from "../lib/photoCrop";
@@ -133,7 +134,7 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
               <div className="dex-detail__cta">
                 {visit && (
-                  <button className="btn btn--block btn--glow" onClick={() => { sfx.pop(); setAdding(true); }}>
+                  <button className="btn btn--block btn--glow" onClick={() => { sfx.pop(); startPhotoCapture(); setAdding(true); }}>
                     <Icon name="camera" /> {tile.photos.length ? "Add another photo" : "Add a photo"}
                   </button>
                 )}

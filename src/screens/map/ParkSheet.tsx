@@ -27,6 +27,7 @@ import { useCrew } from "../../lib/game/CrewProvider";
 import { useParkCrew, useServerClock } from "../../lib/game/useParkCrew";
 import { useKipTip } from "../../lib/kipTips";
 import { buzz } from "../../lib/feedback";
+import { startPhotoCapture } from "../../lib/captureMode";
 import { PARK_COVER_ASPECT } from "../../lib/photoCrop";
 import { CrewList } from "../../components/CrewList";
 import { CrewPanel } from "./CrewPanel";
@@ -313,7 +314,7 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
               {crewList && <CrewList members={crewList.members} flagSince={crewList.flagSince} myHandle={myHandle} />}
               {SHOW_BADGE_ART && <p className="park-sheet__blurb">{park.blurb}</p>}
               {visited && (
-                <button className="btn btn--paper btn--sm btn--block park-sheet__photo" onClick={() => setAdding(true)}>
+                <button className="btn btn--paper btn--sm btn--block park-sheet__photo" onClick={() => { startPhotoCapture(); setAdding(true); }}>
                   <Icon name="camera" size={18} /> Add another photo
                 </button>
               )}

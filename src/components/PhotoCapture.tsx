@@ -1,12 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { Kip } from "./Kip";
 import { PhotoCropper } from "./PhotoCropper";
 import { buzz, sfx } from "../lib/feedback";
 import { useBackHandler } from "../lib/backStack";
 import { takeNativePhoto, useLiveCamera, type Facing } from "../lib/camera";
-import { isNative } from "../lib/native";
+import { captureMode, currentCaptureEnv, openBrowserCamera, takeStartedCapture, usesCameraApp } from "../lib/captureMode";
 import { CROP_ASPECT, type PhotoCrop } from "../lib/photoCrop";
 import { encodePhoto, originalFromBlob, originalFromDataUrl, prepareOriginal, type CapturedPhoto, type Drawable, type OriginalPhoto } from "../lib/photoEncode";
 
@@ -27,31 +27,34 @@ type Taken = { id: number; photo: OriginalPhoto; drawable: Drawable };
 const NATIVE_QUALITY = 92;
 
 /**
- * Takes one real photo, then lets the player crop it to `aspect`, 3:4 by default (#173). On
- * Android the phone's own camera app takes it, straight away and with no gallery; backing out of
- * the camera app returns to the previous screen. On the web a live preview is used when the
- * browser grants one, otherwise the browser's camera capture. The photo is kept as an upright
- * original with the crop beside it, and the cropped image is encoded for upload (see
- * `lib/photoEncode.ts`).
+ * Takes one real photo, then lets the player crop it to `aspect`, 3:4 by default (#173). On a
+ * phone the phone's own camera app takes it, straight away, so the photo gets the phone's own
+ * processing: the Android build through the camera plugin, a phone browser through a file input
+ * with `capture` that the opening tap started (`startPhotoCapture`). Backing out of the camera app
+ * returns to the previous screen. A desktop browser shows a live preview, or its file chooser
+ * without a camera (`lib/captureMode.ts`). The photo is kept as an upright original with the crop
+ * beside it, and the cropped image is encoded for upload (see `lib/photoEncode.ts`).
  */
 export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CROP_ASPECT }: Props) {
+  const [mode] = useState(() => captureMode(currentCaptureEnv()));
+  const cameraApp = usesCameraApp(mode);
   const [facing, setFacing] = useState<Facing>("environment");
-  const { video, live } = useLiveCamera(facing, 1920, !isNative);
+  const { video, live } = useLiveCamera(facing, 1920, mode === "live-preview");
   const [taken, setTaken] = useState<Taken | null>(null);
   const [flash, setFlash] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const picker = useRef<HTMLInputElement>(null);
   const shots = useRef(0);
+  const requests = useRef(0);
   const mounted = useRef(true);
   const takenRef = useRef(taken);
   takenRef.current = taken;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
-  // Back from the crop: on the web it returns to the camera; on Android the camera app was the
-  // step before, so back leaves the capture instead of reopening it.
-  useBackHandler(() => (isNative ? onClose() : setTaken(null)), !!taken);
+  // Back from the crop: with a live preview it returns to the preview; on a phone the camera app was
+  // the step before, so back leaves the capture instead of reopening it.
+  useBackHandler(() => (cameraApp ? onClose() : setTaken(null)), !!taken);
 
   async function prepare(work: () => Promise<{ photo: OriginalPhoto; drawable: Drawable } | null> | { photo: OriginalPhoto; drawable: Drawable } | null) {
     setBusy(true);
@@ -87,13 +90,35 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
     });
   }
 
+  /**
+   * Waits for a photo from the browser's camera capture. With `leaveOnCancel`, backing out of the
+   * camera leaves the capture, back to the previous screen. Backing out of a retake returns to
+   * this screen, whose close button leaves: the web has no back button to leave the crop with.
+   * Only the latest capture counts, so a shutter tap after a camera that never reported back
+   * replaces it.
+   */
+  function receiveBrowserPhoto(shot: Promise<File | null>, leaveOnCancel: boolean) {
+    const request = (requests.current += 1);
+    void shot.then((file) => {
+      if (request !== requests.current || !mounted.current) return;
+      if (file) void prepare(() => originalFromBlob(file));
+      else if (leaveOnCancel) closeRef.current();
+      else setTaken(null);
+    });
+  }
+
   const opened = useRef(false);
   useEffect(() => {
     mounted.current = true;
     // Once per capture, even when a development build mounts effects twice.
-    if (isNative && !opened.current) {
+    if (!opened.current) {
       opened.current = true;
-      openNativeCamera();
+      if (mode === "native-camera") openNativeCamera();
+      else if (mode === "browser-camera") {
+        // The tap that opened this screen opened the camera too. Without it, the shutter does.
+        const started = takeStartedCapture();
+        if (started) receiveBrowserPhoto(started, true);
+      }
     }
     return () => {
       mounted.current = false;
@@ -108,17 +133,19 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
       buzz(20);
       setFlash((value) => value + 1);
       void prepare(() => prepareOriginal({ source: v, width: v.videoWidth, height: v.videoHeight }, { mirror: facing === "user" }));
-    } else if (isNative) {
+    } else if (mode === "native-camera") {
       openNativeCamera();
     } else {
-      picker.current?.click();
+      // Inside the tap, which the browser requires. A desktop without a camera shows its file chooser.
+      receiveBrowserPhoto(openBrowserCamera(), mode === "browser-camera");
     }
   };
 
   const retake = () => {
     if (busy) return;
     sfx.tap();
-    if (isNative) openNativeCamera();
+    if (mode === "native-camera") openNativeCamera();
+    else if (mode === "browser-camera") receiveBrowserPhoto(openBrowserCamera(), false);
     else setTaken(null);
   };
 
@@ -133,12 +160,6 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
     }
   };
 
-  const picked = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (file) void prepare(() => originalFromBlob(file));
-  };
-
   return (
     <motion.div
       className="screen camera found-camera"
@@ -147,10 +168,13 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
       exit={{ opacity: 0, transition: { duration: 0.3 } }}
       transition={{ duration: 0.7, ease: [0.7, 0, 0.2, 1] }}
     >
-      <div className="camera__feed">
-        <video ref={video} playsInline muted className={facing === "user" ? "mirror" : ""} style={{ opacity: live === "on" ? 1 : 0 }} />
-        <div className="camera__grid" />
-      </div>
+      {/* On a phone the camera app is the viewfinder; this screen only waits behind it. */}
+      {!cameraApp && (
+        <div className="camera__feed">
+          <video ref={video} playsInline muted className={facing === "user" ? "mirror" : ""} style={{ opacity: live === "on" ? 1 : 0 }} />
+          <div className="camera__grid" />
+        </div>
+      )}
 
       <div className="camera__top">
         <button className="camera__round" onClick={onClose} aria-label="Close camera">
@@ -164,26 +188,25 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
           onClick={() => setFacing((f) => (f === "user" ? "environment" : "user"))}
           aria-label="Flip camera"
           disabled={live !== "on"}
-          style={isNative ? { visibility: "hidden" } : undefined}
+          style={cameraApp ? { visibility: "hidden" } : undefined}
         >
           <Icon name="flip" size={20} />
         </button>
       </div>
 
-      <div className={`camera__frame${aspect > 1 ? " camera__frame--landscape" : ""}`} style={aspect > 1 ? { aspectRatio: String(aspect) } : undefined}>
-        {["tl", "tr", "bl", "br"].map((c) => (
-          <motion.span key={c} className={`corner corner--${c}`} animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 1.8, repeat: Infinity }} />
-        ))}
-      </div>
-
-      {live === "off" && !taken && (
-        <motion.div className="camera__note" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-          {isNative && busy ? "Opening your camera…" : "Tap the shutter to open your camera"}
-        </motion.div>
+      {!cameraApp && (
+        <div className={`camera__frame${aspect > 1 ? " camera__frame--landscape" : ""}`} style={aspect > 1 ? { aspectRatio: String(aspect) } : undefined}>
+          {["tl", "tr", "bl", "br"].map((c) => (
+            <motion.span key={c} className={`corner corner--${c}`} animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 1.8, repeat: Infinity }} />
+          ))}
+        </div>
       )}
 
-      {/* The web fallback: the browser's camera capture. Never a gallery picker without `capture`. */}
-      <input ref={picker} className="found-camera__picker" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={picked} tabIndex={-1} aria-hidden="true" />
+      {live === "off" && !taken && (mode === "native-camera" || !busy) && (
+        <motion.div className="camera__note" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+          {busy ? "Opening your camera…" : "Tap the shutter to open your camera"}
+        </motion.div>
+      )}
 
       <div className="camera__bottom">
         <div className="camera__hint" role={error && !taken ? "alert" : undefined}>{(!taken && error) || (busy ? "Getting your photo ready…" : hint)}</div>
