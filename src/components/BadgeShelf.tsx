@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
+import { useFeatureFlag } from "../lib/appConfig";
 import { useBackHandler } from "../lib/backStack";
 import { sfx } from "../lib/feedback";
 import { markBadgesSeen, MAX_PATCHES, progressLabel, readSeenBadges, shelfBadges, togglePatch, type ShelfBadge } from "../lib/game/badges";
@@ -20,9 +21,14 @@ function dateLabel(at: string): string {
 /**
  * The badge shelf at the top of My Dex (#175): earned badges in colour, locked ones as silhouettes
  * with how to earn them, and up to 3 sewn onto the player's flag. Shown to players with a handle,
- * on a server that has badges.
+ * on a server that has badges, with the `badges` flag on. Otherwise it renders nothing, so
+ * Collection starts with its summary and leaves no gap.
  */
 export function BadgeShelf() {
+  return useFeatureFlag("badges") ? <ShelfForPlayer /> : null;
+}
+
+function ShelfForPlayer() {
   const game = useGame();
   const statuses = game.me?.badges;
   const player = game.me?.player ?? null;

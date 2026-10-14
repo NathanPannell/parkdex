@@ -1,15 +1,23 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { AchievementBadge } from "../../components/AchievementBadge";
+import { BadgeShelf } from "../../components/BadgeShelf";
 import { BadgeShelfView } from "../../components/BadgeShelfView";
+import { BadgeUnlock } from "../../components/BadgeUnlock";
 import { Flag, FlagPin } from "../../components/Flag";
-import { shelfBadges } from "./badges";
+import { setFeatureFlagsForTests } from "../appConfig";
+import { badgeById, BADGES, shelfBadges } from "./badges";
 import { FLAG_HEIGHT, FLAG_WIDTH, flagPinSvg, flagSpec, flagSvg } from "./flag";
 import { CLOTH_RECT, drawPatches, flagPatchesMarkup, MIN_PATCH_CLOTH_PX, patchesFit, patchesSvg, patchLayout, PIN_CLOTH_RECT, PIN_CLOTH_TRANSFORM, pinPatchesMarkup, placePatches, withPatches } from "./patches";
 
 const SEED = "0f6c1d2e9a7b4c3d";
 const THREE = ["parks-1", "hold-7", "coast-to-coast"];
 const count = (markup: string) => (markup.match(/class="flag-patch"/g) ?? []).length;
+
+// Patches and the shelf are drawn only with the `badges` flag on; "badges flag off" below covers off.
+beforeEach(() => setFeatureFlagsForTests({ badges: true }));
+afterEach(() => setFeatureFlagsForTests({ badges: false }));
 
 describe("flag patches", () => {
   it("draws every patch at every size that has room for patches, and none below it", () => {
@@ -150,5 +158,44 @@ describe("badge shelf view", () => {
     expect(count(html)).toBe(1);
     expect((html.match(/badge-shelf__new/g) ?? []).length).toBe(1);
     expect((render(["hold-7"], ["parks-1", "hold-7"]).match(/badge-shelf__new/g) ?? []).length).toBe(0);
+  });
+});
+
+describe("badges flag off", () => {
+  beforeEach(() => setFeatureFlagsForTests({ badges: false }));
+
+  it("draws no patches on any flag, even when the server sent them", () => {
+    for (const size of [38, 40, 46, 60, 64, 72, 176, 320]) {
+      expect(count(renderToStaticMarkup(createElement(Flag, { seed: SEED, size, patches: THREE })))).toBe(0);
+    }
+    expect(count(renderToStaticMarkup(createElement(FlagPin, { seed: SEED, size: 56, patches: THREE })))).toBe(0);
+    // The same flag as one drawn without patches.
+    expect(renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72, patches: THREE }))).toBe(renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72 })));
+  });
+
+  it("shows no badge shelf and no unlock on a visit result", () => {
+    // The shelf renders nothing before it even asks for the player, so Collection has no gap.
+    expect(renderToStaticMarkup(createElement(BadgeShelf))).toBe("");
+    const unlocks = [{ id: "parks-1", unlockedAt: "2026-10-01T00:00:00Z" }];
+    expect(renderToStaticMarkup(createElement(BadgeUnlock, { unlocks, onOpen: () => {} }))).toBe("");
+    expect(renderToStaticMarkup(createElement(BadgeUnlock, { unlocks, onOpen: () => {}, compact: true }))).toBe("");
+  });
+
+  it("shows unlocks again with the flag on", () => {
+    setFeatureFlagsForTests({ badges: true });
+    const html = renderToStaticMarkup(createElement(BadgeUnlock, { unlocks: [{ id: "parks-1", unlockedAt: "2026-10-01T00:00:00Z" }], onOpen: () => {} }));
+    expect(html).toContain("Badge earned");
+    expect(html).toContain(badgeById("parks-1")!.name);
+  });
+});
+
+describe("achievement badges", () => {
+  it("have no dashed ring, earned or locked", () => {
+    for (const badge of BADGES) {
+      for (const locked of [false, true]) {
+        const html = renderToStaticMarkup(createElement(AchievementBadge, { badge, locked }));
+        expect(html).not.toContain("stroke-dasharray");
+      }
+    }
   });
 });

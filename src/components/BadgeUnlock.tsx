@@ -1,4 +1,5 @@
 import { motion, type Variants } from "motion/react";
+import { useFeatureFlag } from "../lib/appConfig";
 import { badgeById } from "../lib/game/badges";
 import type { BadgeUnlock as Unlock } from "../lib/game/client";
 import { useKipTip } from "../lib/kipTips";
@@ -17,10 +18,12 @@ type Props = {
 
 /**
  * The unlock moment (#175): the new badge spins in on the result of the visit or founding that
- * earned it, and the first one brings Kip's Tip about sewing badges onto your flag.
+ * earned it, and the first one brings Kip's Tip about sewing badges onto your flag. Nothing at all
+ * while the `badges` flag is off, even when the server reports an unlock.
  */
 export function BadgeUnlock({ unlocks, onOpen, variants, compact = false }: Props) {
-  const badges = (unlocks ?? []).flatMap((unlock) => badgeById(unlock.id) ?? []);
+  const enabled = useFeatureFlag("badges");
+  const badges = enabled ? (unlocks ?? []).flatMap((unlock) => badgeById(unlock.id) ?? []) : [];
   useKipTip("badge-first", badges.length > 0);
   if (!badges.length) return null;
   const [first] = badges;

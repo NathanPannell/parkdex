@@ -39,7 +39,12 @@ export type PinFeature = { type: "Feature"; id: number; properties: PinPropertie
 export type PinCollection = { type: "FeatureCollection"; features: PinFeature[] };
 
 type PinnedPark = { id: string; lng: number; lat: number };
-export type PinOptions = { /** Draw crews: pennants and the protected shield. Off unless the `crews` flag is on. */ crews?: boolean };
+export type PinOptions = {
+  /** Draw crews: pennants and the protected shield. Off unless the `crews` flag is on. */
+  crews?: boolean;
+  /** Draw holders' badge patches (#175). Off unless the `badges` flag is on; then no pin has a patched image. */
+  badges?: boolean;
+};
 
 export function pinIconId(seed: string, weather: FlagWeather, label: string, crew?: { pennants: readonly string[]; size: number; shield: boolean }): string {
   const base = `pin:${weather}:${label}:${seed}`;
@@ -82,7 +87,7 @@ export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<strin
         ? { seed: flag.flagSeed, weather, label, pennants: crew.pennants, extra: crew.extra, shield: crew.shield }
         : { seed: flag.flagSeed, weather, label };
       if (!images.has(icon)) images.set(icon, image);
-      const patches = drawablePatches(flag.patches);
+      const patches = options.badges ? drawablePatches(flag.patches) : [];
       patched = patchedPinIconId(icon, patches);
       if (!images.has(patched)) images.set(patched, { ...image, patches });
     }

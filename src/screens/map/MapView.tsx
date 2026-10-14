@@ -91,7 +91,9 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
   const hasReadyMapContent = !!content?.releaseId;
   // Crew pennants and the protected shield (#171) show only with the crews flag on.
   const crews = useFeatureFlag("crews");
-  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews }), [hasReadyMapContent, parks, flags, flagsNow, crews]);
+  // Badge patches (#175) are drawn on pins only with the badges flag on.
+  const badges = useFeatureFlag("badges");
+  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews, badges }), [hasReadyMapContent, parks, flags, flagsNow, crews, badges]);
   // The style never changes after creation, so the map draws its detail once.
   const loaded = styleIsReady;
 
