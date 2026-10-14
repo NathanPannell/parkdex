@@ -22,7 +22,7 @@ export const CONTENT_CHANNELS = ["staging", "main"] as const;
 export type ContentChannel = (typeof CONTENT_CHANNELS)[number];
 
 /** Flags the current app reads. Any other well-formed flag is stored and sent too. */
-export const FEATURE_FLAGS = ["rankProgression", "parkProposals", "friends", "crews"] as const;
+export const FEATURE_FLAGS = ["rankProgression", "parkProposals", "friends", "crews", "badges"] as const;
 export type FeatureFlags = Record<string, boolean>;
 const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 const MAX_FLAGS = 64;
