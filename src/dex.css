@@ -547,14 +547,6 @@
   place-items: center;
 }
 
-.badge-shelf__item.is-sewn .badge-shelf__art::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border: 2.5px dashed var(--ink);
-  border-radius: 50%;
-}
-
 .badge-shelf__sewn,
 .badge-shelf__new {
   position: absolute;
@@ -565,6 +557,7 @@
   color: var(--ink);
 }
 
+/* A sewn badge is marked by this corner pin alone; the badge itself stays as it is. */
 .badge-shelf__sewn {
   right: -4px;
   bottom: -2px;
