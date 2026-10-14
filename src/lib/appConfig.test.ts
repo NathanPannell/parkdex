@@ -86,6 +86,22 @@ describe("app config", () => {
     expect(contentChannelOverride()).toBeNull();
   });
 
+  it("keeps badges off by default, and turns them on live when the operator does (#175)", async () => {
+    expect(FEATURE_FLAG_DEFAULTS.badges).toBe(false);
+    await initAppConfig();
+    expect(isFeatureEnabled("badges")).toBe(false);
+    // A build row without the flag keeps the default: badges stay off.
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true } })));
+    expect(isFeatureEnabled("badges")).toBe(false);
+    const Shelf = () => createElement("span", null, useFeatureFlag("badges") ? "shelf" : "none");
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>none</span>");
+    await checkInAppConfig(respond(answer({ flags: { badges: true } })));
+    expect(isFeatureEnabled("badges")).toBe(true);
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>shelf</span>");
+    await checkInAppConfig(respond(answer({ flags: { badges: false } })));
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>none</span>");
+  });
+
   it("falls back to package install info when App.getInfo times out", async () => {
     vi.useFakeTimers();
     mocks.getInfo.mockImplementation(() => new Promise(() => undefined));
@@ -293,7 +309,7 @@ describe("app config", () => {
     expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
     await initAppConfig();
     const fresh = await checkInAppConfig(respond(answer({ flags: { crews: true, futureThing: true, "bad key": true } })));
-    expect(fresh?.flags).toEqual({ parkProposals: true, friends: false, crews: true });
+    expect(fresh?.flags).toEqual({ parkProposals: true, friends: false, crews: true, badges: false });
     expect(fresh?.remoteFlags).toEqual({ crews: true, futureThing: true });
     await initAppConfig();
     expect(remoteFlag("futureThing")).toBe(true);

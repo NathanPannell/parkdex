@@ -17,10 +17,13 @@ type Draft = {
 
 /** One-line hints for flags current builds read. Add a flag here when a build starts reading it. */
 const FLAG_HINTS: Record<string, string> = {
-  crews: "Crew flags: the protected hour, crew codes and joining (#170, #171). Off by default.",
   friends: "Friends by QR code and the weekly friends board (#64). Off by default.",
   crews: "Crew flags: the protected hour, crew codes and joining (#170, #171). Off by default.",
+  badges: "Badges: the My Dex shelf, unlocks on visit results and patches sewn on flags (#175). Off by default; unlocks are still recorded.",
 };
+
+/** Flags a new row starts with switched off, so a new build does not show an unfinished feature by accident. */
+const OFF_IN_NEW_ROWS: ReadonlySet<string> = new Set(["badges"]);
 
 const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [
   { value: "", label: "Built-in", detail: "The server the build was made for" },
@@ -32,7 +35,7 @@ const PLATFORMS: Record<Platform, string> = { android: "Android", web: "Web" };
 const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 
 function emptyDraft(knownFlags: string[]): Draft {
-  return { isNew: true, platform: "android", build: "", label: "", apiPointer: "", flags: knownFlags.map((name) => ({ name, value: true })), notes: "" };
+  return { isNew: true, platform: "android", build: "", label: "", apiPointer: "", flags: knownFlags.map((name) => ({ name, value: !OFF_IN_NEW_ROWS.has(name) })), notes: "" };
 }
 
 function draftFrom(config: BuildConfig): Draft {
@@ -356,7 +359,7 @@ export function BuildsPage() {
                 {knownFlags.filter((name) => !draft.flags.some((flag) => flag.name === name)).length > 0 && (
                   <div className="chip-row flag-suggestions">
                     {knownFlags.filter((name) => !draft.flags.some((flag) => flag.name === name)).map((name) => (
-                      <button key={name} type="button" className="chip" onClick={() => setDraft({ ...draft, flags: [...draft.flags, { name, value: true }] })}><Icon name="plus" size={13} /> {name}</button>
+                      <button key={name} type="button" className="chip" onClick={() => setDraft({ ...draft, flags: [...draft.flags, { name, value: !OFF_IN_NEW_ROWS.has(name) }] })}><Icon name="plus" size={13} /> {name}</button>
                     ))}
                   </div>
                 )}

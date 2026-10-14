@@ -2,6 +2,8 @@
 
 Achievement badges made from park art (#175, part of #168). They are decorative: they never add points. Players sew up to 3 onto their flag, and everyone who sees the flag sees them.
 
+**Behind the `badges` feature flag, off by default** ([app-config.md](app-config.md)). With it off the app shows no trace of badges: no shelf in My Dex, no unlock on visit, founding or crew-join results, no `badge-first` tip, and no patches on any flag or map pin, even when the server sends `flagPatches` or `patches`. The server is unchanged either way: unlocks keep being recorded, so turning the flag on later shows each player's full history.
+
 ## Badges and rules
 
 The server decides what is unlocked. Each badge is a metric with a goal in `kip_game.badge_rules()` (`database/migrations/game_004_badges.sql`); the app's list in `src/lib/game/badges.ts` gives each one its name, hint, frame and art, and `src/lib/game/badges.test.ts` keeps the two lists in step.

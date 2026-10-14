@@ -1,4 +1,5 @@
 import { useId, useMemo } from "react";
+import { useFeatureFlag } from "../lib/appConfig";
 import { blankFlagSvg, flagPinSvg, flagSvg, FLAG_HEIGHT, FLAG_WIDTH, formatFlagAge, PIN_HEIGHT, PIN_WIDTH, weatherForDays } from "../lib/game/flag";
 import { flagPatchesMarkup, pinPatchesMarkup, withPatches } from "../lib/game/patches";
 
@@ -11,14 +12,23 @@ type Props = {
   days?: number;
   label?: string;
   className?: string;
-  /** Badges sewn on this flag (#175), drawn on top of it when the flag is big enough. Never changes the flag itself. */
+  /**
+   * Badges sewn on this flag (#175), drawn on top of it when the flag is big enough. Never changes
+   * the flag itself. Ignored while the `badges` flag is off, whatever the server sent.
+   */
   patches?: readonly string[];
 };
+
+/** The patches to draw, as a cache key: none at all while the `badges` flag is off. */
+function usePatchKey(patches: readonly string[] | undefined): string {
+  const badges = useFeatureFlag("badges");
+  return badges ? patches?.join(",") ?? "" : "";
+}
 
 export function Flag({ seed, size = 48, days = 0, label, className, patches }: Props) {
   const id = useId();
   const weather = weatherForDays(days);
-  const patchKey = patches?.join(",") ?? "";
+  const patchKey = usePatchKey(patches);
   // The markup is generated from a fixed vocabulary of shapes and colours, never from user text;
   // patches only ever name badges from the bundled list.
   const markup = useMemo(
@@ -48,7 +58,7 @@ export function FlagPin({ seed, days = 0, ageMs, size = 48, showAge = true, labe
   const id = useId();
   const weather = weatherForDays(days);
   const age = seed && showAge ? formatFlagAge(ageMs ?? days * 86_400_000) : undefined;
-  const patchKey = patches?.join(",") ?? "";
+  const patchKey = usePatchKey(patches);
   const markup = useMemo(
     () => {
       const pin = flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: age });

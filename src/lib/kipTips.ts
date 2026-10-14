@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { KipPose } from "../components/Kip";
+import { isFeatureEnabled, type FeatureFlag } from "./appConfig";
 import { captureProductEvent } from "./productAnalytics";
 
 /**
@@ -73,6 +74,9 @@ export const KIP_TIPS: { readonly [Id in KipTipId]: KipTip & { id: Id } } = {
 };
 
 export const KIP_TIP_IDS = Object.keys(KIP_TIPS) as KipTipId[];
+
+/** Tips about a feature behind a flag: they never show while it is off, not even from the demo tools. */
+const TIP_FLAGS: Partial<Record<KipTipId, FeatureFlag>> = { "badge-first": "badges" };
 
 const SEEN_KEY = "parkdex-kip-tips-seen-v1";
 const ENABLED_KEY = "parkdex-kip-tips-enabled-v1";
@@ -173,6 +177,8 @@ export function replayKipTips(): void {
  */
 export function requestKipTip(id: KipTipId, { force = false }: { force?: boolean } = {}): boolean {
   if (queue.some((entry) => entry.tip.id === id)) return false;
+  const flag = TIP_FLAGS[id];
+  if (flag && !isFeatureEnabled(flag)) return false;
   if (!force && (!kipTipsEnabled() || isKipTipSeen(id))) return false;
   queue = [...queue, { tip: KIP_TIPS[id], token: nextToken++, shown: false }];
   notify();

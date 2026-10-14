@@ -56,13 +56,15 @@ describe("map pins", () => {
     expect(flagPinSvg("robin", { label: "12d" })).toContain(">12d</text>");
   });
 
+  const patchedFlags = () => new Map([
+    ["a", { ...flag("a", "robin", 2), patches: ["nope", "hold-7", "parks-1"] }],
+    ["b", { ...flag("b", "sam", 2), patches: ["hold-7"] }],
+    ["c", flag("c", "kim", 2)],
+  ]);
+
   it("gives a holder's pin a second image with their patches, named by what it draws (#175)", () => {
-    const flags = new Map([
-      ["a", { ...flag("a", "robin", 2), patches: ["nope", "hold-7", "parks-1"] }],
-      ["b", { ...flag("b", "sam", 2), patches: ["hold-7"] }],
-      ["c", flag("c", "kim", 2)],
-    ]);
-    const { collection, images } = buildPins(parks, flags, now);
+    const flags = patchedFlags();
+    const { collection, images } = buildPins(parks, flags, now, { badges: true });
     const [a, b, c, d] = collection.features.map((feature) => feature.properties);
     expect(a.patched).toBe(patchedPinIconId(a.icon, ["hold-7", "parks-1"]));
     expect(a.patched).toBe(`${a.icon}:patches:hold-7,parks-1`);
@@ -72,6 +74,21 @@ describe("map pins", () => {
     // Without patches, or without a flag, both images are the same plain pin.
     expect(c.patched).toBe(c.icon);
     expect(d).toMatchObject({ icon: EMPTY_PIN, patched: EMPTY_PIN });
+  });
+
+  it("draws no patches and keeps them out of every image key with the badges flag off", () => {
+    const flags = patchedFlags();
+    for (const options of [{}, { badges: false }, { badges: false, crews: true }]) {
+      const { collection, images } = buildPins(parks, flags, now, options);
+      for (const pin of collection.features.map((feature) => feature.properties)) {
+        expect(pin.patched).toBe(pin.icon);
+        expect(pin.patched).not.toContain("patches");
+      }
+      for (const [key, image] of images) {
+        expect(key).not.toContain("patches");
+        expect(image.patches ?? []).toEqual([]);
+      }
+    }
   });
 
   it("shows patches only where a pin's cloth is drawn big enough, like every other flag", () => {

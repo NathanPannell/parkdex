@@ -72,7 +72,8 @@ function AchievementBadgeImpl({ badge, size = 96, locked = false, showName = fal
       </g>
       <path d={shape} fill="none" stroke={`url(#r${uid})`} strokeWidth={10} />
       <path d={shape} fill="none" stroke="#14231C" strokeWidth={3} />
-      <path d={shape} fill="none" stroke="#FFFFFF" strokeOpacity={0.75} strokeWidth={1.6} strokeDasharray="4 3.2" transform="translate(100 100) scale(0.9) translate(-100 -100)" />
+      {/* A plain inner highlight. Unlike the park badge, no dashed stitching: dashed rings read as clutter on the shelf. */}
+      <path d={shape} fill="none" stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={1.4} transform="translate(100 100) scale(0.9) translate(-100 -100)" />
       <g>
         {Array.from({ length: stars }, (_, index) => (
           <Star key={index} x={100 + (index - (stars - 1) / 2) * 15} y={badge.shape === "arch" ? 30 : 26} r={6.5} fill={locked ? "#CFC7B4" : "#FFD23F"} />

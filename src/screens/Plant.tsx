@@ -10,12 +10,14 @@ import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
 import { startPhotoCapture } from "../lib/captureMode";
 import { useAuth } from "../lib/accounts/AuthProvider";
+import { useFeatureFlag } from "../lib/appConfig";
 import { useContent } from "../lib/content/provider";
 import { createVisitId, GameError, gameErrorMessage, joinCrew, sendVisit, type Crew, type GameErrorCode, type VisitResult } from "../lib/game/client";
 import { Pennant } from "../components/CrewList";
 import { friendOffers } from "../lib/game/crew";
 import { useCrew } from "../lib/game/CrewProvider";
 import { useFriends } from "../lib/friends/FriendsProvider";
+import { badgeById } from "../lib/game/badges";
 import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
@@ -451,6 +453,9 @@ export function Plant() {
   const offers = joinedCrew && friendsBoard
     ? friendOffers(joinedCrew, me?.handle, new Set(friendsBoard.players.map((player) => player.handle))).slice(0, 3)
     : [];
+  // Badges this visit unlocked (#175), shown only with the `badges` flag on.
+  const badgesOn = useFeatureFlag("badges");
+  const unlockShown = badgesOn && (result?.newBadges ?? []).some((unlock) => badgeById(unlock.id));
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
   const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
   const puffs = impact && !reduce ? [-1, -0.55, -0.15, 0.2, 0.6, 1].map((side) => side * 120 * Math.max(impact.power, 0.5)) : [];
@@ -618,7 +623,7 @@ export function Plant() {
               {/* One headline above, the points in the scene, then one sentence and at most two buttons. */}
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>
               {result && <span className="plant__cheer">{plantCheer(result)}</span>}
-              {(joinedCrew || (result?.newBadges?.length ?? 0) > 0) && (
+              {(joinedCrew || unlockShown) && (
                 <motion.div variants={pop} className="plant__extras">
                   {/* The badges this visit unlocked (#175). */}
                   <BadgeUnlock unlocks={result?.newBadges} compact onOpen={() => leave("parks", "collection")} />

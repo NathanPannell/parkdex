@@ -29,6 +29,12 @@ export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   friends: false,
   /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
   crews: false,
+  /**
+   * Badges (#175): the badge shelf in My Dex, unlocks on visit results, Kip's badge tip and the
+   * patches sewn on flags. Off until the operator turns it on; the server keeps recording
+   * unlocks either way, so turning it on later shows the player's history.
+   */
+  badges: false,
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;
@@ -317,6 +323,11 @@ export function remoteFlag(name: string): boolean | undefined {
 export function useFeatureFlag(flag: FeatureFlag): boolean {
   const read = () => isFeatureEnabled(flag);
   return useSyncExternalStore(subscribeFeatureFlags, read, read);
+}
+
+/** Test hook: switch flags as a check-in would, telling every reader. */
+export function setFeatureFlagsForTests(flags: Partial<FeatureFlags>): void {
+  applyFlags({ flags: { ...active.flags, ...flags }, remoteFlags: active.remoteFlags });
 }
 
 /** `remoteFlag`, live like `useFeatureFlag`. */

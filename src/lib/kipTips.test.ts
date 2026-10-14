@@ -19,6 +19,7 @@ import {
   setKipTipsPaused,
   withdrawKipTip,
 } from "./kipTips";
+import { setFeatureFlagsForTests } from "./appConfig";
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -170,5 +171,17 @@ describe("Kip's Tips", () => {
     expect(kipTipsEnabled()).toBe(true);
     expect(isKipTipSeen("points")).toBe(false);
     expect(storage.values.has("parkdex-kip-tips-seen-v1")).toBe(false);
+  });
+
+  it("never shows the badge tip while the badges flag is off, not even forced from the demo tools", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    setFeatureFlagsForTests({ badges: false });
+    expect(requestKipTip("badge-first")).toBe(false);
+    expect(requestKipTip("badge-first", { force: true })).toBe(false);
+    expect(currentKipTip()).toBeNull();
+    setFeatureFlagsForTests({ badges: true });
+    expect(requestKipTip("badge-first")).toBe(true);
+    expect(currentKipTip()?.tip.id).toBe("badge-first");
+    setFeatureFlagsForTests({ badges: false });
   });
 });
