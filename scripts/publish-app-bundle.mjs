@@ -205,6 +205,12 @@ export async function prepareAppBundle({
   return { pointer, pointerBytes, zip, zipSha256, zipPath, pointerPath, fileCount: files.length };
 }
 
+/** An ETag without its weak-validator prefix, or null. */
+export function strongEtag(value) {
+  if (typeof value !== "string" || !value) return null;
+  return value.startsWith("W/") ? value.slice(2) : value;
+}
+
 async function readCurrentPointer(fetcher, channel, expectedGeneration, expectedEtag) {
   const response = await fetcher(CDN_ORIGIN + "/app-bundles/channels/" + channel + "/current.json", { method: "GET", cache: "no-store" });
   if (response.status === 404) {
@@ -215,8 +221,10 @@ async function readCurrentPointer(fetcher, channel, expectedGeneration, expected
   const current = await response.json();
   if (current?.schema !== POINTER_SCHEMA || current.channel !== channel) throw new Error("the current pointer is not a " + channel + " app bundle pointer");
   if (current.generation !== expectedGeneration) throw new Error("the current pointer is generation " + current.generation + ", not " + expectedGeneration);
-  const etag = response.headers.get("ETag");
-  if (!etag || etag !== expectedEtag) throw new Error("the current pointer ETag changed; pass --expected-etag " + etag);
+  // The CDN worker can serve a weak validator (W/"…") for the pointer, but R2's conditional PUT
+  // only matches the strong form, so compare and send the ETag without the W/ prefix.
+  const etag = strongEtag(response.headers.get("ETag"));
+  if (!etag || etag !== strongEtag(expectedEtag)) throw new Error("the current pointer ETag changed; pass --expected-etag " + etag);
   return { condition: { type: "if-match", etag }, previous: current };
 }
 
