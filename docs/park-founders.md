@@ -2,13 +2,13 @@
 
 A signed-in player with a handle, standing in a park, takes a photo. When the photo check approves it straight away, the player becomes the park's founder, the photo becomes the park's public cover, today's visit is recorded (planting or taking the flag) and the player earns a one-time 10 point founder bonus. Everything is online. Design: issue #126.
 
-`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place the 10 lives) and the two analytics event types. `founders_002_reviews.sql` adds manual review ([below](#manual-review)): `kip_founders.check_photos` (the photo and position of a rejected or unsure check, kept for 24 hours) and `kip_founders.review_requests`. `founders_003_park_removed.sql` adds the `park_removed` analytics event for [Remove from map](#remove-from-map). Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founding.ts` (the founding transaction, shared with review approvals), `worker/founding-reviews.ts` (the operator's review store and retention), `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
+`database/migrations/founders_001_init.sql` adds `kip_founders.parks` (one founder and cover per park), `kip_founders.photo_checks` (one row per check, no image, no position), the bonus in `kip_game.player_scores` (`kip_founders.bonus_points()` is the only place it lives; `game_002_points.sql` redefines it as 24, from 10, for hourly points, #169) and the two analytics event types. `founders_002_reviews.sql` adds manual review ([below](#manual-review)): `kip_founders.check_photos` (the photo and position of a rejected or unsure check, kept for 24 hours) and `kip_founders.review_requests`. `founders_003_park_removed.sql` adds the `park_removed` analytics event for [Remove from map](#remove-from-map). `founders_004_boundary_boxes.sql` adds `public.park_boundary_box(feature)` and a GiST index on it over `public.boundaries`, so catalogue parks are found by where their boundary reaches, not only by their pin. Code: `worker/founders.ts` (routes), `worker/founders-store.ts`, `worker/founding.ts` (the founding transaction, shared with review approvals), `worker/founding-reviews.ts` (the operator's review store and retention), `worker/founderPhoto.ts` (questions and decision), `worker/jpeg.ts` (metadata stripping), `worker/parkLocation.ts` (be-there check).
 
 ## Rules
 
 - **Be there.** The position must be inside the outline, allowing `min(max(accuracyM, 10), 35)` metres outside its edge. Accuracy worse than 100 m is refused.
-- **Outline.** A catalogue park uses its boundary. An OpenStreetMap park uses `kip_osm.parks`, then Nominatim and Overpass. An outline that is already a Parkdex park (`catalogueMatch`) is founded as that park, never published again. Unnamed OpenStreetMap outlines cannot be founded. Hidden parks are refused.
-- **Photo.** JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
+- **Outline.** A catalogue park uses its boundary. An OpenStreetMap park uses `kip_osm.parks`, then Nominatim and Overpass. An outline that is already a Parkdex park (`catalogueMatch` in `worker/catalogueMatch.ts`) is founded as that park, never published again. It is that park when it has the park's published `osm-<type>-<id>`, when its interior point is inside the park's boundary, or when the park's interior point is inside it and the park covers at least a quarter of it. A name never overrides the shapes: a park with a boundary also matches only with the same name and at least a quarter of the smaller shape's ground in common, and a park without a boundary (a pin only) with the same name and its pin within 1.5 km. The same name ignores generic words (park, regional, community, …) and word order, so Watershed Park is Watershed Regional Park, but a name inside a longer one is not the same name: Steveston Town Square Park and Steveston Community Park, next door, are two parks. The search and the founding both compare the outline with the catalogue parks around the player: those whose pin is within 5 km, and those whose boundary's bounding box comes within 5 km (`nearbyParks` in `worker/proposalReview.ts`, the `boundaries_box_idx` index from `founders_004_boundary_boxes.sql`). The second set catches the far parts of big parks, such as Kejimkujik Seaside, about 72 km from Kejimkujik's pin (#182). An outline in a hole of a catalogue park, or next to one of its parts, is still a new park. Unnamed OpenStreetMap outlines cannot be founded. Hidden parks are refused.
+- **Photo.** The app sends the player's 3:4 crop of the photo (#173), at most 1,280 px on the long edge, so the check and the cover see the same picture the player chose. On Android the phone's own camera app takes it. The server accepts any shape: JPEG only, at most 1.5 MiB decoded and 2,048 px a side. APP1 to APP15 and COM segments (EXIF with GPS, XMP, ICC, comments) and anything after the end of the image are removed before the photo is checked, stored or served.
 - **Check.** One Decisions API call with six yes/no flags and no overall verdict. A photo is approved when no flag's "yes" probability is above that flag's threshold. Otherwise it is rejected, naming those flags, most likely first. The check never answers `unsure`. The thresholds (`DEFAULT_FLAG_THRESHOLDS` in `worker/founderPhoto.ts`) were chosen by the operator in `tools/photo-lab` against 100 labelled photos (#160):
 
   | Flag | Counts when yes is above |
@@ -63,7 +63,7 @@ Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys; 
   "attemptId": "6f1c2f0e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
   "position": { "lat": 49.0895, "lng": -123.059, "accuracyM": 12 },
   "target": { "osm": { "type": "way", "id": 23938892 } },
-  "photo": { "mime": "image/jpeg", "base64": "<JPEG bytes>", "width": 1280, "height": 796 }
+  "photo": { "mime": "image/jpeg", "base64": "<JPEG bytes>", "width": 960, "height": 1280 }
 }
 ```
 
@@ -74,8 +74,8 @@ Signed in (Bearer, or cookie with `X-CSRF-Token`), handle required. Exact keys; 
   "outcome": "founded",
   "park": { "id": "osm-way-23938892", "name": "Paterson Park" },
   "coverUrl": "https://web.parkdex.app/api/parks/osm-way-23938892/cover/<sha256>.jpg",
-  "visit": { "visitId": "…", "parkId": "osm-way-23938892", "outcome": "planted", "pointsEarned": 0, "previousHolder": null, "flagSince": "2026-10-09T04:46:43.368Z" },
-  "founderPoints": 10
+  "visit": { "visitId": "…", "parkId": "osm-way-23938892", "outcome": "planted", "pointsEarned": 6, "pointsBreakdown": { "base": 6, "days": 0 }, "previousHolder": null, "flagSince": "2026-10-09T04:46:43.368Z" },
+  "founderPoints": 24
 }
 ```
 
@@ -250,7 +250,7 @@ What a new founding of the outline checks, and what the removal does about each:
 
 | A founding checks | Remove from map |
 | --- | --- |
-| No founder row for the park (`already_founded`) | Deletes the `kip_founders.parks` row: the founder, the cover photo and, because `kip_game.player_scores` derives the bonus from that row (`kip_founders.founder_points`), the 10 points. A new founding pays the bonus once. |
+| No founder row for the park (`already_founded`) | Deletes the `kip_founders.parks` row: the founder, the cover photo and, because `kip_game.player_scores` derives the bonus from that row (`kip_founders.founder_points`), the 24 points. A new founding pays the bonus once. |
 | The outline's `osm-<type>-<id>` is not in `public.parks`, and `catalogueMatch` pairs it with no catalogue park nearby | Deletes the park with the same statements as Delete (draft, park, and by cascade its boundary, drive data, reader floor and hidden row), in one content revision whose park, boundary and drive tombstones phones apply on their next sync. |
 | The outline is in `kip_osm.parks` and named | Keeps the outline. The in-app search marks it `inCatalogue: null` again. |
 | No published draft holds the id (`founding_blocked`) | Deletes the draft. |
@@ -275,9 +275,9 @@ What a new founding of the outline checks, and what the removal does about each:
 
 ## Testing
 
-- `worker/jpeg.test.ts`, `worker/park-location.test.ts`, `worker/founder-photo.test.ts`, `worker/founders.test.ts`.
+- `worker/jpeg.test.ts`, `worker/park-location.test.ts`, `worker/founder-photo.test.ts`, `worker/founders.test.ts`, `worker/catalogue-match.test.ts` (far parts, holes and neighbours) and `worker/proposal-review.test.ts` (the boundary box query and its fallback).
 - `worker/founding.test.ts` (the shared transaction), `operator/server/parks/reviews.test.ts` (the dashboard's review routes).
 - `scripts/qa-founders-review-sql.mjs` (`npm run test:sql`, own throwaway database): keeping a rejected photo, asking for a review, approval through the dashboard routes (publish, founder, cover, bonus, no visit or flag), rejection, the supersede race, the daily limit, decisions in `/api/game/me`, retention and account deletion.
 - `operator/server/parks/removal.test.ts` (Remove from map routes and the memory store) and `scripts/qa-park-removal-sql.mjs` (`npm run test:sql`, own throwaway database): found an OpenStreetMap park, remove it, the search offers it again, the same tester founds it again the same day with the bonus counted once, a curated park founded again from its outline, pending reviews closed with the reason, refusals, a database without `founders_003`, and a removal racing a founding.
-- `scripts/qa-founders-sql.mjs` (`npm run test:sql`, own throwaway database): the full migration inventory replayed twice, then the real routes and stores for a new and a catalogue park, concurrent founders, the bonus, one visit per day, hidden parks, covers, summaries, analytics rows and account deletion.
+- `scripts/qa-founders-sql.mjs` (`npm run test:sql`, own throwaway database): the full migration inventory replayed twice, then the real routes and stores for a new and a catalogue park, concurrent founders, the bonus, one visit per day, hidden parks, covers, summaries, analytics rows and account deletion, and a two-part park whose second part is 70 km from its pin: an outline there is marked and founded as the catalogue park, while outlines in its hole and next to the part are new parks (#182).
 - Locally: `npm run local:api -- --content` installs the content tables so parks can be founded; load OpenStreetMap outlines with `scripts/osm_park_index.py` (`docs/osm-park-index.md`).

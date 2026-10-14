@@ -1,7 +1,13 @@
 import {
   CONTENT_CDN_ORIGIN,
   CONTENT_READER_VERSION,
+  isMapChunkPath,
+  isMapLayoutPath,
   isRemoteContentPath,
+  mapChunkIndex,
+  mapChunkPath,
+  type CatalogueCache,
+  type CatalogueChunkRef,
   type ContentBoundaries,
   type ContentChannel,
   type ContentEnvironment,
@@ -191,7 +197,7 @@ function isSupportedManifestPath(path: string): boolean {
     /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(path) ||
     /^art\/kip\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.webp$/.test(path) ||
     /^art\/products\/[A-Za-z0-9._ -]+\.webp$/.test(path) ||
-    /^map\/island\/manifest\.json$/.test(path) || /^map\/island\/\d{3,}\.bin$/.test(path) ||
+    isMapLayoutPath(path) || isMapChunkPath(path) ||
     /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path);
 }
 
@@ -255,9 +261,10 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
     if (knownSize !== undefined && knownSize !== file.byte_size) throw new ContentValidationError("one file hash is declared with multiple sizes");
     hashSizes.set(file.sha256, file.byte_size);
   }
-  for (const required of ["data/parks.json", "data/drive.json", "boundaries.geojson", "map/island/manifest.json"]) {
+  for (const required of ["data/parks.json", "data/drive.json", "boundaries.geojson"]) {
     if (!paths.has(required)) throw new ContentValidationError(`manifest is missing ${required}`);
   }
+  if (!files.some((file) => isMapLayoutPath(file.path))) throw new ContentValidationError("manifest is missing its map chunk layout");
   const parkIds = uniqueStringArray(manifest.parkIds, "manifest.parkIds", PARK_ID);
   const boundaryIds = uniqueStringArray(manifest.boundaryIds, "manifest.boundaryIds", PARK_ID);
   const mapManifestValue = record(manifest.mapManifest, "manifest.mapManifest");
@@ -268,14 +275,7 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
     count: positiveInteger(mapManifestValue.count, "manifest.mapManifest.count"),
   };
   if (mapManifest.count !== Math.ceil(mapManifest.size / mapManifest.chunkBytes)) throw new ContentValidationError("map manifest chunk count does not match its size");
-  const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
-  if (chunks.length !== mapManifest.count) throw new ContentValidationError("map chunk inventory does not match its manifest");
-  for (let index = 0; index < mapManifest.count; index++) {
-    const path = `map/island/${String(index).padStart(3, "0")}.bin`;
-    const chunk = files.find((file) => file.path === path);
-    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
-    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
-  }
+  assertMapChunks(files, mapManifest, "map chunk inventory does not match its manifest");
   if (!files.some((file) => file.path.startsWith("map/fonts/") && file.path.endsWith(".pbf"))) {
     throw new ContentValidationError("manifest is missing map glyphs");
   }
@@ -369,7 +369,7 @@ function validateCoordinates(value: unknown, label: string) {
   }
 }
 
-function validateBoundaries(value: unknown, parks: Park[], manifest: ContentManifest): ContentBoundaries {
+function validateBoundaries(value: unknown, parks: Park[], manifest: ContentManifest, partial = false): ContentBoundaries {
   const collection = record(value, "boundaries.geojson");
   requireKeys(collection, ["type", "features"], "boundaries.geojson");
   if (collection.type !== "FeatureCollection" || !Array.isArray(collection.features)) {
@@ -405,6 +405,12 @@ function validateBoundaries(value: unknown, parks: Park[], manifest: ContentMani
       geometry: { type: "MultiPolygon", coordinates: geometry.coordinates },
     } as ContentBoundaries["features"][number];
   });
+  if (partial) {
+    // A lean catalogue keeps some boundaries; they are stored in park order.
+    const order = new Map(parks.map((park, index) => [park.id, index]));
+    features.sort((a, b) => order.get(a.properties.id)! - order.get(b.properties.id)!);
+    return { type: "FeatureCollection", features };
+  }
   if (seen.size !== parks.length) throw new ContentValidationError("boundary park references do not match the catalog");
   if (!sameOrderedIds(features.map((feature) => feature.properties.id), manifest.boundaryIds)) {
     throw new ContentValidationError("boundary ids do not match the immutable manifest order");
@@ -491,6 +497,7 @@ export function validateContentPayload(
   boundariesValue: unknown,
   driveValue: unknown,
   manifest: ContentManifest,
+  options: { partialBoundaries?: boolean } = {},
 ): ContentPayload {
   if (!Array.isArray(parksValue) || parksValue.length === 0) throw new ContentValidationError("data/parks.json must be a non-empty array");
   const parks = parksValue.map(validatePark);
@@ -511,7 +518,7 @@ export function validateContentPayload(
   if (scenes.size !== referencedScenes.size || [...scenes].some((path) => !referencedScenes.has(path))) {
     throw new ContentValidationError("badge scene inventory does not match the park catalog");
   }
-  const boundaries = validateBoundaries(boundariesValue, parks, manifest);
+  const boundaries = validateBoundaries(boundariesValue, parks, manifest, options.partialBoundaries === true);
   const drive = validateDrive(driveValue, parks);
   return { parks, boundaries, drive };
 }
@@ -550,11 +557,60 @@ export function validateContentSyncState(value: ContentSyncState): ContentSyncSt
     if (Object.keys(driveParks).length !== 0 || assets.length !== 0) throw new ContentValidationError("empty catalog cannot contain drive rows or scene assets");
     payload = { parks: [], boundaries: { type: "FeatureCollection", features: [] }, drive: { hubs, parks: {} } };
   } else {
-    payload = validateContentPayload(parks, value.boundaries, { hubs: value.drive?.hubs, parks: value.drive?.parks }, syncValidationManifest(assets, parks));
+    payload = validateContentPayload(
+      parks, value.boundaries, { hubs: value.drive?.hubs, parks: value.drive?.parks }, syncValidationManifest(assets, parks),
+      { partialBoundaries: value.catalogue !== undefined },
+    );
   }
   const map = parseMapPointer(value.map);
   const sourceId = value.sourceId === undefined ? undefined : string(value.sourceId, "sync source ID");
-  return { revision, ...(sourceId ? { sourceId } : {}), parks: payload.parks, boundaries: payload.boundaries, drive: payload.drive, assets, map };
+  const catalogue = value.catalogue === undefined ? undefined : parseCatalogueCache(value.catalogue, payload);
+  return { revision, ...(sourceId ? { sourceId } : {}), parks: payload.parks, boundaries: payload.boundaries, drive: payload.drive, assets, map, ...(catalogue ? { catalogue } : {}) };
+}
+
+function parseBbox(value: unknown, label: string): [number, number, number, number] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length !== 4 || value.some((entry) => typeof entry !== "number" || !Number.isFinite(entry))) {
+    throw new ContentValidationError(`${label} must be four finite numbers`);
+  }
+  const [west, south, east, north] = value as [number, number, number, number];
+  if (west > east || south > north) throw new ContentValidationError(`${label} is inverted`);
+  return [west, south, east, north];
+}
+
+function parseChunkRef(value: unknown, label: string): CatalogueChunkRef {
+  const chunk = record(value, label);
+  requireKeys(chunk, ["path", "url", "sha256", "byte_size", "parkIds", "bbox"], label);
+  const path = string(chunk.path, `${label}.path`);
+  if (!CATALOGUE_CHUNK_PATH.test(path)) throw new ContentValidationError(`${label}.path is not a boundary chunk`);
+  const url = string(chunk.url, `${label}.url`);
+  if (!url.startsWith(`${CONTENT_CDN_ORIGIN}/releases/`) || !url.endsWith(`/${path}`)) throw new ContentValidationError(`${label}.url is outside its release`);
+  const sha256 = string(chunk.sha256, `${label}.sha256`);
+  if (!SHA256.test(sha256)) throw new ContentValidationError(`${label}.sha256 is invalid`);
+  const byteSize = positiveInteger(chunk.byte_size, `${label}.byte_size`);
+  if (byteSize > MAX_CATALOGUE_FILE_BYTES) throw new ContentValidationError(`${label} is too large`);
+  return { path, url, sha256, byte_size: byteSize, parkIds: uniqueStringArray(chunk.parkIds, `${label}.parkIds`, PARK_ID), bbox: parseBbox(chunk.bbox, `${label}.bbox`) };
+}
+
+/** A stored lean catalogue: its chunks, which of them are on the device, and the boundaries changes pinned. */
+function parseCatalogueCache(value: unknown, payload: ContentPayload): CatalogueCache {
+  const cache = record(value, "catalogue cache");
+  requireKeys(cache, ["version", "revision", "chunks", "loaded", "pinned"], "catalogue cache");
+  const version = cache.version === null ? null : string(cache.version, "catalogue cache version");
+  if (version !== null && !SHA256.test(version)) throw new ContentValidationError("catalogue cache version is invalid");
+  const revision = nonNegativeSafeInteger(cache.revision, "catalogue cache revision");
+  if (!Array.isArray(cache.chunks)) throw new ContentValidationError("catalogue cache chunks must be an array");
+  const chunks = cache.chunks.map((chunk, index) => parseChunkRef(chunk, `catalogue cache chunks[${index}]`));
+  const paths = new Set(chunks.map((chunk) => chunk.path));
+  if (paths.size !== chunks.length) throw new ContentValidationError("catalogue cache lists a chunk twice");
+  const loaded = Array.isArray(cache.loaded) && cache.loaded.length === 0 ? [] : uniqueStringArray(cache.loaded, "catalogue cache loaded");
+  if (loaded.some((path) => !paths.has(path))) throw new ContentValidationError("catalogue cache loaded an unknown chunk");
+  const parkIds = new Set(payload.parks.map((park) => park.id));
+  const boundaryIds = new Set(payload.boundaries.features.map((feature) => feature.properties.id));
+  // A pin only matters while its park and boundary exist.
+  const pins = Array.isArray(cache.pinned) && cache.pinned.length === 0 ? [] : uniqueStringArray(cache.pinned, "catalogue cache pinned");
+  const pinned = pins.filter((id) => parkIds.has(id) && boundaryIds.has(id));
+  return { version, revision, chunks, loaded, pinned };
 }
 
 // A park this build cannot read is left out with its boundary, drive row and
@@ -594,7 +650,7 @@ function withoutSkippedParks(snapshot: Record<string, unknown>, parks: Park[], s
   };
 }
 
-export function parseContentSnapshot(value: unknown): ContentSyncState {
+export function parseContentSnapshot(value: unknown, catalogue?: CatalogueCache): ContentSyncState {
   const snapshot = record(value, "content snapshot");
   requireKeys(snapshot, ["schema", "revision", "parks", "boundaries", "drive", "assets", "map"], "content snapshot");
   if (snapshot.schema !== "parkdex.content-sync/v1") throw new ContentValidationError("content snapshot schema is unsupported");
@@ -609,6 +665,7 @@ export function parseContentSnapshot(value: unknown): ContentSyncState {
     // Later releases may publish other asset kinds; this build only stores badge scenes.
     assets: rest.assets.filter((file) => typeof file?.path === "string" && SCENE_ASSET_PATH.test(file.path)),
     map: parseMapPointer(snapshot.map),
+    ...(catalogue ? { catalogue } : {}),
   };
   return validateContentSyncState(state);
 }
@@ -627,7 +684,7 @@ export type ContentCataloguePointer = {
   indexBytes: number;
   parkCount: number;
 };
-export type ContentCatalogueChunk = ContentFile & { parkIds: string[] };
+export type ContentCatalogueChunk = ContentFile & { parkIds: string[]; bbox?: [number, number, number, number] | null };
 export type ContentCatalogueIndex = {
   pointer: ContentCataloguePointer;
   body: Record<string, unknown>;
@@ -695,7 +752,10 @@ export function parseCatalogueIndex(value: unknown, pointer: ContentCataloguePoi
       seen.add(id);
     }
     const key = `releases/${pointer.version}/${path}`;
-    return { path, key, url: `${CONTENT_CDN_ORIGIN}/${encodeLogicalPath(key)}`, sha256, byte_size: byteSize, content_type: "application/json", parkIds };
+    // Releases list each chunk's area. The app picks chunks by their parks, so a missing area is not an error.
+    let bbox: [number, number, number, number] | null = null;
+    try { bbox = parseBbox(chunk.bbox, `${label}.bbox`); } catch { bbox = null; }
+    return { path, key, url: `${CONTENT_CDN_ORIGIN}/${encodeLogicalPath(key)}`, sha256, byte_size: byteSize, content_type: "application/json", parkIds, bbox };
   });
   return { pointer, body, chunks };
 }
@@ -732,6 +792,108 @@ export function assembleCatalogueSnapshot(index: ContentCatalogueIndex, chunkFea
   });
 }
 
+/**
+ * The catalogue with only some boundary chunks: every park, drive time and badge
+ * descriptor from the index, and the boundaries of the chunks given. The other chunks
+ * are remembered so their boundaries can load later.
+ */
+export function assembleLeanCatalogue(index: ContentCatalogueIndex, loaded: ReadonlyMap<string, unknown[]>): ContentSyncState {
+  const chunks: CatalogueChunkRef[] = index.chunks.map((chunk) => ({
+    path: chunk.path, url: chunk.url, sha256: chunk.sha256, byte_size: chunk.byte_size, parkIds: [...chunk.parkIds], bbox: chunk.bbox ?? null,
+  }));
+  const catalogue: CatalogueCache = {
+    version: index.pointer.version,
+    revision: index.pointer.revision,
+    chunks,
+    loaded: chunks.filter((chunk) => loaded.has(chunk.path)).map((chunk) => chunk.path),
+    pinned: [],
+  };
+  const parkIds = new Set((index.body.parks as unknown[]).map((park) => String(record(park, "catalogue park").id)));
+  const features = [...loaded.values()].flat().filter((feature) => parkIds.has(featureId(feature)));
+  return parseContentSnapshot({
+    schema: "parkdex.content-sync/v1",
+    revision: index.pointer.revision,
+    parks: index.body.parks,
+    boundaries: { type: "FeatureCollection", features },
+    drive: index.body.drive,
+    assets: index.body.assets,
+    map: index.body.map,
+  }, catalogue);
+}
+
+function featureId(feature: unknown): string {
+  return String((feature as { properties?: { id?: unknown } } | null)?.properties?.id);
+}
+
+/**
+ * Add the boundaries of chunks loaded on demand and mark them, and every chunk in
+ * `used`, as just used. A boundary already on the device is kept, because it is at
+ * least as new as the release's copy (it may have changed after the release).
+ */
+export function mergeCatalogueChunks(state: ContentSyncState, loaded: ReadonlyMap<string, unknown[]>, used: readonly string[] = []): ContentSyncState {
+  const catalogue = state.catalogue;
+  if (!catalogue) throw new ContentValidationError("only a lean catalogue loads boundaries by chunk");
+  const known = new Set(catalogue.chunks.map((chunk) => chunk.path));
+  const parks = new Map(state.parks.map((park) => [park.id, park]));
+  const present = new Set(state.boundaries.features.map((feature) => feature.properties.id));
+  const added: ContentBoundaries["features"] = [];
+  for (const [path, features] of loaded) {
+    if (!known.has(path)) throw new ContentValidationError(`${path} is not part of this catalogue`);
+    for (const raw of features) {
+      const id = featureId(raw);
+      const park = parks.get(id);
+      if (!park || present.has(id)) continue;
+      added.push(validateBoundaryFeature(raw, park, `${path} boundary ${id}`));
+      present.add(id);
+    }
+  }
+  const stored = new Set([...catalogue.loaded, ...loaded.keys()]);
+  const touched = [...new Set([...used, ...loaded.keys()])].filter((path) => stored.has(path));
+  const touchedSet = new Set(touched);
+  const order = [...catalogue.loaded.filter((path) => !touchedSet.has(path)), ...touched];
+  return validateContentSyncState({
+    ...state,
+    boundaries: { type: "FeatureCollection", features: [...state.boundaries.features, ...added] },
+    catalogue: { ...catalogue, loaded: order },
+  });
+}
+
+/** Drop the boundaries of the given chunks from the device, except pinned ones. */
+export function evictCatalogueChunks(state: ContentSyncState, paths: readonly string[]): ContentSyncState {
+  const catalogue = state.catalogue;
+  if (!catalogue || paths.length === 0) return state;
+  const evict = new Set(paths);
+  const stillLoaded = catalogue.loaded.filter((path) => !evict.has(path));
+  const keepIds = new Set(catalogue.pinned);
+  const kept = new Set(stillLoaded);
+  for (const chunk of catalogue.chunks) if (kept.has(chunk.path)) for (const id of chunk.parkIds) keepIds.add(id);
+  const dropIds = new Set(catalogue.chunks.filter((chunk) => evict.has(chunk.path)).flatMap((chunk) => chunk.parkIds).filter((id) => !keepIds.has(id)));
+  return {
+    ...state,
+    boundaries: { type: "FeatureCollection", features: state.boundaries.features.filter((feature) => !dropIds.has(feature.properties.id)) },
+    catalogue: { ...catalogue, loaded: stillLoaded },
+  };
+}
+
+/**
+ * A map has one chunk layout file and every chunk beside it, in map/island/ for
+ * releases before the combined map and map/detail/ from it (see mapFolder).
+ */
+function assertMapChunks(files: readonly ContentFile[], mapManifest: MapManifest, mismatch: string): void {
+  const layouts = files.filter((file) => isMapLayoutPath(file.path));
+  if (layouts.length !== 1) throw new ContentValidationError(mismatch);
+  const folder = layouts[0]!.path.split("/")[1]!;
+  const chunks = files.filter((file) => isMapChunkPath(file.path));
+  if (chunks.length !== mapManifest.count) throw new ContentValidationError(mismatch);
+  const byPath = new Map(chunks.map((file) => [file.path, file]));
+  for (let index = 0; index < mapManifest.count; index += 1) {
+    const path = mapChunkPath(index, folder);
+    const chunk = byPath.get(path);
+    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
+    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
+  }
+}
+
 export function parseContentMapInventory(value: unknown, expectedVersion: string): ContentMapInventory {
   const manifest = record(value, "content map manifest");
   requireKeys(manifest, ["schema", "version", "mapManifest", "files"], "content map manifest");
@@ -741,20 +903,12 @@ export function parseContentMapInventory(value: unknown, expectedVersion: string
   const mapManifest = parseMapManifestLayout(manifest.mapManifest, "map manifest.mapManifest");
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) throw new ContentValidationError("map manifest.files must be a non-empty array");
   const files = manifest.files.map((file, index) => parseSyncFile(file, `map manifest.files[${index}]`, (path) =>
-    path === "map/island/manifest.json" || /^map\/island\/\d{3,}\.bin$/.test(path) || /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)));
+    isMapLayoutPath(path) || isMapChunkPath(path) || /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)));
   if (new Set(files.map((file) => file.path)).size !== files.length) throw new ContentValidationError("map manifest contains duplicate paths");
-  const mapFile = files.find((file) => file.path === "map/island/manifest.json");
-  const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
-  if (!mapFile || chunks.length !== mapManifest.count) throw new ContentValidationError("map manifest chunk inventory does not match its layout");
-  for (let index = 0; index < mapManifest.count; index += 1) {
-    const path = `map/island/${String(index).padStart(3, "0")}.bin`;
-    const chunk = files.find((file) => file.path === path);
-    const expectedSize = Math.min(mapManifest.chunkBytes, mapManifest.size - index * mapManifest.chunkBytes);
-    if (!chunk || chunk.byte_size !== expectedSize) throw new ContentValidationError(`map chunk ${path} has an unexpected size`);
-  }
-  if (chunks.some((file) => Number(file.path.match(/\/(\d+)\.bin$/)?.[1]) >= mapManifest.count)) {
+  if (files.some((file) => isMapChunkPath(file.path) && mapChunkIndex(file.path)! >= mapManifest.count)) {
     throw new ContentValidationError("map manifest contains an out-of-range chunk");
   }
+  assertMapChunks(files, mapManifest, "map manifest chunk inventory does not match its layout");
   if (!files.some((file) => file.path.startsWith("map/fonts/") && file.path.endsWith(".pbf"))) {
     throw new ContentValidationError("map manifest is missing map glyphs");
   }
@@ -889,6 +1043,17 @@ export function applyContentChangeBatch(state: ContentSyncState, batch: ContentC
       case "map": if (!deleting) map = change.value; break;
     }
   }
+  // In a lean catalogue a boundary changed after the release stays on the device even
+  // when its chunk is evicted, because the release only has the older copy.
+  const catalogue = state.catalogue
+    ? {
+      ...state.catalogue,
+      pinned: [...new Set([
+        ...state.catalogue.pinned,
+        ...batch.changes.filter((change) => change.entity === "boundary" && change.op === "upsert").map((change) => change.id),
+      ])],
+    }
+    : undefined;
   const candidate: ContentSyncState = {
     revision: batch.revision,
     ...(state.sourceId ? { sourceId: state.sourceId } : {}),
@@ -899,6 +1064,7 @@ export function applyContentChangeBatch(state: ContentSyncState, batch: ContentC
     // The active client catalogue stores only descriptors referenced by current parks.
     assets: [...assets.values()].filter((file) => parksHasScenePath(parks, file.path)),
     map,
+    ...(catalogue ? { catalogue } : {}),
   };
   return validateContentSyncState(candidate);
 }
@@ -913,11 +1079,11 @@ export function remoteFiles(manifest: ContentManifest): ContentFile[] {
 }
 
 export function coreFiles(manifest: ContentManifest): ContentFile[] {
-  return remoteFiles(manifest).filter((file) => !/^map\/island\/\d{3,}\.bin$/.test(file.path));
+  return remoteFiles(manifest).filter((file) => !isMapChunkPath(file.path));
 }
 
 export function mapChunkFiles(manifest: ContentManifest): ContentFile[] {
-  return manifest.files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
+  return manifest.files.filter((file) => isMapChunkPath(file.path));
 }
 
 export function fileByPath(manifest: ContentManifest, path: string): ContentFile {

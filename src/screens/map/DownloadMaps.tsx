@@ -13,12 +13,14 @@ import {
   gridFeatures,
   loadCellIndex,
   readSavedSquares,
+  readSquaresToSaveAgain,
   squareLabels,
   surroundingCellKeys,
   writeSavedSquares,
   type CellIndex,
   type CellState,
 } from "../../lib/mapCells";
+import { mapFolder } from "../../lib/content/contracts";
 import { mapChunkPath, setAllowedMapChunks } from "../../lib/offlineTiles";
 import { sfx } from "../../lib/feedback";
 import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../../lib/downloadPreferences";
@@ -53,7 +55,8 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   const [index, setIndex] = useState<CellIndex | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Set<string>>(() => new Set(readSavedSquares()));
-  const [toAdd, setToAdd] = useState<Set<string>>(new Set());
+  // Squares saved for an earlier map start selected, so one download saves them again.
+  const [toAdd, setToAdd] = useState<Set<string>>(() => new Set(readSquaresToSaveAgain()));
   const [toRemove, setToRemove] = useState<Set<string>>(new Set());
   const [wifi, setWifi] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -211,6 +214,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   }, [index, toRemove, saved]);
 
   const releaseId = content?.releaseId;
+  const folder = useMemo(() => mapFolder(content?.manifest.files ?? []), [content?.manifest.files]);
   const mapReady = !!releaseId && content?.manifest.mapManifest.size === index?.size;
   const busy = progress !== null;
 
@@ -224,7 +228,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
       const ids = [...chunkIdsForCells(index, keys)];
       const missing: number[] = [];
       for (const id of ids) {
-        if (!(await runtime.hasLocalFile?.(releaseId, mapChunkPath(id)))) missing.push(id);
+        if (!(await runtime.hasLocalFile?.(releaseId, mapChunkPath(id, folder)))) missing.push(id);
       }
       const total = bytesForChunks(index, missing);
       let done = 0;
@@ -234,7 +238,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
         while (next < missing.length) {
           const id = missing[next++];
           // "bulk" downloads wait for confirmed Wi-Fi in the scheduler and transport.
-          await runtime.ensureFile(releaseId, mapChunkPath(id), "bulk", controller.signal);
+          await runtime.ensureFile(releaseId, mapChunkPath(id, folder), "bulk", controller.signal);
           done += bytesForChunks(index, [id]);
           setProgress({ done, total, waitingForWifi: false });
         }
@@ -262,7 +266,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
     const kept = hasFix ? [...remaining, ...surroundingCellKeys(user)] : remaining;
     setError(null);
     try {
-      for (const id of chunksToRemove(index, removed, kept)) await runtime.deleteMapChunk?.(releaseId, mapChunkPath(id));
+      for (const id of chunksToRemove(index, removed, kept)) await runtime.deleteMapChunk?.(releaseId, mapChunkPath(id, folder));
       const nextSaved = new Set(remaining);
       writeSavedSquares(nextSaved);
       setSaved(nextSaved);

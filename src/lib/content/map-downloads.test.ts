@@ -113,6 +113,7 @@ describe("map download coverage", () => {
       runtime,
       "release-v2",
       { size: 4, chunkBytes: 2, count: 2 },
+      "island",
       () => allowed,
       false,
       controller.signal,
@@ -221,7 +222,7 @@ describe("detail map coverage notifications", () => {
       }),
       readFile: async () => new Uint8Array([1, 2]).buffer,
     } as unknown as ContentRuntime;
-    const source = new RuntimeChunkSource(runtime, releaseId, { size: 8, chunkBytes: 2, count: 4 }, () => new Set(getAllowedMapChunks(releaseId)));
+    const source = new RuntimeChunkSource(runtime, releaseId, { size: 8, chunkBytes: 2, count: 4 }, "island", () => new Set(getAllowedMapChunks(releaseId)));
     try {
       // Coverage that arrives while every tile read succeeded needs no redraw.
       setAllowedMapChunks(releaseId, [1]);

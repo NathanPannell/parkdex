@@ -54,6 +54,8 @@ Login is rate limited to 5 attempts per email per 15 minutes, as in production.
 
 The routes follow the contract in issue #76. Additive fields beyond the contract: `GET /api/game/me` also returns `flagSeed` (available before a handle exists), `serverTime`, and `visitedToday`, the park IDs this account already visited on the current America/Vancouver day, with `visitedTodayUntil`, the instant that day ends (null before a handle exists). `POST /api/game/takeovers/seen` returns `{ takeoversSeenAt }`.
 
+`GET /api/game/dex` (#174) lists the parks the account has visited for My Dex: `{ parks: [{ parkId, visits, days, firstVisitAt, lastVisitAt, hidden }], serverTime }`. `days` are the distinct America/Vancouver days with a game visit or a claim, so a photo taken during a visit never adds one, and `visits` is how many there are. `hidden` marks parks hidden from the catalogue (`docs/park-visibility.md`); the app leaves them out of its totals.
+
 | Error | When |
 | --- | --- |
 | 400 `invalid_handle` | handle is not 3 to 20 of `a-z`, `0-9`, `_` after lowercasing and trimming a leading `@` |
@@ -65,3 +67,9 @@ The routes follow the contract in issue #76. Additive fields beyond the contract
 | 410 `account_deleting` | the account is being deleted |
 
 Time rules are in `database/migrations/game_001_init.sql`. Visits use server time. Local days are America/Vancouver. A flag falls 720 hours after its holder's last visit.
+
+Points (#169) are in `database/migrations/game_002_points.sql`: 1 per whole hour a flag flies, +6 for planting, +4 plus 1 per whole day the taken flag flew for a take, +1 for visiting your own flag, and +24 for founding. `GET /api/game/me` lists each held park with `days` (the flag's age, for weathering) and `hours` (the holding points so far), and visits carry `pointsBreakdown: { base, days }`, where `days` is a take's day bonus.
+
+Crews (#170) are in `database/migrations/game_003_crews.sql`: each plant or take starts a 60-minute protected hour with a 6-character crew code. Outsiders' visits during it are `logged` (+1), friends join with `POST /api/game/crews/join` (+2, up to 8 people) and hold the park together. Contract in [crews.md](crews.md). To try it locally, plant with one seed account, read the code from `GET /api/game/parks/<park>/crew` and join with another.
+
+Badges (#175) are in `database/migrations/game_004_badges.sql`: your first visit unlocks `parks-1`, and My Dex shows the shelf where you sew up to 3 badges onto your flag. Rules and API in [badges.md](badges.md).

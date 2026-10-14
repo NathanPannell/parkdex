@@ -313,6 +313,59 @@ describe("WebContentStore", () => {
     await store.deleteFile(chunkHash, { optionalMapChunk: true });
     expect(await store.hasFile(chunkHash, chunkBytes.byteLength)).toBe(false);
     expect(await store.hasFile(glyphHash, glyphBytes.byteLength)).toBe(true);
+
+    // Maps from the combined BC and Nova Scotia release keep their chunks in map/detail/.
+    await store.putFile(chunkHash, chunkBytes);
+    active.manifest.files[0] = file("map/detail/0123.bin", chunkHash, chunkBytes.byteLength, "application/octet-stream");
+    await store.putRelease(active);
+    await expect(store.deleteFile(chunkHash)).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(chunkHash, { optionalMapChunk: true });
+    expect(await store.hasFile(chunkHash, chunkBytes.byteLength)).toBe(false);
+  });
+
+  it("removes badge art the catalogue lists only when asked, but never retained art", async () => {
+    const artBytes = arrayBuffer("far badge art");
+    const keptBytes = arrayBuffer("earned badge art");
+    const artHash = await hash(artBytes);
+    const keptHash = await hash(keptBytes);
+    const art = (scene: string, sha256: string, byte_size: number) => ({
+      path: `art/badges/scenes/${scene}.webp`, key: `releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`,
+      url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`, sha256, byte_size, content_type: "image/webp",
+    });
+    await store.putFile(artHash, artBytes);
+    await store.putFile(keptHash, keptBytes);
+    const farPark = { ...park("far-park", "Far"), scene: "far" };
+    await store.replaceSyncState("staging", null, {
+      ...emptyState(3),
+      parks: [farPark],
+      boundaries: { type: "FeatureCollection", features: [{ type: "Feature", properties: { id: "far-park", biome: "coast" }, geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] } }] },
+      drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } },
+      assets: [art("far", artHash, artBytes.byteLength)],
+    }, "test-source", null);
+    await store.retainParks([{ park: { ...park("earned", "Earned"), scene: "earned" }, sceneFile: art("earned", keptHash, keptBytes.byteLength) }]);
+
+    await expect(store.deleteFile(artHash)).rejects.toThrow(/active or retained content/);
+    await store.deleteFile(artHash, { optionalArt: true });
+    expect(await store.hasFile(artHash, artBytes.byteLength)).toBe(false);
+    await expect(store.deleteFile(keptHash, { optionalArt: true, optionalMapChunk: true })).rejects.toThrow(/active or retained content/);
+  });
+
+  it("keeps a lean catalogue's chunk list with its boundaries", async () => {
+    const catalogue = {
+      version: "a".repeat(64),
+      revision: 2,
+      chunks: [{ path: "catalogue/boundaries/000.json", url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/catalogue/boundaries/000.json`, sha256: "b".repeat(64), byte_size: 10, parkIds: ["far-park"], bbox: null }],
+      loaded: [],
+      pinned: [],
+    };
+    await store.replaceSyncState("staging", null, {
+      ...emptyState(3), parks: [park("far-park", "Far")], drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } }, catalogue,
+    }, "test-source", null);
+    await store.close();
+    store = new WebContentStore();
+    const stored = await store.getSyncState("staging");
+    expect(stored?.catalogue).toEqual(catalogue);
+    expect(stored?.boundaries.features).toEqual([]);
   });
 
   it("pins archived scene blobs by release and scene across recreation", async () => {

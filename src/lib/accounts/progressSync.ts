@@ -1,4 +1,5 @@
 import {
+  applyRemotePhotoDisplays,
   claimPayload,
   commitDownloadedPhoto,
   commitPhotoBackupRendition,
@@ -11,7 +12,9 @@ import {
   listPhotosNeedingDownload,
   listPersonalClaims,
   listPersonalOutbox,
+  listPendingPhotoDisplays,
   listPersonalPhotos,
+  markPhotoDisplaySynced,
   personalPhotoBackupSource,
   queuePhotoBackup,
   markClaimUploaded,
@@ -24,7 +27,9 @@ import {
   type ProgressOwner,
   type RemoteClaim,
   type RemotePhoto,
+  type RemotePhotoDisplay,
 } from "./personalStore";
+import { isPhotoCrop } from "../photoCrop";
 import { getAccountBackupConnectivity, isAccountBackupAvailable, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 import { createPhotoBackupRendition } from "./photoBackupRendition";
 
@@ -380,6 +385,59 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
   }
 }
 
+/** The server's answer to `GET /api/claims/display`, keeping only well-formed rows. */
+export function parseRemotePhotoDisplays(body: unknown): RemotePhotoDisplay[] {
+  const rows = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>).displays : null;
+  if (!Array.isArray(rows)) throw new Error("The server returned invalid photo display choices.");
+  return rows.flatMap((row): RemotePhotoDisplay[] => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return [];
+    const value = row as Record<string, unknown>;
+    if (typeof value.claimId !== "string" || !/^[0-9a-f-]{36}$/i.test(value.claimId) || typeof value.removed !== "boolean") return [];
+    if (value.crop !== null && !isPhotoCrop(value.crop)) return [];
+    if (value.coverAt !== null && (typeof value.coverAt !== "string" || !Number.isFinite(Date.parse(value.coverAt)))) return [];
+    const crop = value.crop as RemotePhotoDisplay["crop"];
+    return [{
+      claimId: value.claimId.toLowerCase(),
+      crop: crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null,
+      coverAt: value.coverAt as string | null,
+      removed: value.removed,
+      updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+    }];
+  });
+}
+
+/**
+ * Backs up and restores each photo's display choices (#174): its crop, cover choice and removal.
+ * They are optional extras beside the claim, so a failure here leaves them pending for the next
+ * pass and never marks the claim or photo backup as failed. A server without the route (404)
+ * simply has nothing to restore yet.
+ */
+async function syncPhotoDisplays(session: ProgressSession, owner: ProgressOwner) {
+  const claims = new Map((await listPersonalClaims(owner)).map((claim) => [claim.claimId, claim]));
+  for (const item of await listPendingPhotoDisplays(owner)) {
+    if (claims.get(item.claimId)?.syncState !== "acknowledged") continue;
+    assertCurrent(session);
+    const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/${encodeURIComponent(item.claimId)}/display`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item.display),
+    });
+    assertCurrent(session);
+    if (response.status === 404 || response.status === 405) return;
+    if (!response.ok) continue;
+    await markPhotoDisplaySynced(owner, item.claimId, item.version);
+  }
+  // Choices only apply to photos on this device; without any there is nothing to restore onto.
+  if ((await listPersonalPhotos(owner)).length === 0) return;
+  assertCurrent(session);
+  const response = await session.fetchAuthenticated(`${CLAIMS_PATH}/display`, { method: "GET" });
+  assertCurrent(session);
+  if (!response.ok) return;
+  const displays = parseRemotePhotoDisplays(await response.json());
+  assertCurrent(session);
+  await applyRemotePhotoDisplays(owner, displays);
+}
+
 async function countPending(owner: ProgressOwner, result: ProgressSyncResult) {
   const claims = await listPersonalClaims(owner);
   const outbox = await listPersonalOutbox(owner);
@@ -422,6 +480,11 @@ export async function syncProgress(session: ProgressSession): Promise<ProgressSy
       if (!result.issues.some((issue) => issue.operation === "session")) {
         await pullPhotos(capturedSession, owner, result);
         result.fullPullCompleted = true;
+        try {
+          await syncPhotoDisplays(capturedSession, owner);
+        } catch (error) {
+          if (error instanceof ProgressSessionChangedError) result.issues.push(sessionIssue(error));
+        }
       }
     }
   } catch (error) {

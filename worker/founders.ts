@@ -4,7 +4,7 @@ import {
   type PhotoAnswers, type PhotoChecker, type PhotoFlag,
 } from "./founderPhoto.js";
 import type { FoundedRecord, FoundersStore, FoundResult, KeptAttempt } from "./founders-store.js";
-import { apiVisit, visitEvents } from "./game.js";
+import { apiNewBadges, apiVisit, badgeEvents, visitEvents } from "./game.js";
 import { JpegError, stripJpegMetadata } from "./jpeg.js";
 import type { OsmClient, OsmFeature, OsmRef, MultiPolygon } from "./osmParks.js";
 import { markerPoint, positionInside, validatePosition, type DevicePosition } from "./parkLocation.js";
@@ -41,7 +41,7 @@ const COVER_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/cover\/([0-9a-f]{
 const SUMMARY_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/summary$/;
 
 export type FounderEventName = "park_founded" | "founder_photo_checked" | "founding_review_requested"
-  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell";
+  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell" | "visit_logged_protected" | "badge_unlocked";
 
 export interface FoundersHandlers {
   store(): FoundersStore;
@@ -177,6 +177,8 @@ function foundedResponse(origin: string, founded: FoundedRecord): Response {
     coverUrl: coverUrl(origin, founded.parkId, founded.photoSha256),
     visit: founded.visit ? apiVisit(founded.visit) : null,
     founderPoints: founded.founderPoints,
+    // Additive (#175): the badges this founding unlocked.
+    newBadges: apiNewBadges(founded.badges),
   });
 }
 
@@ -284,7 +286,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   if (resolved.kind === "osm") {
     const feature = resolved.feature;
     const marker = markerPoint(feature.geometry, input.position);
-    const region = await regionFor({ nearbyParks: (lat, lng, km) => handlers.nearbyParks(lat, lng, km) }, resolved.nearby, marker);
+    const region = await regionFor({ nearbyParks: (lat, lng, km) => handlers.nearbyParks(lat, lng, km) }, resolved.nearby, marker, feature.geometry);
     const proposalId = handlers.uuid();
     const park = parkFromProposal(feature, { id: proposalId, name: feature.name ?? "", note: "", point: marker, createdAt: at }, region, marker);
     const distanceM = Math.round(where.distanceM);
@@ -327,8 +329,11 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   handlers.emit("park_founded", { parkId: result.record.parkId, source });
   if (result.record.visit) {
     for (const event of visitEvents({ status: "recorded", visit: result.record.visit }, accountId)) {
-      handlers.emit(event.name as FounderEventName, { parkId: event.parkId, pointsEarned: event.pointsEarned });
+      handlers.emit(event.name as FounderEventName, { parkId: event.parkId, pointsEarned: event.pointsEarned, crewSize: event.crewSize });
     }
+  }
+  for (const event of badgeEvents(result.record.badges, accountId, result.record.parkId)) {
+    handlers.emit("badge_unlocked", { parkId: event.parkId, badgeId: event.badgeId });
   }
   return foundedResponse(handlers.publicOrigin, result.record);
 }

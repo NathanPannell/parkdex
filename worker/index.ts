@@ -13,6 +13,7 @@ import { createOsmClient, handleOsmParksRequest, type OsmClient } from "./osmPar
 import { createSqlOsmParkTable, type OsmParkTable } from "./osmParkTable.js";
 import { createSqlProposalReviewStore, databaseSqlRunner, type ProposalReviewStore } from "./proposalReview.js";
 import { handleGameRequest, type GameDependencies, type GameEnv, type GameEvent } from "./game.js";
+import { handleFriendsRequest, type FriendsDependencies } from "./friends.js";
 import { handleFoundersRequest } from "./founders.js";
 import { createNeonFoundersStore, type FoundersStore } from "./founders-store.js";
 import { purgeFoundingPhotos, type FoundingPurgeResult } from "./founding-reviews.js";
@@ -64,6 +65,7 @@ export interface WorkerDependencies {
   progress?: ProgressDependencies;
   interactions?: InteractionDependencies;
   game?: GameDependencies;
+  friends?: FriendsDependencies;
   createStore?(env: WorkerEnvironment): FeedbackStore;
   /** Deletes feedback archived on the operator board more than 90 days before `cutoff`. */
   purgeArchivedFeedback?(env: WorkerEnvironment, cutoff: string): Promise<FeedbackPurgeResult>;
@@ -108,7 +110,7 @@ function errorResponse(error: unknown): Response {
 
 /** Game outcomes become analytics events on the request that caused them. */
 function recordGameEvent(event: GameEvent): void {
-  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned });
+  emitEvent(event.name, { parkId: event.parkId, pointsEarned: event.pointsEarned, crewSize: event.crewSize, badgeId: event.badgeId, patches: event.patches });
 }
 
 function getStore(env: WorkerEnvironment, dependencies: WorkerDependencies): FeedbackStore {
@@ -360,6 +362,11 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
     mutation: () => requireAccountMutation(request, env, authDependencies),
   }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, publicOrigin: appUrl(env, request), ...dependencies.game });
   if (gameResponse) return gameResponse;
+  const friendsResponse = await handleFriendsRequest(request, env, {
+    account: () => requireAccount(request, env, authDependencies),
+    mutation: () => requireAccountMutation(request, env, authDependencies),
+  }, { now: dependencies.now, ...dependencies.friends });
+  if (friendsResponse) return friendsResponse;
   const reviewStore = () => {
     if (dependencies.createProposalReviewStore) return dependencies.createProposalReviewStore(env);
     if (!env.DATABASE_URL) throw new HttpError(503, "service_unavailable", "Parks are unavailable.");

@@ -28,6 +28,13 @@ export const GAME_EVENT_TYPES = [
   // The operator dashboard writes founding_review_decided itself, in the decision's transaction.
   "founding_review_requested",
   "founding_review_decided",
+  // Crews (#170); game_003_crews.sql adds these to the table's checks.
+  "crew_joined",
+  "crew_code_shown",
+  "visit_logged_protected",
+  // Badges (#175); game_004_badges.sql adds these to the table's checks.
+  "badge_unlocked",
+  "flag_patches_set",
 ] as const;
 export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 export type DbEventType = "db_read" | "db_write";
@@ -99,6 +106,10 @@ export function normalizeRoute(method: string | undefined, path: string): string
   const segments = path.split("/").filter(Boolean).slice(0, 8).map((segment, index, all) => {
     // Park IDs in /api/parks/:park/... would otherwise make one route per park.
     if (index === 2 && all[0] === "api" && all[1] === "parks" && segment !== "found") return ":park";
+    if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";
+    // Handles in DELETE /api/friends/:handle would make one route per friend.
+    if (index === 2 && all[0] === "api" && all[1] === "friends" && segment !== "code") return ":handle";
+    if (index === 3 && all[0] === "api" && all[1] === "game" && all[2] === "parks") return ":park";
     if (UUID.test(segment)) return ":id";
     if (HEX_ID.test(segment)) return ":hash";
     if (/^\d+$/.test(segment)) return ":n";

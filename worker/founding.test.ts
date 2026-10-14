@@ -20,7 +20,10 @@ test("an instant founding records the visit and closes pending reviews of the pa
   assert.ok(!text.some((line) => /review_not_pending/.test(line)));
   const supersede = statements.find((statement) => /SET status = 'superseded'/.test(statement.text))!;
   assert.deepEqual(supersede.params, ["municipal-beacon-hill-park", common.at, "way", 7, null]);
-  assert.match(text.at(-1)!, /kip_game.record_visit/, "the visit comes last");
+  assert.match(text.at(-2)!, /kip_game.record_visit/, "the visit comes after the founder row");
+  // Then the badges it unlocked (#175), in the same transaction, so the founder badge is announced.
+  assert.match(text.at(-1)!, /kip_game.award_badges\(\$1::uuid, \$2::timestamptz, \$3::uuid\) AS badges_unlocked/);
+  assert.deepEqual(statements.at(-1)!.params, [common.accountId, common.at, common.visitId]);
   assert.ok(text.indexOf(supersede.text.replace(/\s+/g, " ")) > text.findIndex((line) => /INSERT INTO kip_founders.parks/.test(line)));
 });
 
@@ -33,6 +36,7 @@ test("a reviewed founding locks and approves its request, skips the visit and ru
   assert.ok(text.some((line) => /'review_not_pending'/.test(line)));
   assert.ok(text.some((line) => /'account_unavailable'/.test(line)));
   assert.ok(!text.some((line) => /record_visit/.test(line)), "no visit and no flag");
+  assert.ok(!text.some((line) => /award_badges/.test(line)), "badges unlock when the player next reads /api/game/me");
   const supersede = statements.find((statement) => /SET status = 'superseded'/.test(statement.text))!;
   assert.equal(supersede.params[4], REQUEST, "the approved request is not superseded");
   const approve = statements.findIndex((statement) => /SET status = 'approved'/.test(statement.text));

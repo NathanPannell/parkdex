@@ -175,6 +175,17 @@ test("apply moves an existing pointer only with its exact ETag and generation", 
   assert.equal(pointerPut.headers["If-Match"], '"pointer-1"');
 });
 
+test("a weak pointer ETag from the CDN is sent to R2 in its strong form", async (t) => {
+  const bundle = await prepared(t, 2);
+  const current = { schema: "parkdex.app-bundle-channel/v1", channel: "staging", generation: 1 };
+  for (const expectedEtag of ['W/"pointer-1"', '"pointer-1"']) {
+    const r2 = fakeR2({ pointer: current, etag: 'W/"pointer-1"' });
+    await publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag, fetcher: r2.fetcher });
+    const pointerPut = r2.calls.filter((call) => call.method === "PUT")[1];
+    assert.equal(pointerPut.headers["If-Match"], '"pointer-1"');
+  }
+});
+
 test("apply refuses a pointer from another channel and a lost race", async (t) => {
   const bundle = await prepared(t, 2);
   const production = { schema: "parkdex.app-bundle-channel/v1", channel: "production", generation: 1 };

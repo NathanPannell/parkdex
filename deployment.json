@@ -41,7 +41,14 @@
     "database/migrations/app_config_003_ota_publishes.sql",
     "database/migrations/operator_analytics_001_indexes.sql",
     "database/migrations/founders_002_reviews.sql",
-    "database/migrations/founders_003_park_removed.sql"
+    "database/migrations/founders_003_park_removed.sql",
+    "database/migrations/game_002_points.sql",
+    "database/migrations/social_001_friends.sql",
+    "database/migrations/osm_parks_002_sources.sql",
+    "database/migrations/game_003_crews.sql",
+    "database/migrations/game_004_badges.sql",
+    "database/migrations/game_005_dex.sql",
+    "database/migrations/founders_004_boundary_boxes.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -64,12 +71,14 @@
     "pythonTestPaths": [
       "scripts/test_bootstrap_content.py",
       "scripts/test_map_only_manifest.py",
+      "scripts/test_build_map_inventory.py",
       "scripts/test_publish_content.py",
       "scripts/test_publish_park_update.py",
       "scripts/test_reset_victoria_100.py",
       "scripts/test_authoring_queue.py",
       "scripts/test_downshift_park_rarities.py",
       "scripts/test_build_bc_import.py",
+      "scripts/test_build_ns_import.py",
       "scripts/test_content_catalogue.py",
       "scripts/test_park_visibility.py",
       "scripts/test_osm_park_index.py",

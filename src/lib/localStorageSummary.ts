@@ -1,7 +1,5 @@
-import type { ContentRuntime } from "./content/contracts";
+import { mapChunkIndex, OFFLINE_DOWNLOADS, type ContentRuntime } from "./content/contracts";
 import { chunkIdsForCells, loadCellIndex, readSavedSquares } from "./mapCells";
-
-const MAP_CHUNK = /^map\/island\/(\d{3,})\.bin$/;
 
 /** What Parkdex keeps on this device, grouped the way Manage downloads shows it. */
 export type LocalStorageSummary = {
@@ -13,7 +11,7 @@ export type LocalStorageSummary = {
   mapCacheChunks: number[];
   /** Map labels and map indexes. */
   mapSupportBytes: number;
-  /** Park guides and badge art the app needs to show parks offline. */
+  /** Park guides: the park index, the boundaries kept on this device and any saved badge art. */
   parkContentBytes: number;
   /** Files from earlier content or maps that nothing uses any more. */
   unusedBytes: number;
@@ -22,9 +20,12 @@ export type LocalStorageSummary = {
 export async function summarizeLocalStorage(runtime: ContentRuntime): Promise<LocalStorageSummary> {
   const files = (await runtime.listStoredFiles?.()) ?? [];
   const index = await loadCellIndex().catch(() => null);
-  const saved = index ? chunkIdsForCells(index, readSavedSquares()) : new Set<number>();
+  // Without offline downloads (#199) no square is kept on purpose, so all map detail is cache.
+  const saved = index && OFFLINE_DOWNLOADS ? chunkIdsForCells(index, readSavedSquares()) : new Set<number>();
+  // The park index and boundaries are database rows, not files.
+  const catalogueBytes = runtime.getCatalogueBytes?.() ?? 0;
   const summary: LocalStorageSummary = {
-    totalBytes: 0, savedSquaresBytes: 0, mapCacheBytes: 0, mapCacheChunks: [], mapSupportBytes: 0, parkContentBytes: 0, unusedBytes: 0,
+    totalBytes: catalogueBytes, savedSquaresBytes: 0, mapCacheBytes: 0, mapCacheChunks: [], mapSupportBytes: 0, parkContentBytes: catalogueBytes, unusedBytes: 0,
   };
   for (const file of files) {
     summary.totalBytes += file.size;
@@ -32,9 +33,8 @@ export async function summarizeLocalStorage(runtime: ContentRuntime): Promise<Lo
       summary.unusedBytes += file.size;
       continue;
     }
-    const chunk = file.path.match(MAP_CHUNK);
-    if (chunk) {
-      const id = Number(chunk[1]);
+    const id = mapChunkIndex(file.path);
+    if (id !== null) {
       if (saved.has(id)) summary.savedSquaresBytes += file.size;
       else {
         summary.mapCacheBytes += file.size;

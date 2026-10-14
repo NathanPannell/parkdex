@@ -5,14 +5,22 @@ import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsP
 const flag = { parkId: "p", handle: "sam", flagSeed: "s", since: "2026-10-01T00:00:00Z" };
 
 describe("plant scene", () => {
-  it("yanks the rival out before a take and counts the bounty", () => {
-    expect(plantPlan({ outcome: "took", pointsEarned: 12 })).toEqual({ yank: true, slam: "big", settle: false, payoff: "big", count: 12 });
-    expect(plantPlan({ outcome: "planted", pointsEarned: 0 })).toEqual({ yank: false, slam: "big", settle: false, payoff: "big", count: null });
+  it("yanks the rival out before a take and counts the points", () => {
+    expect(plantPlan({ outcome: "took", pointsEarned: 12 })).toEqual({ yank: true, slam: "big", settle: false, raise: false, payoff: "big", count: 12 });
+    expect(plantPlan({ outcome: "planted", pointsEarned: 6 })).toEqual({ yank: false, slam: "big", settle: false, raise: false, payoff: "big", count: 6 });
+    // A visit replayed from before #169 may have earned nothing.
+    expect(plantPlan({ outcome: "planted", pointsEarned: 0 })).toMatchObject({ count: null });
   });
 
   it("gives revisits a smaller version and leaves a second visit today unplanted", () => {
-    expect(plantPlan({ outcome: "held", pointsEarned: 0 })).toMatchObject({ slam: "small", payoff: "small", count: null });
-    expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({ yank: false, slam: null, settle: true, payoff: "tiny", count: null });
+    expect(plantPlan({ outcome: "held", pointsEarned: 1 })).toMatchObject({ slam: "small", payoff: "small", count: 1 });
+    expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({ yank: false, slam: null, settle: true, raise: false, payoff: "tiny", count: null });
+  });
+
+  it("raises a pennant for a crew join and settles back for a logged visit", () => {
+    expect(plantPlan({ outcome: "joined", pointsEarned: 2 })).toEqual({ yank: false, slam: null, settle: false, raise: true, payoff: "big", count: 2 });
+    // A logged visit leaves the protected flag standing and counts its point.
+    expect(plantPlan({ outcome: "logged", pointsEarned: 1 })).toEqual({ yank: false, slam: null, settle: true, raise: false, payoff: "tiny", count: 1 });
   });
 
   it("starts from the mound only for the player's own park", () => {

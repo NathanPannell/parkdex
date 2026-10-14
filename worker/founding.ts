@@ -1,5 +1,5 @@
 import { publishStatements, type SqlRunner } from "../operator/server/drafts.js";
-import { visitFromJson, type VisitRecord } from "./game-store.js";
+import { badgeUnlocksFromJson, visitFromJson, type BadgeUnlock, type VisitRecord } from "./game-store.js";
 import type { PublishablePark } from "./parkPublish.js";
 
 /**
@@ -8,7 +8,8 @@ import type { PublishablePark } from "./parkPublish.js";
  * an advisory lock on the park: the founder guard, for an OpenStreetMap park the proposal audit
  * row, the draft and the publish statements, then the founder row with its cover photo, the bonus,
  * and the end of every pending review request for the park. An instant founding also records
- * today's visit; a reviewed one does not, because flags need a real visit that day.
+ * today's visit and unlocks the badges it earned (#175); a reviewed one does neither, because
+ * flags need a real visit that day. Its founder badge unlocks when the player next opens the app.
  *
  * No Node APIs here: the operator dashboard's Edge Function bundles this module.
  */
@@ -24,6 +25,8 @@ export interface FoundedRecord {
   photoSha256: string;
   visit: VisitRecord | null;
   founderPoints: number;
+  /** Badges the founding unlocked (#175). */
+  badges?: BadgeUnlock[];
 }
 
 export interface PhotoInput {
@@ -102,10 +105,19 @@ function founderStatement(input: FoundCommon, parkId: string, source: "osm_new" 
 function visitStatement(input: FoundCommon, parkId: string): Statement {
   return {
     // Founding counts as today's visit. Anything but a recorded (or same-day) visit rolls it all back.
-    text: `SELECT kip_park_drafts.require((v.r->>'status') IN ('recorded', 'already_today', 'replayed'), 'visit_' || coalesce(v.r->>'status', 'failed')) AS visit_ok,
+    // During someone else's protected hour (#170) the visit is logged, and the founding still stands.
+    text: `SELECT kip_park_drafts.require((v.r->>'status') IN ('recorded', 'protected', 'already_today', 'replayed'), 'visit_' || coalesce(v.r->>'status', 'failed')) AS visit_ok,
         v.r AS visit_result
       FROM (SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS r) v`,
     params: [input.visitId, input.accountId, parkId, input.at],
+  };
+}
+
+/** The badges an instant founding unlocked, in its own transaction (game_004_badges.sql, #175). */
+function badgesStatement(input: FoundCommon): Statement {
+  return {
+    text: "SELECT kip_game.award_badges($1::uuid, $2::timestamptz, $3::uuid) AS badges_unlocked",
+    params: [input.accountId, input.at, input.visitId],
   };
 }
 
@@ -184,7 +196,7 @@ export async function foundingStatements(plan: FoundingPlan, mode: FoundingMode)
       params: [mode.reviewRequestId, plan.at, parkId],
     });
   }
-  if (mode.visit) statements.push(visitStatement(plan, parkId));
+  if (mode.visit) statements.push(visitStatement(plan, parkId), badgesStatement(plan));
   statements.push(...(mode.after ?? []));
   return statements;
 }
@@ -224,11 +236,13 @@ export async function runFounding(db: SqlRunner, plan: FoundingPlan, parkName: s
   const founderPoints = Number(results.find((result) => result[0] && "founder_points" in result[0])?.[0]?.founder_points ?? 0);
   const visitRow = results.find((result) => result[0] && "visit_result" in result[0])?.[0];
   const body = jsonValue(visitRow?.visit_result) as { visit?: unknown } | null;
+  const badgesRow = results.find((result) => result[0] && "badges_unlocked" in result[0])?.[0];
   return {
     status: "founded",
     record: {
       parkId: plan.kind === "osm" ? plan.park.id : plan.parkId, parkName, photoSha256: plan.photo.sha256, founderPoints,
       visit: body?.visit ? visitFromJson(body.visit) : null,
+      badges: badgeUnlocksFromJson(jsonValue(badgesRow?.badges_unlocked)),
     },
   };
 }

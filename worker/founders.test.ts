@@ -109,7 +109,7 @@ class MemoryFoundersStore implements FoundersStore {
     const check = this.checks.filter((row) => row.accountId === accountId && row.attemptId === attemptId && row.outcome !== "unavailable").at(-1);
     const kept = this.kept.get(attemptId);
     return {
-      founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 10, visit: entry[1].visit } : null,
+      founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 24, visit: entry[1].visit } : null,
       check: check ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256, keptAt: kept?.accountId === accountId ? kept.at : null } : null,
     };
   }
@@ -122,8 +122,9 @@ class MemoryFoundersStore implements FoundersStore {
     if (this.founded.has(parkId)) return { status: "already_founded" };
     const planted = !this.visits.some((visit) => visit.parkId === parkId);
     const visit = {
-      visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const, pointsEarned: 0,
-      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false,
+      visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const,
+      pointsEarned: planted ? 6 : 4, pointsBreakdown: { base: planted ? 6 : 4, days: 0 },
+      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false, protected: null,
     };
     this.visits.push({ accountId: input.accountId, parkId, at: input.at });
     for (const request of this.requests) if (request.parkId === parkId && request.status === "pending") request.status = "superseded";
@@ -131,7 +132,7 @@ class MemoryFoundersStore implements FoundersStore {
       accountId: input.accountId, attemptId: input.attemptId, sha256: input.photo.sha256, bytes: new Uint8Array(Buffer.from(input.photo.base64, "base64")),
       foundedAt: input.at, parkName, visit,
     });
-    return { status: "founded", record: { parkId, parkName, photoSha256: input.photo.sha256, founderPoints: 10, visit } };
+    return { status: "founded", record: { parkId, parkName, photoSha256: input.photo.sha256, founderPoints: 24, visit } };
   }
   async foundOsm(input: FoundOsmInput) {
     this.osmFoundings.push(input);
@@ -239,8 +240,8 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.equal(result.outcome, "founded");
   assert.deepEqual(result.park, { id: "osm-way-23938892", name: "Paterson Park" });
   assert.match(result.coverUrl, new RegExp(`^${origin}/api/parks/osm-way-23938892/cover/[0-9a-f]{64}\\.jpg$`));
-  assert.equal(result.founderPoints, 10);
-  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsEarned", "previousHolder", "visitId"]);
+  assert.equal(result.founderPoints, 24);
+  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsBreakdown", "pointsEarned", "previousHolder", "protected", "visitId"]);
   assert.equal(result.visit.outcome, "planted");
   assert.equal(result.visit.visitId, await founderVisitId(attemptId));
 
@@ -271,7 +272,7 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.deepEqual(written[0].events.map((event) => [event.type, event.parkId, event.properties]), [
     ["founder_photo_checked", "osm-way-23938892", { outcome: "approve", flags: "", source: "osm_new" }],
     ["park_founded", "osm-way-23938892", { source: "osm_new" }],
-    ["flag_planted", "osm-way-23938892", { points_earned: 0 }],
+    ["flag_planted", "osm-way-23938892", { points_earned: 6 }],
   ]);
   assert.equal(written[0].route, "POST /api/parks/found");
 });
@@ -296,6 +297,32 @@ function stripTail(bytes: Uint8Array): Uint8Array {
   copy[copy.length - 3] ^= 0x01;
   return copy;
 }
+
+/** The fixture with its frame header (SOF0) saying another size, as a founder's 16:9 cover crop would. */
+function withJpegSize(bytes: Uint8Array, width: number, height: number): Uint8Array {
+  const copy = new Uint8Array(bytes);
+  for (let index = 2; index + 8 < copy.length; index += 1) {
+    if (copy[index] !== 0xff || copy[index + 1] !== 0xc0) continue;
+    copy[index + 5] = height >> 8;
+    copy[index + 6] = height & 0xff;
+    copy[index + 7] = width >> 8;
+    copy[index + 8] = width & 0xff;
+    return copy;
+  }
+  throw new Error("The fixture has no SOF0 header.");
+}
+
+test("a founder's 16:9 cover crop is checked and becomes the cover like any other shape", async () => {
+  const { store, photoCalls, found } = setup();
+  const wide = withJpegSize(EXIF_GPS_JPEG, 16, 9);
+  const response = await found({ photo: { ...PHOTO, base64: Buffer.from(wide).toString("base64"), width: 16, height: 9 } });
+  assert.equal(response.status, 200);
+  assert.equal((await body(response)).outcome, "founded");
+  assert.equal(photoCalls.length, 1);
+  assert.ok(store.founded.get("osm-way-23938892"));
+  // The width and height sent still have to match the JPEG itself.
+  assert.equal((await found({ photo: { ...PHOTO, base64: Buffer.from(wide).toString("base64"), width: 16, height: 12 } })).status, 400);
+});
 
 test("a second founder of the same park gets 409 already_founded, also when they race", async () => {
   const { store, found } = setup();

@@ -1,6 +1,7 @@
 import { database } from "./db.js";
 import { distanceToMultiPolygon, interiorPoint, pointInMultiPolygon, type MultiPolygon, type OsmClient, type OsmFeature, type OsmRef } from "./osmParks.js";
-import { FALLBACK_REGION, parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { parkFromProposal, publishProposalPark, type SqlRunner } from "./parkPublish.js";
+import { provinceFor, provinceOfOutline } from "./provinces.js";
 import { HttpError } from "./validation.js";
 import { catalogueMatch } from "./catalogueMatch.js";
 
@@ -141,6 +142,31 @@ export interface ProposalReviewStore {
   sql(): SqlRunner;
 }
 
+const PARK_COLUMNS = "p.id, p.name, p.region, p.lat, p.lng, b.feature->'geometry' AS geometry";
+/** Parks whose pin is in the box around the point ($1 to $4), nearest first. */
+const NEARBY_PINS_SQL = `SELECT ${PARK_COLUMNS}
+  FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
+  WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
+  ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80`;
+/**
+ * Those parks, plus every park whose boundary reaches into the same box, found by the boundary
+ * box index (founders_004). A big park's far parts can contain the point while its pin is tens of
+ * kilometres away (Kejimkujik Seaside, #182). Boxes that contain the point come first.
+ */
+const NEARBY_PARKS_SQL = `WITH pins AS (
+    SELECT p.id FROM public.parks p
+    WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
+    ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80
+  ), reaching AS (
+    SELECT b.park_id AS id FROM public.boundaries b
+    WHERE public.park_boundary_box(b.feature) && box(point($3, $1), point($4, $2))
+    ORDER BY public.park_boundary_box(b.feature) <-> point($6, $5) LIMIT 80
+  )
+  SELECT ${PARK_COLUMNS}
+  FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
+  WHERE p.id IN (SELECT id FROM pins UNION SELECT id FROM reaching)
+  ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2`;
+
 export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore {
   return {
     async state(proposalId) {
@@ -150,13 +176,15 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
     },
     async nearbyParks(lat, lng, km) {
       const dLat = km / 110.54, dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
-      const rows = await db.query(
-        `SELECT p.id, p.name, p.region, p.lat, p.lng, b.feature->'geometry' AS geometry
-         FROM public.parks p LEFT JOIN public.boundaries b ON b.park_id = p.id
-         WHERE p.lat BETWEEN $1 AND $2 AND p.lng BETWEEN $3 AND $4
-         ORDER BY (p.lat - $5) ^ 2 + (p.lng - $6) ^ 2 LIMIT 80`,
-        [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng],
-      );
+      const params = [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng];
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.query(NEARBY_PARKS_SQL, params);
+      } catch (error) {
+        // A database without founders_004 has no boundary boxes yet: pins only, as before.
+        if ((error as { code?: unknown } | null)?.code !== "42883") throw error;
+        rows = await db.query(NEARBY_PINS_SQL, params);
+      }
       return rows.map((row) => {
         const geometry = row.geometry as MultiPolygon | null;
         return {
@@ -220,13 +248,27 @@ function overlaps(feature: OsmFeature, park: NearbyPark): boolean {
   return park.boundary !== null && pointInMultiPolygon(interiorPoint(feature.geometry), park.boundary);
 }
 
-function regionFrom(parks: NearbyPark[], point: [number, number]): string | null {
-  return parks.find((park) => park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM)?.region ?? null;
+function regionFrom(parks: NearbyPark[], point: [number, number], province: string): string | null {
+  return parks.find((park) =>
+    park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM && provinceFor([park.lng, park.lat]) === province,
+  )?.region ?? null;
 }
 
-/** The region of the nearest catalogue park that has one, looking up to REGION_KM away, else the fallback. */
-export async function regionFor(store: Pick<ProposalReviewStore, "nearbyParks">, nearby: NearbyPark[], point: [number, number]): Promise<string> {
-  return regionFrom(nearby, point) ?? regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point) ?? FALLBACK_REGION;
+/**
+ * The region of the nearest catalogue park in the same province that has one, looking up to
+ * REGION_KM away, else the province's name. The province is the one that holds the outline
+ * when there is one, else the point's.
+ */
+export async function regionFor(
+  store: Pick<ProposalReviewStore, "nearbyParks">,
+  nearby: NearbyPark[],
+  point: [number, number],
+  outline?: MultiPolygon,
+): Promise<string> {
+  const province = outline ? provinceOfOutline(outline) : provinceFor(point);
+  return regionFrom(nearby, point, province) ??
+    regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point, province) ??
+    province;
 }
 
 /**
@@ -291,7 +333,7 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     await deps.store.record(proposal.id, verdict.decision, record);
     return { decision: "pending" };
   }
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point), proposal.point);
+  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
   try {
     const published = await publishProposalPark(deps.store.sql(), park, proposal.id);
     if (published.status === "blocked") {
@@ -321,7 +363,7 @@ export async function publishProposalByOperator(proposal: ReviewInput, deps: Pic
   const feature = await deps.osm.feature(proposal.osm);
   if (!feature) throw new HttpError(422, "osm_missing", "That OpenStreetMap outline no longer exists or is not a park.");
   const nearby = await deps.store.nearbyParks(proposal.point[1], proposal.point[0], NEARBY_KM);
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point), proposal.point);
+  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
   const published = await publishProposalPark(deps.store.sql(), park, proposal.id).catch((error: unknown) => {
     // PostgreSQL errors can include connection details; pass on only the guard name.
     const guard = error instanceof Error ? /park_exists|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;

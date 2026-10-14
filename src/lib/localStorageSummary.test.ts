@@ -8,31 +8,34 @@ import { summarizeLocalStorage } from "./localStorageSummary";
 const bundled = JSON.parse(readFileSync(join(process.cwd(), "public", "map", "cells.json"), "utf8"));
 
 describe("local storage summary", () => {
-  it("groups stored files into saved squares, map cache, labels, park content and unused files", async () => {
+  it("groups stored files and the stored catalogue into map cache, labels, park guides and unused files", async () => {
     const index = await loadCellIndex(async () => bundled);
     const victoria = cellKeyAt([-123.3656, 48.4284]);
     const values = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => void values.set(key, value) });
     writeSavedSquares([victoria]);
     const savedChunk = cellChunkIds(index, victoria).at(-1)!;
-    const otherChunk = 2477;
+    const otherChunk = 2753;
     const runtime = {
       listStoredFiles: async () => [
-        { hash: "a", size: 500, path: `map/island/${String(savedChunk).padStart(3, "0")}.bin` },
-        { hash: "b", size: 300, path: `map/island/${otherChunk}.bin` },
+        { hash: "a", size: 500, path: `map/detail/${String(savedChunk).padStart(3, "0")}.bin` },
+        { hash: "b", size: 300, path: `map/detail/${otherChunk}.bin` },
         { hash: "c", size: 40, path: "map/fonts/Noto Sans Regular/0-255.pbf" },
         { hash: "d", size: 70, path: "art/badges/scenes/beacon-hill.webp" },
         { hash: "e", size: 9, path: null },
+        { hash: "f", size: 6, path: "map/detail/manifest.json" },
       ],
+      getCatalogueBytes: () => 1000,
     } as unknown as ContentRuntime;
     try {
       expect(await summarizeLocalStorage(runtime)).toEqual({
-        totalBytes: 919,
-        savedSquaresBytes: 500,
-        mapCacheBytes: 300,
-        mapCacheChunks: [otherChunk],
-        mapSupportBytes: 40,
-        parkContentBytes: 70,
+        // Squares saved by an earlier build count as cache: offline downloads are off (#199).
+        totalBytes: 1925,
+        savedSquaresBytes: 0,
+        mapCacheBytes: 800,
+        mapCacheChunks: [otherChunk, savedChunk].sort((a, b) => a - b),
+        mapSupportBytes: 46,
+        parkContentBytes: 1070,
         unusedBytes: 9,
       });
     } finally {

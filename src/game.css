@@ -34,6 +34,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 0 20px 8px;
+  container-type: inline-size;
 }
 
 .handle-sheet__body h2 {
@@ -57,14 +58,20 @@
 .handle-sheet__preview > span:last-child {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* The @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .handle-sheet__preview strong {
   font-family: var(--display);
   font-size: 22px;
+  font-size: clamp(15px, 100cqi / (var(--handle-chars, 1) * 0.6), 22px);
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .handle-sheet__preview em {
@@ -115,8 +122,10 @@
   text-align: center;
 }
 
+/* "Meet your flag, @handle" wraps at the space; the handle's own line shrinks to fit. */
 .handle-reveal h2 {
   margin: 0;
+  font-size: clamp(20px, 100cqi / (var(--handle-chars, 1) * 0.6), 28px);
 }
 
 .handle-reveal__flag {
@@ -136,13 +145,18 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* The @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .game-identity__text strong {
   font-family: var(--display);
   font-size: 20px;
+  font-size: clamp(15px, 100cqi / (var(--handle-chars, 1) * 0.6), 20px);
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .game-identity__text span {
@@ -162,8 +176,10 @@
   }
 }
 
+/* "You took … from @handle" wraps at the spaces; the handle's line shrinks to fit (handleFit). */
 .plant__stamp {
   font-size: 26px;
+  font-size: clamp(18px, (min(330px, 100cqi) - 40px) / (var(--handle-chars, 1) * 0.6), 26px);
   line-height: 1.15;
   max-width: 330px;
   text-transform: none;
@@ -235,8 +251,10 @@
 /* ---------- Your parks and leaderboard ---------- */
 
 /* Tabbed pages leave room for the bottom bar. */
-.account-screen--tabbed {
-  padding-bottom: calc(var(--safe-bottom) + 110px);
+/* Room for the bottom nav and its raised flag button. Two classes, so the base
+   .account-screen padding never wins on import order. */
+.account-screen.account-screen--tabbed {
+  padding-bottom: calc(var(--safe-bottom) + 120px);
 }
 
 .account-screen--tabbed .account-head__title {
@@ -267,11 +285,14 @@
   min-width: 0;
 }
 
+/* An @handle never wraps. A long one gets its own line instead (.has-long-handle, below). */
 .game-score__text strong {
   font-family: var(--display);
   font-size: 20px;
   font-weight: 800;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Direct children only: the rolling score digits are spans too. */
@@ -296,6 +317,54 @@
   line-height: 1;
 }
 
+/* Hourly points reach four and five digits; keep room for the handle beside them. */
+.game-score.is-long .game-score__text strong {
+  font-size: 18px;
+}
+
+.game-score.is-long .game-score__points strong {
+  font-size: 26px;
+}
+
+/*
+ * A long @handle takes the card's full width above the parks held and the score, and shrinks
+ * from 20px towards 15px to stay on one line: the card's width less the 64px flag and its gap,
+ * shared by the handle's characters (about 0.6em each). An ellipsis is the last resort.
+ */
+.account-card.game-score.has-long-handle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "pin handle handle"
+    "pin held points";
+  align-items: center;
+  row-gap: 2px;
+  container-type: inline-size;
+}
+
+.game-score.has-long-handle > .flag-pin,
+.game-score.has-long-handle > .game-score__flag {
+  grid-area: pin;
+}
+
+.game-score.has-long-handle .game-score__text {
+  display: contents;
+}
+
+.game-score.has-long-handle .game-score__text strong {
+  grid-area: handle;
+  font-size: 15px;
+  font-size: clamp(15px, (100cqi - 78px) / (var(--handle-chars) * 0.6), 20px);
+}
+
+.game-score.has-long-handle .game-score__text > span {
+  grid-area: held;
+}
+
+.game-score.has-long-handle .game-score__points {
+  grid-area: points;
+}
+
 .game-stale {
   margin: -4px 4px 0;
 }
@@ -305,6 +374,8 @@
   margin: 0;
   padding: 0;
   display: grid;
+  /* minmax(0, …) lets long park names shorten with an ellipsis instead of widening the row. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -341,7 +412,8 @@ button.game-row:active {
   font-weight: 800;
 }
 
-.game-board li:first-child .game-row__rank {
+/* First place, and everyone tied for it, wears the same badge. */
+.game-row__rank.is-first {
   background: var(--kip);
   color: var(--paper);
 }
@@ -355,9 +427,12 @@ button.game-row:active {
 
 .game-row__name {
   flex: 1;
+  container-type: inline-size;
 }
 
+/* Leaderboard and friends rows shrink a long @handle towards 12.5px before the ellipsis (handleFit). */
 .game-row__name strong {
+  font-size: clamp(12.5px, 100cqi / (var(--handle-chars, 1) * 0.56), 16px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -526,20 +601,23 @@ button.game-row:active {
 /* Inside a park already visited today: no pulse, and the tag reads as a note, not a call. */
 .fab--visited .fab__label {
   background: var(--paper);
-  rotate: 0deg;
 }
 
 /* ---------- Park sheet: who holds the park ---------- */
+
+/* One status block: the flag holder, then the crew during and after the protected hour. */
+.park-status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: #fff;
+}
 
 .park-sheet__holder {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 0 4px;
-  padding: 10px 14px;
-  border: 2.5px solid var(--ink);
-  border-radius: var(--r-md);
-  background: #fff;
 }
 
 .park-sheet__holder > span:last-child {
@@ -548,10 +626,20 @@ button.game-row:active {
   min-width: 0;
 }
 
+.park-sheet__holder > span:nth-child(2) {
+  flex: 1;
+  container-type: inline-size;
+}
+
+/* The holder's @handle stays on one line and shrinks to fit (--handle-chars, see handleFit). */
 .park-sheet__holder strong {
   font-family: var(--display);
   font-size: 18px;
+  font-size: clamp(14px, 100cqi / (var(--handle-chars, 1) * 0.6), 18px);
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .park-sheet__holder em {
@@ -562,11 +650,13 @@ button.game-row:active {
 
 /* ---------- Planting scene: a flag driven into a mound of dirt ---------- */
 
+/* Drawn at 280 by 330 and scaled from its top left corner to fit the stage (useSceneFit). */
 .plant-scene {
   position: relative;
   z-index: 2;
   width: 280px;
   height: 330px;
+  transform-origin: 0 0;
 }
 
 /* The pole's foot sits 22px inside the mound, so the mound hides it once planted. */
@@ -695,13 +785,13 @@ button.game-row:active {
   pointer-events: none;
 }
 
-/* The points land to the left of the pole, clear of the cloth and the headline. */
+/* The points land left of the pole, in scene coordinates, clear of the cloth and the text. */
 .plant-score {
   position: absolute;
   z-index: 6;
-  top: 16%;
-  left: 2%;
-  width: 170px;
+  top: 30px;
+  left: -44px;
+  width: 150px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -710,7 +800,7 @@ button.game-row:active {
 
 .plant-score strong {
   font-family: var(--display);
-  font-size: 84px;
+  font-size: 72px;
   font-weight: 800;
   line-height: 0.95;
   color: var(--sun);
@@ -730,12 +820,74 @@ button.game-row:active {
   font-weight: 800;
 }
 
+/* Kip cheers on the right of the mound, below the cloth. */
 .plant-kip {
   position: absolute;
   z-index: 5;
-  right: 6px;
-  bottom: -6px;
+  right: -40px;
+  bottom: -4px;
   pointer-events: none;
+}
+
+/* Kip's cheer with the points part by part, for screen readers; the scene shows the total. */
+.plant__cheer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Crew, friend offer and new badge, as one row of small chips under the sentence. */
+.plant__extras {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.plant__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 2px solid rgba(255, 248, 236, 0.45);
+  border-radius: 99px;
+  background: rgba(255, 248, 236, 0.1);
+  color: var(--paper);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.plant__chip--button {
+  border-color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.badge-unlock--compact {
+  gap: 6px;
+  min-height: 36px;
+  padding: 2px 12px 2px 3px;
+  border-width: 2px;
+  border-radius: 99px;
+  box-shadow: none;
+}
+
+.badge-unlock--compact .badge-unlock__text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.badge-unlock--compact .badge-unlock__text span {
+  font-size: 11px;
+}
+
+.badge-unlock--compact .badge-unlock__text strong {
+  font-size: 14px;
 }
 
 .plant__bubble {
@@ -746,4 +898,38 @@ button.game-row:active {
 .plant__bubble .bubble {
   white-space: normal;
   text-align: center;
+}
+
+/* The unlock moment on the visit result (#175). */
+.badge-unlock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 2.5px solid var(--ink);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: var(--pop);
+  color: var(--ink);
+  text-align: left;
+}
+
+.badge-unlock__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.badge-unlock__text span {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-unlock__text strong {
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.1;
 }

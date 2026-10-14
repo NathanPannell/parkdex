@@ -9,8 +9,9 @@ import { useAuth } from "../../lib/accounts/AuthProvider";
 import { handleBack, useBackHandler } from "../../lib/backStack";
 import { insidePark } from "../../lib/boundaries";
 import { buzz, sfx } from "../../lib/feedback";
+import { startPhotoCapture } from "../../lib/captureMode";
 import {
-  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, requestFoundingReview,
+  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderCapture, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, requestFoundingReview,
   REVIEW_HINT, reviewButton, reviewProblem, scanParks, targetFor,
   type ContainingPark, type DeviceFix, type FoundResult, type FoundTarget, type PhotoFlag, type ReviewState,
 } from "../../lib/founders";
@@ -405,6 +406,8 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   function openCamera() {
     if (!choice) return;
     sfx.tap();
+    // In a phone browser the camera app opens from this tap; PhotoCapture collects the photo.
+    startPhotoCapture();
     // A new photo is a new attempt; only a retry of the same photo reuses its ID.
     attemptId.current = createVisitId();
     setPhoto(null);
@@ -421,7 +424,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   if (step.kind === "founded" && photo) {
     return (
       <AboveNav>
-        <FoundCelebration result={step.result} photo={photo.dataUrl} flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null} onClose={onClose} />
+        <FoundCelebration result={step.result} photo={photo.dataUrl} photoAspect={photo.width / photo.height} flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null} onClose={onClose} />
       </AboveNav>
     );
   }
@@ -545,13 +548,13 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
           {step.kind === "camera" && choice && (
             <PhotoCapture
               key="camera"
-              place={`Inside ${choice.label}`}
-              hint="Get the park in the shot, with no people in it. This becomes the park's cover photo."
-              caption={`${choice.label} · ${new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`}
+              // The crop is the park sheet's landscape cover shape, so what the founder frames is what everyone sees.
+              {...founderCapture(choice.label)}
               onClose={() => setStep({ kind: "results" })}
               onUse={(picture) => {
-                setPhoto(picture);
-                void check(picture, choice.target);
+                // Moderation and the public cover use the player's crop, not the whole photo.
+                setPhoto(picture.cropped);
+                void check(picture.cropped, choice.target);
               }}
             />
           )}
@@ -560,7 +563,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         <AnimatePresence>
           {busyStep && photo && (
             <motion.div key="check" className="found-check" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <motion.div className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}`} initial={{ scale: 0.9, rotate: 0 }} animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}>
+              <motion.div className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}${photo.width > photo.height ? " is-landscape" : ""}`} initial={{ scale: 0.9, rotate: 0 }} animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}>
                 <div className="polaroid__img" style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
                   <img src={photo.dataUrl} alt="Your photo" />
                   {step.kind === "checking" && <span className="found-check__scan" aria-hidden="true" />}

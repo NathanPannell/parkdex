@@ -11,3 +11,5 @@ public/map/bootstrap/canada-overview.pmtiles -text
 database/imports/provincial-regional-20260929/** -text whitespace=cr-at-eol
 # The legacy BC import pins exact source and output bytes.
 database/imports/legacy-bc-20261007/** -text
+# The Nova Scotia import pins exact output bytes.
+database/imports/ns-20261013/** -text

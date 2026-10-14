@@ -8,9 +8,10 @@ import { useToast } from "../components/Toast";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { buzz, sfx } from "../lib/feedback";
 import { useGame } from "../lib/game/GameProvider";
-import { distanceKm } from "../lib/geo";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
+import { saveLastLocation } from "../lib/lastLocation";
+import { onboardingStart } from "../lib/provinces";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
 import "../game.css";
@@ -18,7 +19,7 @@ import "../onboarding.css";
 
 /**
  * Six short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
- * park, earn a point a day while it flies, take other players' parks for their flag's age, get
+ * park, earn a point an hour while it flies, take other players' parks for their flag's age, get
  * your own @handle and flag, and become the founder of parks that have none yet. How flags
  * eventually fall is left for players to discover.
  */
@@ -37,14 +38,14 @@ const SLIDES = [
   },
   {
     eyebrow: "Step 2 · Hold",
-    title: ["A point a day", "while it flies."],
-    body: "Your flag earns 1 point for every day it stays up. The longer it flies, the more it's worth.",
+    title: ["A point an hour", "while it flies."],
+    body: "Your flag earns 1 point for every hour it stays up. The longer it flies, the more it's worth.",
     tint: "#FFF1B8",
   },
   {
     eyebrow: "Step 3 · Take",
     title: ["Take parks.", "Win their days."],
-    body: "Plant on someone else's park and it's yours, plus a point for every day their flag was up. They keep what they earned.",
+    body: "Plant on someone else's park and it's yours: 4 points, plus a point for every day their flag was up. They keep what they earned.",
     tint: "#FFD6DE",
   },
   {
@@ -56,7 +57,7 @@ const SLIDES = [
   {
     eyebrow: "Bonus · Founder",
     title: ["Be the founder.", "Snap its cover."],
-    body: "Standing in a park with no founder yet? Take its first photo to become the founder, +10 points.",
+    body: "Standing in a park with no founder yet? Take its first photo to become the founder, +24 points.",
     tint: "#E6F4C8",
   },
 ];
@@ -182,8 +183,8 @@ function PointsPerDay() {
         <PlantedFlag seed={YOU_SEED} size={118} days={days} />
       </div>
       <div className="ob-days__score card">
-        <strong><RollingNumber value={day - 1} /></strong>
-        <span>{day - 1 === 1 ? "point" : "points"}</span>
+        <strong><RollingNumber value={(day - 1) * 24} /></strong>
+        <span>points</span>
       </div>
       <div className="ob-guide ob-guide--right">
         <Bubble side="to-right" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
@@ -320,7 +321,7 @@ function FoundIt() {
         animate={{ scale: [0, 0, 1.3, 1, 1, 0], opacity: [0, 0, 1, 1, 1, 0], y: [10, 10, -6, 0, 0, 0] }}
         transition={{ ...loop, times: [0, 0.14, 0.2, 0.26, 0.92, 1] }}
       >
-        +10
+        +24
       </motion.span>
       <div className="ob-guide ob-guide--left">
         <Kip pose="camera" size={80} />
@@ -374,17 +375,23 @@ export function Onboarding() {
       dispatch({ type: "onboarded" });
       return;
     }
+    // A real position anywhere in a supported province is used as is; the demo spot is
+    // only for players outside them all or without a location.
+    const start = (fix: [number, number] | null, accuracy: number | null) => {
+      const decision = onboardingStart(fix);
+      if (decision.kind === "located") {
+        dispatch({ type: "move", user: decision.point, accuracy });
+        // Builds without live GPS have no other way to remember it across a reload.
+        saveLastLocation(decision.point);
+      } else {
+        toast(decision.message, "kip");
+        dispatch({ type: "move", user: DEMO_START, accuracy: null });
+      }
+      dispatch({ type: "onboarded" });
+    };
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const here: [number, number] = [pos.coords.longitude, pos.coords.latitude];
-        if (distanceKm(here, DEMO_START) > 300) toast("You're far from the Island. Using a Victoria demo spot.", "kip");
-        else dispatch({ type: "move", user: here, accuracy: pos.coords.accuracy });
-        dispatch({ type: "onboarded" });
-      },
-      () => {
-        toast("No location, no problem. Using a Victoria demo spot.", "kip");
-        dispatch({ type: "onboarded" });
-      },
+      (pos) => start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy),
+      () => start(null, null),
       { timeout: 6000 },
     );
   };

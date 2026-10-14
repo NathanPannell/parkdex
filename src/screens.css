@@ -1016,11 +1016,22 @@
 
 .nearby__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  column-gap: 5px;
+  max-width: 100%;
   font-size: 12.5px;
   font-weight: 700;
   color: var(--ink-soft);
+}
+
+/* The card is too narrow for a long @handle at any readable size, so it ends in an ellipsis. */
+.nearby__owner {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nearby__meta i {
@@ -1062,10 +1073,40 @@
   overflow: hidden;
 }
 
+/*
+ * The sheet is one scrolling page under a pinned call to action. The hero is the first thing on
+ * that page, at the park cover's 16:9 (PARK_COVER_ASPECT, set inline), so it scrolls away
+ * instead of pinning a third of the screen, and nothing can sit under it or under the button.
+ */
+.park-sheet__scroll {
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+/* The page scrolls under a finger, so this strip at the top is what drags the sheet down. */
+.park-sheet__grab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 30px;
+  touch-action: none;
+}
+
+.park-sheet .sheet__handle {
+  background: rgba(255, 248, 236, 0.92);
+  box-shadow: 0 0 0 1.5px rgba(20, 35, 28, 0.3);
+}
+
+.park-sheet > .park-sheet__close {
+  z-index: 5;
+}
+
 .park-sheet__hero {
   position: relative;
-  flex: none;
-  height: clamp(180px, 30vh, 250px);
+  width: 100%;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -1091,7 +1132,7 @@
 .park-sheet__badge {
   position: relative;
   z-index: 2;
-  margin-top: 10px;
+  margin-top: 8px;
   filter: drop-shadow(0 8px 0 rgba(20, 35, 28, 0.22));
 }
 
@@ -1110,25 +1151,8 @@
   box-shadow: 0 2px 0 var(--ink);
 }
 
-.park-sheet__earn {
-  position: absolute;
-  z-index: 3;
-  left: 16px;
-  top: 18px;
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 14px;
-  padding: 7px 12px;
-  border-radius: 10px;
-}
-
 .park-sheet__body {
-  flex: 1;
-  /* Lets the body scroll so the call-to-action stays pinned on short screens. */
-  min-height: 0;
-  padding: 18px 20px 20px;
+  padding: 16px 18px 24px;
 }
 
 .park-sheet__pills {
@@ -1155,48 +1179,91 @@
   font-size: 14px;
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 16px 0;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  border-radius: 16px;
-}
-
-.stat svg {
-  color: var(--kip);
-  margin-bottom: 2px;
-}
-
-.stat strong {
-  font-family: var(--display);
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.stat span {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.stat--landscape svg {
-  color: inherit;
-}
-
 .park-sheet__blurb {
+  margin: 0;
   font-size: 16px;
   line-height: 1.5;
   color: var(--ink-2);
+}
+
+/* Stats chips, the founder and the visit counts: one quiet card under the status block. */
+.park-summary.park-facts {
+  margin: 12px 0 0;
+}
+
+.park-facts__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.park-facts__chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1.5px solid rgba(20, 35, 28, 0.25);
+  border-radius: 99px;
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.park-facts__chips svg {
+  color: var(--kip);
+}
+
+.park-facts__chips li[style] svg {
+  color: inherit;
+}
+
+/* The crew list, the photo button and the report link, behind one row. */
+.park-sheet__more {
+  margin-top: 12px;
+  border-top: 2px dashed rgba(20, 35, 28, 0.15);
+}
+
+.park-sheet__more > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 4px 4px;
+  list-style: none;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.park-sheet__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.park-sheet__more > summary svg {
+  transition: rotate 0.2s;
+}
+
+.park-sheet__more[open] > summary svg {
+  rotate: 90deg;
+}
+
+.park-sheet__more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 10px;
+}
+
+.park-sheet__more-body .park-sheet__photo,
+.park-sheet__more-body .park-sheet__report {
+  margin: 0;
+}
+
+.park-sheet__more-body .park-sheet__report {
+  align-self: flex-start;
 }
 
 .park-sheet__cta {
@@ -1215,6 +1282,56 @@
 
 .btn--glow {
   animation: glow 1.6s ease-in-out infinite;
+}
+
+/* "Visited today, back tomorrow": plainly not available, with no colour, glow or pulse. */
+.btn--rest {
+  --bg: var(--paper-2);
+  --fg: var(--ink-soft);
+  --edge: rgba(20, 35, 28, 0.3);
+  box-shadow: none;
+  cursor: default;
+}
+
+.btn--rest:active {
+  transform: none;
+}
+
+.btn--rest.is-nudged {
+  animation: nudge 0.36s ease-in-out;
+}
+
+@keyframes nudge {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25% {
+    translate: -6px 0;
+  }
+  50% {
+    translate: 5px 0;
+  }
+  75% {
+    translate: -3px 0;
+  }
+}
+
+/*
+ * The take button names the holder: "Take it from @handle". It wraps at the spaces, and a long
+ * handle's own line shrinks to fit beside the flag icon (--handle-chars, see handleFit).
+ */
+.park-sheet__cta,
+.arrival__card {
+  container-type: inline-size;
+}
+
+.park-sheet__cta > .btn--glow:only-child,
+.park-sheet__cta > .btn--rest:only-child,
+.arrival__card .btn--block {
+  white-space: normal;
+  line-height: 1.1;
+  font-size: clamp(15px, (100cqi - 91px) / (var(--handle-chars, 1) * 0.6), 19px);
 }
 
 @keyframes glow {
@@ -1534,19 +1651,26 @@
   }
 }
 
+/*
+ * The park-state caption ("Plant!", "Tomorrow") sits on the button's lower rim, inside the bar,
+ * so it never floats over the page behind the nav.
+ */
 .fab__label {
   position: absolute;
-  top: -14px;
-  right: -18px;
+  left: 50%;
+  bottom: -9px;
+  translate: -50% 0;
   background: var(--sun);
   color: var(--ink);
   border: 2px solid var(--ink);
   border-radius: 99px;
   font-family: var(--display);
   font-weight: 800;
-  font-size: 13px;
-  padding: 2px 8px;
-  rotate: 10deg;
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 0 7px;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .fab__hint {
@@ -1690,6 +1814,13 @@
   position: absolute;
   inset: 110px 26px 230px;
   pointer-events: none;
+}
+
+/* A founder's cover is cropped landscape (PARK_COVER_ASPECT), so the viewfinder hints at that shape. */
+.camera__frame--landscape {
+  inset: auto 26px;
+  top: calc(50% - 60px);
+  transform: translateY(-50%);
 }
 
 .corner {
@@ -1853,6 +1984,96 @@
   gap: 10px;
 }
 
+/* The crop after each capture (PhotoCropper): 3:4 for the Dex, 16:9 for a founder cover. */
+.cropper {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  background: #0b1511;
+  color: #fff;
+}
+
+.cropper__title {
+  padding: calc(var(--safe-top) + 10px) 20px 6px;
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.cropper__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  outline: none;
+}
+
+.cropper__stage:active {
+  cursor: grabbing;
+}
+
+.cropper__stage:focus-visible .cropper__window {
+  border-color: var(--kip);
+}
+
+.cropper__frame {
+  position: relative;
+}
+
+.cropper__image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* The frame's border, a rule-of-thirds grid, and a shade over the photo outside it. */
+.cropper__window {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 100vmax rgba(11, 21, 17, 0.68);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22) 1px, transparent 1px);
+  background-size: 33.33% 33.33%;
+  background-position: -1px -1px;
+  pointer-events: none;
+}
+
+.cropper__bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px calc(var(--safe-bottom) + 16px);
+}
+
+.cropper__caption {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.cropper__hint {
+  min-height: 1.3em;
+  font-weight: 700;
+  font-size: 13px;
+  text-align: center;
+  opacity: 0.8;
+}
+
 /* ================= Claim ================= */
 
 .claim {
@@ -1882,14 +2103,17 @@
   padding: calc(var(--safe-top) + 10px) 24px 0;
   text-align: center;
   min-height: 110px;
+  container-type: inline-size;
 }
 
 .eyebrow--light {
   color: rgba(255, 248, 236, 0.65);
 }
 
+/* "Take it from @handle" wraps at the spaces; the handle's own line shrinks to fit (handleFit). */
 .claim__head h1 {
   font-size: 38px;
+  font-size: clamp(24px, 100cqi / (var(--handle-chars, 1) * 0.6), 38px);
   font-weight: 800;
   margin-top: 8px;
 }
@@ -2123,8 +2347,9 @@
   }
 }
 
+/* The badge fits inside the 16:9 hero the sheet's width sets. */
 .park-sheet__badge .badge {
-  width: min(176px, calc(30vh - 44px));
+  width: min(160px, calc(100vw * 9 / 16 - 36px));
   height: auto;
 }
 

@@ -1,6 +1,7 @@
 import { accountApiUrl, fetchAccountApi, fetchAuthenticated } from "./accounts/authClient";
-import { parseVisit, type VisitResult } from "./game/client";
+import { parseBadgeUnlocks, parseVisit, type BadgeUnlock, type VisitResult } from "./game/client";
 import type { LngLat } from "./geo";
+import { PARK_COVER_ASPECT } from "./photoCrop";
 
 /**
  * Client for founding parks (issue #126): scan the device position for park outlines that
@@ -9,7 +10,7 @@ import type { LngLat } from "./geo";
  */
 
 /** The one-time bonus a founder earns; the server's answer wins when it sends one. */
-export const FOUNDER_POINTS = 10;
+export const FOUNDER_POINTS = 24;
 /** The server refuses positions less precise than this. */
 export const MAX_FOUND_ACCURACY_M = 100;
 /** A scan position older than this is replaced by a fresh fix before the photo check. */
@@ -37,7 +38,7 @@ export type FoundRequest = { attemptId: string; position: { lat: number; lng: nu
 
 export type PhotoFlag = { code: string; message: string };
 export type FoundResult =
-  | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number }
+  | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number; newBadges?: BadgeUnlock[] }
   | {
     outcome: "rejected" | "unsure";
     flags: PhotoFlag[];
@@ -232,6 +233,8 @@ export function parseFoundResult(body: unknown): FoundResult {
     coverUrl: text(row.coverUrl),
     visit,
     founderPoints: typeof row.founderPoints === "number" && Number.isFinite(row.founderPoints) ? Math.max(0, Math.round(row.founderPoints)) : FOUNDER_POINTS,
+    // The badges the founding unlocked (additive, #175).
+    ...(Array.isArray(row.newBadges) ? { newBadges: parseBadgeUnlocks(row.newBadges) } : {}),
   };
 }
 
@@ -324,6 +327,19 @@ export function coverImageUrl(coverUrl: string | null | undefined): string | nul
   } catch {
     return null;
   }
+}
+
+/**
+ * What the founding camera is given for a park: its labels, and the crop shape. The founder's crop
+ * is the park's public cover, so it is cropped to the shape the park sheet shows it in.
+ */
+export function founderCapture(label: string, now = new Date()): { place: string; hint: string; caption: string; aspect: number } {
+  return {
+    place: `Inside ${label}`,
+    hint: "Get the park in the shot, with no people in it. This becomes the park's cover photo.",
+    caption: `${label} · ${now.toLocaleDateString("en-CA", { month: "short", day: "numeric" })}`,
+    aspect: PARK_COVER_ASPECT,
+  };
 }
 
 export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "review_sent" | "founded";

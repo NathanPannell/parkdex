@@ -1,0 +1,288 @@
+{
+  "schema": "parkdex.ns-import-bundle.v1",
+  "fetchRecord": {
+    "file": "sources/fetch-record.json",
+    "fetchedAt": "2026-10-13T07:10:15Z",
+    "sha256": "380b192bea8fdcc40cad3f485080ef7d5c150617f8c40afba2e133baa52d52a6"
+  },
+  "sources": {
+    "nsecc-parks.geojson": {
+      "sha256": "545cc90d7ce7bbac7f7ca908ae055673642b68b015bc59978c51510ce525a26b",
+      "bytes": 4623966
+    },
+    "nsecc-attributes.json": {
+      "sha256": "0affd3b30ec5f64c695a6960c647ed425d970cb3dda2ff71df0ac95366e03a64",
+      "bytes": 307644
+    },
+    "clss-national-parks-ns.geojson": {
+      "sha256": "85e64d471bf7171ee26c107590ea8e34db9de4407644e3aab9a66fac218132c2",
+      "bytes": 432385
+    },
+    "parks-canada-finder.html": {
+      "sha256": "94bdb5ba6bbe4bad4779a0e62f50f3cf692446100abbd5c48b4f20b9850e4ba1",
+      "bytes": 165288
+    },
+    "ns-park-entrances.geojson": {
+      "sha256": "3ecb6c895caad176861ea21aae76c879501306a16a0af32904f79ab8a9e5396b",
+      "bytes": 24663
+    },
+    "ns-municipalities.geojson": {
+      "sha256": "7ed171b01537124fa7c757c142a168c99f099bd3e19a7ae26a595549d73c8399",
+      "bytes": 72471812
+    },
+    "nstdb-park-delimiters.json": {
+      "sha256": "e36416be39cb6e618ef5b37f818c36d2eadd8977d7364336b2a87b6180d62218",
+      "bytes": 11720
+    },
+    "staging-snapshot-reader1.json": {
+      "sha256": "10ead4ed51c80558dfcfafc77cc5b91b473813ff2809dc1ec834c1bc9f0d2717",
+      "bytes": 1704623
+    },
+    "staging-snapshot-reader2.json": {
+      "sha256": "bddae81a62988f76aacff2a92d1ee1406f397048e4de9d7f5c480984378f932c",
+      "bytes": 1750933
+    },
+    "staging-snapshot-reader3.json": {
+      "sha256": "4b0f0d44f86c521fc91fcab5260b9a42cd91196b427b14397574006425bdbf12",
+      "bytes": 439
+    },
+    "staging-catalogue/catalogue/index.json": {
+      "sha256": "cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df",
+      "bytes": 665102
+    },
+    "production-snapshot-reader1.json": {
+      "sha256": "ff03b1abeacd5496a68ee100fb8fdffafed773f49b699cc2d991c1f449ac5313",
+      "bytes": 1646312
+    },
+    "production-snapshot-reader2.json": {
+      "sha256": "842642a22ca4820833e428341bc1da6023bd987eb46d8ab0485f1ff4d66679ef",
+      "bytes": 1667723
+    },
+    "production-snapshot-reader3.json": {
+      "sha256": "4311089467d24d60b20745e1d11be753de826dd0a1cb1d075527de5646419a05",
+      "bytes": 438
+    },
+    "production-catalogue/catalogue/index.json": {
+      "sha256": "66157f277cbbe5d83c29d1bffad8a3b908ce9d40b1b5562d7cbc710880112647",
+      "bytes": 593140
+    }
+  },
+  "outputs": {
+    "selection.json": {
+      "sha256": "9cb76d1ed4533995f454479620ae66b12d1b0a6ba6593d381c7809e9462eb3f7",
+      "bytes": 6106
+    },
+    "catalogue.json": {
+      "sha256": "fe28fbc3e4552608762d67bc5c80275d7ac3cba0078b2af82e2e7854d7c92365",
+      "bytes": 71475
+    },
+    "comparison-report.json": {
+      "sha256": "8b59c2684bec8090cf0931191b34b5203363b9813ed436dde384eae4a2790836",
+      "bytes": 255876
+    },
+    "normalization.json": {
+      "sha256": "5553307893f2bfe3139dc9b36927dff502c71e178162ac8805019c555ffe75af",
+      "bytes": 17369
+    },
+    "overlaps.json": {
+      "sha256": "7bd6b8661118b64c071c08be48ccda0822f41b34c67a15875d5768806ea0bbc1",
+      "bytes": 73
+    },
+    "park-ids.txt": {
+      "sha256": "8d7d6237706569e96aa06f22fdc0522e68b857bfe1c2dbefe26ddc4cf887c414",
+      "bytes": 4568
+    },
+    "new-park-review.json": {
+      "sha256": "7e056612b3e47d31a16735bc7f1726c6c46dcdf56972fa004d7c98407e9f33aa",
+      "bytes": 57480
+    }
+  },
+  "boundaries": {
+    "file": "boundaries.geojson.gz",
+    "decompressedSha256": "640c770ce0bd3633cd97293212e93bbc1542785af216aba573907c4f251aac77",
+    "decompressedBytes": 3158346
+  },
+  "counts": {
+    "selected": 112,
+    "categories": {
+      "provincial": 109,
+      "national": 3
+    },
+    "regions": {
+      "Bay of Fundy and Annapolis Valley": 20,
+      "Cape Breton Island": 21,
+      "Eastern Shore": 15,
+      "Halifax Metro": 12,
+      "Northumberland Shore": 23,
+      "South Shore": 14,
+      "Yarmouth and Acadian Shores": 7
+    },
+    "counties": {
+      "Annapolis": 3,
+      "Antigonish": 5,
+      "Cape Breton": 7,
+      "Colchester": 3,
+      "Cumberland": 10,
+      "Digby": 6,
+      "Guysborough": 5,
+      "Halifax": 22,
+      "Hants": 4,
+      "Inverness": 5,
+      "Kings": 6,
+      "Lunenburg": 8,
+      "Pictou": 8,
+      "Queens": 4,
+      "Richmond": 3,
+      "Shelburne": 3,
+      "Victoria": 6,
+      "Yarmouth": 4
+    },
+    "biomes": {
+      "coast": 39,
+      "forest": 49,
+      "lake": 15,
+      "mountain": 2,
+      "river": 6,
+      "waterfall": 1
+    },
+    "pins": {
+      "interior-point-largest-part": 106,
+      "official-entrance-point": 3,
+      "parks-canada-finder": 3
+    },
+    "sourceFeatures": 124,
+    "normalizedSourceFeatures": 24,
+    "unionedParks": 9,
+    "multiPartParks": 57,
+    "parksWithHoles": 37,
+    "geometryTotals": {
+      "parts": 395,
+      "holes": 119,
+      "positions": 123863
+    },
+    "byCategory": {
+      "provincial": {
+        "parks": 109,
+        "parts": 390,
+        "holes": 118
+      },
+      "national": {
+        "parks": 3,
+        "parts": 5,
+        "holes": 1
+      }
+    },
+    "coverageAtLeast99_9Percent": 112,
+    "officialAreaWithinTolerance": 112,
+    "duplicatesExcluded": 0,
+    "overlapsReported": 0,
+    "entrancePointsWithoutOutline": 30
+  },
+  "contentSyncProjection": {
+    "limitBytes": 4194304,
+    "minimumHeadroomBytes": 524288,
+    "minimumReader": 3,
+    "environments": {
+      "staging": {
+        "revision": 160,
+        "reader1": {
+          "parks": 333,
+          "measuredBytes": 1704623,
+          "projectedBytes": 1704623,
+          "headroomBytes": 2489681,
+          "bytesWithoutReaderFloor": 4871860
+        },
+        "reader2": {
+          "parks": 333,
+          "measuredBytes": 1750933,
+          "projectedBytes": 1750933,
+          "headroomBytes": 2443371,
+          "bytesWithoutReaderFloor": 4918170
+        },
+        "reader3Pointer": {
+          "measuredBytes": 439,
+          "parkCount": 1057
+        },
+        "reader3CatalogueNow": {
+          "parks": 1057,
+          "indexBytes": 665102,
+          "chunkCount": 17,
+          "chunkBytesTotal": 7665914,
+          "largestChunkBytes": 524098,
+          "smallestChunkBytes": 67808,
+          "version": "cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df",
+          "liveVersion": "cd7e13eca3757fa93e7ea194c20456b8e4b1e3f94e4789ff3408adcef5a832df",
+          "rebuildMatchesLive": true
+        },
+        "reader3CatalogueWithNovaScotia": {
+          "parks": 1169,
+          "indexBytes": 728869,
+          "chunkCount": 24,
+          "chunkBytesTotal": 10782813,
+          "largestChunkBytes": 524098,
+          "smallestChunkBytes": 67808,
+          "version": "0a690c9ea8c35e3b7a585900dd4501855196710fc2027e90f22c1ea108c39a2d"
+        }
+      },
+      "production": {
+        "revision": 29,
+        "reader1": {
+          "parks": 351,
+          "measuredBytes": 1646312,
+          "projectedBytes": 1646312,
+          "headroomBytes": 2547992,
+          "bytesWithoutReaderFloor": 4813549
+        },
+        "reader2": {
+          "parks": 351,
+          "measuredBytes": 1667723,
+          "projectedBytes": 1667723,
+          "headroomBytes": 2526581,
+          "bytesWithoutReaderFloor": 4834960
+        },
+        "reader3Pointer": {
+          "measuredBytes": 438,
+          "parkCount": 1067
+        },
+        "reader3CatalogueNow": {
+          "parks": 1067,
+          "indexBytes": 593140,
+          "chunkCount": 16,
+          "chunkBytesTotal": 7647760,
+          "largestChunkBytes": 523825,
+          "smallestChunkBytes": 67808,
+          "version": "66157f277cbbe5d83c29d1bffad8a3b908ce9d40b1b5562d7cbc710880112647",
+          "liveVersion": "66157f277cbbe5d83c29d1bffad8a3b908ce9d40b1b5562d7cbc710880112647",
+          "rebuildMatchesLive": true
+        },
+        "reader3CatalogueWithNovaScotia": {
+          "parks": 1179,
+          "indexBytes": 656913,
+          "chunkCount": 23,
+          "chunkBytesTotal": 10764659,
+          "largestChunkBytes": 523825,
+          "smallestChunkBytes": 67808,
+          "version": "04936409a870b45d7bfd49fb13c54b82058f86047b37482d06e0ed25f8f47c90"
+        }
+      }
+    },
+    "importChangeBatchBytes": 3192502
+  },
+  "presentationRules": {
+    "short": "Name without a trailing park-type phrase such as Provincial Park, National Park Reserve or National Park and National Historic Site.",
+    "biome": "First matching name keyword in BIOME_RULES of scripts/build_bc_import.py (ignoring 'and National Historic Site'), otherwise forest.",
+    "shape": "circle",
+    "rarity": "common",
+    "seed": "First 8 bytes of SHA-256 of the park ID, modulo 1,000,001.",
+    "blurb": "A factual line such as 'A provincial park on Nova Scotia's South Shore.'",
+    "scene": null,
+    "access": "accessUnknown true, walkM 0 and null for every drive hub.",
+    "pin": "National: the Parks Canada finder point. Provincial: the official entrance point when one lies inside the outline, otherwise a point inside the largest part.",
+    "coordinates": "Rounded to 7 decimal places (under 1 cm); no simplification, every part and hole kept."
+  },
+  "publication": {
+    "providerActions": false,
+    "databaseWrites": false,
+    "badgeArtworkIncluded": false
+  }
+}

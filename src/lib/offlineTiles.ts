@@ -1,6 +1,15 @@
-import { addProtocol, removeProtocol, type Map as MapLibreMap, type StyleSpecification } from "maplibre-gl";
+import { addProtocol, removeProtocol, type AddProtocolAction, type Map as MapLibreMap, type StyleSpecification } from "maplibre-gl";
 import { PMTiles, Protocol, type RangeResponse, type Source } from "pmtiles";
-import { BUILD_MAP_ARCHIVE, BUILD_MAP_POINTER, type ContentRuntime, type ContentSnapshot, type MapManifest } from "./content/contracts";
+import {
+  BUILD_MAP_ARCHIVE,
+  BUILD_MAP_POINTER,
+  mapChunkPath,
+  mapFolder,
+  tileIntersectsContentBounds,
+  type ContentRuntime,
+  type ContentSnapshot,
+  type MapManifest,
+} from "./content/contracts";
 import { BuildMapSource } from "./buildMapSource";
 
 const TILE_SCHEME = "pmtiles";
@@ -66,7 +75,7 @@ function createBuildMapSource(): BuildMapSource {
     archive: BUILD_MAP_ARCHIVE,
     isConnected: buildMapConnected,
     readLocal: async (index, offset, length) =>
-      (await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, mapChunkPath(index), offset, length)) ?? null,
+      (await buildMap?.runtime.readLocalMapFile?.(BUILD_MAP_POINTER.version, mapChunkPath(index, BUILD_MAP_ARCHIVE.folder), offset, length)) ?? null,
     onUnavailable: () => {
       buildMapUnavailable = true;
     },
@@ -113,7 +122,7 @@ export function registerContentMapProtocols(runtime: ContentRuntime, snapshot: C
   ensureProtocols();
 
   const entry = {} as ReleaseRegistration;
-  const source = new RuntimeChunkSource(runtime, releaseId, manifest, () => allowedChunkIds.get(releaseId));
+  const source = new RuntimeChunkSource(runtime, releaseId, manifest, mapFolder(snapshot.manifest.files), () => allowedChunkIds.get(releaseId));
   Object.assign(entry, { runtime, snapshot, source, references: 1 });
   registrations.set(releaseId, entry);
   tileProtocol!.add(new PMTiles(source));
@@ -149,7 +158,7 @@ function ensureProtocols(): void {
   if (!bundledOverview) bundledOverview = new PMTiles(bundledOverviewSource);
   if (!tileProtocol.tiles.has(BASE_OVERVIEW_KEY)) tileProtocol.add(bundledOverview);
   if (!tileProtocolInstalled) {
-    addProtocol(TILE_SCHEME, tileProtocol.tile);
+    addProtocol(TILE_SCHEME, detailedAreaTile);
     tileProtocolInstalled = true;
   }
   if (!glyphProtocolInstalled) {
@@ -157,6 +166,24 @@ function ensureProtocols(): void {
     glyphProtocolInstalled = true;
   }
 }
+
+const TILE_URL = /^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/;
+
+/**
+ * Detailed sources span one box around every content area (DETAIL_BOUNDS), so
+ * MapLibre also asks for tiles between them. Those tiles are not in the archive:
+ * answer them as empty, without reading archive directories that may not be
+ * saved offline, and the bundled base map shows through.
+ */
+export const detailedAreaTile: AddProtocolAction = async (request, controller) => {
+  const match = TILE_URL.exec(request.url);
+  if (match && decodeURIComponent(match[1]!) !== BASE_OVERVIEW_KEY &&
+    !tileIntersectsContentBounds(Number(match[2]), Number(match[3]), Number(match[4]))) {
+    return { data: new Uint8Array() };
+  }
+  if (!tileProtocol) throw new Error("Map tiles are not registered");
+  return (tileProtocol.tile as AddProtocolAction)(request, controller);
+};
 
 function removeProtocols(): void {
   if (tileProtocolInstalled) {
@@ -216,6 +243,8 @@ export class RuntimeChunkSource implements Source {
     private readonly runtime: ContentRuntime,
     private readonly releaseId: string,
     private readonly manifest: MapManifest,
+    /** The release's map folder (mapFolder), which holds its chunks. */
+    private readonly folder: string,
     private readonly allowed: () => ReadonlySet<number> | undefined,
     private readonly bypassAllowlist = false,
     private readonly defaultSignal?: AbortSignal,
@@ -262,7 +291,7 @@ export class RuntimeChunkSource implements Source {
    */
   private async streamChunks(indices: number[], signal?: AbortSignal): Promise<void> {
     try {
-      for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index), "nearby", signal);
+      for (const index of indices) await this.runtime.ensureFile(this.releaseId, mapChunkPath(index, this.folder), "nearby", signal);
     } catch (error) {
       if (signal?.aborted || (error as Error)?.name === "AbortError") throw error;
       refusedReleases.add(this.releaseId);
@@ -281,7 +310,7 @@ export class RuntimeChunkSource implements Source {
       return cached;
     }
 
-    const path = mapChunkPath(index);
+    const path = mapChunkPath(index, this.folder);
     await this.runtime.ensureFile(this.releaseId, path, "nearby", signal);
     throwIfAborted(signal);
     const bytes = await this.runtime.readFile(this.releaseId, path);
@@ -350,10 +379,7 @@ export function prewarmBundledOverview(): Promise<void> {
   return bundledOverviewSource.getBytes(0, 127).then(() => undefined);
 }
 
-export function mapChunkPath(index: number): string {
-  if (!Number.isInteger(index) || index < 0) throw new RangeError("Map chunk index must be a non-negative integer");
-  return `map/island/${String(index).padStart(3, "0")}.bin`;
-}
+export { mapChunkPath };
 
 export function setAllowedMapChunks(releaseId: string, chunkIds: Iterable<number>): void {
   let allowed = allowedChunkIds.get(releaseId);

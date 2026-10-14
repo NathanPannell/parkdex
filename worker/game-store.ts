@@ -1,5 +1,5 @@
 import { database } from "./db.js";
-import { isParkHidden } from "./parkVisibility.js";
+import { hiddenParks, isParkHidden } from "./parkVisibility.js";
 
 export interface PlayerRecord {
   handle: string;
@@ -8,22 +8,63 @@ export interface PlayerRecord {
   takeoversSeenAt: string | null;
 }
 
-export type VisitOutcome = "planted" | "took" | "held" | "already_today";
+/** `joined` and `logged` are crew outcomes (#170): joining a crew, and a visit during someone else's protected hour. */
+export type VisitOutcome = "planted" | "took" | "held" | "joined" | "logged" | "already_today";
+
+/** Why a visit was logged instead of taking the flag: someone else's protected hour (#170). */
+export interface ProtectedRecord {
+  /** When the protected hour ends; the flag can be taken from then on. */
+  until: string;
+  leader: { handle: string; flagSeed: string };
+  crewSize: number;
+}
 
 export interface VisitRecord {
   visitId: string;
   parkId: string;
   outcome: VisitOutcome;
   pointsEarned: number;
+  /** pointsEarned split into the outcome's base points and a take's day bonus (#169). */
+  pointsBreakdown: PointsBreakdown;
   previousHolder: { handle: string; flagSeed: string } | null;
   flagSince: string | null;
   visitedAt: string;
   /** True when this visit first closed a fallen flag at the park. */
   fell: boolean;
+  /** Set for a logged visit, and for already_today during someone else's protected hour. */
+  protected: ProtectedRecord | null;
 }
 
+export interface PointsBreakdown {
+  base: number;
+  /** One point per whole day the taken flag had flown; 0 for every other outcome. */
+  days: number;
+}
+
+/** A badge a request unlocked (#175). */
+export interface BadgeUnlock {
+  id: string;
+  unlockedAt: string;
+}
+
+/** One badge as its player sees it (#175): progress toward the goal, and when it unlocked. */
+export interface BadgeRecord {
+  id: string;
+  progress: number;
+  goal: number;
+  unlockedAt: string | null;
+}
+
+export type SetPatchesResult =
+  | { status: "saved"; patches: string[] }
+  | { status: "too_many" | "duplicate" | "locked" | "handle_required" | "account_unavailable" };
+
 export type RecordVisitResult =
-  | { status: "recorded" | "replayed" | "already_today"; visit: VisitRecord }
+  /**
+   * protected: the visit was logged during someone else's protected hour (#170). `badges` are the
+   * badges this visit unlocked (#175), empty where game_004_badges.sql has not run.
+   */
+  | { status: "recorded" | "protected" | "replayed" | "already_today"; visit: VisitRecord; badges?: BadgeUnlock[] }
   | { status: "park_not_found" | "handle_required" | "account_unavailable" | "conflict" };
 
 export type SetHandleResult =
@@ -32,8 +73,21 @@ export type SetHandleResult =
 
 export interface HeldPark {
   parkId: string;
+  /** When the flag went up; days counts from here, for weathering. */
   since: string;
   days: number;
+  /** Whole hours this account has held the flag: its holding points so far. */
+  hours: number;
+  crew: HeldParkCrew;
+}
+
+/** The crew this account holds a park with (#170). A solo flag is a crew of 1 led by its holder. */
+export interface HeldParkCrew {
+  size: number;
+  /** True for the planter or taker, false for a member who joined. */
+  leader: boolean;
+  /** The end of the protected hour while it lasts, else null. */
+  protectedUntil: string | null;
 }
 
 export interface Takeover {
@@ -51,6 +105,11 @@ export interface PlayerSummary {
   visitedToday: string[];
   /** When that day ends (the next Victoria midnight), so clients never need time zone rules. */
   visitedTodayUntil: string;
+  /**
+   * Parks with a logged visit today and no flag action (#170). A logged visit does not use up
+   * the day's flag action, so these are not in visitedToday.
+   */
+  loggedToday: string[];
 }
 
 export interface FlagRecord {
@@ -58,7 +117,52 @@ export interface FlagRecord {
   handle: string;
   flagSeed: string;
   since: string;
+  crew: FlagCrew;
+  /** The badges the holder wears on their flag (#175), at most 3. */
+  patches?: string[];
 }
+
+/** A flag's crew for map pins (#170). The leader is the flag's own handle and seed. */
+export interface FlagCrew {
+  /** Everyone holding the flag, leader included. */
+  size: number;
+  /** Up to 3 members after the leader, earliest first. */
+  memberSeeds: string[];
+  protectedUntil: string | null;
+}
+
+export interface CrewMemberRecord {
+  handle: string;
+  flagSeed: string;
+  joinedAt: string;
+  leader: boolean;
+  /** Badges worn on this member's flag (#175). */
+  patches?: string[];
+}
+
+/** A crew as one account sees it (#170). The code is only there for members during the hour. */
+export interface CrewRecord {
+  parkId: string;
+  leader: { handle: string; flagSeed: string; patches?: string[] };
+  /** Leader first, then by joinedAt. */
+  members: CrewMemberRecord[];
+  size: number;
+  cap: number;
+  flagSince: string;
+  protectedUntil: string | null;
+  /** True when the reading account is in this crew. */
+  member: boolean;
+  code: string | null;
+  codeExpiresAt: string | null;
+}
+
+export type JoinCrewFailure = "code_not_found" | "code_expired" | "crew_full" | "already_today" | "handle_required"
+  | "account_unavailable" | "conflict" | "park_not_found";
+
+export type JoinCrewResult =
+  | { status: "joined" | "replayed"; visit: VisitRecord; crew: CrewRecord; badges?: BadgeUnlock[] }
+  | { status: "already_member"; crew: CrewRecord }
+  | { status: JoinCrewFailure };
 
 /** A founded park, for the map: who founded it and which cover photo it has. */
 export interface FounderRecord {
@@ -84,12 +188,28 @@ export interface FoundingReviewRecord {
   decidedAt: string | null;
 }
 
+/**
+ * One park in the player's Dex (#174): every America/Vancouver day they visited it, from game
+ * visits and from claims (old imported claims and photos alike), so a photo taken on the day of a
+ * visit never counts twice.
+ */
+export interface DexParkRecord {
+  parkId: string;
+  days: string[];
+  firstVisitAt: string;
+  lastVisitAt: string;
+  /** Hidden parks (docs/park-visibility.md) stay in the Dex but out of its totals. */
+  hidden: boolean;
+}
+
 export interface LeaderboardRow {
   rank: number;
   handle: string;
   flagSeed: string;
   score: number;
   parksHeld: number;
+  /** Badges worn on the player's flag (#175). */
+  patches?: string[];
 }
 
 export interface GameStore {
@@ -101,16 +221,32 @@ export interface GameStore {
   markTakeoversSeen(accountId: string, at: string): Promise<PlayerRecord | null>;
   flags(now: string): Promise<FlagRecord[]>;
   leaderboard(now: string): Promise<LeaderboardRow[]>;
+  /** Joins the crew of the protected hour that has this code (#170). */
+  joinCrew(accountId: string, code: string, visitId: string, now: string): Promise<JoinCrewResult>;
+  /** The crew of the flag up at a park, as this account sees it, or null when no flag is up. */
+  parkCrew(parkId: string, accountId: string, now: string): Promise<CrewRecord | null>;
   /** Every founded park. Empty where founders_001_init.sql has not run. */
   founders?(): Promise<FounderRecord[]>;
   /** The founder bonus included in the account's score. */
   founderPoints?(accountId: string, now: string): Promise<number>;
   /** Pending review requests and unseen decisions. Empty where founders_002_reviews.sql has not run. */
   foundingReviews?(accountId: string): Promise<FoundingReviewRecord[]>;
+  /** The parks this account has visited, for My Dex. */
+  dex?(accountId: string, now: string): Promise<DexParkRecord[]>;
+  /**
+   * Badges (#175). awardBadges checks every rule at `now` and returns the badges it unlocked;
+   * badges lists them all with progress, plus the badges worn on the flag. Absent or empty where
+   * game_004_badges.sql has not run.
+   */
+  awardBadges?(accountId: string, now: string): Promise<BadgeUnlock[]>;
+  badges?(accountId: string, now: string): Promise<{ badges: BadgeRecord[]; patches: string[] }>;
+  setFlagPatches?(accountId: string, patches: string[]): Promise<SetPatchesResult>;
 }
 
 export const TAKEOVER_LIMIT = 50;
-const VISIT_OUTCOMES = new Set(["planted", "took", "held", "already_today"]);
+const VISIT_OUTCOMES = new Set(["planted", "took", "held", "joined", "logged", "already_today"]);
+const PATCH_REFUSALS = new Set<string>(["too_many", "duplicate", "locked", "handle_required", "account_unavailable"]);
+const JOIN_FAILURES = new Set<string>(["code_not_found", "code_expired", "crew_full", "already_today", "handle_required", "account_unavailable", "conflict"]);
 
 function iso(value: unknown): string {
   return value instanceof Date ? value.toISOString() : new Date(String(value)).toISOString();
@@ -118,6 +254,15 @@ function iso(value: unknown): string {
 
 function nullableIso(value: unknown): string | null {
   return value === null || value === undefined ? null : iso(value);
+}
+
+/** A text[] column, as an array or in PostgreSQL's `{a,b}` text form. Flag seeds never need quoting. */
+function textArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
+    return value.length > 2 ? value.slice(1, -1).split(",") : [];
+  }
+  return [];
 }
 
 function jsonValue(value: unknown): unknown {
@@ -138,15 +283,54 @@ export function visitFromJson(value: unknown): VisitRecord {
   const outcome = String(visit.outcome);
   if (!VISIT_OUTCOMES.has(outcome)) throw new Error("unexpected stored visit outcome");
   const holder = visit.previousHolder as Record<string, unknown> | null;
+  const pointsEarned = Number(visit.pointsEarned);
+  const breakdown = visit.pointsBreakdown as Record<string, unknown> | null | undefined;
   return {
     visitId: String(visit.visitId).toLowerCase(),
     parkId: String(visit.parkId),
     outcome: outcome as VisitOutcome,
-    pointsEarned: Number(visit.pointsEarned),
+    pointsEarned,
+    // game_001's visit_json has no breakdown; it only runs briefly while a deploy replays it.
+    pointsBreakdown: breakdown
+      ? { base: Number(breakdown.base), days: Number(breakdown.days) }
+      : { base: pointsEarned, days: 0 },
     previousHolder: holder ? { handle: String(holder.handle), flagSeed: String(holder.flagSeed) } : null,
     flagSince: nullableIso(visit.flagSince),
     visitedAt: iso(visit.visitedAt),
     fell: visit.fell === true,
+    // game_001's and game_002's visit_json have no protected hour; they only run while a deploy replays them.
+    protected: protectedFromJson(visit.protected),
+  };
+}
+
+function protectedFromJson(value: unknown): ProtectedRecord | null {
+  if (typeof value !== "object" || value === null) return null;
+  const row = value as Record<string, unknown>;
+  const leader = row.leader as Record<string, unknown>;
+  return {
+    until: iso(row.until),
+    leader: { handle: String(leader.handle), flagSeed: String(leader.flagSeed) },
+    crewSize: Number(row.crewSize),
+  };
+}
+
+export function crewFromJson(value: unknown): CrewRecord {
+  const crew = value as Record<string, unknown>;
+  const leader = crew.leader as Record<string, unknown>;
+  const members = Array.isArray(crew.members) ? crew.members as Array<Record<string, unknown>> : [];
+  return {
+    parkId: String(crew.parkId),
+    leader: { handle: String(leader.handle), flagSeed: String(leader.flagSeed), patches: [] },
+    members: members.map((member) => ({
+      handle: String(member.handle), flagSeed: String(member.flagSeed), joinedAt: iso(member.joinedAt), leader: member.leader === true, patches: [],
+    })),
+    size: Number(crew.size),
+    cap: Number(crew.cap),
+    flagSince: iso(crew.flagSince),
+    protectedUntil: nullableIso(crew.protectedUntil),
+    member: crew.member === true,
+    code: typeof crew.code === "string" ? crew.code : null,
+    codeExpiresAt: nullableIso(crew.codeExpiresAt),
   };
 }
 
@@ -154,6 +338,25 @@ export function visitFromJson(value: unknown): VisitRecord {
 function missingFounders(error: unknown): boolean {
   const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
   return code === "42P01" || code === "42883" || code === "3F000";
+}
+
+// Booleans arrive as true over the Neon driver and as "t" through some adapters.
+function truthy(value: unknown): boolean {
+  return value === true || value === "t";
+}
+
+// Undefined function, column or table: a database without game_004_badges.sql.
+function missingBadges(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  return code === "42883" || code === "42703" || code === "42P01";
+}
+
+export function badgeUnlocksFromJson(value: unknown): BadgeUnlock[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const row = item as Record<string, unknown> | null;
+    return row && typeof row.id === "string" ? [{ id: row.id, unlockedAt: iso(row.unlockedAt) }] : [];
+  });
 }
 
 function uniqueViolation(error: unknown): boolean {
@@ -165,6 +368,45 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
   const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
 
   const playerColumns = "handle, flag_seed, created_at, takeovers_seen_at";
+
+  /** The patches each handle wears (#175). Empty where game_004_badges.sql has not run. */
+  async function patchesFor(handles: string[]): Promise<Map<string, string[]>> {
+    if (!handles.length) return new Map();
+    try {
+      const found = await rows(
+        "SELECT handle, flag_patches FROM kip_game.players WHERE handle = ANY($1::text[]) AND cardinality(flag_patches) > 0",
+        [[...new Set(handles)]],
+      );
+      return new Map(found.map((row) => [String(row.handle), textArray(row.flag_patches)]));
+    } catch (error) {
+      if (missingBadges(error)) return new Map();
+      throw error;
+    }
+  }
+
+  async function withCrewPatches(crew: CrewRecord): Promise<CrewRecord> {
+    const patches = await patchesFor([crew.leader.handle, ...crew.members.map((member) => member.handle)]);
+    return {
+      ...crew,
+      leader: { ...crew.leader, patches: patches.get(crew.leader.handle) ?? [] },
+      members: crew.members.map((member) => ({ ...member, patches: patches.get(member.handle) ?? [] })),
+    };
+  }
+
+  /**
+   * Runs a game function through its game_004 wrapper, which adds the badges it unlocked, or the
+   * function itself on a database without game_004_badges.sql (a preview before its migration).
+   */
+  async function withBadges(wrapper: string, plain: string, params: unknown[]): Promise<Record<string, unknown>> {
+    try {
+      const result = await rows(`SELECT ${wrapper} AS result`, params);
+      return jsonValue(result[0]?.result) as Record<string, unknown>;
+    } catch (error) {
+      if (!missingBadges(error)) throw error;
+      const result = await rows(`SELECT ${plain} AS result`, params);
+      return jsonValue(result[0]?.result) as Record<string, unknown>;
+    }
+  }
 
   return {
     async getPlayer(accountId) {
@@ -200,10 +442,13 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
         const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
         if (!stored.length) return { status: "park_not_found" };
       }
-      const result = await rows("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result", [visitId, accountId, parkId, visitedAt]);
-      const body = jsonValue(result[0]?.result) as { status: string; visit?: unknown };
-      if (body.status === "recorded" || body.status === "replayed" || body.status === "already_today") {
-        return { status: body.status, visit: visitFromJson(body.visit) };
+      const body = await withBadges(
+        "kip_game.record_visit_with_badges($1::uuid, $2::uuid, $3, $4::timestamptz)",
+        "kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz)",
+        [visitId, accountId, parkId, visitedAt],
+      ) as { status: string; visit?: unknown; badges?: unknown };
+      if (body.status === "recorded" || body.status === "protected" || body.status === "replayed" || body.status === "already_today") {
+        return { status: body.status, visit: visitFromJson(body.visit), badges: badgeUnlocksFromJson(body.badges) };
       }
       if (body.status === "park_not_found" || body.status === "handle_required" || body.status === "account_unavailable" || body.status === "conflict") {
         return { status: body.status };
@@ -215,35 +460,50 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
       const [score, parks, takeovers, visitedToday, dayEnd] = await Promise.all([
         rows("SELECT score FROM kip_game.player_scores($2::timestamptz) WHERE account_id = $1::uuid", [accountId, now]),
         rows(`
-          SELECT t.park_id, t.started_at, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
-          FROM kip_game.tenures t
-          WHERE t.holder_account_id = $1::uuid AND kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)
-            AND t.started_at <= $2::timestamptz
-          ORDER BY t.started_at ASC, t.park_id ASC`, [accountId, now]),
+          SELECT h.park_id, h.flag_since, kip_game.whole_days(h.flag_since, $2::timestamptz) AS days,
+            kip_game.holding_points(h.held_from, h.last_visit_at, h.ended_at, $2::timestamptz) AS hours,
+            kip_game.crew_size(h.tenure_id) AS crew_size, t.holder_account_id = h.account_id AS leader,
+            CASE WHEN $2::timestamptz < kip_game.protected_until(h.flag_since) THEN kip_game.protected_until(h.flag_since) END AS protected_until
+          FROM kip_game.holdings($2::timestamptz) h
+          JOIN kip_game.tenures t ON t.tenure_id = h.tenure_id
+          WHERE h.account_id = $1::uuid AND kip_game.flag_up(h.last_visit_at, h.ended_at, $2::timestamptz)
+          ORDER BY h.flag_since ASC, h.park_id ASC`, [accountId, now]),
+        // Flags this account held, as leader or crew member (#170), that someone took.
         rows(`
           SELECT t.park_id, t.ended_at, taker.handle, taker.flag_seed
           FROM kip_game.players me
-          JOIN kip_game.tenures t ON t.holder_account_id = me.account_id AND t.end_reason = 'taken'
+          JOIN (
+            SELECT tenure_id FROM kip_game.tenures WHERE holder_account_id = $1::uuid AND end_reason = 'taken'
+            UNION
+            SELECT tenure_id FROM kip_game.crew_members WHERE account_id = $1::uuid
+          ) mine ON true
+          JOIN kip_game.tenures t ON t.tenure_id = mine.tenure_id AND t.end_reason = 'taken'
           JOIN kip_game.players taker ON taker.account_id = t.ended_by_account_id
           WHERE me.account_id = $1::uuid AND t.ended_at > coalesce(me.takeovers_seen_at, me.created_at)
             AND t.ended_at <= $2::timestamptz
           ORDER BY t.ended_at DESC, t.park_id ASC
           LIMIT ${TAKEOVER_LIMIT}`, [accountId, now]),
+        // A logged visit (#170) does not use up the day's flag action, so it is listed apart.
         rows(`
-          SELECT DISTINCT park_id FROM kip_game.visits
+          SELECT park_id, bool_or(outcome <> 'logged') AS flag_action FROM kip_game.visits
           WHERE account_id = $1::uuid AND source = 'visit'
             AND local_day = kip_game.local_day($2::timestamptz) AND visited_at <= $2::timestamptz
+          GROUP BY park_id
           ORDER BY park_id`, [accountId, now]),
         rows("SELECT ((kip_game.local_day($1::timestamptz) + 1)::timestamp AT TIME ZONE 'America/Vancouver') AS until", [now]),
       ]);
       return {
         score: Number(score[0]?.score ?? 0),
-        parks: parks.map((row) => ({ parkId: String(row.park_id), since: iso(row.started_at), days: Number(row.days) })),
+        parks: parks.map((row) => ({
+          parkId: String(row.park_id), since: iso(row.flag_since), days: Number(row.days), hours: Number(row.hours),
+          crew: { size: Number(row.crew_size), leader: truthy(row.leader), protectedUntil: nullableIso(row.protected_until) },
+        })),
         takeovers: takeovers.map((row) => ({
           parkId: String(row.park_id), byHandle: String(row.handle), byFlagSeed: String(row.flag_seed), at: iso(row.ended_at),
         })),
-        visitedToday: visitedToday.map((row) => String(row.park_id)),
+        visitedToday: visitedToday.filter((row) => truthy(row.flag_action)).map((row) => String(row.park_id)),
         visitedTodayUntil: iso(dayEnd[0]?.until),
+        loggedToday: visitedToday.filter((row) => !truthy(row.flag_action)).map((row) => String(row.park_id)),
       };
     },
 
@@ -257,8 +517,51 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
     },
 
     async flags(now) {
-      const found = await rows("SELECT park_id, handle, flag_seed, since FROM kip_game.flags_up($1::timestamptz)", [now]);
-      return found.map((row) => ({ parkId: String(row.park_id), handle: String(row.handle), flagSeed: String(row.flag_seed), since: iso(row.since) }));
+      const found = await rows(`
+        SELECT f.park_id, f.handle, f.flag_seed, f.since, c.crew_size, c.member_seeds, c.protected_until
+        FROM kip_game.flags_up($1::timestamptz) f
+        LEFT JOIN kip_game.flag_crews($1::timestamptz) c ON c.park_id = f.park_id
+        ORDER BY f.park_id`, [now]);
+      const patches = await patchesFor(found.map((row) => String(row.handle)));
+      return found.map((row) => ({
+        parkId: String(row.park_id), handle: String(row.handle), flagSeed: String(row.flag_seed), since: iso(row.since),
+        crew: {
+          size: row.crew_size === null || row.crew_size === undefined ? 1 : Number(row.crew_size),
+          memberSeeds: textArray(row.member_seeds),
+          protectedUntil: nullableIso(row.protected_until),
+        },
+        patches: patches.get(String(row.handle)) ?? [],
+      }));
+    },
+
+    async joinCrew(accountId, code, visitId, now) {
+      // A hidden park takes no new joins, like visits; a replay of a stored join still answers.
+      const target = await rows(`
+        SELECT t.park_id FROM kip_game.crew_codes c JOIN kip_game.tenures t ON t.tenure_id = c.tenure_id
+        WHERE c.code = $1 ORDER BY c.released ASC, c.expires_at DESC LIMIT 1`, [code]);
+      if (target[0] && await isParkHidden(sql, String(target[0].park_id))) {
+        const stored = await rows("SELECT 1 FROM kip_game.visits WHERE account_id = $1::uuid AND visit_id = $2::uuid", [accountId, visitId]);
+        if (!stored.length) return { status: "park_not_found" };
+      }
+      const body = await withBadges(
+        "kip_game.join_crew_with_badges($1::uuid, $2, $3::uuid, $4::timestamptz)",
+        "kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz)",
+        [accountId, code, visitId, now],
+      ) as { status: string; visit?: unknown; crew?: unknown; badges?: unknown };
+      if (body.status === "joined" || body.status === "replayed") {
+        return {
+          status: body.status, visit: visitFromJson(body.visit), crew: await withCrewPatches(crewFromJson(body.crew)), badges: badgeUnlocksFromJson(body.badges),
+        };
+      }
+      if (body.status === "already_member") return { status: body.status, crew: await withCrewPatches(crewFromJson(body.crew)) };
+      if (JOIN_FAILURES.has(body.status)) return { status: body.status as JoinCrewFailure };
+      throw new Error("unexpected join_crew status");
+    },
+
+    async parkCrew(parkId, accountId, now) {
+      const found = await rows("SELECT kip_game.park_crew($1, $2::uuid, $3::timestamptz) AS crew", [parkId, accountId, now]);
+      const crew = jsonValue(found[0]?.crew);
+      return crew ? withCrewPatches(crewFromJson(crew)) : null;
     },
 
     async founders() {
@@ -321,11 +624,73 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
       }
     },
 
+    async dex(accountId, now) {
+      // Claims are read directly, not only through their import into visits, so a claim backed up
+      // since the last deploy already counts. Days are distinct, so one visit day counts once.
+      const found = await rows(`
+        WITH mine AS (
+          SELECT park_id, local_day, visited_at AS at FROM kip_game.visits
+          WHERE account_id = $1::uuid AND visited_at <= $2::timestamptz
+          UNION ALL
+          SELECT park_id, kip_game.local_day(claimed_at), claimed_at FROM kip_account.claims
+          WHERE account_id = $1::uuid AND claimed_at <= $2::timestamptz
+        )
+        SELECT park_id, array_agg(DISTINCT to_char(local_day, 'YYYY-MM-DD') ORDER BY to_char(local_day, 'YYYY-MM-DD')) AS days,
+          min(at) AS first_at, max(at) AS last_at
+        FROM mine GROUP BY park_id ORDER BY park_id`, [accountId, now]);
+      const hidden = await hiddenParks(sql, found.map((row) => String(row.park_id)));
+      return found.map((row) => ({
+        parkId: String(row.park_id),
+        days: (Array.isArray(row.days) ? row.days : jsonValue(row.days) as unknown[]).map(String),
+        firstVisitAt: iso(row.first_at),
+        lastVisitAt: iso(row.last_at),
+        hidden: hidden.has(String(row.park_id)),
+      }));
+    },
+
     async leaderboard(now) {
       const found = await rows("SELECT rank, handle, flag_seed, score, parks_held FROM kip_game.leaderboard($1::timestamptz)", [now]);
+      const patches = await patchesFor(found.map((row) => String(row.handle)));
       return found.map((row) => ({
         rank: Number(row.rank), handle: String(row.handle), flagSeed: String(row.flag_seed), score: Number(row.score), parksHeld: Number(row.parks_held),
+        patches: patches.get(String(row.handle)) ?? [],
       }));
+    },
+
+    async awardBadges(accountId, now) {
+      try {
+        const found = await rows("SELECT kip_game.award_badges($1::uuid, $2::timestamptz, NULL) AS badges", [accountId, now]);
+        return badgeUnlocksFromJson(jsonValue(found[0]?.badges));
+      } catch (error) {
+        if (missingBadges(error)) return [];
+        throw error;
+      }
+    },
+
+    async badges(accountId, now) {
+      try {
+        const found = await rows(`
+          SELECT kip_game.badges_json($1::uuid, $2::timestamptz) AS badges,
+            (SELECT flag_patches FROM kip_game.players WHERE account_id = $1::uuid) AS patches`, [accountId, now]);
+        const listed = jsonValue(found[0]?.badges);
+        return {
+          badges: (Array.isArray(listed) ? listed as Array<Record<string, unknown>> : []).map((row) => ({
+            id: String(row.id), progress: Number(row.progress), goal: Number(row.goal), unlockedAt: nullableIso(row.unlockedAt),
+          })),
+          patches: textArray(found[0]?.patches),
+        };
+      } catch (error) {
+        if (missingBadges(error)) return { badges: [], patches: [] };
+        throw error;
+      }
+    },
+
+    async setFlagPatches(accountId, patches) {
+      const found = await rows("SELECT kip_game.set_flag_patches($1::uuid, $2::text[]) AS result", [accountId, patches]);
+      const body = jsonValue(found[0]?.result) as { status: string; patches?: unknown };
+      if (body.status === "saved") return { status: "saved", patches: textArray(body.patches) };
+      if (PATCH_REFUSALS.has(body.status)) return { status: body.status as Exclude<SetPatchesResult["status"], "saved"> };
+      throw new Error("unexpected set_flag_patches status");
     },
   };
 }

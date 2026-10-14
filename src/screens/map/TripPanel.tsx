@@ -6,7 +6,9 @@ import { Rays } from "../../components/Motion";
 import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
-import type { ParkHolder } from "../../lib/game/visit";
+import { takeLabel, type ParkHolder } from "../../lib/game/visit";
+import { formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
+import { handleFit } from "../../lib/game/handleFit";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
 import { recordDirectionsOpened } from "../../lib/interactions";
@@ -19,6 +21,8 @@ type TripProps = {
   park: Park;
   holder: ParkHolder;
   flagDays: number;
+  /** How long the flag has flown, for its age tag. */
+  flagAgeMs: number;
   remaining: Trip;
   totalKm: number;
   simulating: boolean;
@@ -29,7 +33,7 @@ type TripProps = {
   contentReleaseId: string;
 };
 
-export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
+export function TripPanel({ park, holder, flagDays, flagAgeMs, remaining, totalKm, simulating, onSimulate, onEnd, onOpen, entryPoint, contentReleaseId }: TripProps) {
   const accessUnknown = remaining.mode === "unknown";
   const remainingKm = remaining.km;
   const progress = totalKm > 0 ? Math.min(1, Math.max(0, 1 - remainingKm / totalKm)) : 0;
@@ -44,7 +48,7 @@ export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulati
       <div className="trip__row">
         <button className="trip__badge" onClick={onOpen} aria-label="Park details">
           <motion.div animate={{ rotate: [0, -6, 6, 0] }} transition={{ duration: 2.4, repeat: Infinity }}>
-            <FlagPin seed={holderSeed(holder)} days={flagDays} size={50} />
+            <FlagPin seed={holderSeed(holder)} days={flagDays} ageMs={flagAgeMs} size={50} />
           </motion.div>
         </button>
         <div className="trip__text">
@@ -97,18 +101,27 @@ export function TripPanel({ park, holder, flagDays, remaining, totalKm, simulati
   );
 }
 
-export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = false, onCheckIn, onDismiss }: {
+export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = false, crew = { kind: "none" }, now = Date.now(), onCheckIn, onScanCrew, onDismiss }: {
   park: Park;
   holder: ParkHolder;
   flagDays: number;
   visitLabel: string;
   /** Already visited today: another visit would not count, so there is nothing to press. */
   visited?: boolean;
+  /** The player's crew phase here (#171); `none` unless the crews flag is on. */
+  crew?: CrewPhase;
+  now?: number;
   onCheckIn: () => void;
+  onScanCrew?: () => void;
   onDismiss: () => void;
 }) {
   const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
-  const message = visited
+  const outsider = crew.kind === "outsider" && !visited ? crew : null;
+  const message = outsider
+    ? outsider.logged
+      ? loggedVisitLine(outsider.until)
+      : `@${outsider.leader}'s crew flag is protected for ${formatMinutesLeft(outsider.until, now)}. Log your visit, or ask the crew for their code to join.`
+    : visited
     ? holder.kind === "mine"
       ? "Your flag is flying here. You visited today, so come back tomorrow to check in again."
       : holder.kind === "other"
@@ -118,10 +131,10 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = fals
     ? flagDays < 1 ? "You planted your flag here today. It is still flying." : `Your flag has flown here for ${flown}. Check in to keep it up.`
     : holder.kind === "other"
       ? flagDays < 1
-        ? `@${holder.flag.handle} planted a flag here today. Take it for your own.`
-        : `@${holder.flag.handle}'s flag has flown here for ${flown}. Take it for +${flagDays} ${flagDays === 1 ? "point" : "points"}.`
+        ? `@${holder.flag.handle} planted a flag here today. ${takeLabel(flagDays)}.`
+        : `@${holder.flag.handle}'s flag has flown here for ${flown}. ${takeLabel(flagDays)}.`
       : holder.kind === "empty"
-        ? "Nobody holds this park yet. Plant your flag and earn a point every day it flies."
+        ? "Nobody holds this park yet. Plant your flag and earn a point every hour it flies."
         : "Plant your flag here. You need a connection to see who holds it.";
   return (
     <motion.div
@@ -141,7 +154,7 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = fals
         </Bubble>
         <Kip pose="cheer" size={92} />
       </motion.div>
-      <div className="arrival__card card">
+      <div className="arrival__card card" style={handleFit(holder.kind === "other" ? holder.flag.handle : null)}>
         <motion.span className="arrival__tag" initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.15, stiffness: 600, damping: 14 }}>
           <Icon name="check" size={14} stroke={3.4} /> Inside the boundary
         </motion.span>
@@ -152,7 +165,18 @@ export function ArrivalCard({ park, holder, flagDays, visitLabel, visited = fals
         </h2>
         <p>{message}</p>
         <AnimatePresence>
-          {visited ? (
+          {outsider ? (
+            <motion.div key="crew" className="arrival__crew" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
+              {onScanCrew && (
+                <button className="btn btn--block btn--glow" onClick={onScanCrew}>
+                  <Icon name="qr" /> Scan crew code
+                </button>
+              )}
+              <button className="btn btn--block btn--paper" onClick={onCheckIn} disabled={outsider.logged}>
+                <Icon name="flag" /> {outsider.logged ? "Visit logged" : visitLabel}
+              </button>
+            </motion.div>
+          ) : visited ? (
             <motion.p className="arrival__visited" role="status" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
               <Icon name="check" size={18} stroke={3} /> {visitLabel}
             </motion.p>

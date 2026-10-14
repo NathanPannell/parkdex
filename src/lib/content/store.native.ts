@@ -1,7 +1,7 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import { CONTENT_READER_VERSION, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
+import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type DeleteFileOptions, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
 
 const DATABASE = "parkdex_content";
@@ -11,7 +11,6 @@ const TEMP = `${ROOT}/tmp`;
 const ACTIVE_POINTER = "1";
 
 // Detailed map chunks are optional coverage: removing one only drops offline detail for its area.
-const OPTIONAL_MAP_CHUNK = /^map\/island\/\d{3,}\.bin$/;
 
 function assertHash(hash: string): string {
   if (!/^[a-f\d]{64}$/i.test(hash)) throw new Error("Invalid content SHA-256 hash");
@@ -414,9 +413,10 @@ export class NativeContentStore implements ContentStore {
     return output.sort((a, b) => a.hash.localeCompare(b.hash));
   }
 
-  async deleteFile(hash: string, options: { optionalMapChunk?: boolean } = {}): Promise<void> {
+  async deleteFile(hash: string, options: DeleteFileOptions = {}): Promise<void> {
     const key = assertHash(hash);
-    const required = (path: string) => !(options.optionalMapChunk && OPTIONAL_MAP_CHUNK.test(path));
+    // Optional copies (map chunks, badge art) may go even while current content lists them.
+    const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path)) && !(options.optionalArt && path.startsWith("art/badges/scenes/"));
     await this.withFileLock(key, () => this.exclusive(async () => {
       const activeId = await this.getActiveId();
       const active = activeId ? await this.getRelease(activeId) : undefined;
@@ -427,7 +427,7 @@ export class NativeContentStore implements ContentStore {
       if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
       const retainedReferencesFile = retainedParks.some((park) => park?.sceneFile?.sha256.toLowerCase() === key);
       const syncState = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'asset'", [])).values ?? [];
-      const syncReferencesFile = syncState.some((row) => {
+      const syncReferencesFile = !options.optionalArt && syncState.some((row) => {
         const file = JSON.parse(String(row.value_json)) as { sha256?: unknown };
         return file.sha256 === key;
       });
@@ -577,6 +577,8 @@ export class NativeContentStore implements ContentStore {
           assets: parsed.filter((row) => row.entity === "asset").map((row) => row.value as ContentSyncState["assets"][number]),
           map: parsed.find((row) => row.entity === "map")?.value as ContentSyncState["map"] ?? null,
         };
+        const catalogue = parsed.find((row) => row.entity === "catalogue")?.value as ContentSyncState["catalogue"] | undefined;
+        if (catalogue) state.catalogue = catalogue;
         await db.commitTransaction();
         return state;
       } catch (error) {
@@ -604,6 +606,8 @@ export class NativeContentStore implements ContentStore {
       state.assets.forEach((value, position) => rows.push({ entity: "asset", id: value.path, value, position }));
       rows.push({ entity: "hubs", id: "default", value: state.drive.hubs, position: 0 });
       if (state.map) rows.push({ entity: "map", id: "default", value: state.map, position: 0 });
+      // Older builds skip this row; without it they read the stored boundaries as incomplete and fetch a fresh snapshot.
+      if (state.catalogue) rows.push({ entity: "catalogue", id: "default", value: state.catalogue, position: 0 });
       const statements = [
         { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN ((? IS NULL AND NOT EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ?)) OR EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id IS ?)) OR (? = 1 AND ? IS NULL AND ? IS NULL AND EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND (typeof(revision) != 'integer' OR revision < -9007199254740991 OR revision > 9007199254740991 OR typeof(source_id) != 'text'))) THEN 1 ELSE 0 END", values: [expectedRevision, environment, environment, expectedRevision, expectedSourceId, resetCursor ? 1 : 0, expectedRevision, expectedSourceId, environment] },
         { statement: "DELETE FROM content_sync_guard", values: [] },

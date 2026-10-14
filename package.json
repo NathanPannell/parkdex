@@ -27,7 +27,7 @@
     "photo-lab": "tsx tools/photo-lab/server.ts",
     "photo-lab:fetch": "python tools/photo-lab/fetch.py",
     "photo-lab:run": "tsx tools/photo-lab/run.ts",
-    "test:sql": "tsx scripts/qa-account-sql.mjs && tsx scripts/qa-progress-sql.mjs && tsx scripts/qa-interactions-sql.mjs && tsx scripts/qa-game-sql.mjs && tsx scripts/qa-analytics-sql.mjs && tsx scripts/qa-park-proposals-sql.mjs && tsx scripts/qa-content-catalogue-sql.mjs && tsx scripts/qa-park-visibility-sql.mjs && tsx scripts/qa-osm-parks-sql.mjs && tsx scripts/qa-founders-sql.mjs && tsx scripts/qa-founders-review-sql.mjs && tsx scripts/qa-park-removal-sql.mjs && tsx scripts/qa-feedback-archive-sql.mjs && node scripts/qa-postgres-adapter-end.mjs",
+    "test:sql": "tsx scripts/qa-account-sql.mjs && tsx scripts/qa-progress-sql.mjs && tsx scripts/qa-interactions-sql.mjs && tsx scripts/qa-game-sql.mjs && tsx scripts/qa-badges-sql.mjs && tsx scripts/qa-friends-sql.mjs && tsx scripts/qa-analytics-sql.mjs && tsx scripts/qa-park-proposals-sql.mjs && tsx scripts/qa-content-catalogue-sql.mjs && tsx scripts/qa-park-visibility-sql.mjs && tsx scripts/qa-osm-parks-sql.mjs && tsx scripts/qa-founders-sql.mjs && tsx scripts/qa-founders-review-sql.mjs && tsx scripts/qa-park-removal-sql.mjs && tsx scripts/qa-feedback-archive-sql.mjs && tsx scripts/qa-dex-sql.mjs && node scripts/qa-postgres-adapter-end.mjs",
     "postbuild": "node scripts/check-content-package.mjs",
     "postbuild:field": "node scripts/check-content-package.mjs"
   },
@@ -52,12 +52,14 @@
     "canvas-confetti": "^1.9.4",
     "google-auth-library": "11.1.0",
     "html-to-image": "^1.11.13",
+    "jsqr": "1.4.0",
     "maplibre-gl": "^6.11.2",
     "motion": "^13.4.4",
     "pmtiles": "^4.5.0",
     "posthog-js": "1.434.2",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "uqr": "0.1.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",

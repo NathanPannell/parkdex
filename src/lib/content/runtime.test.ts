@@ -19,7 +19,7 @@ import type {
   StoredRelease,
 } from "./contracts";
 import { applyContentChangeBatch, parseContentSnapshot, sha256Hex } from "./manifest";
-import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime } from "./runtime";
+import { ArchivedSceneRestoreDeferredError, ContentUnavailableOfflineError, createContentRuntime, mapAnchorFor } from "./runtime";
 import { CONTENT_CDN_ORIGIN, CONTENT_READER_VERSION, contentTransportPausedError } from "./contracts";
 import { contentGateView } from "../../components/contentGateState";
 import { getAllowedMapChunks, resetAllowedMapChunks } from "../offlineTiles";
@@ -64,7 +64,8 @@ vi.mock("./map-downloads", () => ({
         mapMock.onNearbyPause?.();
       });
     }
-    await runtime.ensureFile(releaseId, "map/island/000.bin", "nearby", signal);
+    const { mapChunkPath, mapFolder } = await import("./contracts");
+    await runtime.ensureFile(releaseId, mapChunkPath(0, mapFolder(snapshotOverride.manifest.files)), "nearby", signal);
     return { releaseId, detail, chunkIds: [0], allowedChunkIds: [0] };
   },
 }));
@@ -87,7 +88,7 @@ function toBytes(value: unknown): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-async function makeRelease(id: string, generation: number, parkId: string, scene: string) {
+async function makeRelease(id: string, generation: number, parkId: string, scene: string, mapFolder = "island") {
   const park = { id: parkId, name: `${parkId} park`, short: parkId, ...PARK_FIELDS, scene };
   const boundaries = {
     type: "FeatureCollection",
@@ -104,9 +105,9 @@ async function makeRelease(id: string, generation: number, parkId: string, scene
     ["data/drive.json", toBytes(drive)],
     ["boundaries.geojson", toBytes(boundaries)],
     [`art/badges/scenes/${scene}.webp`, toBytes(`scene:${scene}`)],
-    ["map/island/manifest.json", toBytes(mapIndex)],
-    ["map/island/000.bin", new Uint8Array([1, 2, 3, 4]).buffer],
-    ["map/island/001.bin", new Uint8Array([5, 6, 7, 8]).buffer],
+    [`map/${mapFolder}/manifest.json`, toBytes(mapIndex)],
+    [`map/${mapFolder}/000.bin`, new Uint8Array([1, 2, 3, 4]).buffer],
+    [`map/${mapFolder}/001.bin`, new Uint8Array([5, 6, 7, 8]).buffer],
     ["map/fonts/Noto Sans Regular/0-255.pbf", new Uint8Array([9, 10, 11]).buffer],
   ];
   const files: ContentFile[] = [];
@@ -446,6 +447,18 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+describe("starter map anchor", () => {
+  it("follows the visitor inside a province and the nearest province's town outside them", () => {
+    const halifax: [number, number] = [-63.58, 44.65];
+    expect(mapAnchorFor(halifax, halifax)).toEqual(halifax);
+    // Toronto is nearer Nova Scotia than BC; Seattle is nearer BC.
+    expect(mapAnchorFor(null, [-79.38, 43.65])).toEqual([-63.5752, 44.6488]);
+    expect(mapAnchorFor(null, [-122.33, 47.61])).toEqual([-123.3656, 48.4284]);
+    // Before any location, Victoria as before.
+    expect(mapAnchorFor(null, null)).toEqual([-123.3656, 48.4284]);
+  });
+});
+
 describe("content runtime", () => {
   it("keeps the first-install snapshot private until core and the Victoria starter are verified", async () => {
     const a = await makeRelease("a".repeat(64), 1, "provincial-a-park", "scene-a");
@@ -731,6 +744,42 @@ describe("content runtime", () => {
     expect(server.calls).toContain(pinned.manifestUrl);
     expect(server.calls).not.toContain(serverPointer.manifestUrl);
     expect((await store.getSyncState("staging"))?.map).toEqual(pinned);
+  });
+
+  it("reads a pinned map whose chunks are in map/detail/, like the combined BC and Nova Scotia map", async () => {
+    const release = await makeRelease("d".repeat(64), 1, "provincial-detail-map-park", "scene-detail", "detail");
+    const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-detail.webp")!;
+    const mapFiles = release.rawManifest.files.filter((file) => file.path.startsWith("map/"));
+    const inventory: ContentMapInventory = {
+      schema: "parkdex.content-map/v1",
+      version: release.channel.releaseId,
+      mapManifest: release.rawManifest.mapManifest,
+      files: mapFiles,
+    };
+    const inventoryBytes = toBytes(inventory);
+    const pinned: ContentMapPointer = {
+      version: release.channel.releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${release.channel.releaseId}/map/manifest.json`,
+      manifestSha256: await sha256Hex(inventoryBytes),
+    };
+    const snapshot = contentSyncSnapshot(9, release.park, [sceneFile]);
+    const remoteFiles = new Map<string, ArrayBuffer>([[pinned.manifestUrl, inventoryBytes]]);
+    for (const file of mapFiles) remoteFiles.set(file.url, release.content.get(file.url)!.slice(0));
+    remoteFiles.set(sceneFile.url, release.content.get(sceneFile.url)!.slice(0));
+    const server = contentSyncServer(snapshot, new Map(), new Map(), remoteFiles);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: false }, [], undefined, "staging", pinned));
+    await runtime.start();
+
+    await vi.waitFor(() => expect(runtime.getStatus().mapDetailReady).toBe(true));
+    const releaseId = runtime.getStatus().snapshot!.releaseId;
+    const firstChunk = mapFiles.find((file) => file.path === "map/detail/000.bin")!;
+    await vi.waitFor(async () => expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(true));
+    expect(server.calls).not.toContain(mapFiles.find((file) => file.path === "map/detail/001.bin")!.url);
+    expect(await runtime.hasLocalFile?.(releaseId, "map/detail/000.bin")).toBe(true);
+    expect([...new Uint8Array((await runtime.readLocalMapFile?.(pinned.version, "map/detail/000.bin"))!)]).toEqual([1, 2, 3, 4]);
+    await runtime.deleteMapChunk?.(releaseId, "map/detail/000.bin");
+    expect(await store.hasFile(firstChunk.sha256, firstChunk.byte_size)).toBe(false);
   });
 
   it("downloads nearby detail on mobile data and never fetches the whole map", async () => {
@@ -1215,7 +1264,7 @@ describe("incremental content sync", () => {
     expect(artAttempts).toBe(2);
   });
 
-  it("starts nearby coverage again when the map release changes at the same location", async () => {
+  it("starts the area around the visitor again when the map release changes at the same location", async () => {
     const firstRelease = await makeRelease("1".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-a");
     const secondRelease = await makeRelease("2".repeat(64), 1, "municipal-nearby-release-park", "unused-nearby-scene-b");
     const makeMapPointer = async (release: Awaited<ReturnType<typeof makeRelease>>) => {
@@ -1268,15 +1317,17 @@ describe("incremental content sync", () => {
 
     await runtime.start();
     const firstReleaseId = `sync-staging-1-${firstMap.pointer.version}`;
-    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: firstReleaseId, detail: "nearby" }));
-    expect(mapMock.calls.filter((call) => call.releaseId === firstReleaseId && call.detail === "nearby")).toHaveLength(1);
+    // Without offline downloads the area around the visitor is the starter view at their position,
+    // after the starter view at the map anchor.
+    await vi.waitFor(() => expect(mapMock.calls.filter((call) => call.releaseId === firstReleaseId && call.detail === "starter")).toHaveLength(2));
+    expect(mapMock.calls.some((call) => call.detail === "nearby" || call.detail === "surrounding")).toBe(false);
 
     deltas.set(1, delta);
     await runtime.retry();
     const nextReleaseId = `sync-staging-2-${secondMap.pointer.version}`;
     await vi.waitFor(() => expect(runtime.getStatus().snapshot?.releaseId).toBe(nextReleaseId));
-    await vi.waitFor(() => expect(mapMock.calls).toContainEqual({ releaseId: nextReleaseId, detail: "nearby" }));
-    expect(mapMock.calls.filter((call) => call.detail === "nearby")).toHaveLength(2);
+    await vi.waitFor(() => expect(mapMock.calls.filter((call) => call.releaseId === nextReleaseId && call.detail === "starter")).toHaveLength(2));
+    expect(mapMock.calls.some((call) => call.detail === "nearby" || call.detail === "surrounding")).toBe(false);
   });
 
   it("clears retained parks synchronously when the account claim projection changes", async () => {
@@ -2116,5 +2167,250 @@ describe("incremental content sync", () => {
     await expect(pending).rejects.toThrow("Content runtime is stopped");
     expect(requestSignal?.aborted).toBe(true);
     await stopped;
+  });
+});
+
+describe("lean device cache", () => {
+  const SOURCE = "staging|https://parkdex.example.test/api/content";
+  const HALIFAX_PARK = { lng: -63.57, lat: 44.65 };
+
+  async function leanRelease(revision: number, parks: TestSyncPark[]) {
+    const json = (value: unknown) => toBytes(JSON.stringify(value));
+    const chunkBytes = parks.map((park) => json({ schema: "parkdex.content-boundaries/v1", features: [{
+      type: "Feature",
+      properties: { id: park.id, biome: park.biome },
+      geometry: { type: "MultiPolygon", coordinates: [[[[park.lng, park.lat], [park.lng + 0.01, park.lat], [park.lng + 0.01, park.lat + 0.01], [park.lng, park.lat]]]] },
+    }] }));
+    const boundaryChunks = await Promise.all(chunkBytes.map(async (bytes, index) => ({
+      path: `catalogue/boundaries/00${index}.json`, sha256: await sha256Hex(bytes), byte_size: bytes.byteLength,
+      parkIds: [parks[index]!.id], bbox: [parks[index]!.lng, parks[index]!.lat, parks[index]!.lng + 0.01, parks[index]!.lat + 0.01],
+    })));
+    const indexBytes = json({
+      schema: "parkdex.content-catalogue/v1", revision, parks,
+      drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: Object.fromEntries(parks.map((park) => [park.id, { drive: [null], walkM: 0 }])) },
+      assets: [], map: null, boundaryChunks,
+    });
+    const version = await sha256Hex(indexBytes);
+    const base = `https://kip-assets.parkdex.app/releases/${version}/`;
+    const files = new Map<string, ArrayBuffer>([[`${base}catalogue/index.json`, indexBytes]]);
+    boundaryChunks.forEach((chunk, index) => files.set(`${base}${chunk.path}`, chunkBytes[index]!));
+    const pointer = {
+      schema: "parkdex.content-sync/v1", revision,
+      catalogue: { schema: "parkdex.content-catalogue/v1", version, indexUrl: `${base}catalogue/index.json`, indexSha256: version, indexBytes: indexBytes.byteLength, parkCount: parks.length },
+    };
+    return { pointer: pointer as unknown as ReturnType<typeof contentSyncSnapshot>, files };
+  }
+
+  async function twoParks() {
+    const release = await makeRelease("a".repeat(64), 1, "municipal-lean-near", "scene-lean-near");
+    const near: TestSyncPark = { ...release.park, scene: null };
+    // The fixture types its coordinates as Victoria's literals; this park is in Halifax.
+    const far = { ...release.park, id: "provincial-lean-far", name: "Far", short: "Far", ...HALIFAX_PARK, scene: null } as unknown as TestSyncPark;
+    return { near, far };
+  }
+
+  function memoryMarker(initial: string | null = null) {
+    const marker = { value: initial, read: () => marker.value, write: (next: string) => { marker.value = next; } };
+    return marker;
+  }
+  const boundaryIds = (runtime: ContentRuntime) => runtime.getStatus().snapshot?.boundaries.features.map((feature) => feature.properties.id);
+  const chunkCalls = (calls: string[]) => calls.filter((url) => url.includes("/catalogue/boundaries/"));
+
+  it("keeps only the boundaries near the visitor and loads others when the map shows them", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const store = new MemoryContentStore();
+    const runtime = track(createSyncRuntime(store, server.fetcher, { connected: true, wifi: true }));
+    runtime.setLocation([near.lng, near.lat]);
+    await runtime.start();
+
+    expect(runtime.getStatus().snapshot?.parks.map((park) => park.id)).toEqual([near.id, far.id]);
+    expect(boundaryIds(runtime)).toEqual([near.id]);
+    expect(chunkCalls(server.calls)).toHaveLength(1);
+    expect((await store.getSyncState("staging"))?.catalogue?.loaded).toEqual(["catalogue/boundaries/000.json"]);
+
+    // A zoomed-out view shows parks as dots and loads nothing.
+    runtime.loadBoundariesInView?.([-64, 44, -63, 45], 5);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(chunkCalls(server.calls)).toHaveLength(1);
+
+    runtime.loadBoundariesInView?.([-64, 44, -63, 45], 11);
+    await vi.waitFor(() => expect(boundaryIds(runtime)).toEqual([near.id, far.id]));
+    const stored = await store.getSyncState("staging");
+    expect(stored?.catalogue?.loaded).toEqual(["catalogue/boundaries/000.json", "catalogue/boundaries/001.json"]);
+    expect(stored?.boundaries.features).toHaveLength(2);
+  });
+
+  it("loads a far park's boundary when the player opens it", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
+    runtime.setLocation([near.lng, near.lat]);
+    await runtime.start();
+
+    await runtime.loadParkBoundary?.(far.id);
+    expect(boundaryIds(runtime)).toEqual([near.id, far.id]);
+    // Already on the device: nothing more downloads.
+    await runtime.loadParkBoundary?.(far.id);
+    expect(chunkCalls(server.calls)).toHaveLength(2);
+  });
+
+  it("replaces a catalogue saved whole with a lean one after an update, then cleans up old content once", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const store = new MemoryContentStore();
+    // A catalogue saved whole by an earlier build, with badge art it downloaded.
+    const oldArt = await makeSceneAsset("b".repeat(64), "old-far-art", "scene:old-far-art");
+    const whole = parseContentSnapshot(contentSyncSnapshot(5, { ...far, scene: "old-far-art" }, [oldArt.file]));
+    store.sync.set("staging", { ...whole, sourceId: SOURCE });
+    store.files.set(oldArt.file.sha256, oldArt.bytes.slice(0));
+    // A retired claimed badge keeps its art.
+    const retainedArt = await makeSceneAsset("c".repeat(64), "claimed-art", "scene:claimed-art");
+    store.retained.set("municipal-retired", { park: { ...near, id: "municipal-retired", scene: "claimed-art" }, sceneFile: retainedArt.file });
+    store.files.set(retainedArt.file.sha256, retainedArt.bytes.slice(0));
+    // The release of the first content format, still active, and an older map with a saved chunk.
+    const legacy = await makeRelease("d".repeat(64), 1, "municipal-legacy", "legacy-scene");
+    store.releases.set(legacy.channel.releaseId, { id: legacy.channel.releaseId, channel: legacy.channel, manifest: legacy.rawManifest, readiness: "complete", healthy: true });
+    store.activeId = legacy.channel.releaseId;
+    const oldChunk = legacy.rawManifest.files.find((file) => file.path === "map/island/001.bin")!;
+    store.files.set(oldChunk.sha256, legacy.content.get(oldChunk.url)!.slice(0));
+    store.inventories.set("e".repeat(64), {
+      schema: "parkdex.content-map/v1", version: "e".repeat(64), mapManifest: legacy.rawManifest.mapManifest,
+      files: legacy.rawManifest.files.filter((file) => file.path.startsWith("map/")),
+    });
+    const values = new Map([["parkdex-map-squares-v1", JSON.stringify({ version: "f".repeat(64), keys: ["80/177"] })]]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+      removeItem: (key: string) => void values.delete(key),
+    });
+    const marker = memoryMarker("v1|build-1|none");
+    const options = {
+      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
+      claimedParkIds: () => ["municipal-retired"], connectivity: { connected: true, wifi: true }, badgeArt: false,
+      appBuild: "build-2", cacheMarker: marker,
+    };
+    try {
+      const runtime = track(createContentRuntime(options));
+      runtime.setLocation([near.lng, near.lat]);
+      await runtime.start();
+
+      await vi.waitFor(() => expect(marker.value).toBe("v1|build-2|none"));
+      const stored = await store.getSyncState("staging");
+      expect(stored?.catalogue?.loaded).toEqual(["catalogue/boundaries/000.json"]);
+      expect(stored?.boundaries.features.map((feature) => feature.properties.id)).toEqual([near.id]);
+      expect(store.files.has(oldArt.file.sha256)).toBe(false);
+      expect(store.files.has(oldChunk.sha256)).toBe(false);
+      expect(store.files.has(retainedArt.file.sha256)).toBe(true);
+      expect(store.retained.has("municipal-retired")).toBe(true);
+      expect(store.releases.size).toBe(0);
+      expect(store.activeId).toBeNull();
+      expect(store.inventories.size).toBe(0);
+      expect(values.has("parkdex-map-squares-v1")).toBe(false);
+      await runtime.stop();
+
+      // The same build starting again neither refetches the catalogue nor cleans up again.
+      const snapshots = server.calls.filter((url) => url.includes("/api/content/snapshot")).length;
+      const deleted = store.deletedFiles.length;
+      const again = track(createContentRuntime(options));
+      await again.start();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(server.calls.filter((url) => url.includes("/api/content/snapshot"))).toHaveLength(snapshots);
+      expect(store.deletedFiles).toHaveLength(deleted);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("runs an interrupted cleanup again on the next start", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const store = new MemoryContentStore();
+    for (const scene of ["stale-one", "stale-two"]) {
+      const art = await makeSceneAsset("b".repeat(64), scene, `scene:${scene}`);
+      store.files.set(art.file.sha256, art.bytes.slice(0));
+    }
+    const marker = memoryMarker();
+    const options = {
+      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
+      claimedParkIds: () => [], connectivity: { connected: true, wifi: true }, badgeArt: false, appBuild: "build-3", cacheMarker: marker,
+    };
+    const first = track(createContentRuntime(options));
+    const deleteFile = store.deleteFile.bind(store);
+    let stopping: Promise<void> | null = null;
+    store.deleteFile = async (hash: string) => {
+      await deleteFile(hash);
+      // The app closes right after the first file is deleted.
+      stopping ??= first.stop();
+    };
+    await first.start();
+    await vi.waitFor(() => expect(stopping).not.toBeNull());
+    await stopping;
+    expect(store.files.size).toBe(1);
+    expect(marker.value).toBeNull();
+
+    store.deleteFile = deleteFile;
+    const second = track(createContentRuntime(options));
+    await second.start();
+    await vi.waitFor(() => expect(marker.value).toBe("v1|build-3|none"));
+    expect(store.files.size).toBe(0);
+  });
+
+  it("trims a catalogue saved whole and cleans up old content without a sync, then replaces it on the next sync", async () => {
+    const { near, far } = await twoParks();
+    const { pointer, files } = await leanRelease(7, [near, far]);
+    const server = contentSyncServer(pointer, new Map(), new Map(), files);
+    const store = new MemoryContentStore();
+    // Saved whole by an earlier build: both boundaries, an older map's inventory and its labels.
+    const whole = parseContentSnapshot({
+      ...contentSyncSnapshot(7, near, []),
+      parks: [near, far],
+      boundaries: { type: "FeatureCollection", features: [near, far].map((park) => ({
+        type: "Feature", properties: { id: park.id, biome: park.biome },
+        geometry: { type: "MultiPolygon", coordinates: [[[[park.lng, park.lat], [park.lng + 0.01, park.lat], [park.lng + 0.01, park.lat + 0.01], [park.lng, park.lat]]]] },
+      })) },
+      drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [near.id]: { drive: [null], walkM: 0 }, [far.id]: { drive: [null], walkM: 0 } } },
+    } as ReturnType<typeof contentSyncSnapshot>);
+    store.sync.set("staging", { ...whole, sourceId: SOURCE });
+    const oldMap = await makeRelease("d".repeat(64), 1, "municipal-old-map", "old-map-scene");
+    const oldGlyph = oldMap.rawManifest.files.find((file) => file.path.startsWith("map/fonts/"))!;
+    store.files.set(oldGlyph.sha256, oldMap.content.get(oldGlyph.url)!.slice(0));
+    store.inventories.set("e".repeat(64), {
+      schema: "parkdex.content-map/v1", version: "e".repeat(64), mapManifest: oldMap.rawManifest.mapManifest,
+      files: oldMap.rawManifest.files.filter((file) => file.path.startsWith("map/")),
+    });
+    const marker = memoryMarker("v1|build-1|none");
+    const options = {
+      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
+      claimedParkIds: () => [], connectivity: { connected: true, wifi: true }, badgeArt: false,
+      appBuild: "build-2", cacheMarker: marker, lastLocation: [near.lng, near.lat] as [number, number],
+    };
+
+    // A hidden tab, a background start or no network: no sync runs.
+    const hidden = track(createContentRuntime(options));
+    hidden.setForeground(false);
+    await hidden.start();
+    await vi.waitFor(() => expect(marker.value).toBe("v1|build-2|none"));
+    expect(server.calls).toEqual([]);
+    const trimmed = await store.getSyncState("staging");
+    expect(trimmed?.boundaries.features.map((feature) => feature.properties.id)).toEqual([near.id]);
+    expect(trimmed?.parks).toHaveLength(2);
+    expect(trimmed?.catalogue?.version).toBeNull();
+    expect(boundaryIds(hidden)).toEqual([near.id]);
+    expect(store.inventories.size).toBe(0);
+    expect(store.files.has(oldGlyph.sha256)).toBe(false);
+    await hidden.stop();
+
+    // The next sync swaps in the release's catalogue, which can load far boundaries again.
+    const visible = track(createContentRuntime(options));
+    await visible.start();
+    await vi.waitFor(async () => expect((await store.getSyncState("staging"))?.catalogue?.version).toMatch(/^[0-9a-f]{64}$/));
+    expect(server.calls.filter((url) => url.includes("/api/content/snapshot"))).toHaveLength(1);
+    await visible.loadParkBoundary?.(far.id);
+    expect(boundaryIds(visible)).toEqual([near.id, far.id]);
   });
 });

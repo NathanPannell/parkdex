@@ -1,10 +1,12 @@
 import { layers, namedFlavor, type Flavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { BASE_OVERVIEW_KEY } from "./offlineTiles";
-import { CONTENT_BOUNDS } from "./content/contracts";
+import { contentBoundsEnvelope } from "./content/contracts";
 
-// Detailed tiles cover the archive named by BUILD_MAP_POINTER.
-export const DETAIL_BOUNDS = CONTENT_BOUNDS;
+// Detailed tiles cover the areas of the archive named by BUILD_MAP_POINTER
+// (CONTENT_BOUNDS). A source takes one box, so this spans them all; the tile
+// protocol answers tiles between the areas as empty (see offlineTiles).
+export const DETAIL_BOUNDS = contentBoundsEnvelope();
 // The bundled low-detail base map; must match canada-overview.provenance.json.
 export const BASE_OVERVIEW_BOUNDS: [number, number, number, number] = [-141.0, 41.6, -52.6, 83.2];
 export const BASE_OVERVIEW_MAX_ZOOM = 6;

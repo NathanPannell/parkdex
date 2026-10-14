@@ -1,19 +1,31 @@
 import { animate, AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { BadgeUnlock } from "../components/BadgeUnlock";
+import { AddDexPhoto } from "../components/DexPhoto";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
-import { Bubble, Kip } from "../components/Kip";
+import { Kip } from "../components/Kip";
 import { Rays } from "../components/Motion";
 import { burst, cannons } from "../lib/confetti";
 import { buzz, sfx } from "../lib/feedback";
+import { startPhotoCapture } from "../lib/captureMode";
 import { useAuth } from "../lib/accounts/AuthProvider";
+import { useFeatureFlag } from "../lib/appConfig";
 import { useContent } from "../lib/content/provider";
-import { createVisitId, GameError, gameErrorMessage, sendVisit, type VisitResult } from "../lib/game/client";
+import { createVisitId, GameError, gameErrorMessage, joinCrew, sendVisit, type Crew, type GameErrorCode, type VisitResult } from "../lib/game/client";
+import { Pennant } from "../components/CrewList";
+import { friendOffers } from "../lib/game/crew";
+import { useCrew } from "../lib/game/CrewProvider";
+import { useFriends } from "../lib/friends/FriendsProvider";
+import { badgeById } from "../lib/game/badges";
 import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
-import { parkHolder, visitHeadline } from "../lib/game/visit";
+import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
+import { handleFit } from "../lib/game/handleFit";
+import { useKipTip } from "../lib/kipTips";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
+import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
 import "../game.css";
 
@@ -28,8 +40,15 @@ const CARRY_TILT = -12;
 const ZOOM = 0.1;
 const DIM = 0.72;
 
-type Failure = { message: string; action: "retry" | "sign-in" | "handle" };
-type Score = { value: number; target: number; kind: "count" | "rate" };
+type Failure = { message: string; action: "retry" | "sign-in" | "handle" | "none" };
+// A crew join refused for one of these reasons will be refused again, so it offers no retry (#171).
+const FINAL_JOIN_ERRORS = new Set<GameErrorCode>(["invalid_code", "code_not_found", "code_expired", "crew_full", "already_today", "park_not_found", "account_deleting", "visit_id_reused"]);
+// Where the pennant waits low on the leader's pole before it is hoisted (#171).
+const PENNANT_LOW = 112;
+// The scene's own size; it scales down to fit the space the result text leaves it.
+const SCENE_WIDTH = 280;
+const SCENE_HEIGHT = 330;
+type Score = { value: number; target: number };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,6 +57,7 @@ function failureFor(error: unknown): Failure {
     if (error.code === "offline") return { message: "You need a connection to plant your flag. Check your signal and try again.", action: "retry" };
     if (error.code === "unauthenticated") return { message: "Sign in again to plant your flag.", action: "sign-in" };
     if (error.code === "handle_required") return { message: "Pick a handle first. Your flag comes with it.", action: "handle" };
+    if (FINAL_JOIN_ERRORS.has(error.code)) return { message: error.message, action: "none" };
   }
   return { message: gameErrorMessage(error), action: "retry" };
 }
@@ -49,6 +69,30 @@ function shakeFrames(amplitude: number): number[] {
 
 function run(value: MotionValue<number>, to: number | number[], options: Parameters<typeof animate>[2]) {
   return animate(value, to as never, options);
+}
+
+/**
+ * How far the flag scene shrinks to fit its stage, which gets shorter as the result text and
+ * buttons arrive below it. The flag, Kip and the points scale together, so none of them ever
+ * runs into the text.
+ */
+function useSceneFit() {
+  const stage = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(1);
+  useEffect(() => {
+    const element = stage.current;
+    if (!element) return;
+    const measure = () => {
+      const { clientWidth, clientHeight } = element;
+      if (!clientWidth || !clientHeight) return;
+      setFit(Math.max(0.5, Math.min(1, clientHeight / SCENE_HEIGHT, clientWidth / (SCENE_WIDTH + 60))));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [stage, fit] as const;
 }
 
 /**
@@ -65,13 +109,17 @@ export function Plant() {
   const content = useContent();
   const reduce = useReducedMotion() ?? false;
   const [parkId] = useState(() => state.tripId ?? "");
+  // A crew join (#171) arrives with its code and its own visit ID from the join card.
+  const crewUi = useCrew();
+  const friends = useFriends();
+  const [ticket] = useState(() => (crewUi.joining && crewUi.joining.parkId === parkId ? crewUi.joining : null));
   // One id per visit attempt, reused on retries so the server can deduplicate.
-  const [visitId] = useState(createVisitId);
+  const [visitId] = useState(() => ticket?.visitId ?? createVisitId());
   const [accountId] = useState(() => auth.ownerAccountId);
   const park = content?.parkById.get(parkId);
   const parkName = park?.short ?? park?.name ?? "this park";
   const me = game.me?.player ?? null;
-  const [holder] = useState(() => parkHolder(parkId, game.flags?.byPark, me?.handle));
+  const [holder] = useState(() => parkHolder(parkId, game.flags?.byPark, me?.handle, game.me?.parks));
   const rival = standingRival(holder);
   const rivalDays = rival ? flagAgeDays(rival.since, game.serverNow()) : 0;
   const mineFirst = startsPlanted(holder);
@@ -84,6 +132,11 @@ export function Plant() {
   const [waving, setWaving] = useState(mineFirst);
   const [cheering, setCheering] = useState(false);
   const [score, setScore] = useState<Score | null>(null);
+  const [joinedCrew, setJoinedCrew] = useState<Crew | null>(null);
+  const [alreadyMember, setAlreadyMember] = useState(false);
+  // "Add a photo" after the visit (#174): the camera, the crop, then the photo joins My Dex.
+  const [adding, setAdding] = useState(false);
+  const [stage, fit] = useSceneFit();
 
   const progress = useMotionValue(0);
   const ring = useTransform(progress, (p) => 289 * (1 - p));
@@ -107,14 +160,21 @@ export function Plant() {
   const dim = useMotionValue(0);
   const moundX = useMotionValue(1);
   const moundY = useMotionValue(1);
+  const pennantY = useMotionValue(PENNANT_LOW);
   const anim = useRef<ReturnType<typeof animate> | null>(null);
   const lastTick = useRef(0);
   const sending = useRef(false);
   // Read by the frame loop, which can run once more before React re-renders with a new phase.
   const charging = useRef(true);
 
-  const title = holder.kind === "other" ? `Take it from @${holder.flag.handle}` : holder.kind === "mine" ? "Visit your flag" : "Plant your flag";
-  const verb = holder.kind === "other" ? "take it" : holder.kind === "mine" ? "visit" : "plant";
+  // The flag already standing: the leader's, when joining their crew.
+  const standing = holder.kind === "other" || holder.kind === "mine" ? holder.flag : null;
+  const title = ticket
+    ? `Join ${standing ? `@${standing.handle}'s` : "the"} crew`
+    : holder.kind === "other" ? `Take it from @${holder.flag.handle}` : holder.kind === "mine" ? "Visit your flag" : "Plant your flag";
+  // The part of the title that cannot wrap: the @handle, with its 's when joining a crew.
+  const titleHandle = ticket ? (standing ? `${standing.handle}'s` : null) : holder.kind === "other" ? holder.flag.handle : null;
+  const verb = ticket ? "join" : holder.kind === "other" ? "take it" : holder.kind === "mine" ? "visit" : "plant";
   const flagSeed = me?.flagSeed ?? game.me?.flagSeed ?? null;
 
   useEffect(() => {
@@ -124,10 +184,13 @@ export function Plant() {
   // Android back is handled in App, which asks for the phase; a hold in progress must not
   // finish and send a visit after the screen has gone.
   useEffect(() => reportPlantPhase(phase), [phase]);
+  const endJoin = useRef(crewUi.endJoin);
+  endJoin.current = crewUi.endJoin;
   useEffect(() => () => {
     reportPlantPhase(null);
     anim.current?.stop();
-  }, []);
+    if (ticket) endJoin.current();
+  }, [ticket]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -143,6 +206,7 @@ export function Plant() {
     const p = progress.get();
     if (phase === "charge") {
       flagY.set(base.get() - p * HOLD_LIFT);
+      pennantY.set(PENNANT_LOW - p * 24);
       zoom.set(1 + p * ZOOM);
       dim.set(p * DIM);
     }
@@ -157,8 +221,26 @@ export function Plant() {
     // Hang the flag high while the server decides; at least a beat, so the slam lands.
     const hang = reduce ? Promise.resolve() : run(flagY, mineFirst ? HANG / 2 : HANG, { duration: 0.32, ease: [0.2, 0.9, 0.3, 1] }).then(() => wait(200));
     try {
-      const [visit] = await Promise.all([sendVisit(accountId, { visitId, parkId }), hang]);
-      charging.current = false;
+      let visit: VisitResult;
+      if (ticket) {
+        const [answer] = await Promise.all([joinCrew(accountId, { visitId, code: ticket.code }), hang]);
+        charging.current = false;
+        setJoinedCrew(answer.crew);
+        if (answer.status === "already_member") {
+          // A second scan by someone already in the crew changes nothing.
+          setAlreadyMember(true);
+          void run(pennantY, 0, { type: "spring", stiffness: 200, damping: 18 });
+          void run(zoom, 1, { duration: 0.3 });
+          void run(dim, 0, { duration: 0.3 });
+          setCheering(true);
+          setPhase("done");
+          return;
+        }
+        visit = answer.visit;
+      } else {
+        [visit] = await Promise.all([sendVisit(accountId, { visitId, parkId }), hang]);
+        charging.current = false;
+      }
       setResult(visit);
       setPhase("playing");
       await play(visit);
@@ -181,13 +263,13 @@ export function Plant() {
   }
 
   async function countUp(target: number) {
-    setScore({ value: 0, target, kind: "count" });
+    setScore({ value: 0, target });
     sfx.thud();
     buzz(40);
     await wait(260);
     const step = countStepMs(target);
     for (let value = 1; value <= target; value += 1) {
-      setScore({ value, target, kind: "count" });
+      setScore({ value, target });
       sfx.coin(value);
       if (value % 2 === 1) buzz(6);
       await wait(step);
@@ -202,6 +284,10 @@ export function Plant() {
     if (reduce) {
       // Reduced motion: land on the final picture with one gentle cue.
       if (plan.yank) rivalY.set(900);
+      if (plan.raise) {
+        pennantY.set(0);
+        setWaving(true);
+      }
       if (plan.slam) {
         flagY.set(0);
         flagX.set(0);
@@ -214,8 +300,7 @@ export function Plant() {
       zoom.set(1);
       dim.set(0);
       setCheering(true);
-      if (plan.count !== null) setScore({ value: plan.count, target: plan.count, kind: "count" });
-      else if (visit.outcome === "planted") setScore({ value: 1, target: 1, kind: "rate" });
+      if (plan.count !== null) setScore({ value: plan.count, target: plan.count });
       sfx.pop();
       buzz(30);
       return;
@@ -271,6 +356,19 @@ export function Plant() {
       await run(tilt, [0, -9, 7, -4, 2, 0], { duration: 0.6 });
     }
 
+    if (plan.raise) {
+      // Hoist the pennant up the leader's pole, a little past its spot, and let it settle and flap.
+      void run(zoom, 1, { duration: 0.4 });
+      void run(dim, 0, { duration: 0.4 });
+      sfx.swish(false);
+      await run(pennantY, -10, { duration: 0.42, ease: [0.2, 0.9, 0.3, 1] });
+      sfx.flap();
+      buzz([40, 30, 60]);
+      setImpact({ key: Date.now(), power: 0.35 });
+      await run(pennantY, 0, { type: "spring", stiffness: 320, damping: 12 });
+      setWaving(true);
+    }
+
     if (plan.payoff) {
       const colours = flagConfetti(flagSeed);
       setCheering(true);
@@ -288,12 +386,6 @@ export function Plant() {
     if (plan.count !== null) {
       await wait(250);
       await countUp(plan.count);
-    } else if (visit.outcome === "planted") {
-      await wait(250);
-      setScore({ value: 1, target: 1, kind: "rate" });
-      sfx.thud();
-      sfx.coin(4);
-      buzz(40);
     }
   }
 
@@ -335,12 +427,35 @@ export function Plant() {
     void send();
   };
 
-  function leave(screen: "map" | "parks") {
+  function leave(screen: "map" | "parks", segment: "flags" | "collection" = "flags") {
+    if (screen === "parks") openDexOn(segment);
     for (const action of leavePlant(park ? park.id : null, screen)) dispatch(action);
   }
 
-  const won = !!result && (result.outcome === "planted" || result.outcome === "took");
-  const headline = result ? visitHeadline(result, parkName) : null;
+  const won = !!result && (result.outcome === "planted" || result.outcome === "took" || result.outcome === "joined");
+  // Kip explains hourly points (#169) on the first visit result that earned any.
+  useKipTip("points", phase === "done" && !!result && result.pointsEarned > 0 && result.outcome !== "joined");
+  useKipTip("crew-joined", phase === "done" && result?.outcome === "joined");
+  const headline = alreadyMember
+    ? { title: "Already in this crew", detail: `You hold ${parkName} with this crew already.` }
+    : result?.outcome === "joined" && joinedCrew
+      ? { ...visitHeadline(result, parkName), title: `You joined @${joinedCrew.leader.handle}'s crew` }
+      : result ? visitHeadline(result, parkName) : null;
+  // The stamp names the crew's leader or the player the flag was taken from.
+  const headlineHandle = alreadyMember ? null : result?.outcome === "joined" && joinedCrew ? `${joinedCrew.leader.handle}'s` : result?.outcome === "took" ? result.previousHolder?.handle : null;
+  // Friends (#64): after joining, offer the crew members who aren't friends yet.
+  const friendsBoard = friends.enabled ? friends.board : null;
+  const refreshFriends = useRef(friends.refresh);
+  refreshFriends.current = friends.refresh;
+  useEffect(() => {
+    if (joinedCrew && friends.enabled && !friends.board) void refreshFriends.current();
+  }, [joinedCrew, friends.enabled, friends.board]);
+  const offers = joinedCrew && friendsBoard
+    ? friendOffers(joinedCrew, me?.handle, new Set(friendsBoard.players.map((player) => player.handle))).slice(0, 3)
+    : [];
+  // Badges this visit unlocked (#175), shown only with the `badges` flag on.
+  const badgesOn = useFeatureFlag("badges");
+  const unlockShown = badgesOn && (result?.newBadges ?? []).some((unlock) => badgeById(unlock.id));
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
   const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
   const puffs = impact && !reduce ? [-1, -0.55, -0.15, 0.2, 0.6, 1].map((side) => side * 120 * Math.max(impact.power, 0.5)) : [];
@@ -371,24 +486,24 @@ export function Plant() {
           {!headline || phase === "playing" ? (
             <motion.div key="a" initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
               <span className="eyebrow eyebrow--light">At {parkName}</span>
-              <h1>{title}</h1>
+              <h1 style={handleFit(titleHandle)}>{title}</h1>
             </motion.div>
           ) : (
             <motion.div key="b" initial={{ scale: 2.4, rotate: -16, opacity: 0 }} animate={{ scale: 1, rotate: -3, opacity: 1 }} transition={{ type: "spring", stiffness: 520, damping: 15 }}>
-              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`}>{headline.title}</span>
+              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`} style={handleFit(headlineHandle)}>{headline.title}</span>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="claim__stage">
+      <div className="claim__stage" ref={stage}>
         {won && (phase === "done" || score) && (
           <div className="claim__rays">
             <Rays color="#FFE27A" size={620} opacity={0.4} speed={20} />
           </div>
         )}
-        <motion.div className="plant-camera" style={{ x: camX, y: camY, rotate: camRotate, scale: zoom }}>
-          <div className="plant-scene">
+        <motion.div className="plant-camera" style={{ x: camX, y: camY, rotate: camRotate, scale: zoom, width: SCENE_WIDTH * fit, height: SCENE_HEIGHT * fit }}>
+          <div className="plant-scene" style={{ scale: fit }}>
             <AnimatePresence>
               {impact && !reduce && (
                 <motion.span
@@ -401,7 +516,22 @@ export function Plant() {
                 />
               )}
             </AnimatePresence>
-            {rival && (
+            {ticket && (
+              <div className="plant-flag plant-flag--crew" aria-label={standing ? `Flag of @${standing.handle}, with your pennant` : "Your pennant"} role="img">
+                <span className="plant-flag__pole" />
+                {standing && (
+                  <span className="plant-flag__cloth plant-flag__cloth--wave">
+                    <Flag seed={standing.flagSeed} size={124} days={flagAgeDays(standing.since, game.serverNow())} />
+                  </span>
+                )}
+                {flagSeed && (
+                  <motion.span className={`plant-pennant ${waving ? "plant-pennant--wave" : ""}`} style={{ y: pennantY }}>
+                    <Pennant seed={flagSeed} size={64} />
+                  </motion.span>
+                )}
+              </div>
+            )}
+            {rival && !ticket && (
               <motion.div className="plant-flag plant-flag--rival" style={{ x: rivalX, y: rivalY, rotate: rivalRotate }} aria-label={`Flag of @${rival.handle}`} role="img">
                 <span className="plant-flag__pole" />
                 <span className="plant-flag__cloth plant-flag__cloth--wave">
@@ -409,7 +539,7 @@ export function Plant() {
                 </span>
               </motion.div>
             )}
-            {flagSeed && (
+            {flagSeed && !ticket && (
               <motion.div className="plant-flag" style={{ x: flagX, y: flagY, rotate: flagRotate }} aria-label="Your flag" role="img">
                 <motion.span className="plant-flag__pole" style={{ scaleX: poleX, scaleY: poleY }} />
                 <motion.span className={`plant-flag__cloth ${waving ? "plant-flag__cloth--wave" : ""}`} style={{ scaleX: cloth }}>
@@ -448,6 +578,33 @@ export function Plant() {
                 />
               ))}
             </div>
+            {/* The points land left of the pole and Kip cheers right of the mound, inside the scene. */}
+            <AnimatePresence>
+              {score && (
+                <motion.div
+                  key="score"
+                  className="plant-score"
+                  initial={{ scale: 3, opacity: 0, rotate: -12 }}
+                  animate={{ scale: 1, opacity: 1, rotate: -4 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 14 }}
+                  aria-live="polite"
+                >
+                  <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
+                    +{score.value}
+                  </motion.strong>
+                  <span>{score.target === 1 ? "point" : "points"}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {cheering && (
+                <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
+                  <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
+                    <Kip pose={won ? "celebrate" : "cheer"} size={92} flip />
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
 
@@ -457,49 +614,37 @@ export function Plant() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {score && (
-            <motion.div
-              key="score"
-              className="plant-score"
-              initial={{ scale: 3, opacity: 0, rotate: -12 }}
-              animate={{ scale: 1, opacity: 1, rotate: -4 }}
-              transition={{ type: "spring", stiffness: 520, damping: 14 }}
-              aria-live="polite"
-            >
-              <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
-                +{score.value}
-              </motion.strong>
-              <span>{score.kind === "rate" ? "point a day" : score.target === 1 ? "point" : "points"}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {cheering && (
-            <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
-              <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
-                <Kip pose={won ? "celebrate" : "cheer"} size={112} flip />
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <div className="claim__foot">
         <AnimatePresence mode="wait">
-          {phase === "done" && result && headline ? (
+          {phase === "done" && (result || alreadyMember) && headline ? (
             <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
-              <motion.div className="claim__kip plant__bubble" variants={pop}>
-                <Bubble side="to-right" style={{ position: "relative" }}>
-                  {result.outcome === "took" ? `KLEEP! +${result.pointsEarned} for ${result.pointsEarned === 1 ? "that day" : `those ${result.pointsEarned} days`}!` : result.outcome === "planted" ? "KLEEP! Flag's up!" : result.outcome === "held" ? "Still flying!" : "See you tomorrow!"}
-                </Bubble>
-              </motion.div>
+              {/* One headline above, the points in the scene, then one sentence and at most two buttons. */}
               <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>
+              {result && <span className="plant__cheer">{plantCheer(result)}</span>}
+              {(joinedCrew || unlockShown) && (
+                <motion.div variants={pop} className="plant__extras">
+                  {/* The badges this visit unlocked (#175). */}
+                  <BadgeUnlock unlocks={result?.newBadges} compact onOpen={() => leave("parks", "collection")} />
+                  {joinedCrew && (
+                    <span className="plant__chip">
+                      <Icon name="flag" size={16} /> Crew of {joinedCrew.size}
+                    </span>
+                  )}
+                  {offers.length > 0 && (
+                    <button className="plant__chip plant__chip--button" onClick={() => friends.setAddSheet("open")}>
+                      <Icon name="qr" size={16} /> {offers.length === 1 ? `Add @${offers[0].handle} as a friend` : `Add ${offers.length} crewmates as friends`}
+                    </button>
+                  )}
+                </motion.div>
+              )}
               <motion.div variants={pop} className="claim__row">
-                <button className="btn btn--sm btn--sun" onClick={() => leave("parks")}>
-                  <Icon name="flag" size={18} /> Your parks
-                </button>
+                {park && (
+                  <button className="btn btn--sm btn--sun" onClick={() => { sfx.pop(); startPhotoCapture(); setAdding(true); }}>
+                    <Icon name="camera" size={18} /> Add a photo
+                  </button>
+                )}
                 <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>
                   <Icon name="map" size={18} /> Back to map
                 </button>
@@ -515,7 +660,7 @@ export function Plant() {
                   <div className="claim__row">
                     {failure.action === "sign-in" ? (
                       <button className="btn btn--sm btn--sun" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in</button>
-                    ) : failure.action === "handle" ? (
+                    ) : failure.action === "none" ? null : failure.action === "handle" ? (
                       <button className="btn btn--sm btn--sun" onClick={() => game.openHandleSheet({ onDone: () => void send() })}>Pick a handle</button>
                     ) : (
                       <button className="btn btn--sm btn--sun" onClick={retry}>
@@ -555,6 +700,7 @@ export function Plant() {
           )}
         </AnimatePresence>
       </div>
+      {park && <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} />}
     </motion.div>
   );
 }

@@ -11,13 +11,20 @@ import type { Park } from "../../lib/parks";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
 import type { ParkFlag } from "../../lib/game/client";
 import { PIN_POLE_X } from "../../lib/game/flag";
-import { buildPins, PIN_PIXEL_RATIO, pinImageSvg, type PinImage } from "../../lib/game/mapPins";
+import { buildPins, FLAG_PIN_ZOOM, PATCHED_PIN_PIXEL_RATIO, patchMinZoom, PIN_PIXEL_RATIO, PIN_SCALE_STOPS, pinImageSvg, type PinImage } from "../../lib/game/mapPins";
+import { useFeatureFlag } from "../../lib/appConfig";
+import { badgeArtUrl } from "../../lib/game/badges";
+import { PIN_HEIGHT, PIN_WIDTH } from "../../lib/game/flag";
+import { drawPatches, PIN_CLOTH_RECT } from "../../lib/game/patches";
 
 type Tier = "far" | "mid" | "near";
 // Pins stay dots until the map is zoomed to a town, so dense areas stay readable.
-const FAR_ZOOM = 10.5;
+const FAR_ZOOM = FLAG_PIN_ZOOM;
 const tierOf = (z: number): Tier => (z < FAR_ZOOM ? "far" : z < 12 ? "mid" : "near");
-const PIN_LAYERS = ["park-flag", "park-dot"];
+// Badge patches (#175) show on a pin only where it is drawn big enough for them to read: every
+// pin from this zoom, and the selected pin from FAR_ZOOM (patchMinZoom(true), checked in tests).
+const PATCH_ZOOM = patchMinZoom(false);
+const PIN_LAYERS = ["park-flag", "park-flag-close", "park-dot"];
 
 type Props = {
   mapRef: RefObject<MLMap | null>;
@@ -82,7 +89,11 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
   const focusRef = useRef(focusedId);
   focusRef.current = focusedId;
   const hasReadyMapContent = !!content?.releaseId;
-  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow), [hasReadyMapContent, parks, flags, flagsNow]);
+  // Crew pennants and the protected shield (#171) show only with the crews flag on.
+  const crews = useFeatureFlag("crews");
+  // Badge patches (#175) are drawn on pins only with the badges flag on.
+  const badges = useFeatureFlag("badges");
+  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews, badges }), [hasReadyMapContent, parks, flags, flagsNow, crews, badges]);
   // The style never changes after creation, so the map draws its detail once.
   const loaded = styleIsReady;
 
@@ -118,6 +129,13 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
     setUserHost(uEl);
 
     map.on("zoom", () => setTier(tierOf(map.getZoom())));
+    // Park outlines away from the player load for the area in view; the runtime skips zoomed-out views.
+    const loadViewBoundaries = () => {
+      const view = map.getBounds();
+      runtime.loadBoundariesInView?.([view.getWest(), view.getSouth(), view.getEast(), view.getNorth()], map.getZoom());
+    };
+    map.on("moveend", loadViewBoundaries);
+    map.on("load", loadViewBoundaries);
     map.on("click", (e: MapMouseEvent) => {
       selectRef.current(parkAtPoint(map, [e.point.x, e.point.y], pinnedIds.current));
     });
@@ -254,14 +272,17 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
           },
         });
       }
-      if (!map.getLayer("park-flag")) {
+      // Two layers split at PATCH_ZOOM rather than one zoom step in icon-image: MapLibre lays out
+      // symbol images at the tile's whole zoom, while layer zoom ranges follow the camera exactly.
+      for (const [id, range] of [["park-flag", { minzoom: FAR_ZOOM, maxzoom: PATCH_ZOOM }], ["park-flag-close", { minzoom: PATCH_ZOOM }]] as const) {
+        if (map.getLayer(id)) continue;
         map.addLayer({
-          id: "park-flag",
+          id,
           type: "symbol",
           source: "park-pins",
-          minzoom: FAR_ZOOM,
+          ...range,
           layout: {
-            "icon-image": ["get", "icon"],
+            "icon-image": id === "park-flag" ? pinIcon(focusRef.current) : ["get", "patched"],
             "icon-anchor": "bottom-left",
             "icon-offset": [-PIN_POLE_X, 0],
             "icon-allow-overlap": true,
@@ -278,7 +299,11 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map?.getLayer("park-flag")) map.setLayoutProperty("park-flag", "icon-size", pinSize(focusedId));
+    if (map?.getLayer("park-flag")) {
+      map.setLayoutProperty("park-flag", "icon-size", pinSize(focusedId));
+      map.setLayoutProperty("park-flag", "icon-image", pinIcon(focusedId));
+    }
+    if (map?.getLayer("park-flag-close")) map.setLayoutProperty("park-flag-close", "icon-size", pinSize(focusedId));
     if (!map?.getLayer("park-selected")) return;
     map.setFilter("park-selected", ["==", ["get", "id"], focusedId ?? ""]);
     map.setFilter("park-glow", ["==", ["get", "id"], arrivedId ?? ""]);
@@ -334,7 +359,14 @@ function parkAtPoint(map: MLMap, point: [number, number], pinned: ReadonlySet<st
 
 function pinSize(focusedId: string | null): ExpressionSpecification {
   const focused: ExpressionSpecification = ["==", ["get", "id"], focusedId ?? ""];
-  return ["interpolate", ["linear"], ["zoom"], FAR_ZOOM, ["case", focused, 0.95, 0.62], 13, ["case", focused, 1.3, 0.9], 16, ["case", focused, 1.45, 1.05]];
+  const stops = PIN_SCALE_STOPS.flatMap(([zoom, plain, selected]) => [zoom, ["case", focused, selected, plain]]);
+  return ["interpolate", ["linear"], ["zoom"], ...stops] as ExpressionSpecification;
+}
+
+// Below PATCH_ZOOM only the selected pin is drawn big enough for its patches.
+function pinIcon(focusedId: string | null): ExpressionSpecification {
+  const focused: ExpressionSpecification = ["==", ["get", "id"], focusedId ?? ""];
+  return ["case", focused, ["get", "patched"], ["get", "icon"]];
 }
 
 function loadSvgImage(svg: string): Promise<HTMLImageElement> {
@@ -350,8 +382,8 @@ function loadSvgImage(svg: string): Promise<HTMLImageElement> {
 function ensurePinImage(map: MLMap, pending: Map<string, Promise<void>>, id: string, image: PinImage): Promise<void> {
   const existing = pending.get(id);
   if (existing) return existing;
-  const work = loadSvgImage(pinImageSvg(image)).then((element) => {
-    if (!map.hasImage(id)) map.addImage(id, element, { pixelRatio: PIN_PIXEL_RATIO });
+  const work = drawPinImage(image).then(({ data, pixelRatio }) => {
+    if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio });
   }).catch((error: unknown) => {
     // Let a later refresh try this image again.
     pending.delete(id);
@@ -359,6 +391,42 @@ function ensurePinImage(map: MLMap, pending: Map<string, Promise<void>>, id: str
   });
   pending.set(id, work);
   return work;
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("The badge patch could not be loaded."));
+    image.src = url;
+  });
+}
+
+/**
+ * A pin image for the map. A pin with patches is drawn on a canvas: the pin from its SVG, then
+ * the patches with the same layout and look as every other flag (patches.ts), since an SVG
+ * drawn as an image cannot load the badge art itself. If any badge's art cannot load, the
+ * image is the plain pin, so a pin never shows some of its patches.
+ */
+async function drawPinImage(image: PinImage): Promise<{ data: HTMLImageElement | ImageData; pixelRatio: number }> {
+  const patches = image.patches ?? [];
+  if (!patches.length) return { data: await loadSvgImage(pinImageSvg(image)), pixelRatio: PIN_PIXEL_RATIO };
+  const ratio = PATCHED_PIN_PIXEL_RATIO;
+  const pin = await loadSvgImage(pinImageSvg(image, ratio));
+  try {
+    const arts = await Promise.all(patches.map((id) => loadImage(badgeArtUrl(id)).then((art) => ({ id, art }))));
+    const canvas = document.createElement("canvas");
+    canvas.width = PIN_WIDTH * ratio;
+    canvas.height = PIN_HEIGHT * ratio;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("The flag pin could not be drawn.");
+    context.drawImage(pin, 0, 0, canvas.width, canvas.height);
+    context.scale(ratio, ratio);
+    drawPatches(context, arts, PIN_CLOTH_RECT);
+    return { data: context.getImageData(0, 0, canvas.width, canvas.height), pixelRatio: ratio };
+  } catch {
+    return { data: pin, pixelRatio: ratio };
+  }
 }
 
 // Touch holds use a timer; a mouse right-click opens the same menu on desktop.

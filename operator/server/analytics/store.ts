@@ -340,7 +340,10 @@ function toOverview(byKey: Record<string, Row[]>, now: Date, days: number, featu
 /**
  * Per-account columns for the accounts table. $1 is now. Each one is an index probe on the
  * account. Without kip_founders the score has no founder bonus, as kip_game.player_scores from
- * game_001 has none, and the founded count is null.
+ * game_001 has none, and the founded count is null. Visit bonuses come from visits.points_earned:
+ * before game_002_points.sql that is each take's bounty, the same as tenures.bounty_points, so
+ * this matches kip_game.player_scores on either side of that migration. Holding points follow
+ * kip_game.holding_points (days before game_002, hours after).
  */
 function accountSelect(founders: boolean): string {
   return `SELECT a.id::text AS id, pl.handle, a.created_at, a.deletion_state,
@@ -351,8 +354,9 @@ function accountSelect(founders: boolean): string {
     (SELECT count(*) FROM kip_game.visits v WHERE v.account_id = a.id AND v.source = 'visit')::int AS visits,
     (SELECT count(*) FROM kip_game.tenures t WHERE t.holder_account_id = a.id AND t.started_at <= $1::timestamptz
       AND kip_game.flag_up(t.last_visit_at, t.ended_at, $1::timestamptz))::int AS parks_held,
-    ((SELECT coalesce(sum(kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $1::timestamptz) + t.bounty_points), 0)
+    ((SELECT coalesce(sum(kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $1::timestamptz)), 0)
       FROM kip_game.tenures t WHERE t.holder_account_id = a.id AND t.started_at <= $1::timestamptz)
+      + (SELECT coalesce(sum(v.points_earned), 0) FROM kip_game.visits v WHERE v.account_id = a.id AND v.visited_at <= $1::timestamptz)
       ${founders ? "+ kip_founders.founder_points(a.id, $1::timestamptz)" : ""})::int AS score,
     ${founders ? "(SELECT count(*) FROM kip_founders.parks f WHERE f.account_id = a.id)::int" : "NULL::int"} AS founded
   FROM kip_account.accounts a

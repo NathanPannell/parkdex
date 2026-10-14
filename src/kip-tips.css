@@ -1,0 +1,92 @@
+/* ---------- Kip's Tips ---------- */
+
+/* Light, so the thing being explained stays visible behind the card. */
+.kip-tip-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 97;
+  background: rgba(20, 35, 28, 0.22);
+}
+
+.kip-tip {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--safe-bottom) + 12px);
+  z-index: 98;
+  padding: 18px 18px 16px 112px;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kip-tip__kip {
+  position: absolute;
+  left: 10px;
+  bottom: 54px;
+  pointer-events: none;
+}
+
+.kip-tip__skip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--body);
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.kip-tip .eyebrow {
+  color: var(--kip-dark);
+  padding-right: 52px;
+}
+
+.kip-tip__text h2 {
+  margin: 0 0 4px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.kip-tip__text p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.kip-tip__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.kip-tip__dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.kip-tip__dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(20, 35, 28, 0.22);
+  transition: width 0.2s, background 0.2s;
+}
+
+.kip-tip__dots span.is-current {
+  width: 20px;
+  background: var(--ink);
+}

@@ -2,9 +2,12 @@
 """Split a detailed PMTiles archive into chunks and build its map-only R2 inventory.
 
 The output directory mirrors R2 keys:
-  releases/<version>/map/island/NNN.bin       archive chunks
-  releases/<version>/map/island/manifest.json the chunk layout read by the app
-  releases/<version>/map/manifest.json        the parkdex.content-map/v1 inventory
+  releases/<version>/map/<folder>/NNN.bin       archive chunks
+  releases/<version>/map/<folder>/manifest.json the chunk layout read by the app
+  releases/<version>/map/manifest.json          the parkdex.content-map/v1 inventory
+
+<folder> is `detail` from the combined BC and Nova Scotia map. Earlier releases
+used `island`, which the app still reads.
 
 Glyph descriptors are reused from an existing published inventory, so their
 immutable objects are not uploaded again. The printed report is the map pointer
@@ -16,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -23,6 +27,7 @@ from urllib.parse import quote
 CDN_ORIGIN = "https://kip-assets.parkdex.app"
 MAP_SCHEMA = "parkdex.content-map/v1"
 MAX_CHUNK_BYTES = 4 * 1024 * 1024
+FOLDER = re.compile(r"[a-z][a-z0-9-]*")
 
 
 def canonical_json(value: object) -> bytes:
@@ -50,9 +55,11 @@ def font_descriptors(source: Path) -> list[dict]:
     return fonts
 
 
-def build(archive: Path, chunk_bytes: int, glyph_source: Path, output: Path) -> dict:
+def build(archive: Path, chunk_bytes: int, glyph_source: Path, output: Path, folder: str = "detail") -> dict:
     if chunk_bytes <= 0 or chunk_bytes > MAX_CHUNK_BYTES:
         raise ValueError(f"chunk size must be between 1 and {MAX_CHUNK_BYTES} bytes")
+    if not FOLDER.fullmatch(folder) or folder == "fonts":
+        raise ValueError("folder must be lowercase letters, digits and hyphens, and not fonts")
     data = archive.read_bytes()
     size = len(data)
     count = (size + chunk_bytes - 1) // chunk_bytes
@@ -60,8 +67,8 @@ def build(archive: Path, chunk_bytes: int, glyph_source: Path, output: Path) -> 
     layout_bytes = json.dumps(layout, separators=(",", ":")).encode("utf-8")
 
     chunks = [data[index * chunk_bytes:(index + 1) * chunk_bytes] for index in range(count)]
-    entries: list[tuple[str, bytes, str]] = [("map/island/manifest.json", layout_bytes, "application/json")]
-    entries += [(f"map/island/{index:03d}.bin", chunk, "application/octet-stream") for index, chunk in enumerate(chunks)]
+    entries: list[tuple[str, bytes, str]] = [(f"map/{folder}/manifest.json", layout_bytes, "application/json")]
+    entries += [(f"map/{folder}/{index:03d}.bin", chunk, "application/octet-stream") for index, chunk in enumerate(chunks)]
     fonts = font_descriptors(glyph_source)
 
     # The version covers paths, hashes and sizes only, so it can be computed before keys exist.
@@ -100,9 +107,10 @@ def main() -> int:
     parser.add_argument("--chunk-bytes", type=int, default=512 * 1024)
     parser.add_argument("--glyph-source", type=Path, required=True, help="a published map inventory whose glyph objects are reused")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--folder", default="detail", help="the map/<folder>/ that holds the chunks (default: detail)")
     args = parser.parse_args()
     try:
-        report = build(args.archive, args.chunk_bytes, args.glyph_source, args.output.resolve())
+        report = build(args.archive, args.chunk_bytes, args.glyph_source, args.output.resolve(), args.folder)
     except (OSError, ValueError, KeyError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

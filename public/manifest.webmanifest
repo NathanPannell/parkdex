@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Parkdex",
+  "short_name": "Parkdex",
+  "description": "Plant your flag in real parks.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "theme_color": "#FFF8EC",
+  "background_color": "#FFF8EC",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/icons/parkdex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/parkdex-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/parkdex-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

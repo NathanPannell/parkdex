@@ -37,10 +37,11 @@ vi.mock("./native", () => ({ getNativePackageInstallInfo: mocks.getNativePackage
 vi.mock("./accounts/authClient", () => ({ clearLocalNativeSession: mocks.clearLocalNativeSession }));
 
 import { FEATURE_FLAGS } from "../../worker/appConfig";
-import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeUpdateStatus } from "./appConfig";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, isFeatureEnabled, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeFeatureFlags, subscribeUpdateStatus, useFeatureFlag, useRemoteFlag } from "./appConfig";
 import { apiEnvironment, apiPointerOverride } from "./apiPointer";
 import { contentChannelOverride } from "./contentChannel";
-import { getParkRarityEligibility, getRarityProgress, isRankProgressionEnabled, setRankProgressionEnabled } from "./progression";
 
 function answer(overrides: Record<string, unknown> = {}) {
   return { schema: "parkdex.app-config/v1", platform: "android", build: 42, contentChannel: null, flags: {}, source: "none", ...overrides };
@@ -70,19 +71,35 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  setRankProgressionEnabled(true);
 });
 
 describe("app config", () => {
   it("lists the same feature flags as the server", () => {
-    expect(Object.keys(FEATURE_FLAG_DEFAULTS).sort()).toEqual([...FEATURE_FLAGS].sort());
+    // rankProgression is retired in the app (#175); the server still lists it for installed builds.
+    expect([...Object.keys(FEATURE_FLAG_DEFAULTS), "rankProgression"].sort()).toEqual([...FEATURE_FLAGS].sort());
   });
 
   it("uses built-in defaults before the first check-in", async () => {
     const config = await initAppConfig();
     expect(config).toMatchObject({ platform: "android", build: 42, contentChannel: null, fetchedAt: null });
-    expect(isRankProgressionEnabled()).toBe(false);
+    expect(activeAppConfig().flags.crews).toBe(false);
     expect(contentChannelOverride()).toBeNull();
+  });
+
+  it("keeps badges off by default, and turns them on live when the operator does (#175)", async () => {
+    expect(FEATURE_FLAG_DEFAULTS.badges).toBe(false);
+    await initAppConfig();
+    expect(isFeatureEnabled("badges")).toBe(false);
+    // A build row without the flag keeps the default: badges stay off.
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true } })));
+    expect(isFeatureEnabled("badges")).toBe(false);
+    const Shelf = () => createElement("span", null, useFeatureFlag("badges") ? "shelf" : "none");
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>none</span>");
+    await checkInAppConfig(respond(answer({ flags: { badges: true } })));
+    expect(isFeatureEnabled("badges")).toBe(true);
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>shelf</span>");
+    await checkInAppConfig(respond(answer({ flags: { badges: false } })));
+    expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>none</span>");
   });
 
   it("falls back to package install info when App.getInfo times out", async () => {
@@ -115,14 +132,14 @@ describe("app config", () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: 0, contentChannel: "main", flags: { rankProgression: true } }),
+      config: answer({ build: 0, contentChannel: "main", flags: { crews: true } }),
       fetchedAt: "2026-09-01T00:00:00.000Z",
     }));
 
     const initial = await initAppConfig();
     expect(initial).toMatchObject({ platform: "android", build: 0, contentChannel: null, fetchedAt: null });
-    expect(initial.flags.rankProgression).toBe(false);
-    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: true }, update: "available" }));
+    expect(initial.flags.crews).toBe(false);
+    const fetcher = respond(answer({ contentChannel: "main", flags: { crews: true }, update: "available" }));
     vi.stubGlobal("fetch", fetcher);
 
     startAppConfigCheckIns();
@@ -138,11 +155,12 @@ describe("app config", () => {
 
     expect(String(vi.mocked(fetcher).mock.calls[0]?.[0])).toContain("platform=android&build=42");
     expect(currentUpdateStatus()).toBe("available");
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: false } });
+    // Flags apply as soon as the answer arrives; the content channel waits for the next launch.
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: true } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(42);
 
     await initAppConfig();
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { rankProgression: true } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { crews: true } });
     expect(contentChannelOverride()).toBe("main");
   });
 
@@ -153,12 +171,12 @@ describe("app config", () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: cacheBuild, contentChannel: "main", flags: { rankProgression: true }, update: "required" }),
+      config: answer({ build: cacheBuild, contentChannel: "main", flags: { crews: true }, update: "required" }),
       fetchedAt: "2026-09-01T00:00:00.000Z",
     }));
 
     const initial = await initAppConfig();
-    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { rankProgression: false } });
+    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { crews: false } });
     expect(currentUpdateStatus()).toBe("none");
 
     const fetcher = vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch;
@@ -174,32 +192,66 @@ describe("app config", () => {
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
 
     expect(currentUpdateStatus()).toBe(expectedUpdate);
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { rankProgression: false } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: false } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(cacheBuild);
   });
 
-  it("applies a saved check-in on the next launch, not mid-session", async () => {
+  it("applies a check-in's flags at once and its content channel on the next launch", async () => {
     await initAppConfig();
-    const fetcher = respond(answer({ contentChannel: "main", flags: { rankProgression: true } }));
+    const fetcher = respond(answer({ contentChannel: "main", flags: { crews: true } }));
     const fresh = await checkInAppConfig(fetcher);
-    expect(fresh?.flags.rankProgression).toBe(true);
+    expect(fresh?.flags.crews).toBe(true);
     expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42&env=staging");
-    expect(isRankProgressionEnabled()).toBe(false);
+    expect(activeAppConfig().flags.crews).toBe(true);
+    expect(activeAppConfig().contentChannel).toBeNull();
+    expect(contentChannelOverride()).toBeNull();
 
     await initAppConfig();
-    expect(activeAppConfig().flags.rankProgression).toBe(true);
-    expect(isRankProgressionEnabled()).toBe(true);
+    expect(activeAppConfig().flags.crews).toBe(true);
     // This test build is a staging build, so a main answer is a switch.
     expect(contentChannelOverride()).toBe("main");
   });
 
+  it("turns a feature on without a relaunch: a fresh install sees the operator's flags (vc17 had no Friends tab)", async () => {
+    // A fresh install has nothing saved, so it starts on the build's defaults.
+    await initAppConfig();
+    expect(isFeatureEnabled("friends")).toBe(false);
+    const listener = vi.fn();
+    const stop = subscribeFeatureFlags(listener);
+    const Friends = () => createElement("span", null, useFeatureFlag("friends") ? "Friends tab" : "no tab");
+    const Future = () => createElement("span", null, String(useRemoteFlag("futureThing")));
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>no tab</span>");
+
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(isFeatureEnabled("friends")).toBe(true);
+    expect(isFeatureEnabled("crews")).toBe(true);
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>Friends tab</span>");
+    expect(renderToStaticMarkup(createElement(Future))).toBe("<span>true</span>");
+
+    // The same answer again changes nothing, so nothing re-renders.
+    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // And the operator can turn it off again mid-session.
+    await checkInAppConfig(respond(answer({ flags: { friends: false } })));
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>no tab</span>");
+    expect(remoteFlag("futureThing")).toBeUndefined();
+
+    // A failed check-in keeps what the player has.
+    await checkInAppConfig(respond({ error: "down" }, 503));
+    expect(listener).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
   it("ignores a saved answer for a different build", async () => {
     await initAppConfig();
-    await checkInAppConfig(respond(answer({ flags: { rankProgression: true } })));
+    await checkInAppConfig(respond(answer({ flags: { crews: true } })));
     mocks.build = "43";
     await initAppConfig();
     expect(activeAppConfig().fetchedAt).toBeNull();
-    expect(isRankProgressionEnabled()).toBe(false);
+    expect(activeAppConfig().flags.crews).toBe(false);
   });
 
   it("keeps the previous answer when the server fails or answers badly", async () => {
@@ -256,9 +308,9 @@ describe("app config", () => {
     expect(parseRemoteAppConfig(answer({ contentChannel: "production" }), { platform: "android", build: 42 })).toBeNull();
     expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
     await initAppConfig();
-    const fresh = await checkInAppConfig(respond(answer({ flags: { rankProgression: true, futureThing: true, "bad key": true } })));
-    expect(fresh?.flags).toEqual({ rankProgression: true, parkProposals: true });
-    expect(fresh?.remoteFlags).toEqual({ rankProgression: true, futureThing: true });
+    const fresh = await checkInAppConfig(respond(answer({ flags: { crews: true, futureThing: true, "bad key": true } })));
+    expect(fresh?.flags).toEqual({ parkProposals: true, friends: false, crews: true, badges: false });
+    expect(fresh?.remoteFlags).toEqual({ crews: true, futureThing: true });
     await initAppConfig();
     expect(remoteFlag("futureThing")).toBe(true);
     expect(remoteFlag("missing")).toBeUndefined();
@@ -268,9 +320,13 @@ describe("app config", () => {
     await initAppConfig();
     expect(apiPointerOverride()).toBeNull();
     expect(apiEnvironment()).not.toBe("main");
-    await checkInAppConfig(respond(answer({ apiPointer: "production", contentChannel: "main" })));
-    // Nothing changes mid-session.
+    await checkInAppConfig(respond(answer({ apiPointer: "production", contentChannel: "main", flags: { friends: true } })));
+    // The server does not change mid-session, even though the flags in the same answer do.
+    expect(isFeatureEnabled("friends")).toBe(true);
     expect(apiPointerOverride()).toBeNull();
+    expect(apiEnvironment()).not.toBe("main");
+    expect(contentChannelOverride()).toBeNull();
+    expect(activeAppConfig().apiPointer).toBeNull();
     expect(mocks.clearLocalNativeSession).not.toHaveBeenCalled();
 
     await initAppConfig();
@@ -294,19 +350,5 @@ describe("app config", () => {
   it("reads an older server's content channel as the pointer", () => {
     expect(parseRemoteAppConfig(answer({ contentChannel: "main" }), { platform: "android", build: 42 })?.apiPointer).toBe("production");
     expect(parseRemoteAppConfig(answer({ contentChannel: null }), { platform: "android", build: 42 })?.apiPointer).toBeNull();
-  });
-});
-
-describe("rank progression flag", () => {
-  const legendary = { id: "legend", rarity: "legendary" as const };
-
-  it("locks higher rarities while on", () => {
-    expect(getParkRarityEligibility(legendary, getRarityProgress({}, [])).eligible).toBe(false);
-  });
-
-  it("opens every rarity while off", () => {
-    setRankProgressionEnabled(false);
-    const eligibility = getParkRarityEligibility(legendary, getRarityProgress({}, []));
-    expect(eligibility).toMatchObject({ eligible: true, reason: "unlocked", remaining: 0 });
   });
 });

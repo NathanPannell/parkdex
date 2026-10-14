@@ -1,5 +1,6 @@
 import { animate, AnimatePresence, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
+import { BadgeUnlock } from "../../components/BadgeUnlock";
 import { Flag } from "../../components/Flag";
 import { Icon } from "../../components/Icon";
 import { Bubble, Kip } from "../../components/Kip";
@@ -9,12 +10,16 @@ import { buzz, sfx } from "../../lib/feedback";
 import type { FoundResult } from "../../lib/founders";
 import { countStepMs, flagConfetti } from "../../lib/game/plantScene";
 import { visitHeadline } from "../../lib/game/visit";
+import { openDexOn } from "../../lib/dex/prefs";
+import { useStore } from "../../lib/store";
 import "../../game.css";
 
 type Props = {
   result: Extract<FoundResult, { outcome: "founded" }>;
   /** The approved photo as taken, so the cover shows without waiting for the network. */
   photo: string;
+  /** The photo's width over height: a founder's crop is the park sheet's landscape cover shape. */
+  photoAspect?: number;
   flagSeed: string | null;
   onClose: (showParkId?: string) => void;
 };
@@ -29,8 +34,9 @@ function shakeFrames(amplitude: number): number[] {
  * The founding moment, in the flag plant's style: the cover photo slams down like a planted
  * flag with a shake and confetti, the stamp lands, and the founder points count up.
  */
-export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
+export function FoundCelebration({ result, photo, photoAspect = 3 / 4, flagSeed, onClose }: Props) {
   const reduce = useReducedMotion() ?? false;
+  const { dispatch } = useStore();
   const [landed, setLanded] = useState(reduce);
   const [points, setPoints] = useState(reduce ? result.founderPoints : 0);
   const [done, setDone] = useState(reduce);
@@ -103,13 +109,13 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
         )}
         <motion.div className="found-done__camera" style={{ x: camX, y: camY }}>
           <motion.div
-            className="polaroid found-done__cover"
+            className={`polaroid found-done__cover${photoAspect > 1 ? " is-landscape" : ""}`}
             initial={reduce ? false : { y: -520, rotate: -18, scale: 1.25 }}
             animate={{ y: 0, rotate: -4, scale: 1 }}
             transition={{ type: "spring", stiffness: 420, damping: 22, delay: 0.1 }}
           >
             <span className="tape" />
-            <div className="polaroid__img">
+            <div className="polaroid__img" style={{ aspectRatio: String(photoAspect) }}>
               <img src={photo} alt={`Cover photo of ${name}`} />
             </div>
             <span className="polaroid__caption">Your founder photo</span>
@@ -157,11 +163,21 @@ export function FoundCelebration({ result, photo, flagSeed, onClose }: Props) {
                 <motion.div className={`found-done__visit${visitWon ? " is-won" : ""}`} variants={pop}>
                   {flagSeed ? <Flag seed={flagSeed} size={40} className="is-waving" /> : <Icon name="flag" size={22} />}
                   <span>
-                    <strong>{headline.title}{visit && visit.outcome === "took" && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}</strong>
+                    <strong>{headline.title}{visit && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}</strong>
                     <em>{headline.detail}</em>
                   </span>
                 </motion.div>
               )}
+              {/* The badges this founding unlocked, such as Spelunker (#175). */}
+              <BadgeUnlock
+                unlocks={result.newBadges}
+                variants={pop}
+                onOpen={() => {
+                  openDexOn("collection");
+                  onClose();
+                  dispatch({ type: "go", screen: "parks" });
+                }}
+              />
               <motion.div variants={pop} className="claim__row">
                 <button className="btn btn--sm btn--sun" onClick={() => onClose(result.park.id)}>
                   <Icon name="pin" size={18} /> See the park

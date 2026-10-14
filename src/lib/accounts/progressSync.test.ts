@@ -485,7 +485,7 @@ describe("account progress sync", () => {
 
     const result = await sync.runProgressSyncWhenReady(makeSession(ACCOUNT_A, fetcher), () => true);
 
-    expect(urls).toEqual(["/api/claims", "/api/claims?cursor=photo-revision", `/api/claims/${REMOTE_ID}/photo`]);
+    expect(urls).toEqual(["/api/claims", "/api/claims?cursor=photo-revision", `/api/claims/${REMOTE_ID}/photo`, "/api/claims/display"]);
     expect(result?.photosRestored).toBe(1);
     expect(await personal.getPersonalPhoto(owner, REMOTE_ID)).toMatchObject({ backupState: "backed-up" });
   });
@@ -525,6 +525,65 @@ describe("account progress sync", () => {
     expect(photoRequests).toHaveLength(1);
     expect(result.photosPending).toBe(2);
     expect(result.issues).toContainEqual(expect.objectContaining({ operation: "photo-restore", code: "network_or_storage_error" }));
+  });
+
+  it("backs up a photo's crop and cover after its claim, and restores backed-up choices on a fresh device", async () => {
+    const personal = await import("./personalStore");
+    const sync = await import("./progressSync");
+    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
+    const crop = { x: 0.1, y: 0, width: 0.5625, height: 1 };
+    const local = await personal.createPersonalClaim(owner, { park: park(), photo: png(1), crop });
+    const remotePhoto = png(2);
+    const photoMetadata = { status: "ready", sha256: await personal.hashPhoto(remotePhoto), sizeBytes: remotePhoto.size, contentType: "image/png" };
+    const remoteCrop = { x: 0, y: 0.125, width: 1, height: 0.75 };
+    const displays: Array<{ url: string; body: unknown }> = [];
+    const calls: string[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      const method = init?.method ?? "GET";
+      calls.push(`${method} ${url}`);
+      if (method === "PUT" && url === `/api/claims/${local.claimId}`) {
+        return jsonResponse({ claim: { claimId: local.claimId, ...JSON.parse(String(init?.body)), photo: { status: "missing" } } }, 201);
+      }
+      if (method === "PUT" && url === `/api/claims/${local.claimId}/photo`) {
+        const photo = await personal.getPersonalPhoto(owner, local.claimId);
+        return jsonResponse({ claimId: local.claimId, photo: { status: "ready", sha256: photo!.sha256, sizeBytes: photo!.sizeBytes, contentType: photo!.contentType } }, 201);
+      }
+      if (method === "GET" && url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), photoMetadata)], nextCursor: "one" });
+      if (method === "GET" && url === "/api/claims?cursor=one") return jsonResponse({ claims: [], nextCursor: null });
+      if (method === "GET" && url === `/api/claims/${REMOTE_ID}/photo`) return new Response(await remotePhoto.arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
+      if (method === "PUT" && url === `/api/claims/${local.claimId}/display`) {
+        displays.push({ url, body: JSON.parse(String(init?.body)) });
+        return jsonResponse({ display: { claimId: local.claimId, ...JSON.parse(String(init?.body)), updatedAt: "2026-06-04T10:00:00.000Z" } });
+      }
+      if (method === "GET" && url === "/api/claims/display") {
+        return jsonResponse({ displays: [
+          { claimId: REMOTE_ID, crop: remoteCrop, coverAt: "2026-06-04T10:00:00.000Z", removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
+          { claimId: "not-a-claim", crop: remoteCrop, coverAt: null, removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
+        ] });
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    };
+
+    const result = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
+    expect(result.issues).toEqual([]);
+    expect(calls.slice(-2)).toEqual([`PUT /api/claims/${local.claimId}/display`, "GET /api/claims/display"]);
+    expect(displays).toEqual([{ url: `/api/claims/${local.claimId}/display`, body: { crop, coverAt: null, removed: false } }]);
+    expect(personal.photoDisplayPending((await personal.getPersonalPhoto(owner, local.claimId))!)).toBe(false);
+    expect(await personal.getPersonalPhoto(owner, REMOTE_ID)).toMatchObject({ crop: remoteCrop, coverAt: "2026-06-04T10:00:00.000Z", backupState: "backed-up" });
+
+    // Nothing pending on the next pass: no display upload, and an older server without the route is fine.
+    calls.length = 0;
+    const older = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input);
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === "/api/claims?cursor=one") return jsonResponse({ claims: [], nextCursor: null });
+      if (url === "/api/claims/display") return jsonResponse({ code: "not_found" }, 404);
+      throw new Error(`Unexpected request: ${url}`);
+    };
+    const second = await sync.syncProgress(makeSession(ACCOUNT_A, older));
+    expect(second.issues).toEqual([]);
+    expect(calls).toEqual(["GET /api/claims?cursor=one", "GET /api/claims/display"]);
   });
 
   it("scopes claim upload, claim pages, photo upload, and private photo download to the captured account", async () => {
@@ -574,6 +633,7 @@ describe("account progress sync", () => {
       "GET /api/claims",
       "GET /api/claims?cursor=revision-one",
       `GET /api/claims/${REMOTE_ID}/photo`,
+      "GET /api/claims/display",
     ]);
     expect(calls.every((call) => call.accountId === ACCOUNT_A)).toBe(true);
   });

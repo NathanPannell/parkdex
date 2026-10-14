@@ -1,4 +1,5 @@
 import type { Park } from "../parks";
+import { isPhotoCrop, type PhotoCrop } from "../photoCrop";
 import { MAX_BACKUP_PHOTO_BYTES, type ConvertedPhotoRendition, type SupportedPhotoType as SupportedPhotoTypeInternal } from "./photoBackupRendition";
 
 const DATABASE = "parkdex-personal-v1";
@@ -46,7 +47,27 @@ export type PersonalPhoto = {
   backupState: PhotoBackupState;
   unsupportedReason: "type" | "size" | "magic" | null;
   backupRendition?: PhotoBackupRendition | null;
+  /**
+   * The player's 3:4 crop of this photo (#173), normalised 0–1 to the upright photo
+   * (`lib/photoCrop.ts`). Missing or null on photos saved before crops: show the largest centred
+   * 3:4 fit. It is display metadata only: the blob, its digest and its backup never change with it.
+   */
+  crop?: PhotoCrop | null;
+  /** When the player made this photo their park's cover in My Dex (#174). The latest choice per park wins. */
+  coverAt?: string | null;
+  /** Removed from My Dex. Hidden everywhere, but the photo and its backup are kept. */
+  removed?: boolean;
+  /**
+   * Display choices (crop, cover, removal) change `displayVersion`; backup records the version it
+   * sent in `displaySyncedVersion`. A higher `displayVersion` means the choices still need backing up.
+   */
+  displayVersion?: number;
+  displaySyncedVersion?: number;
 };
+
+/** A photo's display choices as `PUT /api/claims/:claimId/display` takes them (#174). */
+export type PhotoDisplay = { crop: PhotoCrop | null; coverAt: string | null; removed: boolean };
+export type RemotePhotoDisplay = PhotoDisplay & { claimId: string; updatedAt: string };
 
 export type PhotoBackupRendition = ConvertedPhotoRendition & {
   sourceSha256: string;
@@ -527,6 +548,8 @@ export type CreatePersonalClaimInput = {
   claimedAt?: string;
   contentReleaseId?: string | null;
   photo?: Blob | string | null;
+  /** The crop of `photo`, kept beside the original photo. */
+  crop?: PhotoCrop | null;
 };
 
 /** The resolved promise means claim metadata, local photo, and account outbox committed together. */
@@ -542,7 +565,12 @@ export async function createPersonalClaim(owner: ProgressOwner, input: CreatePer
     syncState: owner.kind === "guest" ? "local" : "pending", photoIssue: null, remotePhoto: { status: "missing" },
   };
   let photo: PersonalPhoto | null = null;
+  if (input.crop != null && (input.photo == null || !isPhotoCrop(input.crop))) throw new Error("A photo crop needs a photo and must lie within it.");
   if (input.photo != null) photo = await preparePhoto(owner, claimId, typeof input.photo === "string" ? dataUrlToBlob(input.photo) : input.photo);
+  if (photo && input.crop) {
+    photo.crop = { x: input.crop.x, y: input.crop.y, width: input.crop.width, height: input.crop.height };
+    photo.displayVersion = 1;
+  }
   await withDatabase((db) => transaction(db, [CLAIMS, PHOTOS, OUTBOX], "readwrite", (tx, complete, fail) => {
     const claims = tx.objectStore(CLAIMS);
     const request = claims.get([key, claimId]);
@@ -703,6 +731,122 @@ export async function getPersonalPhoto(owner: ProgressOwner, claimId: string): P
       const reservationRequest = tx.objectStore(META).get(guestReservationKey(claimId)) as IDBRequest<Meta | undefined>;
       reservationRequest.onsuccess = () => complete(reservationRequest.result ? null : photo);
       reservationRequest.onerror = () => fail(reservationRequest.error);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+/** Changes one saved photo of this owner in place. False when the owner has no such photo. */
+function updatePersonalPhoto(owner: ProgressOwner, claimId: string, change: (photo: PersonalPhoto) => void): Promise<boolean> {
+  const key = ownerKey(owner);
+  const stores = owner.kind === "guest" ? [PHOTOS, META] : PHOTOS;
+  return withDatabase((db) => transaction<boolean>(db, stores, "readwrite", (tx, complete, fail) => {
+    const request = tx.objectStore(PHOTOS).get([key, claimId]);
+    request.onsuccess = () => {
+      const photo = request.result as PersonalPhoto | undefined;
+      if (!photo) { complete(false); return; }
+      const save = () => {
+        change(photo);
+        tx.objectStore(PHOTOS).put(photo);
+        complete(true);
+      };
+      if (owner.kind !== "guest") { save(); return; }
+      // A guest photo reserved for an account is hidden from the guest.
+      const reservationRequest = tx.objectStore(META).get(guestReservationKey(claimId)) as IDBRequest<Meta | undefined>;
+      reservationRequest.onsuccess = () => (reservationRequest.result ? complete(false) : save());
+      reservationRequest.onerror = () => fail(reservationRequest.error);
+    };
+    request.onerror = () => fail(request.error);
+  }));
+}
+
+function bumpDisplay(photo: PersonalPhoto): void {
+  photo.displayVersion = Math.max(photo.displayVersion ?? 0, photo.displaySyncedVersion ?? 0) + 1;
+}
+
+/** The display choices backup sends for this photo. */
+export function photoDisplay(photo: Pick<PersonalPhoto, "crop" | "coverAt" | "removed">): PhotoDisplay {
+  const crop = photo.crop && isPhotoCrop(photo.crop) ? { x: photo.crop.x, y: photo.crop.y, width: photo.crop.width, height: photo.crop.height } : null;
+  return { crop, coverAt: photo.coverAt ?? null, removed: photo.removed === true };
+}
+
+export function photoDisplayPending(photo: Pick<PersonalPhoto, "displayVersion" | "displaySyncedVersion">): boolean {
+  return (photo.displayVersion ?? 0) > (photo.displaySyncedVersion ?? 0);
+}
+
+/**
+ * Re-crops a saved photo (#174): changes only its crop, never the photo, its digest or its backup
+ * state. Null goes back to the default centred fit. False when this owner has no such photo.
+ */
+export async function setPersonalPhotoCrop(owner: ProgressOwner, claimId: string, crop: PhotoCrop | null): Promise<boolean> {
+  if (crop !== null && !isPhotoCrop(crop)) throw new Error("A photo crop must lie within the photo.");
+  await initializePersonalStore();
+  return updatePersonalPhoto(owner, claimId, (photo) => {
+    photo.crop = crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null;
+    bumpDisplay(photo);
+  });
+}
+
+/** Makes this photo its park's cover in My Dex. Never touches the photo or its backup state. */
+export async function setPersonalPhotoCover(owner: ProgressOwner, claimId: string, at = new Date().toISOString()): Promise<boolean> {
+  await initializePersonalStore();
+  const coverAt = normalizeClaimedAt(at);
+  return updatePersonalPhoto(owner, claimId, (photo) => {
+    photo.coverAt = coverAt;
+    photo.removed = false;
+    bumpDisplay(photo);
+  });
+}
+
+/** Removes a photo from My Dex. It is only hidden: the photo, its claim and its backup stay. */
+export async function removePersonalPhoto(owner: ProgressOwner, claimId: string): Promise<boolean> {
+  await initializePersonalStore();
+  return updatePersonalPhoto(owner, claimId, (photo) => {
+    photo.removed = true;
+    photo.coverAt = null;
+    bumpDisplay(photo);
+  });
+}
+
+/** Photos whose display choices still need backing up, with the version being sent. */
+export async function listPendingPhotoDisplays(owner: ProgressOwner): Promise<Array<{ claimId: string; version: number; display: PhotoDisplay }>> {
+  const photos = await listPersonalPhotos(owner);
+  return photos.filter(photoDisplayPending).map((photo) => ({ claimId: photo.claimId, version: photo.displayVersion ?? 0, display: photoDisplay(photo) }));
+}
+
+/** Records that `version` of a photo's display choices is backed up. A later local change stays pending. */
+export async function markPhotoDisplaySynced(owner: ProgressOwner, claimId: string, version: number): Promise<boolean> {
+  await initializePersonalStore();
+  return updatePersonalPhoto(owner, claimId, (photo) => {
+    photo.displaySyncedVersion = Math.max(photo.displaySyncedVersion ?? 0, version);
+  });
+}
+
+/**
+ * Restores backed-up display choices onto the photos saved on this device. A photo with local
+ * choices not yet backed up keeps them, because they are newer. Returns how many photos changed.
+ */
+export async function applyRemotePhotoDisplays(owner: ProgressOwner, displays: RemotePhotoDisplay[]): Promise<number> {
+  if (displays.length === 0) return 0;
+  await initializePersonalStore();
+  const key = ownerKey(owner);
+  const byClaim = new Map(displays.map((display) => [display.claimId.toLowerCase(), display]));
+  return withDatabase((db) => transaction<number>(db, PHOTOS, "readwrite", (tx, complete, fail) => {
+    const request = tx.objectStore(PHOTOS).index("byOwner").getAll(IDBKeyRange.only(key));
+    request.onsuccess = () => {
+      let changed = 0;
+      for (const photo of request.result as PersonalPhoto[]) {
+        const remote = byClaim.get(photo.claimId.toLowerCase());
+        if (!remote || photoDisplayPending(photo)) continue;
+        const next = photoDisplay(remote);
+        if (JSON.stringify(photoDisplay(photo)) === JSON.stringify(next)) continue;
+        photo.crop = next.crop;
+        photo.coverAt = next.coverAt;
+        photo.removed = next.removed;
+        tx.objectStore(PHOTOS).put(photo);
+        changed += 1;
+      }
+      complete(changed);
     };
     request.onerror = () => fail(request.error);
   }));

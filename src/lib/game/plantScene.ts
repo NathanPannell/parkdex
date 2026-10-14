@@ -5,8 +5,11 @@ import type { ParkHolder } from "./visit";
 /**
  * The planting scene's choreography, kept apart from the animation code so what each outcome
  * plays is testable. A take yanks the rival flag out and throws it away; planting and taking
- * slam the flag in hard and pay off with confetti and a points counter; a revisit gets a
- * smaller re-plant; a second visit the same day settles the flag back with a wiggle and a wave from Kip.
+ * slam the flag in hard and pay off with confetti; a revisit gets a smaller re-plant; each of
+ * those counts up the points it earned. A second visit the same day settles the flag back with
+ * a wiggle and a wave from Kip. A logged visit during someone else's protected hour settles back
+ * too, and counts its point. Joining a crew (#170) raises the player's pennant under the leader's
+ * flag instead of planting.
  */
 
 export type PlantPlan = {
@@ -15,21 +18,29 @@ export type PlantPlan = {
   slam: "big" | "small" | null;
   /** Lower the flag back without planting. */
   settle: boolean;
+  /** Hoist the player's pennant up the leader's pole: joining a crew. */
+  raise: boolean;
   payoff: "big" | "small" | "tiny";
   /** Points to count up on screen, or null when the outcome has no points to show. */
   count: number | null;
 };
 
+const earned = (points: number) => (points > 0 ? points : null);
+
 export function plantPlan(visit: Pick<VisitResult, "outcome" | "pointsEarned">): PlantPlan {
   switch (visit.outcome) {
     case "took":
-      return { yank: true, slam: "big", settle: false, payoff: "big", count: visit.pointsEarned };
+      return { yank: true, slam: "big", settle: false, raise: false, payoff: "big", count: earned(visit.pointsEarned) };
     case "planted":
-      return { yank: false, slam: "big", settle: false, payoff: "big", count: null };
+      return { yank: false, slam: "big", settle: false, raise: false, payoff: "big", count: earned(visit.pointsEarned) };
     case "held":
-      return { yank: false, slam: "small", settle: false, payoff: "small", count: null };
+      return { yank: false, slam: "small", settle: false, raise: false, payoff: "small", count: earned(visit.pointsEarned) };
+    case "joined":
+      return { yank: false, slam: null, settle: false, raise: true, payoff: "big", count: earned(visit.pointsEarned) };
+    case "logged":
+      return { yank: false, slam: null, settle: true, raise: false, payoff: "tiny", count: earned(visit.pointsEarned) };
     case "already_today":
-      return { yank: false, slam: null, settle: true, payoff: "tiny", count: null };
+      return { yank: false, slam: null, settle: true, raise: false, payoff: "tiny", count: null };
   }
 }
 

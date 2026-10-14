@@ -50,6 +50,27 @@ export type PhotoView =
   | { status: "pending" }
   | { status: "ready"; sha256: string; sizeBytes: number; contentType: PhotoContentType };
 
+/** A 3:4 crop normalised 0–1 to the upright photo (src/lib/photoCrop.ts). */
+export interface PhotoCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A photo claim's display choices (#174), backed up beside the immutable claim. */
+export interface ClaimDisplay {
+  crop: PhotoCrop | null;
+  /** When the player made this photo their park's cover; the latest per park wins. */
+  coverAt: string | null;
+  removed: boolean;
+}
+
+export interface ClaimDisplayRecord extends ClaimDisplay {
+  claimId: string;
+  updatedAt: string;
+}
+
 export interface AccountAuthContext {
   accountId: string;
   sessionId: string;
