@@ -3,10 +3,8 @@
   "repository": "NathanPannell/parkdex-kip",
   "stagingBranch": "staging",
   "productionBranch": "main",
-  "vercelProjectName": "parkdex-kip",
   "vercelProjectIdEnvironment": "VERCEL_STAGING_PROJECT_ID",
   "productionVercelProjectIdEnvironment": "VERCEL_PRODUCTION_PROJECT_ID",
-  "vercelPreviewProjectIdEnvironment": "VERCEL_PREVIEW_PROJECT_ID",
   "vercelTeamIdEnvironment": "VERCEL_ORG_ID",
   "vercelTokenEnvironment": "VERCEL_TOKEN",
   "stagingAlias": "staging.web.parkdex.app",
@@ -19,7 +17,6 @@
   "neonProductionBranchId": "br-shy-hat-akg1paip",
   "neonStagingBranchId": "br-odd-paper-aktgtidp",
   "neonDatabaseName": "parkdex_kip",
-  "neonRoleName": "parkdex_kip_owner",
   "migrationPath": "database/migrations/feedback_001_init.sql",
   "optionalMigrationPaths": [
     "database/migrations/accounts_001_init.sql",
@@ -86,8 +83,7 @@
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
-    "pythonRequirementsPath": "database/delivery-test-requirements.txt",
-    "previewClockTable": "content_clock"
+    "pythonRequirementsPath": "database/delivery-test-requirements.txt"
   },
   "runtimeOptionalKeys": [
     "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
@@ -110,9 +106,6 @@
   "apiEntrypoint": "api/feedback-api.ts",
   "healthPath": "/api/health",
   "releasePath": "/release.json",
-  "previewDatabaseInitSource": "parent-schema",
-  "previewExpiryHours": 72,
-  "previewEmailMode": "disabled",
   "stagingEmailMode": "resend",
   "productionEmailMode": "resend",
   "runtimeSecretBundleEnvironment": "KIP_STAGING_RUNTIME_JSON",

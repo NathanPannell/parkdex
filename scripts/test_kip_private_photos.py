@@ -18,9 +18,7 @@ SPEC.loader.exec_module(photos)
 ACCOUNT_ID = "6f0eb57971124f41fadc7897ace74dac"
 SHA = "a" * 40
 OTHER_SHA = "b" * 40
-RELEASE_ID = "11111111-2222-4333-8444-555555555555"
-WORKER = "parkdex-kip-p12-111111112222"
-BUCKET = WORKER
+BUCKET = "parkdex-kip-photos-staging"
 
 
 class DeliveryError(RuntimeError):
@@ -82,43 +80,26 @@ def config():
     }
 
 
-def preview_state():
-    return {
-        "repository": "NathanPannell/parkdex-kip",
-        "pullRequest": 12,
-        "releaseId": RELEASE_ID,
-        "headSha": SHA,
-        "candidateSha": OTHER_SHA,
-        "resources": {},
-        "intent": {},
-    }
-
-
 def worker_bindings(identity, release_sha=SHA):
     result = [
         {"name": "KIP_ENVIRONMENT", "type": "plain_text", "text": identity["environment"]},
         {"name": "KIP_REPOSITORY", "type": "plain_text", "text": "NathanPannell/parkdex-kip"},
         {"name": "KIP_RESOURCE_ID", "type": "plain_text", "text": identity["resourceId"]},
         {"name": "KIP_PHOTO_BUCKET", "type": "plain_text", "text": identity["bucketName"]},
-        *([{"name": "RETENTION_URL", "type": "plain_text", "text": identity["retentionUrl"]}] if identity["environment"] in ("staging", "production") else []),
+        {"name": "RETENTION_URL", "type": "plain_text", "text": identity["retentionUrl"]},
         {"name": "KIP_RELEASE_SHA", "type": "plain_text", "text": release_sha},
         {"name": "RELEASE_SHA", "type": "plain_text", "text": release_sha},
         {"name": "PHOTO_SERVICE_TOKEN", "type": "secret_text"},
         {"name": "PHOTOS", "type": "r2_bucket", "bucket_name": identity["bucketName"]},
         {"name": "ACCOUNT_PHOTOS", "type": "durable_object_namespace", "class_name": "AccountPhotos", "namespace_id": "ns-test"},
+        {"name": "KIP_CANDIDATE_SHA", "type": "plain_text", "text": release_sha},
+        {"name": "KIP_RETENTION_SECRET", "type": "secret_text"},
     ]
-    if identity["environment"] == "preview":
-        result.extend([
-            {"name": "KIP_PULL_REQUEST", "type": "plain_text", "text": str(identity["pullRequest"])},
-            {"name": "KIP_HEAD_SHA", "type": "plain_text", "text": identity["headSha"]},
-            {"name": "KIP_CANDIDATE_SHA", "type": "plain_text", "text": identity["candidateSha"]},
-        ])
-    else:
-        result.extend([
-            {"name": "KIP_CANDIDATE_SHA", "type": "plain_text", "text": release_sha},
-            {"name": "KIP_RETENTION_SECRET", "type": "secret_text"},
-        ])
     return result
+
+
+def staging_state():
+    return {"resources": {}, "intent": {}}
 
 
 class PrivatePhotoAdapterTests(unittest.TestCase):
@@ -158,16 +139,13 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
                 photos.validate_candidate(self.delivery, self.cfg, self.root)
         self.assertEqual(self.delivery.api_calls, [])
 
-    def test_wranger_config_has_isolated_preview_staging_and_production_resources(self):
-        preview = photos._validate_identity(self.delivery, self.cfg, preview_state())
-        preview_cfg = photos._worker_config(self.cfg, preview, SHA)
-        self.assertEqual(preview_cfg["r2_buckets"], [{"binding": "PHOTOS", "bucket_name": BUCKET}])
-        self.assertEqual(preview_cfg["durable_objects"]["bindings"], [{"name": "ACCOUNT_PHOTOS", "class_name": "AccountPhotos"}])
-        self.assertNotIn("triggers", preview_cfg)
-        self.assertNotIn("PHOTO_SERVICE_TOKEN", json.dumps(preview_cfg))
-
+    def test_wranger_config_has_isolated_staging_and_production_resources(self):
         staging = photos._staging_identity(self.cfg)
         staging_cfg = photos._worker_config(self.cfg, staging, SHA)
+        self.assertEqual(staging_cfg["r2_buckets"], [{"binding": "PHOTOS", "bucket_name": BUCKET}])
+        self.assertEqual(staging_cfg["durable_objects"]["bindings"], [{"name": "ACCOUNT_PHOTOS", "class_name": "AccountPhotos"}])
+        self.assertNotIn("PHOTO_SERVICE_TOKEN", json.dumps(staging_cfg))
+        self.assertNotIn("triggers", photos._worker_config(self.cfg, staging, SHA, enable_retention=False))
         self.assertEqual(staging_cfg["triggers"]["crons"], ["23 9 * * *"])
         self.assertEqual(staging_cfg["vars"]["RETENTION_URL"], "https://staging.web.parkdex.app/api/retention/interactions/purge")
         self.assertNotIn("KIP_RETENTION_SECRET", json.dumps(staging_cfg))
@@ -181,17 +159,21 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         self.assertEqual(production_cfg["vars"]["RETENTION_URL"], "https://web.parkdex.app/api/retention/interactions/purge")
 
     def test_worker_verification_requires_exact_provenance_bindings_and_secret_types(self):
-        identity = photos._validate_identity(self.delivery, self.cfg, preview_state())
+        identity = photos._staging_identity(self.cfg)
         settings = {"bindings": worker_bindings(identity, SHA)}
         result = photos._check_worker_settings(self.delivery, settings, identity, SHA)
         self.assertEqual(result["namespaceId"], "ns-test")
-        settings["bindings"][0]["text"] = "staging"
+        settings["bindings"][0]["text"] = "production"
         with self.assertRaisesRegex(DeliveryError, "ownership metadata mismatch"):
             photos._check_worker_settings(self.delivery, settings, identity, SHA)
 
         settings = {"bindings": worker_bindings(identity, SHA)}
         next(item for item in settings["bindings"] if item["name"] == "PHOTO_SERVICE_TOKEN")["type"] = "plain_text"
         with self.assertRaisesRegex(DeliveryError, "PHOTO_SERVICE_TOKEN binding is missing or not secret"):
+            photos._check_worker_settings(self.delivery, settings, identity, SHA)
+
+        settings = {"bindings": [item for item in worker_bindings(identity, SHA) if item["name"] != "KIP_RETENTION_SECRET"]}
+        with self.assertRaisesRegex(DeliveryError, "KIP_RETENTION_SECRET binding is missing or not secret"):
             photos._check_worker_settings(self.delivery, settings, identity, SHA)
 
     def test_bucket_privacy_requires_disabled_managed_url_and_no_custom_domains(self):
@@ -239,19 +221,6 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         self.assertNotIn(secret, " ".join(args))
         self.assertNotIn(secret, json.dumps(kwargs["env"]))
         self.assertEqual(kwargs["input_text"], secret)
-
-    def test_worker_delete_accepts_documented_empty_success_body(self):
-        with patch.object(photos, "_api_token", return_value=("t" * 64, True)), \
-             patch.object(self.delivery, "api_json", return_value={}):
-            result = photos._api(
-                self.delivery,
-                self.cfg,
-                f"/accounts/{ACCOUNT_ID}/workers/scripts/{WORKER}",
-                method="DELETE",
-                not_found_ok=True,
-                empty_response_ok=True,
-            )
-        self.assertEqual(result, {"success": True, "result": {}})
 
     def test_credential_free_wrangler_compile_ignores_management_oauth_and_api_token(self):
         token = "m" * 64
@@ -315,27 +284,9 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         self.assertEqual(deploy_args[0][2], OTHER_SHA)
         self.assertEqual(result["releaseSha"], OTHER_SHA)
 
-    def test_absence_detects_orphaned_durable_object_namespace(self):
-        state = preview_state()
-        with patch.object(photos, "_list_workers", return_value=[]), \
-             patch.object(photos, "_list_namespaces", return_value=[{"id": "namespace-left-behind", "script": WORKER}]), \
-             patch.object(photos, "_bucket_names", return_value=set()):
-            self.assertFalse(photos.absence(self.delivery, self.cfg, state))
-
-        with patch.object(photos, "_list_workers", return_value=[]), \
-             patch.object(photos, "_list_namespaces", return_value=[]), \
-             patch.object(photos, "_bucket_names", return_value=set()):
-            self.assertTrue(photos.absence(self.delivery, self.cfg, state))
-
-        state.setdefault("resources", {})["photoDoNamespaceId"] = "ns-orphan-recorded"
-        with patch.object(photos, "_list_workers", return_value=[]), \
-             patch.object(photos, "_list_namespaces", return_value=[{"id": "ns-orphan-recorded", "script": "renamed-script"}]), \
-             patch.object(photos, "_bucket_names", return_value=set()):
-            self.assertFalse(photos.absence(self.delivery, self.cfg, state))
-
     def test_created_bucket_without_marker_is_recovered_only_from_exact_create_journal(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
+        state = staging_state()
+        identity = photos._staging_identity(self.cfg)
         marker = photos._marker(identity)
         state["intent"]["cloudflarePhotos"] = {
             "bucketCreate": {"status": "created", "name": BUCKET, "owner": marker},
@@ -348,126 +299,20 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         put.assert_called_once_with(self.delivery, self.cfg, BUCKET, marker)
         self.assertEqual(state["intent"]["cloudflarePhotos"]["bucketMarker"]["status"], "stored")
 
-    def test_markerless_bucket_recovery_requires_journaled_final_marker_delete(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        marker = photos._marker(identity)
-        state["intent"]["cloudflarePhotos"] = {
-            "bucketCreate": {"status": "created", "name": BUCKET, "owner": marker},
-            "bucketPurge": {"status": "objects-empty", "name": BUCKET, "owner": marker, "deleted": 3},
-            "bucketDelete": {"status": "intent", "name": BUCKET, "owner": marker, "markerDelete": "intent"},
-        }
-        journal = self.root / "state" / "pr-12-photos.json"
-        with patch.object(photos, "_bucket_names", return_value={BUCKET}), \
-             patch.object(photos, "_owner_marker", return_value=None), \
-             patch.object(photos, "_require_private_bucket"), \
-             patch.object(photos, "_list_objects", return_value=[]), \
-             patch.object(photos, "_put_owner_marker") as put:
-            result = photos._bucket_cleanup_status(self.delivery, self.cfg, identity, journal, state)
-        self.assertEqual(result, "marker-deleted")
-        put.assert_not_called()
-
     def test_markerless_unjournaled_bucket_is_preserved(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        with patch.object(photos, "_bucket_names", return_value={BUCKET}), \
-             patch.object(photos, "_owner_marker", return_value=None):
-            with self.assertRaisesRegex(DeliveryError, "no recoverable ownership marker"):
-                photos._bucket_cleanup_status(self.delivery, self.cfg, identity, self.root / "journal.json", state)
-
-    def test_preview_delete_allows_missing_secret_then_force_removes_owned_namespace(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        bindings = worker_bindings(identity, SHA)
-        bindings = [binding for binding in bindings if binding["name"] != "PHOTO_SERVICE_TOKEN"]
-        identity_settings = {"bindings": bindings}
-        journal = self.root / "state" / "pr-12-photos.json"
-        namespace = {"id": "ns-test", "script": WORKER, "class": "AccountPhotos", "use_sqlite": True}
-        calls = []
-
-        def api(_delivery, _config, path, **kwargs):
-            calls.append((path, kwargs))
-            return {"success": True, "result": {}}
-
-        with patch.object(photos, "_worker_settings", return_value=identity_settings), \
-             patch.object(photos, "_list_namespaces", side_effect=[[namespace], []]), \
-             patch.object(photos, "_list_workers", return_value=[]), \
-             patch.object(photos, "_api", side_effect=api), \
-             patch.object(photos, "_purge_bucket"):
-            photos._delete_worker(self.delivery, self.cfg, identity, journal, state)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][1]["method"], "DELETE")
-        self.assertEqual(calls[0][1]["query"], {"force": "true"})
-        self.assertTrue(calls[0][1]["empty_response_ok"])
-        self.assertEqual(state["resources"]["photoDoNamespaceId"], "ns-test")
-        self.assertEqual(state["intent"]["cloudflarePhotos"]["workerDelete"]["status"], "requested")
-
-    def test_preview_purge_keeps_owner_marker_until_last_then_deletes_exact_bucket(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        journal = self.root / "state" / "pr-12-photos.json"
-        marker = photos._marker(identity)
-        pages = [
-            [{"key": photos.OWNER_OBJECT}, {"key": "accounts/11111111-1111-4111-8111-111111111111/claims/photo"}],
-            [{"key": photos.OWNER_OBJECT}],
-            [{"key": photos.OWNER_OBJECT}],
-            [],
-        ]
-        removed = []
-        calls = []
-
-        def api(_delivery, _config, path, **kwargs):
-            calls.append((path, kwargs))
-            return {"success": True, "result": {}}
-
-        def r2(_delivery, _config, bucket, key, *, method, body=None):
-            removed.append((bucket, key, method))
-            return 204, b""
-
-        with patch.object(photos, "_bucket_cleanup_status", return_value="owned"), \
-             patch.object(photos, "_list_objects", side_effect=pages), \
-             patch.object(photos, "_owner_marker", return_value=marker), \
-             patch.object(photos, "_r2_object", side_effect=r2), \
-             patch.object(photos, "_api", side_effect=api):
-            photos._purge_bucket(self.delivery, self.cfg, identity, journal, state)
-        self.assertEqual([entry[1] for entry in removed], ["accounts/11111111-1111-4111-8111-111111111111/claims/photo", photos.OWNER_OBJECT])
-        self.assertTrue(calls[-1][0].endswith(f"/r2/buckets/{BUCKET}"))
-        self.assertEqual(calls[-1][1]["method"], "DELETE")
-        self.assertEqual(state["intent"]["cloudflarePhotos"]["bucketDelete"]["objectsDeleted"], 1)
-
-    def test_marker_deleted_interruption_retries_exact_bucket_delete(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        marker = photos._marker(identity)
-        state["intent"]["cloudflarePhotos"] = {
-            "bucketCreate": {"status": "created", "name": BUCKET, "owner": marker},
-            "bucketPurge": {"status": "objects-empty", "name": BUCKET, "owner": marker, "deleted": 4},
-            "bucketDelete": {"status": "intent", "name": BUCKET, "owner": marker, "markerDelete": "intent", "objectsDeleted": 4},
-        }
-        journal = self.root / "state" / "pr-12-photos.json"
-        calls = []
-
-        def api(_delivery, _config, path, **kwargs):
-            calls.append((path, kwargs))
-            return {"success": True, "result": {}}
-
+        state = staging_state()
+        identity = photos._staging_identity(self.cfg)
         with patch.object(photos, "_bucket_names", return_value={BUCKET}), \
              patch.object(photos, "_owner_marker", return_value=None), \
-             patch.object(photos, "_require_private_bucket"), \
-             patch.object(photos, "_list_objects", return_value=[]), \
-             patch.object(photos, "_api", side_effect=api), \
              patch.object(photos, "_put_owner_marker") as put:
-            photos._purge_bucket(self.delivery, self.cfg, identity, journal, state)
+            with self.assertRaisesRegex(DeliveryError, "without this release's exact ownership marker"):
+                photos._ensure_bucket(self.delivery, self.cfg, identity, None, state)
         put.assert_not_called()
-        self.assertEqual(len(calls), 1)
-        self.assertTrue(calls[0][0].endswith(f"/r2/buckets/{BUCKET}"))
-        self.assertEqual(calls[0][1]["method"], "DELETE")
-        self.assertEqual(state["intent"]["cloudflarePhotos"]["bucketDelete"]["status"], "requested")
 
     def test_deploy_journals_namespace_before_secret_put_and_defers_health(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
-        journal = self.root / "state" / "pr-12-photos.json"
+        state = staging_state()
+        identity = photos._staging_identity(self.cfg)
+        journal = self.root / "state" / "private-photos-staging.json"
         settings = {"bindings": worker_bindings(identity, SHA)}
         wrangler_calls = []
 
@@ -496,11 +341,12 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
             )
         self.assertEqual(result["doNamespaceId"], "ns-created-first")
         self.assertEqual(wrangler_calls[0][0], "deploy")
+        self.assertEqual(wrangler_calls[0][wrangler_calls[0].index("--tag") + 1], SHA)
         self.assertEqual(wrangler_calls[1][:3], ["secret", "put", "PHOTO_SERVICE_TOKEN"])
 
     def test_deploy_refuses_same_named_foreign_worker_before_wrangler(self):
-        state = preview_state()
-        identity = photos._validate_identity(self.delivery, self.cfg, state)
+        state = staging_state()
+        identity = photos._staging_identity(self.cfg)
         bindings = worker_bindings(identity, SHA)
         next(binding for binding in bindings if binding["name"] == "KIP_RESOURCE_ID")["text"] = "foreign-release"
         with patch.object(photos, "_worker_settings", return_value={"bindings": bindings}), \
@@ -513,7 +359,7 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
                     identity,
                     SHA,
                     {"PHOTO_SERVICE_TOKEN": "s" * 64},
-                    self.root / "state" / "pr-12-photos.json",
+                    self.root / "state" / "private-photos-staging.json",
                     state,
                 )
 

@@ -74,16 +74,6 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertEqual(commands[0], ["npm", "ci"])
         self.assertIn("unittest", commands[-1])
 
-    def test_candidate_checks_still_journal_every_passed_check(self):
-        path = self.root / "journal.json"
-        state = {"accountsPresent": False}
-        with patch.object(delivery, "npm_args", return_value=["npm"]), \
-             patch.object(delivery, "run", return_value=""):
-            delivery.candidate_checks(self.root, state, path)
-        self.assertEqual([item["check"] for item in state["validation"]], ["install", "typecheck", "tests", "build", "delivery-tests"])
-        self.assertEqual(state["status"], "validating-build")
-        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["validation"], state["validation"])
-
     def test_bootstrap_runs_existing_migration_only(self):
         self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], ["feedback_001_init.sql"])
 
@@ -195,20 +185,6 @@ class AccountReleaseGates(unittest.TestCase):
             "database/migrations/content_004_catalogue_release.sql",
             "database/migrations/content_005_park_visibility.sql",
         ])
-
-    def test_preview_empty_gate_allows_only_the_initialized_content_clock_row(self):
-        queries = []
-        with patch.object(delivery, "preview_psql_query", side_effect=lambda _url, sql: queries.append(sql) or ""):
-            delivery.verify_preview_database_empty("postgresql://role:secret@ep-owned-test.us-west-2.aws.neon.tech/db", migration_applied=True, allow_content_clock=True)
-        sql = queries[0]
-        self.assertIn("SELECT count(*) INTO clock_rows FROM public.content_clock", sql)
-        self.assertIn("singleton IS TRUE", sql)
-        self.assertIn("revision = 0", sql)
-        self.assertIn("retention_floor = 0", sql)
-        self.assertIn("last_transaction_id IS NULL", sql)
-        self.assertIn("item.table_name = 'content_clock'", sql)
-        self.assertIn("IF (item.table_schema", sql)
-        self.assertNotIn("IF true OR", sql)
 
     def test_public_bootstrap_uses_only_the_migration_database_url_and_selected_environment(self):
         self.content_files()
@@ -354,7 +330,7 @@ class AccountReleaseGates(unittest.TestCase):
         created_name = next(args[-1].split('"')[1] for args in commands if args[-1].startswith("CREATE DATABASE"))
         self.assertEqual(commands[-1][-1], f'DROP DATABASE "{created_name}"')
 
-    def test_staging_rejects_preview_photo_origin_and_missing_google(self):
+    def test_staging_rejects_foreign_photo_origin_and_missing_google(self):
         self.account_files()
         bundle = self.runtime()
         delivery.require_account_runtime(self.config, bundle, self.root)
@@ -371,16 +347,6 @@ class AccountReleaseGates(unittest.TestCase):
         bundle["AUTH_SESSION_SECRET"] = bundle["SESSION_SECRET"]
         with self.assertRaises(delivery.DeliveryError):
             delivery.require_account_runtime(self.config, bundle, self.root)
-
-    def test_preview_uses_fresh_secrets_without_email_or_google_credentials(self):
-        path = self.root / "credentials.json"
-        document = {"sessionSecret": "s", "operatorPasswordHash": "h", "authSessionSecret": "a", "photoServiceToken": "p", "retentionSecret": "r"}
-        path.write_text(json.dumps(document), encoding="utf-8")
-        state = {"headSha": "a" * 40, "accountsPresent": True, "resources": {"photoServiceUrl": "https://owned-preview.workers.dev"}}
-        env = delivery.runtime_env_for_preview(self.config, state, "postgres://fresh", path)
-        self.assertEqual(env["EMAIL_MODE"], "disabled")
-        self.assertEqual(env["KIP_PHOTO_SERVICE_TOKEN"], "p")
-        self.assertFalse(set(env) & {"GOOGLE_WEB_CLIENT_ID", "RESEND_API_KEY", "CLOUDFLARE_API_TOKEN", "NEON_API_KEY"})
 
     def test_main_content_gate_checks_pointer_shape_and_exact_manifest_hash(self):
         origin = "https://kip-assets.parkdex.app"
@@ -540,6 +506,19 @@ class AccountReleaseGates(unittest.TestCase):
         with self.assertRaises(delivery.DeliveryError):
             delivery.vercel_release_target_args("preview")
 
+    def test_release_file_supports_only_staging_and_production(self):
+        sha = "a" * 40
+        delivery.set_release_file(self.root, sha, "staging")
+        self.assertEqual(json.loads((self.root / "public" / "release.json").read_text(encoding="utf-8")), {"sha": sha, "environment": "staging"})
+        with self.assertRaises(delivery.DeliveryError):
+            delivery.set_release_file(self.root, sha, "preview")
+        parser = delivery.build_parser()
+        with contextlib.redirect_stderr(io.StringIO()):
+            for argv in (["write-release", "--environment", "preview", "--sha", sha], ["preview", "--pr", "1"],
+                         ["teardown", "--pr", "1"], ["provision-staging-photos", "--from-preview-pr", "1"]):
+                with self.subTest(argv=argv), self.assertRaises(SystemExit):
+                    parser.parse_args(argv)
+
     def test_exact_release_sha_is_bound_to_the_correct_push_branch(self):
         sha = "a" * 40
         def git_result(*args):
@@ -595,15 +574,6 @@ class AccountReleaseGates(unittest.TestCase):
              self.assertRaisesRegex(delivery.DeliveryError, "stable URL verification"):
             delivery.ensure_previous_release_resolved(self.config, "prj_test", "staging")
 
-    def test_all_generated_credentials_are_redacted(self):
-        path = self.root / "generated.json"
-        with patch.object(delivery, "credential_path", return_value=path):
-            delivery.make_operator_credentials(12, "owned-release")
-        document = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(len(set(document.values())), len(document))
-        for secret in document.values():
-            self.assertNotIn(secret, delivery.redact("failure " + secret))
-
     def test_migration_is_atomic_and_stops_on_sql_error(self):
         with patch.object(delivery, "run") as run:
             delivery.run_migration("postgresql://role:secret@ep-owned-test.us-west-2.aws.neon.tech/db", self.root / "migration.sql")
@@ -622,56 +592,6 @@ class AccountReleaseGates(unittest.TestCase):
         for overrides in ({"PGHOST": "ep-staging.neon.tech"}, {"PGDATABASE": "parkdex_kip"}, {"PGPORT": "65536"}):
             with patch.dict(os.environ, {**values, **overrides}, clear=True), self.assertRaises(delivery.DeliveryError):
                 delivery.candidate_sql_env()
-
-    def test_staging_bootstrap_source_requires_current_browser_verified_preview(self):
-        head, base, candidate = "a" * 40, "b" * 40, "c" * 40
-        path = self.root / "preview.json"
-        state = {
-            "schema": "parkdex-kip.preview/v1", "repository": delivery.REPOSITORY,
-            "pullRequest": 12, "releaseId": "a1111111-1111-4111-8111-111111111111",
-            "status": "ready-for-browser-verification", "accountsPresent": True,
-            "headSha": head, "baseSha": base, "candidateSha": candidate,
-            "browserVerifiedHeadSha": head, "browserVerifiedCandidateSha": candidate,
-            "browserVerifiedDeploymentId": "dpl_owned", "browserVerifiedAt": "2026-09-28T00:00:00Z",
-            "resources": {"vercelDeploymentId": "dpl_owned"}, "url": "https://owned.vercel.app",
-        }
-        pr = {"number": 12, "state": "OPEN", "isDraft": True, "isCrossRepository": False,
-              "baseRefName": "staging", "headRefName": "feat/accounts", "headRefOid": head}
-        with patch.object(delivery, "journal_path", return_value=path), patch.object(delivery, "gh_pr", return_value=pr), patch.object(delivery, "fetch_pr_head", return_value=head), patch.object(delivery, "photo_provider") as provider, patch.object(delivery, "git") as git, patch.object(delivery, "vercel_request", return_value={"readyState": "READY", "url": "owned.vercel.app"}), patch.object(delivery, "verify_deployment"), patch.object(delivery, "verify_release_url"):
-            for change in ({"browserVerifiedHeadSha": None}, {"browserVerifiedCandidateSha": "d" * 40},
-                           {"browserVerifiedDeploymentId": "dpl_other"}, {"headSha": "d" * 40},
-                           {"baseSha": "e" * 40}, {"status": "failed-needs-teardown"}):
-                path.write_text(json.dumps({**state, **change}), encoding="utf-8")
-                with self.subTest(change=change), self.assertRaises(delivery.DeliveryError):
-                    delivery.verified_photo_source(self.config, 12, base)
-            provider.assert_not_called()
-            path.write_text(json.dumps(state), encoding="utf-8")
-            git.side_effect = [f"{candidate} {base} {head}", "f" * 40, "f" * 40]
-            self.assertEqual(delivery.verified_photo_source(self.config, 12, base), state)
-            provider.return_value.verify_preview.assert_called_once()
-
-    def test_browser_attestation_binds_current_preview_and_deployment(self):
-        path = self.root / "preview.json"
-        state = {
-            "headSha": "a" * 40, "candidateSha": "c" * 40,
-            "resources": {"vercelDeploymentId": "dpl_owned"},
-        }
-        args = argparse.Namespace(pr=12, deployment_id="dpl_owned")
-        with patch.object(delivery, "load_config", return_value=self.config), \
-             patch.object(delivery, "assert_clean_staging_harness", return_value=("b" * 40, None)), \
-             patch.object(delivery, "lifecycle_lock", return_value=contextlib.nullcontext()), \
-             patch.object(delivery, "journal_path", return_value=path), \
-             patch.object(delivery, "verified_photo_source", return_value=state):
-            delivery.attest_preview_browser(args)
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["browserVerifiedHeadSha"], state["headSha"])
-            self.assertEqual(saved["browserVerifiedCandidateSha"], state["candidateSha"])
-            self.assertEqual(saved["browserVerifiedDeploymentId"], args.deployment_id)
-            self.assertTrue(saved["browserVerifiedAt"])
-            with self.assertRaises(delivery.DeliveryError):
-                delivery.attest_preview_browser(argparse.Namespace(pr=12, deployment_id="dpl_wrong"))
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), saved)
-
 
 class ReleaseUrlPropagation(unittest.TestCase):
     config = {"releasePath": "/release.json", "healthPath": "/api/health"}
@@ -739,91 +659,6 @@ class ReleaseUrlPropagation(unittest.TestCase):
     def test_default_wait_is_bounded(self):
         self.assertLessEqual(delivery.RELEASE_VERIFY_TIMEOUT_SECONDS, 120)
         self.assertGreater(delivery.RELEASE_VERIFY_TIMEOUT_SECONDS, delivery.RELEASE_VERIFY_INTERVAL_SECONDS)
-
-
-class TeardownStagingSha(unittest.TestCase):
-    config = {"stagingUrl": "https://staging.web.parkdex.app", "releasePath": "/release.json", "healthPath": "/api/health"}
-    merged = "a" * 40
-    later = "c" * 40
-    pr = {"state": "MERGED", "mergedAt": "2026-10-08T20:12:05Z", "mergeCommit": {"oid": "a" * 40}}
-
-    def check(self, deployed, *, ancestors=(), staging_verified="1", state=None):
-        state = {"apiPresent": True, "accountsPresent": True} if state is None else state
-        compared = []
-
-        def is_ancestor(ancestor, descendant):
-            compared.append((ancestor, descendant))
-            return (ancestor, descendant) in ancestors
-
-        with patch.dict(os.environ, {"STAGING_VERIFIED": staging_verified}), \
-             patch.object(delivery, "http_json", return_value=(200, {"sha": deployed, "environment": "staging"})), \
-             patch.object(delivery, "git") as git, \
-             patch.object(delivery, "is_ancestor", side_effect=is_ancestor), \
-             patch.object(delivery, "verify_release_url") as verify, \
-             patch.object(delivery, "photo_provider") as provider, \
-             contextlib.redirect_stdout(io.StringIO()):
-            delivery.verify_teardown_condition(self.config, state, self.pr)
-        return state, verify, provider, git, compared
-
-    def contained(self):
-        return {(self.merged, self.later), (self.later, "refs/remotes/origin/staging")}
-
-    def test_exact_merge_sha_still_verifies_without_git(self):
-        state, verify, provider, git, compared = self.check(self.merged)
-        self.assertEqual(verify.call_args.args[2], self.merged)
-        provider.return_value.verify_staging.assert_called_once()
-        self.assertEqual(provider.return_value.verify_staging.call_args.args[2], self.merged)
-        self.assertEqual(state["stagingVerifiedSha"], self.merged)
-        git.assert_not_called()
-        self.assertEqual(compared, [])
-
-    def test_later_staging_release_containing_the_merge_is_accepted(self):
-        state, verify, provider, git, compared = self.check(self.later, ancestors=self.contained())
-        git.assert_called_once_with("fetch", "--no-tags", "origin", "+refs/heads/staging:refs/remotes/origin/staging")
-        self.assertEqual(verify.call_args.args[1:4], (self.config["stagingUrl"], self.later, "staging"))
-        self.assertTrue(verify.call_args.kwargs["api_present"])
-        self.assertEqual(provider.return_value.verify_staging.call_args.args[2], self.later)
-        self.assertEqual(state["stagingVerifiedSha"], self.later)
-        self.assertEqual(state["stagingMergeSha"], self.merged)
-
-    def test_staging_release_without_the_merge_falls_back_to_the_exact_sha(self):
-        state, verify, _, _, _ = self.check(self.later, ancestors={(self.later, "refs/remotes/origin/staging")})
-        self.assertEqual(verify.call_args.args[2], self.merged)
-
-    def test_release_outside_staging_history_falls_back_to_the_exact_sha(self):
-        _, verify, _, _, _ = self.check(self.later, ancestors={(self.merged, self.later)})
-        self.assertEqual(verify.call_args.args[2], self.merged)
-
-    def test_unreachable_staging_falls_back_to_the_exact_sha(self):
-        with patch.dict(os.environ, {"STAGING_VERIFIED": "1"}), \
-             patch.object(delivery, "http_json", side_effect=delivery.DeliveryError("HTTP check could not reach staging.")), \
-             patch.object(delivery, "verify_release_url") as verify, \
-             patch.object(delivery, "photo_provider"):
-            delivery.verify_teardown_condition(self.config, {}, self.pr)
-        self.assertEqual(verify.call_args.args[2], self.merged)
-
-    def test_staging_verified_is_still_required(self):
-        with self.assertRaisesRegex(delivery.DeliveryError, "STAGING_VERIFIED=1"):
-            self.check(self.later, ancestors=self.contained(), staging_verified="")
-
-    def test_photo_check_is_skipped_without_accounts(self):
-        _, _, provider, _, _ = self.check(self.later, ancestors=self.contained(), state={"apiPresent": False})
-        provider.assert_not_called()
-
-    def test_is_ancestor_uses_git_merge_base(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
-                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
-            delivery.run(["git", "-C", directory, "init", "-q"], env=env)
-            delivery.run(["git", "-C", directory, "commit", "-q", "--allow-empty", "-m", "one"], env=env)
-            first = delivery.run(["git", "-C", directory, "rev-parse", "HEAD"], env=env)
-            delivery.run(["git", "-C", directory, "commit", "-q", "--allow-empty", "-m", "two"], env=env)
-            second = delivery.run(["git", "-C", directory, "rev-parse", "HEAD"], env=env)
-            with patch.object(delivery, "ROOT", root), patch.object(delivery, "safe_env", return_value=env):
-                self.assertTrue(delivery.is_ancestor(first, second))
-                self.assertFalse(delivery.is_ancestor(second, first))
-                self.assertFalse(delivery.is_ancestor("d" * 40, second))
 
 
 class MigrationLockRetry(unittest.TestCase):

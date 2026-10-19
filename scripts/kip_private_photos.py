@@ -2,7 +2,7 @@
 
 This module is called by scripts/kip-delivery.py. It keeps Cloudflare management
 credentials local to explicit provider operations and never writes them to a
-preview journal or runtime bundle.
+journal or runtime bundle. Only the persistent staging and production resources are managed.
 """
 from __future__ import annotations
 
@@ -26,12 +26,10 @@ OWNER_SCHEMA = "parkdex-kip.private-photos-owner/v1"
 JOURNAL_SCHEMA = "parkdex-kip.private-photos-journal/v1"
 REPOSITORY = "NathanPannell/parkdex-kip"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 ACCOUNT_RE = re.compile(r"^[0-9a-f]{32}$", re.I)
 NAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$")
 PAGE_SIZE = 1000
 MAX_PAGES = 10000
-MAX_OBJECTS_PER_PURGE = 1_000_000
 
 
 def _error(delivery, message: str):
@@ -81,7 +79,7 @@ def _api_token(delivery) -> tuple[str, bool]:
     return token, direct
 
 
-def _api(delivery, config: dict, path: str, *, method="GET", body=None, query=None, not_found_ok=False, empty_response_ok=False):
+def _api(delivery, config: dict, path: str, *, method="GET", body=None, query=None, not_found_ok=False):
     token, _ = _api_token(delivery)
     try:
         response = delivery.api_json(
@@ -97,8 +95,6 @@ def _api(delivery, config: dict, path: str, *, method="GET", body=None, query=No
         raise
     if response is None and not_found_ok:
         return None
-    if response == {} and empty_response_ok:
-        return {"success": True, "result": {}}
     if not isinstance(response, dict) or response.get("success") is not True:
         _error(delivery, f"Cloudflare API {method} operation did not confirm success.")
     return response
@@ -226,34 +222,6 @@ def _list_namespaces(delivery, config: dict) -> list[dict]:
     _error(delivery, "Cloudflare Durable Object namespace inventory exceeded its pagination safety limit.")
 
 
-def _list_objects(delivery, config: dict, bucket: str, *, prefix: str | None = None) -> list[dict]:
-    rows = []
-    cursor = None
-    seen = set()
-    for _ in range(MAX_PAGES):
-        query = {"per_page": PAGE_SIZE}
-        if prefix is not None:
-            query["prefix"] = prefix
-        if cursor:
-            query["cursor"] = cursor
-        response = _api(delivery, config, _r2_path(delivery, config, bucket, "/objects"), query=query)
-        result = response.get("result")
-        if not isinstance(result, list) or any(not isinstance(item, dict) for item in result):
-            _error(delivery, "Cloudflare R2 object inventory response is incomplete.")
-        rows.extend(result)
-        info = response.get("result_info") or {}
-        next_cursor = info.get("cursor") if info.get("is_truncated") else None
-        if not next_cursor:
-            if info.get("is_truncated") is True:
-                _error(delivery, "Cloudflare R2 object inventory was truncated without a cursor.")
-            return rows
-        if not isinstance(next_cursor, str) or next_cursor in seen:
-            _error(delivery, "Cloudflare R2 object inventory pagination did not advance.")
-        seen.add(next_cursor)
-        cursor = next_cursor
-    _error(delivery, "Cloudflare R2 object inventory exceeded its pagination safety limit.")
-
-
 def _subdomain(delivery, config: dict) -> str:
     account = _account_id(delivery, config)
     response = _api(delivery, config, f"/accounts/{account}/workers/subdomain")
@@ -341,36 +309,21 @@ def _check_worker_settings(
         "KIP_RESOURCE_ID": identity["resourceId"],
         "KIP_PHOTO_BUCKET": identity["bucketName"],
     }
-    if identity["environment"] == "preview":
-        expected.update({
-            "KIP_PULL_REQUEST": str(identity["pullRequest"]),
-            "KIP_HEAD_SHA": identity["headSha"],
-            "KIP_CANDIDATE_SHA": identity["candidateSha"],
-        })
     if release_sha is not None:
         expected["KIP_RELEASE_SHA"] = release_sha
         expected["RELEASE_SHA"] = release_sha
-        if identity["environment"] in ("staging", "production"):
-            expected["KIP_CANDIDATE_SHA"] = release_sha
-    if identity["environment"] in ("staging", "production"):
-        expected["RETENTION_URL"] = identity["retentionUrl"]
+        expected["KIP_CANDIDATE_SHA"] = release_sha
+    expected["RETENTION_URL"] = identity["retentionUrl"]
     for name, value in expected.items():
         binding = bindings.get(name)
         if not binding or _binding_value(binding) != value:
             _error(delivery, f"Private-photo Worker ownership metadata mismatch for {name}.")
     if release_sha is None:
-        provenance_names = ("KIP_RELEASE_SHA", "RELEASE_SHA")
-        if identity["environment"] in ("staging", "production"):
-            provenance_names += ("KIP_CANDIDATE_SHA",)
+        provenance_names = ("KIP_RELEASE_SHA", "RELEASE_SHA", "KIP_CANDIDATE_SHA")
         release_values = [_binding_value(bindings.get(name, {})) for name in provenance_names]
         if any(not isinstance(value, str) or not SHA_RE.fullmatch(value) for value in release_values) or len(set(release_values)) != 1:
             _error(delivery, "Private-photo Worker release provenance is missing or inconsistent.")
-        if identity["environment"] == "preview" and release_values[0] != identity["headSha"]:
-            _error(delivery, "Private-photo preview Worker release provenance does not match its exact PR head.")
-    secret_names = ["PHOTO_SERVICE_TOKEN"]
-    if identity["environment"] in ("staging", "production"):
-        secret_names.append("KIP_RETENTION_SECRET")
-    for name in secret_names:
+    for name in ("PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"):
         secret = bindings.get(name)
         if require_secrets and (not secret or secret.get("type") not in ("secret_text", "secret_text_binding")):
             _error(delivery, f"Private-photo Worker {name} binding is missing or not secret.")
@@ -415,41 +368,6 @@ def _worker_url(delivery, config: dict, worker_name: str) -> str:
     return _service_url(worker_name, _subdomain(delivery, config))
 
 
-def _validate_identity(delivery, config: dict, state: dict) -> dict:
-    if state.get("repository") != REPOSITORY:
-        _error(delivery, "Private-photo preview repository identity is invalid.")
-    release_id = state.get("releaseId", "")
-    pr = state.get("pullRequest")
-    head_sha = state.get("headSha", "")
-    candidate_sha = state.get("candidateSha", "")
-    if not isinstance(release_id, str) or not UUID_RE.fullmatch(release_id):
-        _error(delivery, "Private-photo preview release ID is invalid.")
-    if not isinstance(pr, int) or not 1 <= pr <= 999999:
-        _error(delivery, "Private-photo preview pull request identity is invalid.")
-    if not SHA_RE.fullmatch(head_sha) or not SHA_RE.fullmatch(candidate_sha):
-        _error(delivery, "Private-photo preview commit identity is invalid.")
-    suffix = release_id.replace("-", "")[:12]
-    name = f"parkdex-kip-p{pr}-{suffix}"
-    if not NAME_RE.fullmatch(name):
-        _error(delivery, "Private-photo preview resource name is invalid.")
-    identity = {
-        "environment": "preview",
-        "resourceId": release_id,
-        "releaseId": release_id,
-        "pullRequest": pr,
-        "headSha": head_sha,
-        "candidateSha": candidate_sha,
-        "bucketName": name,
-        "workerName": name,
-    }
-    for container in (state.get("resources", {}), state.get("intent", {}).get("cloudflarePhotos", {})):
-        for key, expected in (("photoBucketName", name), ("photoWorkerName", name), ("bucketName", name), ("workerName", name)):
-            actual = container.get(key)
-            if actual is not None and actual != expected:
-                _error(delivery, "Private-photo preview journal names do not match its release identity.")
-    return identity
-
-
 def _marker(identity: dict) -> dict:
     marker = {
         "schema": OWNER_SCHEMA,
@@ -459,12 +377,6 @@ def _marker(identity: dict) -> dict:
         "bucketName": identity["bucketName"],
         "workerName": identity["workerName"],
     }
-    if identity["environment"] == "preview":
-        marker.update({
-            "pullRequest": identity["pullRequest"],
-            "headSha": identity["headSha"],
-            "candidateSha": identity["candidateSha"],
-        })
     return marker
 
 
@@ -537,49 +449,6 @@ def _check_bucket_owned(delivery, config: dict, identity: dict) -> bool:
     return True
 
 
-def _bucket_cleanup_status(delivery, config: dict, identity: dict, journal: Path, state: dict) -> str:
-    bucket = identity["bucketName"]
-    if bucket not in _bucket_names(delivery, config):
-        return "absent"
-    expected_marker = _marker(identity)
-    marker = _owner_marker(delivery, config, bucket)
-    if marker == expected_marker:
-        _require_private_bucket(delivery, config, bucket)
-        return "owned"
-    if marker is not None:
-        _error(delivery, "Private-photo bucket ownership marker does not match the expected release.")
-
-    steps = state.get("intent", {}).get("cloudflarePhotos", {})
-    purge_step = steps.get("bucketPurge", {})
-    delete_step = steps.get("bucketDelete", {})
-    if (
-        purge_step.get("status") == "objects-empty"
-        and purge_step.get("name") == bucket
-        and purge_step.get("owner") == expected_marker
-        and delete_step.get("name") == bucket
-        and delete_step.get("owner") == expected_marker
-        and delete_step.get("markerDelete") in ("intent", "confirmed")
-    ):
-        _require_private_bucket(delivery, config, bucket)
-        if _list_objects(delivery, config, bucket):
-            _error(delivery, "Private-photo bucket contains objects after its owner marker was removed; preserving it for manual recovery.")
-        return "marker-deleted"
-
-    create_step = steps.get("bucketCreate", {})
-    if (
-        create_step.get("status") == "created"
-        and create_step.get("name") == bucket
-        and create_step.get("owner") == expected_marker
-    ):
-        _require_private_bucket(delivery, config, bucket)
-        _set_step(delivery, journal, state, "bucketMarker", {"status": "intent", "name": bucket, "owner": expected_marker})
-        _put_owner_marker(delivery, config, bucket, expected_marker)
-        _set_step(delivery, journal, state, "bucketMarker", {"status": "stored", "name": bucket, "owner": expected_marker})
-        return "owned"
-
-    _error(delivery, "A same-named R2 bucket has no recoverable ownership marker; preserving it for manual inspection.")
-
-
 def _source_file(delivery, config: dict, source_root: Path) -> Path:
     settings = _settings(delivery, config)
     root = Path(source_root).resolve()
@@ -634,17 +503,9 @@ def _worker_vars(identity: dict, release_sha: str) -> dict[str, str]:
         "KIP_RESOURCE_ID": identity["resourceId"],
         "KIP_PHOTO_BUCKET": identity["bucketName"],
         "KIP_RELEASE_SHA": release_sha,
+        "KIP_CANDIDATE_SHA": release_sha,
+        "RETENTION_URL": identity["retentionUrl"],
     }
-    if identity["environment"] == "preview":
-        variables.update({
-            "KIP_PULL_REQUEST": str(identity["pullRequest"]),
-            "KIP_HEAD_SHA": identity["headSha"],
-            "KIP_CANDIDATE_SHA": identity["candidateSha"],
-        })
-    else:
-        variables["KIP_CANDIDATE_SHA"] = release_sha
-    if identity["environment"] in ("staging", "production"):
-        variables["RETENTION_URL"] = identity["retentionUrl"]
     return variables
 
 
@@ -661,7 +522,7 @@ def _worker_config(config: dict, identity: dict, release_sha: str, *, enable_ret
         "durable_objects": {"bindings": [{"name": "ACCOUNT_PHOTOS", "class_name": "AccountPhotos"}]},
         "migrations": [{"tag": "v1", "new_sqlite_classes": ["AccountPhotos"]}],
     }
-    if identity["environment"] in ("staging", "production") and enable_retention:
+    if enable_retention:
         result["triggers"] = {"crons": [settings["retentionCron"]]}
     return result
 
@@ -730,13 +591,12 @@ def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, re
             release_sha, identity, directory, enable_retention=enable_retention,
         )
         message = f"Parkdex Kip {identity['environment']} {identity['resourceId']} {release_sha}"
-        tag = identity["resourceId"] if identity["environment"] == "preview" else release_sha
         _set_step(delivery, journal, state, "workerDeploy", {
             "status": "intent", "name": identity["workerName"], "bucketName": identity["bucketName"],
             "environment": identity["environment"], "resourceId": identity["resourceId"], "releaseSha": release_sha,
         })
         _wrangler(delivery, config, [
-            "deploy", "--config", str(config_path), "--tag", tag, "--message", message,
+            "deploy", "--config", str(config_path), "--tag", release_sha, "--message", message,
         ], cwd=directory)
         _set_step(delivery, journal, state, "workerDeploy", {
             "status": "deployed", "name": identity["workerName"], "bucketName": identity["bucketName"],
@@ -785,233 +645,6 @@ def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, re
         }
     finally:
         temp.cleanup()
-
-
-def _credentials(delivery, credential_file: Path) -> dict:
-    try:
-        document = json.loads(Path(credential_file).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        _error(delivery, "Private-photo preview credentials could not be read.")
-    token = document.get("photoServiceToken") if isinstance(document, dict) else None
-    if not isinstance(token, str) or len(token) < 32:
-        _error(delivery, "Private-photo preview service token is missing or invalid.")
-    delivery.register_secret(token)
-    return {"PHOTO_SERVICE_TOKEN": token}
-
-
-def create_preview(delivery, config: dict, state: dict, journal: Path, candidate_root: Path, credential_file: Path) -> dict:
-    _settings(delivery, config)
-    validate_candidate(delivery, config, candidate_root)
-    identity = _validate_identity(delivery, config, state)
-    journal = Path(journal)
-    state.setdefault("resources", {})
-    state.setdefault("intent", {})
-    _set_step(delivery, journal, state, "identity", {
-        "status": "prepared", "environment": "preview", "releaseId": identity["releaseId"],
-        "pullRequest": identity["pullRequest"], "headSha": identity["headSha"],
-        "candidateSha": identity["candidateSha"], "workerName": identity["workerName"], "bucketName": identity["bucketName"],
-    })
-    _ensure_bucket(delivery, config, identity, journal, state)
-    result = _deploy_worker(
-        delivery, config, _source_file(delivery, config, candidate_root), identity, identity["headSha"],
-        _credentials(delivery, credential_file), journal, state,
-    )
-    state["status"] = "private-photos-created"
-    _save(delivery, journal, state)
-    return {key: result[key] for key in ("workerName", "bucketName", "photoServiceUrl", "releaseSha")}
-
-
-def _verify_preview(delivery, config: dict, state: dict) -> dict:
-    identity = _validate_identity(delivery, config, state)
-    if not _check_bucket_owned(delivery, config, identity):
-        _error(delivery, "Private-photo preview R2 bucket is missing.")
-    settings = _worker_settings(delivery, config, identity["workerName"])
-    if settings is None:
-        _error(delivery, "Private-photo preview Worker is missing.")
-    binding_info = _check_worker_settings(delivery, settings, identity, identity["headSha"])
-    namespace = _verify_namespace(delivery, config, identity["workerName"], binding_info)
-    url = _worker_url(delivery, config, identity["workerName"])
-    resources = state.get("resources", {})
-    if resources.get("photoServiceUrl") not in (None, url):
-        _error(delivery, "Private-photo preview URL does not match its owned Worker identity.")
-    health = _health(url)
-    if health.get("status") != "ok" or health.get("releaseSha") != identity["headSha"]:
-        _error(delivery, "Private-photo preview health did not report the exact PR head SHA.")
-    return {"identity": identity, "url": url, "namespace": namespace}
-
-
-def verify_preview(delivery, config: dict, state: dict) -> None:
-    verified = _verify_preview(delivery, config, state)
-    state.setdefault("resources", {}).update({
-        "photoWorkerName": verified["identity"]["workerName"],
-        "photoBucketName": verified["identity"]["bucketName"],
-        "photoServiceUrl": verified["url"],
-        "photoReleaseSha": verified["identity"]["headSha"],
-        "photoDoNamespaceId": verified["namespace"]["id"],
-    })
-
-
-def _delete_worker(delivery, config: dict, identity: dict, journal: Path, state: dict) -> None:
-    settings = _worker_settings(delivery, config, identity["workerName"])
-    all_namespaces = _list_namespaces(delivery, config)
-    namespaces = [
-        item for item in all_namespaces
-        if item.get("script") == identity["workerName"] and item.get("class") == "AccountPhotos"
-    ]
-    recorded_id = state.get("resources", {}).get("photoDoNamespaceId")
-    if settings is None:
-        workers = _list_workers(delivery, config)
-        worker_present = any(item.get("id") == identity["workerName"] or item.get("script_name") == identity["workerName"] for item in workers)
-        namespace_present = bool(namespaces) or (recorded_id and any(item.get("id") == recorded_id for item in all_namespaces))
-        if worker_present:
-            _error(delivery, "The private-photo Worker exists but its settings are unavailable; preserving it for manual recovery.")
-        if namespace_present:
-            _error(delivery, "The private-photo Worker is absent while its Durable Object namespace remains; preserving it for manual recovery.")
-        return
-    binding_info = _check_worker_settings(delivery, settings, identity, None, require_secrets=False)
-    if len(namespaces) != 1:
-        _error(delivery, "Owned preview Worker Durable Object namespace inventory is ambiguous; preserving resources for manual recovery.")
-    namespace = namespaces[0]
-    if not namespace.get("id") or namespace.get("use_sqlite") is not True:
-        _error(delivery, "Owned preview Worker Durable Object namespace is incomplete; preserving resources for manual recovery.")
-    bound_id = binding_info.get("namespaceId")
-    if bound_id and namespace.get("id") != bound_id:
-        _error(delivery, "Preview Worker Durable Object settings disagree with its namespace inventory; preserving resources.")
-    if recorded_id and namespace.get("id") != recorded_id:
-        _error(delivery, "Preview Worker Durable Object namespace does not match the journal; preserving resources.")
-    state.setdefault("resources", {})["photoDoNamespaceId"] = namespace["id"]
-    _save(delivery, journal, state)
-    _set_step(delivery, journal, state, "workerDelete", {"status": "intent", "name": identity["workerName"], "force": True})
-    response = _api(
-        delivery,
-        config,
-        _worker_path(delivery, config, identity["workerName"]),
-        method="DELETE",
-        query={"force": "true"},
-        not_found_ok=True,
-        empty_response_ok=True,
-    )
-    if response is not None and response.get("success") is not True:
-        _error(delivery, "Cloudflare did not confirm the owned preview Worker deletion.")
-    workers = _list_workers(delivery, config)
-    remaining_namespaces = _list_namespaces(delivery, config)
-    if any(item.get("id") == identity["workerName"] or item.get("script_name") == identity["workerName"] for item in workers):
-        _error(delivery, "The owned private-photo Worker remains visible after force deletion; keep the journal and retry teardown.")
-    if any(item.get("id") == namespace["id"] for item in remaining_namespaces):
-        _error(delivery, "The owned private-photo Durable Object namespace remains after force deletion; keep the journal and retry teardown.")
-    if any(item.get("script") == identity["workerName"] and item.get("class") == "AccountPhotos" for item in remaining_namespaces):
-        _error(delivery, "The owned private-photo Durable Object namespace remains after force deletion; keep the journal and retry teardown.")
-    _set_step(delivery, journal, state, "workerDelete", {
-        "status": "requested", "name": identity["workerName"], "force": True, "doNamespaceId": namespace["id"],
-    })
-
-
-def _purge_bucket(delivery, config: dict, identity: dict, journal: Path, state: dict) -> None:
-    bucket = identity["bucketName"]
-    cleanup_status = _bucket_cleanup_status(delivery, config, identity, journal, state)
-    if cleanup_status == "absent":
-        return
-    expected_marker = _marker(identity)
-    purge_step = state.get("intent", {}).get("cloudflarePhotos", {}).get("bucketPurge", {})
-    deleted = purge_step.get("deleted", 0) if purge_step.get("name") == bucket else 0
-    if not isinstance(deleted, int) or deleted < 0:
-        deleted = 0
-
-    if cleanup_status == "marker-deleted":
-        if _list_objects(delivery, config, bucket):
-            _error(delivery, "Private-photo bucket contains objects before its journaled final deletion; preserving it for manual recovery.")
-        _set_step(delivery, journal, state, "bucketDelete", {
-            "status": "intent", "name": bucket, "owner": expected_marker,
-            "markerDelete": "confirmed", "objectsDeleted": deleted,
-        })
-        response = _api(delivery, config, _r2_path(delivery, config, bucket, ""), method="DELETE", not_found_ok=True)
-        if response is not None and response.get("success") is not True:
-            _error(delivery, "Cloudflare did not confirm deletion of the owned private-photo preview bucket.")
-        _set_step(delivery, journal, state, "bucketDelete", {
-            "status": "requested", "name": bucket, "owner": expected_marker,
-            "markerDelete": "confirmed", "objectsDeleted": deleted,
-        })
-        return
-
-    _set_step(delivery, journal, state, "bucketPurge", {
-        "status": "intent", "name": bucket, "owner": expected_marker, "deleted": deleted,
-    })
-    for _ in range(MAX_PAGES):
-        objects = _list_objects(delivery, config, bucket)
-        remaining = [item for item in objects if item.get("key") != OWNER_OBJECT]
-        if not remaining:
-            break
-        for item in remaining:
-            key = item.get("key")
-            if not isinstance(key, str) or not key:
-                _error(delivery, "Cloudflare returned an invalid R2 object key during preview purge.")
-            deleted += 1
-            if deleted > MAX_OBJECTS_PER_PURGE:
-                _error(delivery, "Private-photo preview purge exceeded its object safety limit; keep the journal for recovery.")
-            status, _ = _r2_object(delivery, config, bucket, key, method="DELETE")
-            if status not in (200, 204):
-                _error(delivery, "Cloudflare did not confirm an exact private-photo object deletion.")
-        _set_step(delivery, journal, state, "bucketPurge", {
-            "status": "purging", "name": bucket, "owner": expected_marker, "deleted": deleted,
-        })
-    else:
-        _error(delivery, "Private-photo preview purge exceeded its page safety limit; keep the journal for recovery.")
-    remaining = _list_objects(delivery, config, bucket)
-    if any(item.get("key") != OWNER_OBJECT for item in remaining):
-        _error(delivery, "Private-photo preview bucket still contains objects after its purge.")
-    if _owner_marker(delivery, config, bucket) != expected_marker:
-        _error(delivery, "Private-photo bucket owner marker changed before final deletion; preserving it.")
-    _set_step(delivery, journal, state, "bucketPurge", {
-        "status": "objects-empty", "name": bucket, "owner": expected_marker, "deleted": deleted,
-    })
-    _set_step(delivery, journal, state, "bucketDelete", {
-        "status": "intent", "name": bucket, "owner": expected_marker,
-        "markerDelete": "intent", "objectsDeleted": deleted,
-    })
-    marker_status, _ = _r2_object(delivery, config, bucket, OWNER_OBJECT, method="DELETE")
-    if marker_status not in (200, 204):
-        _error(delivery, "Cloudflare did not confirm the final private-photo ownership marker deletion.")
-    _set_step(delivery, journal, state, "bucketDelete", {
-        "status": "marker-deleted", "name": bucket, "owner": expected_marker,
-        "markerDelete": "confirmed", "objectsDeleted": deleted,
-    })
-    if _list_objects(delivery, config, bucket):
-        _error(delivery, "Private-photo bucket is not empty after its final owner marker deletion.")
-    response = _api(delivery, config, _r2_path(delivery, config, bucket, ""), method="DELETE", not_found_ok=True)
-    if response is not None and response.get("success") is not True:
-        _error(delivery, "Cloudflare did not confirm deletion of the owned private-photo preview bucket.")
-    _set_step(delivery, journal, state, "bucketDelete", {
-        "status": "requested", "name": bucket, "owner": expected_marker,
-        "markerDelete": "confirmed", "objectsDeleted": deleted,
-    })
-
-
-def delete_preview(delivery, config: dict, state: dict, journal: Path) -> None:
-    identity = _validate_identity(delivery, config, state)
-    journal = Path(journal)
-    state.setdefault("resources", {})
-    state.setdefault("intent", {})
-    _set_step(delivery, journal, state, "cleanup", {"status": "started", "workerName": identity["workerName"], "bucketName": identity["bucketName"]})
-    _delete_worker(delivery, config, identity, journal, state)
-    _purge_bucket(delivery, config, identity, journal, state)
-    state["status"] = "private-photos-cleanup-requested"
-    _save(delivery, journal, state)
-    if not absence(delivery, config, state):
-        _error(delivery, "Owned private-photo resources remain visible after deletion; keep the journal and retry teardown.")
-
-
-def absence(delivery, config: dict, state: dict) -> bool:
-    identity = _validate_identity(delivery, config, state)
-    workers = _list_workers(delivery, config)
-    if any(item.get("id") == identity["workerName"] or item.get("script_name") == identity["workerName"] for item in workers):
-        return False
-    namespaces = _list_namespaces(delivery, config)
-    if any(item.get("script") == identity["workerName"] for item in namespaces):
-        return False
-    recorded_id = state.get("resources", {}).get("photoDoNamespaceId")
-    if recorded_id and any(item.get("id") == recorded_id for item in namespaces):
-        return False
-    return identity["bucketName"] not in _bucket_names(delivery, config)
 
 
 def _persistent_identity(config: dict, environment: str, release_sha: str | None = None) -> dict:
@@ -1070,9 +703,8 @@ def _verify_production_resources(delivery, config: dict, expected_sha: str | Non
 
 
 def _runtime_photo_secrets(delivery, bundle: dict, *, environment: str) -> dict[str, str]:
-    names = ["KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"] if environment in ("staging", "production") else ["KIP_PHOTO_SERVICE_TOKEN"]
     secrets = {}
-    for name in names:
+    for name in ("KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET"):
         value = bundle.get(name)
         if not isinstance(value, str) or len(value) < 32:
             _error(delivery, f"{name} must be configured with at least 32 random characters.")
