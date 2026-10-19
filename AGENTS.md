@@ -134,3 +134,4 @@ Read the matching file before you change these areas. Format and how to add one:
 | SQL QA scripts and their pools | `docs/learnings/sql-qa-pool-teardown.md` |
 | Merging several PRs into staging | `docs/learnings/staging-merge-sequence.md` |
 | Outbound calls from the operator dashboard | `docs/learnings/operator-edge-fetch.md` |
+| Vercel project deleted or renamed | `docs/learnings/vercel-project-recovery.md` |
