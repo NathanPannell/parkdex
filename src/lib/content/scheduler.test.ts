@@ -16,13 +16,7 @@ async function flushMicrotasks() {
   for (let i = 0; i < 8; i += 1) await Promise.resolve();
 }
 
-function request(
-  key: string,
-  path: string,
-  purpose: DownloadPurpose,
-  priority: number,
-  run: ScheduledDownload["run"],
-): ScheduledDownload {
+function request(key: string, path: string, purpose: DownloadPurpose, priority: number, run: ScheduledDownload["run"]): ScheduledDownload {
   return { key, path, purpose, priority, run };
 }
 
@@ -72,18 +66,36 @@ describe("ContentDownloadScheduler policy transitions", () => {
     const queuedGate = deferred();
     const firstWaiter = scheduler.enqueue(request("shared-hash", "map/island/001.bin", "bulk", 5, bulkRun));
     let firstResult = "pending";
-    void firstWaiter.then(() => { firstResult = "resolved"; }, () => { firstResult = "rejected"; });
+    void firstWaiter.then(
+      () => {
+        firstResult = "resolved";
+      },
+      () => {
+        firstResult = "rejected";
+      },
+    );
     const dedupedWaiter = scheduler.enqueue(request("shared-hash", "map/island/001.bin", "bulk", 1, bulkRun));
     let dedupedResult = "pending";
-    void dedupedWaiter.then(() => { dedupedResult = "resolved"; }, () => { dedupedResult = "rejected"; });
-    const nearby = scheduler.enqueue(request("nearby", "art/nearby.webp", "nearby", 3, () => {
-      starts.push("nearby");
-      return nearbyGate.promise;
-    }));
-    const queued = scheduler.enqueue(request("queued", "art/queued.webp", "nearby", 2, () => {
-      starts.push("queued");
-      return queuedGate.promise;
-    }));
+    void dedupedWaiter.then(
+      () => {
+        dedupedResult = "resolved";
+      },
+      () => {
+        dedupedResult = "rejected";
+      },
+    );
+    const nearby = scheduler.enqueue(
+      request("nearby", "art/nearby.webp", "nearby", 3, () => {
+        starts.push("nearby");
+        return nearbyGate.promise;
+      }),
+    );
+    const queued = scheduler.enqueue(
+      request("queued", "art/queued.webp", "nearby", 2, () => {
+        starts.push("queued");
+        return queuedGate.promise;
+      }),
+    );
     void nearby;
     void queued;
 
@@ -134,7 +146,14 @@ describe("ContentDownloadScheduler policy transitions", () => {
     };
     const pending = scheduler.enqueue(request("map-chunk", "map/island/001.bin", "update", 0, run));
     let result = "pending";
-    void pending.then(() => { result = "resolved"; }, () => { result = "rejected"; });
+    void pending.then(
+      () => {
+        result = "resolved";
+      },
+      () => {
+        result = "rejected";
+      },
+    );
     await flushMicrotasks();
     expect(attempts).toHaveLength(1);
 

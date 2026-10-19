@@ -4,6 +4,7 @@
 The extract test needs pyosmium and is skipped without it (CI does not install it). The
 PostgreSQL tests need OSM_PARKS_TEST_DATABASE_URL pointing at a loopback kip_qa_* database.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -29,30 +30,64 @@ def square(west: float, south: float, east: float, north: float) -> list[list[fl
     return [[west, south], [east, south], [east, north], [west, north], [west, south]]
 
 
-PATERSON = {"type": "way", "id": 23938892, "kind": "leisure=park", "tags": {"name": "Paterson Park", "leisure": "park"},
-            "geometry": {"type": "Polygon", "coordinates": [square(-123.062, 49.088, -123.058, 49.090)]}}
-WATERSHED = {"type": "relation", "id": 200, "kind": "leisure=nature_reserve", "tags": {"name": "Watershed Park", "leisure": "nature_reserve"},
-             "geometry": {"type": "MultiPolygon", "coordinates": [[square(-122.9, 49.11, -122.88, 49.118), square(-122.895, 49.112, -122.89, 49.115)]]}}
-UNNAMED = {"type": "way", "id": 400, "kind": "landuse=recreation_ground", "tags": {"landuse": "recreation_ground"},
-           "geometry": {"type": "Polygon", "coordinates": [square(-123.07, 49.096, -123.068, 49.097)]}}
+PATERSON = {
+    "type": "way",
+    "id": 23938892,
+    "kind": "leisure=park",
+    "tags": {"name": "Paterson Park", "leisure": "park"},
+    "geometry": {"type": "Polygon", "coordinates": [square(-123.062, 49.088, -123.058, 49.090)]},
+}
+WATERSHED = {
+    "type": "relation",
+    "id": 200,
+    "kind": "leisure=nature_reserve",
+    "tags": {"name": "Watershed Park", "leisure": "nature_reserve"},
+    "geometry": {"type": "MultiPolygon", "coordinates": [[square(-122.9, 49.11, -122.88, 49.118), square(-122.895, 49.112, -122.89, 49.115)]]},
+}
+UNNAMED = {
+    "type": "way",
+    "id": 400,
+    "kind": "landuse=recreation_ground",
+    "tags": {"landuse": "recreation_ground"},
+    "geometry": {"type": "Polygon", "coordinates": [square(-123.07, 49.096, -123.068, 49.097)]},
+}
 # Nova Scotia: Point Pleasant Park and the Public Gardens in Halifax.
-POINT_PLEASANT = {"type": "way", "id": 4593271, "kind": "leisure=park", "tags": {"name": "Point Pleasant Park", "leisure": "park"},
-                  "geometry": {"type": "Polygon", "coordinates": [square(-63.575, 44.617, -63.562, 44.628)]}}
-PUBLIC_GARDENS = {"type": "way", "id": 23180040, "kind": "leisure=garden", "tags": {"name": "Halifax Public Gardens", "leisure": "garden"},
-                  "geometry": {"type": "Polygon", "coordinates": [square(-63.5835, 44.6418, -63.58, 44.6436)]}}
+POINT_PLEASANT = {
+    "type": "way",
+    "id": 4593271,
+    "kind": "leisure=park",
+    "tags": {"name": "Point Pleasant Park", "leisure": "park"},
+    "geometry": {"type": "Polygon", "coordinates": [square(-63.575, 44.617, -63.562, 44.628)]},
+}
+PUBLIC_GARDENS = {
+    "type": "way",
+    "id": 23180040,
+    "kind": "leisure=garden",
+    "tags": {"name": "Halifax Public Gardens", "leisure": "garden"},
+    "geometry": {"type": "Polygon", "coordinates": [square(-63.5835, 44.6418, -63.58, 44.6436)]},
+}
 SOURCE_NAMES = {"bc": "british-columbia-latest.osm.pbf", "nova-scotia": "nova-scotia-latest.osm.pbf"}
 
 
-def write_slim(directory: Path, records: list[dict], source_date: str = "2026-10-07T20:20:00Z", name: str = "parks.geojsonl",
-               source_id: str = "bc") -> Path:
+def write_slim(directory: Path, records: list[dict], source_date: str = "2026-10-07T20:20:00Z", name: str = "parks.geojsonl", source_id: str = "bc") -> Path:
     path = directory / name
     body = "".join(json.dumps(record) + "\n" for record in records).encode("utf-8")
     path.write_bytes(body)
     rows, sha, size = index.read_slim(path)
-    index.manifest_path(path).write_text(json.dumps({
-        "schema": index.MANIFEST_SCHEMA, "sourceId": source_id, "sourceName": SOURCE_NAMES.get(source_id, f"{source_id}-latest.osm.pbf"),
-        "sourceDate": source_date, "sha256": sha, "bytes": size, "rows": len(rows),
-    }), encoding="utf-8")
+    index.manifest_path(path).write_text(
+        json.dumps(
+            {
+                "schema": index.MANIFEST_SCHEMA,
+                "sourceId": source_id,
+                "sourceName": SOURCE_NAMES.get(source_id, f"{source_id}-latest.osm.pbf"),
+                "sourceDate": source_date,
+                "sha256": sha,
+                "bytes": size,
+                "rows": len(rows),
+            }
+        ),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -95,7 +130,9 @@ class SlimFileTests(unittest.TestCase):
         cases = {
             "repeats": [PATERSON, PATERSON],
             "private": [{**PATERSON, "tags": {**PATERSON["tags"], "access": "private"}}],
-            "not closed": [{**PATERSON, "geometry": {"type": "Polygon", "coordinates": [[[-123.06, 49.08], [-123.05, 49.08], [-123.05, 49.09], [-123.06, 49.09]]]}}],
+            "not closed": [
+                {**PATERSON, "geometry": {"type": "Polygon", "coordinates": [[[-123.06, 49.08], [-123.05, 49.08], [-123.05, 49.09], [-123.06, 49.09]]]}}
+            ],
             "kind does not match": [{**PATERSON, "kind": "leisure=garden"}],
             "point": [{**PATERSON, "geometry": {"type": "Point", "coordinates": [-123.06, 49.08]}}],
             "node": [{**PATERSON, "type": "node"}],
@@ -160,8 +197,16 @@ class PlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             slim = write_slim(Path(tmp), [PATERSON])
             rows, sha, size = index.read_slim(slim)
-            target = {"host": "127.0.0.1", "port": 5432, "database": "kip_qa_x", "environment": "local-qa", "declaredHost": "127.0.0.1",
-                      "sourceId": "bc", "current": None, "otherSources": []}
+            target = {
+                "host": "127.0.0.1",
+                "port": 5432,
+                "database": "kip_qa_x",
+                "environment": "local-qa",
+                "declaredHost": "127.0.0.1",
+                "sourceId": "bc",
+                "current": None,
+                "otherSources": [],
+            }
             plan = index.build_plan(slim, rows, sha, size, index.read_manifest(slim, sha), target)
             self.assertEqual(plan["action"], "replace")
             self.assertEqual((plan["source"]["id"], plan["source"]["sharedWithOtherSources"]), ("bc", {}))
@@ -221,6 +266,7 @@ class PostgresTests(unittest.TestCase):
         if parts.hostname not in ("127.0.0.1", "localhost", "::1") or not parts.path.lstrip("/").startswith("kip_qa_"):
             raise RuntimeError("OSM_PARKS_TEST_DATABASE_URL must point to a loopback kip_qa_ database")
         import psycopg
+
         first, second = (path.read_text(encoding="utf-8") for path in MIGRATIONS)
         with psycopg.connect(TEST_URL, autocommit=True) as conn:
             conn.execute("DROP SCHEMA IF EXISTS kip_osm CASCADE")
@@ -230,7 +276,10 @@ class PostgresTests(unittest.TestCase):
                 "INSERT INTO kip_osm.parks (osm_type, osm_id, name, kind, min_lat, max_lat, min_lng, max_lng, area_m2, geometry, source_date) "
                 "VALUES ('way', 1, 'Old Park', 'leisure=park', 49, 49.1, -123.1, -123, 10, '{\"type\":\"MultiPolygon\",\"coordinates\":[]}', now())"
             )
-            conn.execute("INSERT INTO kip_osm.source (source_date, source_sha256, source_name, row_count) VALUES (now(), %s, 'british-columbia-latest.osm.pbf', 1)", ("a" * 64,))
+            conn.execute(
+                "INSERT INTO kip_osm.source (source_date, source_sha256, source_name, row_count) VALUES (now(), %s, 'british-columbia-latest.osm.pbf', 1)",
+                ("a" * 64,),
+            )
             # Every deploy replays the whole inventory, so 002 runs twice and 001 runs again after it.
             for sql in (second, second, first, second):
                 with conn.transaction():
@@ -244,6 +293,7 @@ class PostgresTests(unittest.TestCase):
 
     def setUp(self):
         import psycopg
+
         with psycopg.connect(TEST_URL, autocommit=True) as conn:
             conn.execute("DELETE FROM kip_osm.parks")
             conn.execute("DELETE FROM kip_osm.source")
@@ -255,14 +305,26 @@ class PostgresTests(unittest.TestCase):
         return code, (json.loads(out.getvalue()) if code == 0 else {"error": err.getvalue()})
 
     def plan(self, slim: Path, tmp: Path, source_id: str = "bc", out: str = "plan.json") -> dict:
-        code, result = self.run_cli("plan", "--source", str(slim), "--source-id", source_id, "--target-host", "127.0.0.1",
-                                    "--target-environment", "local-qa", "--out", str(tmp / out))
+        code, result = self.run_cli(
+            "plan", "--source", str(slim), "--source-id", source_id, "--target-host", "127.0.0.1", "--target-environment", "local-qa", "--out", str(tmp / out)
+        )
         self.assertEqual(code, 0, result)
         return result
 
     def apply(self, tmp: Path, sha: str, source_id: str = "bc", out: str = "plan.json") -> tuple[int, dict]:
-        return self.run_cli("apply", "--plan", str(tmp / out), "--reviewed-plan-sha", sha, "--source-id", source_id,
-                            "--expected-target-host", "127.0.0.1", "--target-environment", "local-qa")
+        return self.run_cli(
+            "apply",
+            "--plan",
+            str(tmp / out),
+            "--reviewed-plan-sha",
+            sha,
+            "--source-id",
+            source_id,
+            "--expected-target-host",
+            "127.0.0.1",
+            "--target-environment",
+            "local-qa",
+        )
 
     def load(self, slim: Path, tmp: Path, source_id: str) -> dict:
         plan = self.plan(slim, tmp, source_id)
@@ -273,9 +335,13 @@ class PostgresTests(unittest.TestCase):
 
     def source_state(self) -> dict:
         import psycopg
+
         with psycopg.connect(TEST_URL) as conn:
             counts = dict(conn.execute("SELECT source_id, count(*) FROM kip_osm.parks GROUP BY 1").fetchall())
-            sources = {row[0]: (index.iso(row[1]), row[2], row[3]) for row in conn.execute("SELECT source_id, source_date, source_sha256, row_count FROM kip_osm.source")}
+            sources = {
+                row[0]: (index.iso(row[1]), row[2], row[3])
+                for row in conn.execute("SELECT source_id, source_date, source_sha256, row_count FROM kip_osm.source")
+            }
         return {"counts": counts, "sources": sources}
 
     def test_the_migration_backfills_bc_and_replays(self):
@@ -287,6 +353,7 @@ class PostgresTests(unittest.TestCase):
 
     def test_load_replace_noop_and_refusals(self):
         import psycopg
+
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)
             first = write_slim(tmp, [PATERSON, WATERSHED])
@@ -297,8 +364,10 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(result["result"], "replaced")
             self.assertEqual(result["rows"], 2)
             with psycopg.connect(TEST_URL) as conn:
-                row = conn.execute("SELECT name, kind, min_lat, max_lng, geometry->>'type', jsonb_array_length(geometry->'coordinates'->0), source_date, source_id "
-                                   "FROM kip_osm.parks WHERE osm_type = 'relation' AND osm_id = 200").fetchone()
+                row = conn.execute(
+                    "SELECT name, kind, min_lat, max_lng, geometry->>'type', jsonb_array_length(geometry->'coordinates'->0), source_date, source_id "
+                    "FROM kip_osm.parks WHERE osm_type = 'relation' AND osm_id = 200"
+                ).fetchone()
                 self.assertEqual(row[:6], ("Watershed Park", "leisure=nature_reserve", 49.11, -122.88, "MultiPolygon", 2))
                 self.assertEqual((index.iso(row[6]), row[7]), ("2026-10-07T20:20:00Z", "bc"))
 
@@ -330,8 +399,19 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(code, 1)
 
             # The host in the plan must be the host connected to.
-            code, wrong = self.run_cli("plan", "--source", str(older), "--source-id", "bc", "--target-host", "db.example.test",
-                                       "--target-environment", "local-qa", "--out", str(tmp / "x.json"))
+            code, wrong = self.run_cli(
+                "plan",
+                "--source",
+                str(older),
+                "--source-id",
+                "bc",
+                "--target-host",
+                "db.example.test",
+                "--target-environment",
+                "local-qa",
+                "--out",
+                str(tmp / "x.json"),
+            )
             self.assertEqual(code, 1)
             self.assertIn("does not match", wrong["error"])
 
@@ -371,6 +451,7 @@ class PostgresTests(unittest.TestCase):
 
     def test_an_outline_another_source_holds_stays_with_it(self):
         import psycopg
+
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)
             self.load(write_slim(tmp, [PATERSON, WATERSHED], name="bc.geojsonl"), tmp, "bc")
@@ -387,7 +468,9 @@ class PostgresTests(unittest.TestCase):
             self.assertEqual(after["sources"]["bc"], before["sources"]["bc"])
             self.assertEqual(after["sources"]["nova-scotia"][2], 1)
             with psycopg.connect(TEST_URL) as conn:
-                self.assertEqual(conn.execute("SELECT source_id FROM kip_osm.parks WHERE osm_type = 'way' AND osm_id = %s", (PATERSON["id"],)).fetchone()[0], "bc")
+                self.assertEqual(
+                    conn.execute("SELECT source_id FROM kip_osm.parks WHERE osm_type = 'way' AND osm_id = %s", (PATERSON["id"],)).fetchone()[0], "bc"
+                )
 
             code, status = self.run_cli("status", "--target-host", "127.0.0.1")
             self.assertEqual(code, 0, status)
@@ -398,8 +481,19 @@ class PostgresTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)
             ns = write_slim(tmp, [POINT_PLEASANT], name="ns.geojsonl", source_id="nova-scotia")
-            code, refused = self.run_cli("plan", "--source", str(ns), "--source-id", "bc", "--target-host", "127.0.0.1",
-                                         "--target-environment", "local-qa", "--out", str(tmp / "plan.json"))
+            code, refused = self.run_cli(
+                "plan",
+                "--source",
+                str(ns),
+                "--source-id",
+                "bc",
+                "--target-host",
+                "127.0.0.1",
+                "--target-environment",
+                "local-qa",
+                "--out",
+                str(tmp / "plan.json"),
+            )
             self.assertEqual(code, 1)
             self.assertIn("not 'bc'", refused["error"])
             plan = self.plan(ns, tmp, "nova-scotia")

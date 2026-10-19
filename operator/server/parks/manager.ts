@@ -163,7 +163,8 @@ function hiddenOf(row: Record<string, unknown>): HiddenState | null {
 
 /** Grows a map view so pins just outside it still bring their outlines. */
 export function grow(bbox: Bbox, factor = 0.5): Bbox {
-  const dx = (bbox.east - bbox.west) * factor, dy = (bbox.north - bbox.south) * factor;
+  const dx = (bbox.east - bbox.west) * factor,
+    dy = (bbox.north - bbox.south) * factor;
   return { west: bbox.west - dx, south: bbox.south - dy, east: bbox.east + dx, north: bbox.north + dy };
 }
 
@@ -215,11 +216,7 @@ export function deleteGuards(id: string) {
 
 /** The draft, the park (cascading to its content rows and founder) and the revision it produced. */
 export function deleteRows(id: string) {
-  return [
-    { text: "DELETE FROM kip_park_drafts.drafts WHERE id = $1", params: [id] },
-    { text: "DELETE FROM public.parks WHERE id = $1", params: [id] },
-    clock,
-  ];
+  return [{ text: "DELETE FROM kip_park_drafts.drafts WHERE id = $1", params: [id] }, { text: "DELETE FROM public.parks WHERE id = $1", params: [id] }, clock];
 }
 
 /** Turns a guard raised in a transaction into the error the operator sees. */
@@ -228,7 +225,8 @@ export function transactionError(error: unknown): HttpError {
   if (/park_missing/.test(message)) return NOT_FOUND();
   if (/already_hidden/.test(message)) return new HttpError(409, "already_hidden", "This park is already hidden. Reload to see its current state.");
   if (/not_hidden/.test(message)) return new HttpError(409, "not_hidden", "This park is not hidden. Reload to see its current state.");
-  if (/park_in_enrichment/.test(message)) return new HttpError(409, "park_in_enrichment", "This park is in the art enrichment queue, so it cannot be deleted. Hide it instead.");
+  if (/park_in_enrichment/.test(message))
+    return new HttpError(409, "park_in_enrichment", "This park is in the art enrichment queue, so it cannot be deleted. Hide it instead.");
   const code = (error as { code?: unknown })?.code;
   return new HttpError(422, "save_failed", `The change was rolled back by a content check${typeof code === "string" ? ` (${code})` : ""}.`);
 }
@@ -259,22 +257,39 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
            ORDER BY p.name, p.id`,
         ),
         optional(db.query("SELECT id FROM kip_park_drafts.drafts WHERE status = 'published' AND source ? 'proposal'"), []),
-        optional(db.query(
-          `SELECT f.park_id, pl.handle, f.founded_at, f.photo_sha256
+        optional(
+          db.query(
+            `SELECT f.park_id, pl.handle, f.founded_at, f.photo_sha256
            FROM kip_founders.parks f LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id`,
-        ), []),
+          ),
+          [],
+        ),
         optional(db.query("SELECT park_id, count(*)::integer AS visits FROM kip_game.visits GROUP BY park_id"), []),
       ]);
       const proposed = new Set(proposals.map((row) => String(row.id)));
-      const founderOf = new Map(founders.map((row) => [String(row.park_id), {
-        handle: row.handle === null || row.handle === undefined ? null : String(row.handle), foundedAt: iso(row.founded_at), photoSha256: String(row.photo_sha256),
-      }]));
+      const founderOf = new Map(
+        founders.map((row) => [
+          String(row.park_id),
+          {
+            handle: row.handle === null || row.handle === undefined ? null : String(row.handle),
+            foundedAt: iso(row.founded_at),
+            photoSha256: String(row.photo_sha256),
+          },
+        ]),
+      );
       const visitsOf = new Map(visits.map((row) => [String(row.park_id), Number(row.visits)]));
       return parks.map((row) => {
         const id = String(row.id);
         return {
-          id, name: String(row.name), short: String(row.short), category: String(row.category), region: String(row.region),
-          lat: Number(row.lat), lng: Number(row.lng), biome: String(row.biome), rarity: String(row.rarity),
+          id,
+          name: String(row.name),
+          short: String(row.short),
+          category: String(row.category),
+          region: String(row.region),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
+          biome: String(row.biome),
+          rarity: String(row.rarity),
           source: sourceOf(id, row.legacy === true, proposed.has(id)),
           hidden: hiddenOf(row),
           founder: founderOf.get(id) ?? null,
@@ -290,18 +305,22 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
            FROM public.parks p LEFT JOIN public.content_park_hidden h ON h.park_id = p.id`,
         ),
         optional(db.query("SELECT count(*)::integer AS count FROM kip_founders.parks"), [{ count: 0 }]),
-        optional(db.query(
-          // One pass over the OSM table; each outline looks for its own osm-* id and any catalogue pin in its box.
-          `SELECT count(*)::integer AS outlines,
+        optional(
+          db.query(
+            // One pass over the OSM table; each outline looks for its own osm-* id and any catalogue pin in its box.
+            `SELECT count(*)::integer AS outlines,
              count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM public.parks p WHERE p.id = 'osm-' || o.osm_type || '-' || o.osm_id)
                AND NOT EXISTS (SELECT 1 FROM public.parks p WHERE p.lat BETWEEN o.min_lat AND o.max_lat AND p.lng BETWEEN o.min_lng AND o.max_lng)
              )::integer AS missing,
              -- One row per extract (bc, nova-scotia, ...); the oldest says how stale the outlines can be.
              (SELECT min(source_date) FROM kip_osm.source) AS source_date
            FROM kip_osm.parks o`,
-        ), [{ outlines: 0, missing: 0, source_date: null }]),
+          ),
+          [{ outlines: 0, missing: 0, source_date: null }],
+        ),
       ]);
-      const total = Number(parks[0]?.total ?? 0), hidden = Number(parks[0]?.hidden ?? 0);
+      const total = Number(parks[0]?.total ?? 0),
+        hidden = Number(parks[0]?.hidden ?? 0);
       return {
         live: total - hidden,
         hidden,
@@ -323,7 +342,12 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
          ORDER BY p.id LIMIT ${OUTLINE_LIMIT}`,
         [box.south, box.north, box.west, box.east],
       );
-      return rows.map((row) => ({ id: String(row.id), category: String(row.category), hidden: row.hidden === true, geometry: jsonValue<MultiPolygon>(row.geometry) }));
+      return rows.map((row) => ({
+        id: String(row.id),
+        category: String(row.category),
+        hidden: row.hidden === true,
+        geometry: jsonValue<MultiPolygon>(row.geometry),
+      }));
     },
 
     async activity(id, now) {
@@ -335,26 +359,35 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
         ),
         db.query("SELECT 1 FROM public.content_park_reader_floor WHERE park_id = $1 AND minimum_reader >= 3", [id]),
         optional(db.query("SELECT 1 FROM kip_park_drafts.drafts WHERE id = $1 AND source ? 'proposal'", [id]), []),
-        optional(db.query(
-          `SELECT pl.handle, f.founded_at, f.source, f.photo_sha256, f.photo_width, f.photo_height, octet_length(f.photo_bytes) AS photo_bytes
+        optional(
+          db.query(
+            `SELECT pl.handle, f.founded_at, f.source, f.photo_sha256, f.photo_width, f.photo_height, octet_length(f.photo_bytes) AS photo_bytes
            FROM kip_founders.parks f LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id WHERE f.park_id = $1`,
-          [id],
-        ), []),
-        optional(db.query(
-          `SELECT count(*)::integer AS total,
+            [id],
+          ),
+          [],
+        ),
+        optional(
+          db.query(
+            `SELECT count(*)::integer AS total,
              count(*) FILTER (WHERE visited_at > $2::timestamptz - interval '30 days')::integer AS last30,
              count(DISTINCT account_id)::integer AS players,
              (SELECT count(*)::integer FROM kip_game.tenures WHERE park_id = $1) AS tenures
            FROM kip_game.visits WHERE park_id = $1`,
-          [id, now],
-        ), []),
-        optional(db.query(
-          `SELECT pl.handle, t.started_at, t.last_visit_at, kip_game.fall_at(t.last_visit_at) AS falls_at,
+            [id, now],
+          ),
+          [],
+        ),
+        optional(
+          db.query(
+            `SELECT pl.handle, t.started_at, t.last_visit_at, kip_game.fall_at(t.last_visit_at) AS falls_at,
              kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz) AS up
            FROM kip_game.tenures t LEFT JOIN kip_game.players pl ON pl.account_id = t.holder_account_id
            WHERE t.park_id = $1 AND t.ended_at IS NULL`,
-          [id, now],
-        ), []),
+            [id, now],
+          ),
+          [],
+        ),
         db.query(
           `SELECT c.revision, b.created_at, c.entity, c.operation, CASE WHEN c.entity = 'park' THEN c.value END AS value
            FROM public.content_changes c JOIN public.content_change_batches b ON b.revision = c.revision
@@ -365,23 +398,40 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
       ]);
       const park = parks[0];
       if (!park) return null;
-      const f = founder[0], v = visits[0], t = flag[0];
+      const f = founder[0],
+        v = visits[0],
+        t = flag[0];
       return {
         source: sourceOf(id, floor.length > 0, proposal.length > 0),
         hidden: hiddenOf(park),
-        founder: f ? {
-          handle: f.handle === null || f.handle === undefined ? null : String(f.handle), foundedAt: iso(f.founded_at), source: String(f.source),
-          photoSha256: String(f.photo_sha256), photoWidth: Number(f.photo_width), photoHeight: Number(f.photo_height), photoBytes: Number(f.photo_bytes),
-        } : null,
+        founder: f
+          ? {
+              handle: f.handle === null || f.handle === undefined ? null : String(f.handle),
+              foundedAt: iso(f.founded_at),
+              source: String(f.source),
+              photoSha256: String(f.photo_sha256),
+              photoWidth: Number(f.photo_width),
+              photoHeight: Number(f.photo_height),
+              photoBytes: Number(f.photo_bytes),
+            }
+          : null,
         visits: { total: Number(v?.total ?? 0), last30Days: Number(v?.last30 ?? 0), uniquePlayers: Number(v?.players ?? 0) },
-        flag: t ? {
-          handle: t.handle === null || t.handle === undefined ? null : String(t.handle),
-          since: iso(t.started_at), lastVisitAt: iso(t.last_visit_at), fallsAt: iso(t.falls_at), up: t.up === true,
-        } : null,
+        flag: t
+          ? {
+              handle: t.handle === null || t.handle === undefined ? null : String(t.handle),
+              since: iso(t.started_at),
+              lastVisitAt: iso(t.last_visit_at),
+              fallsAt: iso(t.falls_at),
+              up: t.up === true,
+            }
+          : null,
         tenures: Number(v?.tenures ?? 0),
         history: history.map((row) => ({
-          revision: Number(row.revision), at: iso(row.created_at), entity: String(row.entity) as ChangeRow["entity"],
-          operation: row.operation === "delete" ? "delete" : "upsert", value: row.value ? jsonValue<Record<string, unknown>>(row.value) : null,
+          revision: Number(row.revision),
+          at: iso(row.created_at),
+          entity: String(row.entity) as ChangeRow["entity"],
+          operation: row.operation === "delete" ? "delete" : "upsert",
+          value: row.value ? jsonValue<Record<string, unknown>>(row.value) : null,
         })),
       };
     },
@@ -396,12 +446,15 @@ export function createSqlParkManagerStore(db: SqlRunner): ParkManagerStore {
     },
 
     async replaceCover(id, photo, at) {
-      const rows = await optional(db.query(
-        `UPDATE kip_founders.parks SET photo_bytes = decode($2, 'base64'), photo_sha256 = $3, photo_width = $4, photo_height = $5,
+      const rows = await optional(
+        db.query(
+          `UPDATE kip_founders.parks SET photo_bytes = decode($2, 'base64'), photo_sha256 = $3, photo_width = $4, photo_height = $5,
            moderation = moderation || jsonb_build_object('operatorCoverReplacedAt', $6::text)
          WHERE park_id = $1 RETURNING park_id`,
-        [id, photo.base64, photo.sha256, photo.width, photo.height, at],
-      ), []);
+          [id, photo.base64, photo.sha256, photo.width, photo.height, at],
+        ),
+        [],
+      );
       if (!rows.length) throw new HttpError(404, "no_founder", "This park has no founder, so it has no cover to replace.");
     },
 

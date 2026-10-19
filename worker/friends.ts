@@ -53,7 +53,7 @@ function requireMethod(request: Request, method: string): void {
 const handleRequired = () => new HttpError(409, "handle_required", "Choose a handle before adding friends.");
 
 export function validateAddFriendBody(body: unknown): string {
-  const value = typeof body === "object" && body !== null && !Array.isArray(body) ? body as Record<string, unknown> : null;
+  const value = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   if (!value || Object.keys(value).length !== 1 || typeof value.code !== "string") {
     throw new HttpError(400, "invalid_request", "Invalid request.");
   }

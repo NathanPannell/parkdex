@@ -21,8 +21,13 @@ import {
   type ReviewInput,
 } from "./proposalReview.ts";
 
-const square = (lng: number, lat: number, size: number): [number, number][] =>
-  [[lng, lat], [lng + size, lat], [lng + size, lat + size], [lng, lat + size], [lng, lat]];
+const square = (lng: number, lat: number, size: number): [number, number][] => [
+  [lng, lat],
+  [lng + size, lat],
+  [lng + size, lat + size],
+  [lng, lat + size],
+  [lng, lat],
+];
 const OUTLINE: MultiPolygon = { type: "MultiPolygon", coordinates: [[square(-123.36, 48.45, 0.004), square(-123.359, 48.451, 0.001)]] };
 
 const FEATURE: OsmFeature = {
@@ -93,7 +98,7 @@ class FakeSql implements SqlRunner {
     this.drafts.get(id)!.status = "published";
     const accept = statements.find((statement) => statement.text.includes("status = 'accepted'"))!;
     this.accepted.set(String(accept.params[0]), String(accept.params[1]));
-    return statements.map((statement) => statement.text.includes("RETURNING published_revision") ? [{ published_revision: "42" }] : []);
+    return statements.map((statement) => (statement.text.includes("RETURNING published_revision") ? [{ published_revision: "42" }] : []));
   }
 }
 
@@ -107,14 +112,22 @@ class MemoryReviewStore implements ProposalReviewStore {
   async state(id: string) {
     return { decision: this.decisions.get(id)?.decision ?? null, publishedParkId: this.db.accepted.get(id) ?? null };
   }
-  async nearbyParks(_lat: number, _lng: number, km: number) { return km > 5 ? [...this.nearby, ...this.wide] : this.nearby; }
-  async record(id: string, decision: Decision, moderation: ModerationRecord) { this.decisions.set(id, { decision, moderation }); }
-  sql() { return this.db; }
+  async nearbyParks(_lat: number, _lng: number, km: number) {
+    return km > 5 ? [...this.nearby, ...this.wide] : this.nearby;
+  }
+  async record(id: string, decision: Decision, moderation: ModerationRecord) {
+    this.decisions.set(id, { decision, moderation });
+  }
+  sql() {
+    return this.db;
+  }
 }
 
 function osm(feature: OsmFeature | null | Error = FEATURE): OsmClient {
   return {
-    async search() { return []; },
+    async search() {
+      return [];
+    },
     async feature() {
       if (feature instanceof Error) throw feature;
       return feature;
@@ -143,11 +156,17 @@ test("a clearly approved OpenStreetMap proposal is published with the proposal a
   assert.equal(asked[0].kind, "park_proposal");
   assert.deepEqual(Object.keys(asked[0].questions), ["park", "name", "duplicate"]);
   const state = asked[0].state as { nearbyParks: { name: string }[]; openStreetMap: { pinInside: boolean } };
-  assert.deepEqual(state.nearbyParks.map((park) => park.name), ["Thetis Lake"]);
+  assert.deepEqual(
+    state.nearbyParks.map((park) => park.name),
+    ["Thetis Lake"],
+  );
   assert.equal(state.openStreetMap.pinInside, true);
 
   const [statements] = store.db.transactions;
-  assert.ok(statements.some((s) => s.text.includes("INSERT INTO public.parks")), "uses the dashboard publish transaction");
+  assert.ok(
+    statements.some((s) => s.text.includes("INSERT INTO public.parks")),
+    "uses the dashboard publish transaction",
+  );
   assert.ok(statements.some((s) => s.text.includes("INSERT INTO public.boundaries")));
   // The acceptance comes before the park insert, so the category soft-hide can tell the park was proposed.
   const accept = statements[0];
@@ -249,7 +268,12 @@ test("a failed publish rolls back and leaves the approved proposal waiting", asy
 
 test("publishing is blocked when another park or draft already uses the id", async () => {
   const db = new FakeSql();
-  const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
+  const park = parkFromProposal(
+    FEATURE,
+    { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt },
+    "Capital Region",
+    PROPOSAL.point,
+  );
   db.parks.add(park.id);
   assert.deepEqual(await publishProposalPark(db, park, PROPOSAL.id), { status: "blocked", reason: "park_exists" });
   const other = new FakeSql();
@@ -300,11 +324,21 @@ test("a published park never has an empty region, even when the nearest park has
   assert.equal(alone.store.db.inserted[0][7], "British Columbia");
 
   for (const region of ["", "   ", "\u0007\u0008"]) {
-    const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, region, PROPOSAL.point);
+    const park = parkFromProposal(
+      FEATURE,
+      { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt },
+      region,
+      PROPOSAL.point,
+    );
     assert.equal(park.region, "British Columbia", JSON.stringify(region));
   }
   const db = new FakeSql();
-  const park = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
+  const park = parkFromProposal(
+    FEATURE,
+    { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt },
+    "Capital Region",
+    PROPOSAL.point,
+  );
   await assert.rejects(publishProposalPark(db, { ...park, region: " " }, PROPOSAL.id), /park_incomplete/);
   assert.equal(db.inserted.length, 0);
 });
@@ -318,7 +352,13 @@ test("with no catalogue park close by, the region comes from one up to 30 km awa
 
 // Point Pleasant Park in Halifax, and a Nova Scotia proposal for it.
 const HALIFAX_OUTLINE: MultiPolygon = { type: "MultiPolygon", coordinates: [[square(-63.575, 44.62, 0.01)]] };
-const HALIFAX_FEATURE: OsmFeature = { ...FEATURE, id: 654321, name: "Point Pleasant Park", tags: { leisure: "park", name: "Point Pleasant Park" }, geometry: HALIFAX_OUTLINE };
+const HALIFAX_FEATURE: OsmFeature = {
+  ...FEATURE,
+  id: 654321,
+  name: "Point Pleasant Park",
+  tags: { leisure: "park", name: "Point Pleasant Park" },
+  geometry: HALIFAX_OUTLINE,
+};
 const HALIFAX_PROPOSAL: ReviewInput = { ...PROPOSAL, name: "Point Pleasant Park", point: [-63.57, 44.625], osm: { type: "way", id: 654321 } };
 
 test("a Nova Scotia park takes the region of the nearest Nova Scotia park, else Nova Scotia", async () => {
@@ -332,7 +372,12 @@ test("a Nova Scotia park takes the region of the nearest Nova Scotia park, else 
   assert.equal(alone.store.db.inserted[0][7], "Nova Scotia");
 
   // An empty region falls back to the province that holds the outline, not British Columbia.
-  const park = parkFromProposal(HALIFAX_FEATURE, { id: PROPOSAL.id, name: "Point Pleasant Park", note: "", point: HALIFAX_PROPOSAL.point, createdAt: PROPOSAL.createdAt }, " ", HALIFAX_PROPOSAL.point);
+  const park = parkFromProposal(
+    HALIFAX_FEATURE,
+    { id: PROPOSAL.id, name: "Point Pleasant Park", note: "", point: HALIFAX_PROPOSAL.point, createdAt: PROPOSAL.createdAt },
+    " ",
+    HALIFAX_PROPOSAL.point,
+  );
   assert.equal(park.region, "Nova Scotia");
 });
 
@@ -399,11 +444,21 @@ test("a huge outline is thinned to the content size budget but keeps every part 
   });
   wiggly.push(wiggly[0]);
   const geometry = { type: "MultiPolygon" as const, coordinates: [[wiggly, square(-122.942, 49.139, 0.002)], [square(-122.9, 49.16, 0.003)]] };
-  const park = parkFromProposal({ ...FEATURE, geometry }, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: [-122.94, 49.14], createdAt: PROPOSAL.createdAt }, "Metro Vancouver", [-122.94, 49.14]);
+  const park = parkFromProposal(
+    { ...FEATURE, geometry },
+    { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: [-122.94, 49.14], createdAt: PROPOSAL.createdAt },
+    "Metro Vancouver",
+    [-122.94, 49.14],
+  );
   assert.ok(positionCount(park.geometry) <= MAX_BOUNDARY_POSITIONS, `${positionCount(park.geometry)} positions`);
   assert.equal(park.geometry.coordinates.length, 2);
   assert.equal(park.geometry.coordinates[0].length, 2, "the hole stays");
-  const small = parkFromProposal(FEATURE, { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt }, "Capital Region", PROPOSAL.point);
+  const small = parkFromProposal(
+    FEATURE,
+    { id: PROPOSAL.id, name: PROPOSAL.name, note: "", point: PROPOSAL.point, createdAt: PROPOSAL.createdAt },
+    "Capital Region",
+    PROPOSAL.point,
+  );
   assert.deepEqual(small.geometry, FEATURE.geometry, "small outlines are untouched");
 });
 
@@ -424,11 +479,19 @@ test("the proposal moderator sends choice questions through the shared module an
   const calls: { url: string; init: RequestInit }[] = [];
   const fetcher = async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(url), init: init! });
-    return new Response(JSON.stringify({
-      id: "dec_1",
-      model: "openai/gpt-6-luna-decisions",
-      answers: Object.fromEntries(Object.entries(APPROVE).map(([name, answer]) => [name, { type: "choice", choice: answer.choice, confidence: 0.9, probabilities: answer.probabilities }])),
-    }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        id: "dec_1",
+        model: "openai/gpt-6-luna-decisions",
+        answers: Object.fromEntries(
+          Object.entries(APPROVE).map(([name, answer]) => [
+            name,
+            { type: "choice", choice: answer.choice, confidence: 0.9, probabilities: answer.probabilities },
+          ]),
+        ),
+      }),
+      { status: 200 },
+    );
   };
   const moderator = createProposalModerator({ OPENROUTER_API_KEY: "test-key-not-real" }, fetcher)!;
   const result = await moderator({ kind: "park_proposal", state: { proposal: { name: "x" } }, questions: QUESTIONS });
@@ -447,28 +510,42 @@ test("nearby catalogue parks include parks whose boundary box reaches the point,
   const db: SqlRunner = {
     async query(text, params = []) {
       queries.push({ text, params });
-      if (missing && text.includes("park_boundary_box")) throw Object.assign(new Error("function public.park_boundary_box(jsonb) does not exist"), { code: "42883" });
+      if (missing && text.includes("park_boundary_box"))
+        throw Object.assign(new Error("function public.park_boundary_box(jsonb) does not exist"), { code: "42883" });
       return [row];
     },
-    async transaction() { throw new Error("unused"); },
+    async transaction() {
+      throw new Error("unused");
+    },
   };
   const store = createSqlProposalReviewStore(db);
   // A point in Kejimkujik Seaside, about 72 km from the park's pin.
   const parks = await store.nearbyParks(43.85124, -64.82927, 5);
-  assert.deepEqual(parks.map((park) => park.id), ["national-far"]);
+  assert.deepEqual(
+    parks.map((park) => park.id),
+    ["national-far"],
+  );
   assert.equal(queries.length, 1);
   assert.match(queries[0].text, /public\.park_boundary_box\(b\.feature\) && box\(point\(\$3, \$1\), point\(\$4, \$2\)\)/);
   const [south, north, west, east, lat, lng] = queries[0].params as number[];
   assert.ok(south < 43.85124 && north > 43.85124 && west < -64.82927 && east > -64.82927);
-  assert.ok(Math.abs((north - south) / 2 * 110.54 - 5) < 1e-9, "the box is the same 5 km as the pin search");
+  assert.ok(Math.abs(((north - south) / 2) * 110.54 - 5) < 1e-9, "the box is the same 5 km as the pin search");
   assert.deepEqual([lat, lng], [43.85124, -64.82927]);
 
   missing = true;
   queries.length = 0;
-  assert.deepEqual((await store.nearbyParks(43.85124, -64.82927, 5)).map((park) => park.id), ["national-far"]);
+  assert.deepEqual(
+    (await store.nearbyParks(43.85124, -64.82927, 5)).map((park) => park.id),
+    ["national-far"],
+  );
   assert.equal(queries.length, 2);
   assert.doesNotMatch(queries[1].text, /park_boundary_box/);
 
-  const failing = createSqlProposalReviewStore({ ...db, async query() { throw Object.assign(new Error("db down"), { code: "57P01" }); } });
+  const failing = createSqlProposalReviewStore({
+    ...db,
+    async query() {
+      throw Object.assign(new Error("db down"), { code: "57P01" });
+    },
+  });
   await assert.rejects(failing.nearbyParks(43.85124, -64.82927, 5), /db down/);
 });

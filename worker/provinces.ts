@@ -21,7 +21,10 @@ export function provinceFor([lng, lat]: Position): string {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return PROVINCES[0].name;
   let best = PROVINCES[0].name;
   let bestKm = Infinity;
-  for (const { name, box: [west, south, east, north] } of PROVINCES) {
+  for (const {
+    name,
+    box: [west, south, east, north],
+  } of PROVINCES) {
     const nearLng = Math.min(east, Math.max(west, lng));
     const nearLat = Math.min(north, Math.max(south, lat));
     const kx = 111.32 * Math.cos((((lat + nearLat) / 2) * Math.PI) / 180);

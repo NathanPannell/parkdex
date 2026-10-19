@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Crew, GameMe, ParkFlag } from "./client";
-import {
-  crewCodeFromText, crewHeadline, crewLink, crewMemberNote, crewPhase, formatClockTime, formatMinutesLeft, friendOffers, loggedVisitLine,
-} from "./crew";
+import { crewCodeFromText, crewHeadline, crewLink, crewMemberNote, crewPhase, formatClockTime, formatMinutesLeft, friendOffers, loggedVisitLine } from "./crew";
 import { buildPins, pinIconId, pinImageSvg } from "./mapPins";
 import { flagPinSvg, flagSpec } from "./flag";
 
@@ -10,10 +8,19 @@ const MIN = 60_000;
 const start = Date.parse("2026-10-13T17:00:00.000Z");
 const until = new Date(start + 60 * MIN).toISOString();
 const flag = (crew: ParkFlag["crew"] = { size: 2, memberSeeds: ["s1"], protectedUntil: until }): ParkFlag => ({
-  parkId: "beacon-hill", handle: "tom", flagSeed: "t1", since: new Date(start).toISOString(), crew,
+  parkId: "beacon-hill",
+  handle: "tom",
+  flagSeed: "t1",
+  since: new Date(start).toISOString(),
+  crew,
 });
 const me = (handle: string, extra: Partial<GameMe> = {}): GameMe => ({
-  player: { handle, flagSeed: `${handle}-seed` }, score: 0, parks: [], takeovers: [], flagSeed: `${handle}-seed`, ...extra,
+  player: { handle, flagSeed: `${handle}-seed` },
+  score: 0,
+  parks: [],
+  takeovers: [],
+  flagSeed: `${handle}-seed`,
+  ...extra,
 });
 const crew = (extra: Partial<Crew> = {}): Crew => ({
   parkId: "beacon-hill",
@@ -22,7 +29,13 @@ const crew = (extra: Partial<Crew> = {}): Crew => ({
     { handle: "tom", flagSeed: "t1", joinedAt: new Date(start).toISOString(), leader: true },
     { handle: "sara", flagSeed: "s1", joinedAt: new Date(start + 12 * MIN).toISOString(), leader: false },
   ],
-  size: 2, cap: 8, flagSince: new Date(start).toISOString(), protectedUntil: until, member: false, code: null, codeExpiresAt: null,
+  size: 2,
+  cap: 8,
+  flagSince: new Date(start).toISOString(),
+  protectedUntil: until,
+  member: false,
+  code: null,
+  codeExpiresAt: null,
   ...extra,
 });
 
@@ -35,11 +48,20 @@ describe("park page crew states", () => {
     // A member is known from /me's held parks, or from the crew read on the park page.
     const sara = me("sara", { parks: [{ parkId: "beacon-hill", since: flag().since, days: 0, hours: 0 }] });
     expect(crewPhase({ enabled: true, flag: flag(), myHandle: "sara", me: sara, now: during })).toEqual({ kind: "member", until, leader: "tom" });
-    expect(crewPhase({ enabled: true, flag: flag(), myHandle: "sara", me: me("sara"), crew: crew({ member: true }), now: during })).toMatchObject({ kind: "member" });
-    expect(crewPhase({ enabled: true, flag: flag(), myHandle: "bee", me: me("bee"), now: during })).toEqual({ kind: "outsider", until, leader: "tom", logged: false });
+    expect(crewPhase({ enabled: true, flag: flag(), myHandle: "sara", me: me("sara"), crew: crew({ member: true }), now: during })).toMatchObject({
+      kind: "member",
+    });
+    expect(crewPhase({ enabled: true, flag: flag(), myHandle: "bee", me: me("bee"), now: during })).toEqual({
+      kind: "outsider",
+      until,
+      leader: "tom",
+      logged: false,
+    });
     expect(crewPhase({ enabled: true, flag: flag(), myHandle: "tom", me: me("tom"), now: after })).toEqual({ kind: "closed", size: 2 });
     // A solo flag after its hour is the normal V1 park.
-    expect(crewPhase({ enabled: true, flag: flag({ size: 1, memberSeeds: [], protectedUntil: until }), myHandle: "bee", me: me("bee"), now: after })).toEqual({ kind: "none" });
+    expect(crewPhase({ enabled: true, flag: flag({ size: 1, memberSeeds: [], protectedUntil: until }), myHandle: "bee", me: me("bee"), now: after })).toEqual({
+      kind: "none",
+    });
     expect(crewPhase({ enabled: true, flag: null, myHandle: "bee", me: me("bee"), now: during })).toEqual({ kind: "none" });
   });
 
@@ -47,7 +69,9 @@ describe("park page crew states", () => {
     const logged = me("bee", { loggedToday: ["beacon-hill"], visitedTodayUntil: "2026-10-14T07:00:00.000Z" });
     expect(crewPhase({ enabled: true, flag: flag(), myHandle: "bee", me: logged, now: start + 20 * MIN })).toMatchObject({ kind: "outsider", logged: true });
     // The list expires when the server's day ends.
-    expect(crewPhase({ enabled: true, flag: flag(), myHandle: "bee", me: { ...logged, visitedTodayUntil: new Date(start).toISOString() }, now: start + 20 * MIN })).toMatchObject({ logged: false });
+    expect(
+      crewPhase({ enabled: true, flag: flag(), myHandle: "bee", me: { ...logged, visitedTodayUntil: new Date(start).toISOString() }, now: start + 20 * MIN }),
+    ).toMatchObject({ logged: false });
   });
 
   it("shows nothing of crews with the flag off", () => {
@@ -109,7 +133,10 @@ describe("crew links", () => {
 describe("crew map pins", () => {
   const now = start + 10 * MIN;
   const parks = [{ id: "beacon-hill", lng: -123.36, lat: 48.41 }];
-  const crewFlag = (size: number, seeds: string[], protectedUntil: string | null): ParkFlag => ({ ...flag(), crew: { size, memberSeeds: seeds, protectedUntil } });
+  const crewFlag = (size: number, seeds: string[], protectedUntil: string | null): ParkFlag => ({
+    ...flag(),
+    crew: { size, memberSeeds: seeds, protectedUntil },
+  });
 
   it("names the image by leader, up to 3 member seeds, the count, the hour and the weather", () => {
     const { collection, images } = buildPins(parks, new Map([["beacon-hill", crewFlag(6, ["s1", "s2", "s3"], until)]]), now, { crews: true });

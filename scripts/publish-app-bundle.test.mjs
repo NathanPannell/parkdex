@@ -6,7 +6,17 @@ import { join } from "node:path";
 import { test } from "node:test";
 import zlib from "node:zlib";
 import { CDN_ORIGIN } from "./publish-content-channel.mjs";
-import { bundleVersion, collectBundleFiles, createZip, makeBundlePointer, prepareAppBundle, publicationRow, publishAppBundle, recordPublication, verifyPointerThroughCdn } from "./publish-app-bundle.mjs";
+import {
+  bundleVersion,
+  collectBundleFiles,
+  createZip,
+  makeBundlePointer,
+  prepareAppBundle,
+  publicationRow,
+  publishAppBundle,
+  recordPublication,
+  verifyPointerThroughCdn,
+} from "./publish-app-bundle.mjs";
 
 const COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
@@ -58,7 +68,10 @@ async function distFixture(t) {
 test("collects packaged files in a stable order and leaves dot files out", async (t) => {
   const { dist } = await distFixture(t);
   const files = await collectBundleFiles(dist);
-  assert.deepEqual(files.map((file) => file.path), ["assets/a.css", "assets/index-abc.js", "index.html"]);
+  assert.deepEqual(
+    files.map((file) => file.path),
+    ["assets/a.css", "assets/index-abc.js", "index.html"],
+  );
 });
 
 test("zips are readable, keep every byte, and are identical for the same input", () => {
@@ -108,7 +121,17 @@ test("refuses a bundle without index.html and bad native ranges", async (t) => {
   const { directory } = await distFixture(t);
   const empty = join(directory, "empty");
   await mkdir(empty);
-  await assert.rejects(prepareAppBundle({ channel: "staging", distDirectory: empty, outDirectory: join(directory, "o"), minimumNativeBuild: 1, generation: 1, sourceCommit: COMMIT }), /index.html/);
+  await assert.rejects(
+    prepareAppBundle({
+      channel: "staging",
+      distDirectory: empty,
+      outDirectory: join(directory, "o"),
+      minimumNativeBuild: 1,
+      generation: 1,
+      sourceCommit: COMMIT,
+    }),
+    /index.html/,
+  );
   const base = { channel: "staging", generation: 1, zipSha256: "a".repeat(64), byteSize: 10, sourceCommit: COMMIT, publishedAt: "2026-10-07T12:00:00.000Z" };
   assert.throws(() => makeBundlePointer({ ...base, minimumNativeBuild: 14, maximumNativeBuild: 12 }), /exceed/);
   assert.throws(() => makeBundlePointer({ ...base, minimumNativeBuild: 0, maximumNativeBuild: 12 }), /minimum/);
@@ -139,11 +162,24 @@ function fakeR2({ pointer = null, etag = '"pointer-1"', zipStatus = 200, pointer
   return { fetcher, calls, stored };
 }
 
-const credentials = { accountId: "c".repeat(32), bucket: "parkdex-kip-content", accessKeyId: "test-access", secretAccessKey: "test-secret", now: new Date("2026-10-07T12:00:00.000Z") };
+const credentials = {
+  accountId: "c".repeat(32),
+  bucket: "parkdex-kip-content",
+  accessKeyId: "test-access",
+  secretAccessKey: "test-secret",
+  now: new Date("2026-10-07T12:00:00.000Z"),
+};
 
 async function prepared(t, generation = 1) {
   const { directory, dist } = await distFixture(t);
-  return prepareAppBundle({ channel: "staging", distDirectory: dist, outDirectory: join(directory, "out"), minimumNativeBuild: 12, generation, sourceCommit: COMMIT });
+  return prepareAppBundle({
+    channel: "staging",
+    distDirectory: dist,
+    outDirectory: join(directory, "out"),
+    minimumNativeBuild: 12,
+    generation,
+    sourceCommit: COMMIT,
+  });
 }
 
 test("apply uploads the zip without overwriting, verifies it, then creates the pointer", async (t) => {
@@ -167,7 +203,10 @@ test("apply uploads the zip without overwriting, verifies it, then creates the p
 test("apply moves an existing pointer only with its exact ETag and generation", async (t) => {
   const bundle = await prepared(t, 2);
   const current = { schema: "parkdex.app-bundle-channel/v1", channel: "staging", generation: 1 };
-  await assert.rejects(publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"stale"', fetcher: fakeR2({ pointer: current }).fetcher }), /ETag/);
+  await assert.rejects(
+    publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"stale"', fetcher: fakeR2({ pointer: current }).fetcher }),
+    /ETag/,
+  );
   await assert.rejects(publishAppBundle(bundle, { ...credentials, expectedGeneration: 0, fetcher: fakeR2({ pointer: current }).fetcher }), /generation/);
   const r2 = fakeR2({ pointer: current });
   await publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: r2.fetcher });
@@ -189,9 +228,15 @@ test("a weak pointer ETag from the CDN is sent to R2 in its strong form", async 
 test("apply refuses a pointer from another channel and a lost race", async (t) => {
   const bundle = await prepared(t, 2);
   const production = { schema: "parkdex.app-bundle-channel/v1", channel: "production", generation: 1 };
-  await assert.rejects(publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: fakeR2({ pointer: production }).fetcher }), /not a staging/);
+  await assert.rejects(
+    publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: fakeR2({ pointer: production }).fetcher }),
+    /not a staging/,
+  );
   const raced = fakeR2({ pointer: { ...production, channel: "staging" }, pointerStatus: 412 });
-  await assert.rejects(publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: raced.fetcher }), /changed during publication/);
+  await assert.rejects(
+    publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: raced.fetcher }),
+    /changed during publication/,
+  );
 });
 
 test("apply needs every R2 credential and never uploads without them", async (t) => {
@@ -204,7 +249,12 @@ test("apply needs every R2 credential and never uploads without them", async (t)
 test("apply returns the pointer it replaced, for the publish history", async (t) => {
   const bundle = await prepared(t, 2);
   const current = { schema: "parkdex.app-bundle-channel/v1", channel: "staging", generation: 1, sha256: "d".repeat(64) };
-  const result = await publishAppBundle(bundle, { ...credentials, expectedGeneration: 1, expectedEtag: '"pointer-1"', fetcher: fakeR2({ pointer: current }).fetcher });
+  const result = await publishAppBundle(bundle, {
+    ...credentials,
+    expectedGeneration: 1,
+    expectedEtag: '"pointer-1"',
+    fetcher: fakeR2({ pointer: current }).fetcher,
+  });
   assert.equal(result.previous.generation, 1);
   const first = await publishAppBundle(await prepared(t), { ...credentials, expectedGeneration: 0, fetcher: fakeR2().fetcher });
   assert.equal(first.previous, null);
@@ -213,13 +263,18 @@ test("apply returns the pointer it replaced, for the publish history", async (t)
 test("--record writes one idempotent history row with the CDN readback outcome", async (t) => {
   const bundle = await prepared(t, 2);
   const row = publicationRow(bundle.pointer, { generation: 1, sha256: "d".repeat(64) }, { outcome: "confirmed", note: "Map fix" });
-  assert.deepEqual([row.channel, row.generation, row.previousGeneration, row.action, row.source, row.previousSha256, row.minimumNativeBuild, row.note],
-    ["staging", 2, 1, "publish", "script", "d".repeat(64), 12, "Map fix"]);
+  assert.deepEqual(
+    [row.channel, row.generation, row.previousGeneration, row.action, row.source, row.previousSha256, row.minimumNativeBuild, row.note],
+    ["staging", 2, 1, "publish", "script", "d".repeat(64), 12, "Map fix"],
+  );
   assert.equal(publicationRow(bundle.pointer, null, { outcome: "confirmed" }).previousGeneration, 0);
   assert.throws(() => publicationRow(bundle.pointer, null, { outcome: "confirmed", note: "x".repeat(301) }), /--note/);
 
   const calls = [];
-  const query = async (text, params) => { calls.push({ text, params }); return calls.length === 1 ? [{ id: 1 }] : []; };
+  const query = async (text, params) => {
+    calls.push({ text, params });
+    return calls.length === 1 ? [{ id: 1 }] : [];
+  };
   assert.equal(await recordPublication(query, row), true);
   assert.equal(await recordPublication(query, row), false, "a retried --record adds nothing");
   assert.match(calls[0].text, /INSERT INTO kip_app_config\.ota_publishes/);
@@ -227,7 +282,12 @@ test("--record writes one idempotent history row with the CDN readback outcome",
   assert.equal(calls[0].params.length, 15);
 
   const seen = [];
-  const cdn = (served, status = 206) => async (url, init) => { seen.push({ url, range: init.headers.Range }); return new Response(JSON.stringify(served), { status }); };
+  const cdn =
+    (served, status = 206) =>
+    async (url, init) => {
+      seen.push({ url, range: init.headers.Range });
+      return new Response(JSON.stringify(served), { status });
+    };
   assert.equal(await verifyPointerThroughCdn(cdn(bundle.pointer), bundle.pointer), "confirmed");
   assert.equal(seen[0].url, CDN_ORIGIN + "/app-bundles/channels/staging/current.json");
   assert.equal(seen[0].range, "bytes=0-", "the readback skips the CDN cache");

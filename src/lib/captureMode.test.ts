@@ -80,8 +80,12 @@ function installDocument() {
         style: { cssText: "" },
         files: null,
         attributes: {},
-        setAttribute: (name, value) => { input.attributes[name] = value; },
-        addEventListener: (type, listener) => { (listeners[type] ??= []).push(listener); },
+        setAttribute: (name, value) => {
+          input.attributes[name] = value;
+        },
+        addEventListener: (type, listener) => {
+          (listeners[type] ??= []).push(listener);
+        },
         click: vi.fn(),
         remove: vi.fn(),
         fire: (type) => listeners[type]?.forEach((listener) => listener()),

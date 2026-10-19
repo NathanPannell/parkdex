@@ -31,7 +31,9 @@ test("a draft stays out of synchronized content until it is published", { skip: 
 });
 
 test("publishing inserts the park, boundary and unknown-access drive rows in one revision", { skip: !DSN }, async () => {
-  const updatedAt = new Date((await pool.query("SELECT updated_at FROM kip_park_drafts.drafts WHERE id = 'regional-thetis-lake'")).rows[0].updated_at).toISOString();
+  const updatedAt = new Date(
+    (await pool.query("SELECT updated_at FROM kip_park_drafts.drafts WHERE id = 'regional-thetis-lake'")).rows[0].updated_at,
+  ).toISOString();
   const before = await revision();
   const results = await runner.transaction(publishStatements("regional-thetis-lake", updatedAt, null));
   assert.ok(Number(results[results.length - 1][0].published_revision) > before);
@@ -40,18 +42,30 @@ test("publishing inserts the park, boundary and unknown-access drive rows in one
   const feature = (await pool.query("SELECT feature FROM public.boundaries WHERE park_id = 'regional-thetis-lake'")).rows[0].feature;
   assert.deepEqual(feature.properties, { id: "regional-thetis-lake", biome: "lake" });
   assert.equal(feature.geometry.coordinates.length, 2);
-  const drive = await pool.query("SELECT hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = 'regional-thetis-lake' ORDER BY hub_position");
-  assert.deepEqual(drive.rows, [{ hub_position: 0, distance_km: null, duration_min: null }, { hub_position: 1, distance_km: null, duration_min: null }]);
+  const drive = await pool.query(
+    "SELECT hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = 'regional-thetis-lake' ORDER BY hub_position",
+  );
+  assert.deepEqual(drive.rows, [
+    { hub_position: 0, distance_km: null, duration_min: null },
+    { hub_position: 1, distance_km: null, duration_min: null },
+  ]);
   assert.equal((await pool.query("SELECT walk_m FROM public.park_drive_settings WHERE park_id = 'regional-thetis-lake'")).rows[0].walk_m, 0);
   assert.equal((await pool.query("SELECT status FROM kip_park_drafts.drafts WHERE id = 'regional-thetis-lake'")).rows[0].status, "published");
   const changes = await pool.query("SELECT DISTINCT entity FROM public.content_changes WHERE revision > $1 ORDER BY 1", [before]);
-  assert.deepEqual(changes.rows.map((row: { entity: string }) => row.entity), ["boundary", "drive", "park"], "publication is recorded as synchronized changes");
+  assert.deepEqual(
+    changes.rows.map((row: { entity: string }) => row.entity),
+    ["boundary", "drive", "park"],
+    "publication is recorded as synchronized changes",
+  );
 });
 
 test("a stale draft and an existing park are refused, and nothing is written", { skip: !DSN }, async () => {
   const updatedAt = await insertDraft(runner, "regional-mount-work", { lat: 48.53 });
   const before = await revision();
-  await assert.rejects(runner.transaction(publishStatements("regional-mount-work", new Date(Date.parse(updatedAt) - 1000).toISOString(), null)), /draft_changed/);
+  await assert.rejects(
+    runner.transaction(publishStatements("regional-mount-work", new Date(Date.parse(updatedAt) - 1000).toISOString(), null)),
+    /draft_changed/,
+  );
   await assert.rejects(runner.transaction(publishStatements("regional-thetis-lake", new Date().toISOString(), null)), /draft_changed|park_exists/);
   assert.equal(await revision(), before);
   assert.equal((await pool.query("SELECT count(*)::int AS count FROM public.parks WHERE id = 'regional-mount-work'")).rows[0].count, 0);

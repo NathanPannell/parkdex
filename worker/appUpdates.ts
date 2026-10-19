@@ -166,9 +166,7 @@ export async function handleAppUpdateRequest(request: Request, handlers: AppUpda
       answer = failed(400, "invalid_request", "The update check is not valid.");
     } else {
       const pointer = await readPointer(handlers, origin, check.channel);
-      answer = pointer === "unavailable"
-        ? failed(503, "pointer_unavailable", "Updates are temporarily unavailable.")
-        : decideUpdate(check, pointer);
+      answer = pointer === "unavailable" ? failed(503, "pointer_unavailable", "Updates are temporarily unavailable.") : decideUpdate(check, pointer);
     }
   }
   return handlers.json(answer.body, answer.status);

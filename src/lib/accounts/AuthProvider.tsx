@@ -12,7 +12,14 @@ import {
   setLastCompleteSyncAt,
 } from "./personalStore";
 import { setProductAnalyticsAccount } from "../productAnalytics";
-import { coalesceProgressSync, persistLastCompleteSyncTimestamp, persistSuccessfulOutboundBackupTimestamp, runProgressSyncWhenReady, shouldScheduleAccountBackup, type ProgressSyncResult } from "./progressSync";
+import {
+  coalesceProgressSync,
+  persistLastCompleteSyncTimestamp,
+  persistSuccessfulOutboundBackupTimestamp,
+  runProgressSyncWhenReady,
+  shouldScheduleAccountBackup,
+  type ProgressSyncResult,
+} from "./progressSync";
 import {
   AuthHttpError,
   clearLocalNativeSession,
@@ -41,12 +48,7 @@ import {
   type DeletionResponse,
   type GooglePurpose,
 } from "./authClient";
-import {
-  listenForNativeAuthLinks,
-  NativeSessionOriginMismatchError,
-  parseNativeAuthLink,
-  resolveGoogleWebClientId,
-} from "./nativeIdentity";
+import { listenForNativeAuthLinks, NativeSessionOriginMismatchError, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
 import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 import { shouldReopenAccount, SignInGate } from "./signInGate";
 
@@ -199,17 +201,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await reserveGuestClaimsForAccount(account.id);
     } catch {
       if (current()) {
-        setState((value) => ({ ...value, phase: "error", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: new GuestReservationFailedError().message }));
+        setState((value) => ({
+          ...value,
+          phase: "error",
+          account: null,
+          offlineAccountId: null,
+          backup: EMPTY_BACKUP,
+          startupError: new GuestReservationFailedError().message,
+        }));
       }
       throw new GuestReservationFailedError();
     }
     if (!current()) throw new Error("The account session changed before this action finished.");
     let lastSuccessfulBackupAt: number | null = null;
-    try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(account.id); }
-    catch { /* A local status read must not prevent a verified account from opening. */ }
+    try {
+      lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(account.id);
+    } catch {
+      /* A local status read must not prevent a verified account from opening. */
+    }
     let lastCompleteSyncAt: number | null = null;
-    try { lastCompleteSyncAt = await getLastCompleteSyncAt(account.id); }
-    catch { /* A local status read must not prevent a verified account from opening. */ }
+    try {
+      lastCompleteSyncAt = await getLastCompleteSyncAt(account.id);
+    } catch {
+      /* A local status read must not prevent a verified account from opening. */
+    }
     if (!current()) throw new Error("The account session changed before this action finished.");
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
@@ -229,169 +244,223 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return account;
   }, []);
 
-  const refresh = useCallback((expectedOverride?: string | null) => {
-    if (refreshInFlight.current?.operation === authOperationGeneration.current) return refreshInFlight.current.promise;
-    const operation = ++authOperationGeneration.current;
-    const current = () => authOperationGeneration.current === operation;
-    const expectedAccountId = expectedOverride !== undefined
-      ? expectedOverride
-      : stateRef.current.account?.id ?? stateRef.current.offlineAccountId ?? lastAccountId();
-    const task = (async () => {
-      setState((value) => ({ ...value, startupError: null }));
-      try {
-        await initializePersonalStore();
-      } catch {
-        if (current()) setState((value) => ({ ...value, phase: "error", startupError: "Saved progress could not be opened. Your existing local data was left untouched." }));
-        return;
-      }
-
-      try {
-        const config = await fetchAuthConfig();
-        if (current()) setState((value) => ({ ...value, config }));
-      } catch (error) {
-        if (current()) setState((value) => ({ ...value, config: null, startupError: networkMessage(error) }));
-      }
-      if (!current()) return;
-
-      let localSession: Awaited<ReturnType<typeof readLocalNativeSession>> = null;
-      if (isNative) {
-        try { localSession = await readLocalNativeSession(); }
-        catch (error) {
-          if (!current()) return;
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          if (error instanceof NativeSessionOriginMismatchError) {
-            const cachedId = expectedAccountId ?? lastAccountId();
+  const refresh = useCallback(
+    (expectedOverride?: string | null) => {
+      if (refreshInFlight.current?.operation === authOperationGeneration.current) return refreshInFlight.current.promise;
+      const operation = ++authOperationGeneration.current;
+      const current = () => authOperationGeneration.current === operation;
+      const expectedAccountId =
+        expectedOverride !== undefined ? expectedOverride : (stateRef.current.account?.id ?? stateRef.current.offlineAccountId ?? lastAccountId());
+      const task = (async () => {
+        setState((value) => ({ ...value, startupError: null }));
+        try {
+          await initializePersonalStore();
+        } catch {
+          if (current())
             setState((value) => ({
               ...value,
-              phase: cachedId ? "offline-account" : "guest",
+              phase: "error",
+              startupError: "Saved progress could not be opened. Your existing local data was left untouched.",
+            }));
+          return;
+        }
+
+        try {
+          const config = await fetchAuthConfig();
+          if (current()) setState((value) => ({ ...value, config }));
+        } catch (error) {
+          if (current()) setState((value) => ({ ...value, config: null, startupError: networkMessage(error) }));
+        }
+        if (!current()) return;
+
+        let localSession: Awaited<ReturnType<typeof readLocalNativeSession>> = null;
+        if (isNative) {
+          try {
+            localSession = await readLocalNativeSession();
+          } catch (error) {
+            if (!current()) return;
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            if (error instanceof NativeSessionOriginMismatchError) {
+              const cachedId = expectedAccountId ?? lastAccountId();
+              setState((value) => ({
+                ...value,
+                phase: cachedId ? "offline-account" : "guest",
+                account: null,
+                offlineAccountId: cachedId,
+                backup: cachedId ? { ...value.backup, phase: "offline", message: error.message } : EMPTY_BACKUP,
+                startupError: error.message,
+              }));
+              return;
+            }
+            setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null }));
+            rememberAccount(null);
+            return;
+          }
+          if (!current()) return;
+          if (!localSession) {
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP }));
+            rememberAccount(null);
+            return;
+          }
+        }
+
+        try {
+          const account = await getCurrentAccount(expectedAccountId ?? undefined);
+          if (!current()) return;
+          // /me is intentionally usable to discover a cookie session, so compare its
+          // result locally before any account-scoped renew or progress operation.
+          if (expectedAccountId && account.id.toLowerCase() !== expectedAccountId.toLowerCase()) {
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            rememberAccount(null);
+            setState((value) => ({
+              ...value,
+              phase: "guest",
               account: null,
-              offlineAccountId: cachedId,
-              backup: cachedId ? { ...value.backup, phase: "offline", message: error.message } : EMPTY_BACKUP,
-              startupError: error.message,
+              offlineAccountId: null,
+              backup: EMPTY_BACKUP,
+              startupError: "A different account is active in another tab. Sign in again here to open its saved progress.",
             }));
             return;
           }
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null }));
-          rememberAccount(null);
-          return;
-        }
-        if (!current()) return;
-        if (!localSession) {
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP }));
-          rememberAccount(null);
-          return;
-        }
-      }
 
-      try {
-        let account = await getCurrentAccount(expectedAccountId ?? undefined);
-        if (!current()) return;
-        // /me is intentionally usable to discover a cookie session, so compare its
-        // result locally before any account-scoped renew or progress operation.
-        if (expectedAccountId && account.id.toLowerCase() !== expectedAccountId.toLowerCase()) {
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          rememberAccount(null);
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: "A different account is active in another tab. Sign in again here to open its saved progress." }));
-          return;
-        }
-
-        const nativeNeedsRenewal = !!localSession && localSession.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000;
-        const webNeedsRenewal = !isNative && Date.now() - lastRenewalAt.current >= 12 * 60 * 60 * 1000;
-        if (nativeNeedsRenewal || webNeedsRenewal) {
-          try {
-            await renewSession(account.id);
+          const nativeNeedsRenewal = !!localSession && localSession.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000;
+          const webNeedsRenewal = !isNative && Date.now() - lastRenewalAt.current >= 12 * 60 * 60 * 1000;
+          if (nativeNeedsRenewal || webNeedsRenewal) {
+            try {
+              await renewSession(account.id);
+              if (!current()) return;
+              lastRenewalAt.current = Date.now();
+            } catch (error) {
+              if (!current()) return;
+              if (isUnauthorized(error)) throw error;
+              // A transient renew failure does not hide an account whose session
+              // was just confirmed by /me. A later foreground event can retry it.
+            }
+          }
+          if (!current()) return;
+          // Confirming the account that is already open keeps its session, so a resume right
+          // after sign-in does not cancel the backup sync that the sign-in started.
+          if (shouldReopenAccount(stateRef.current.phase, stateRef.current.account?.id, account.id)) await establishAccount(account, operation);
+          else setState((value) => (value.account?.id?.toLowerCase() === account.id.toLowerCase() ? { ...value, account } : value));
+        } catch (error) {
+          if (!current()) return;
+          if (error instanceof GuestReservationFailedError) return;
+          if (isUnauthorized(error)) {
+            if (isNative) await clearLocalNativeSession().catch(() => {});
             if (!current()) return;
-            lastRenewalAt.current = Date.now();
-          } catch (error) {
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            rememberAccount(null);
+            setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: null }));
+            return;
+          }
+          const cachedId = expectedAccountId ?? lastAccountId();
+          if (cachedId) {
+            let lastSuccessfulBackupAt: number | null = null;
+            try {
+              lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(cachedId);
+            } catch {
+              /* Keep offline access available if status metadata cannot be read. */
+            }
+            let lastCompleteSyncAt: number | null = null;
+            try {
+              lastCompleteSyncAt = await getLastCompleteSyncAt(cachedId);
+            } catch {
+              /* Keep offline access available if status metadata cannot be read. */
+            }
             if (!current()) return;
-            if (isUnauthorized(error)) throw error;
-            // A transient renew failure does not hide an account whose session
-            // was just confirmed by /me. A later foreground event can retry it.
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            setState((value) => ({
+              ...value,
+              phase: "offline-account",
+              account: null,
+              offlineAccountId: cachedId,
+              backup: {
+                ...EMPTY_BACKUP,
+                phase: "offline",
+                message: networkMessage(error),
+                updatedAt: lastSuccessfulBackupAt,
+                lastSyncedAt: lastCompleteSyncAt,
+              },
+              startupError: networkMessage(error),
+            }));
+          } else {
+            abortProgressRequests(syncAbortControllers.current);
+            syncRerunRequested.current.clear();
+            sessionGeneration.current += 1;
+            setState((value) => ({
+              ...value,
+              phase: "guest",
+              account: null,
+              offlineAccountId: null,
+              backup: EMPTY_BACKUP,
+              startupError: networkMessage(error),
+            }));
           }
         }
-        if (!current()) return;
-        // Confirming the account that is already open keeps its session, so a resume right
-        // after sign-in does not cancel the backup sync that the sign-in started.
-        if (shouldReopenAccount(stateRef.current.phase, stateRef.current.account?.id, account.id)) await establishAccount(account, operation);
-        else setState((value) => value.account?.id?.toLowerCase() === account.id.toLowerCase() ? { ...value, account } : value);
-      } catch (error) {
-        if (!current()) return;
-        if (error instanceof GuestReservationFailedError) return;
-        if (isUnauthorized(error)) {
-          if (isNative) await clearLocalNativeSession().catch(() => {});
-          if (!current()) return;
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          rememberAccount(null);
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: null }));
-          return;
-        }
-        const cachedId = expectedAccountId ?? lastAccountId();
-        if (cachedId) {
-          let lastSuccessfulBackupAt: number | null = null;
-          try { lastSuccessfulBackupAt = await getLastSuccessfulBackupAt(cachedId); }
-          catch { /* Keep offline access available if status metadata cannot be read. */ }
-          let lastCompleteSyncAt: number | null = null;
-          try { lastCompleteSyncAt = await getLastCompleteSyncAt(cachedId); }
-          catch { /* Keep offline access available if status metadata cannot be read. */ }
-          if (!current()) return;
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          setState((value) => ({
-            ...value,
-            phase: "offline-account",
-            account: null,
-            offlineAccountId: cachedId,
-            backup: { ...EMPTY_BACKUP, phase: "offline", message: networkMessage(error), updatedAt: lastSuccessfulBackupAt, lastSyncedAt: lastCompleteSyncAt },
-            startupError: networkMessage(error),
-          }));
-        } else {
-          abortProgressRequests(syncAbortControllers.current);
-          syncRerunRequested.current.clear();
-          sessionGeneration.current += 1;
-          setState((value) => ({ ...value, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, startupError: networkMessage(error) }));
-        }
-      }
-    })();
-    refreshInFlight.current = { operation, promise: task };
-    void task.then(
-      () => { if (refreshInFlight.current?.promise === task) refreshInFlight.current = null; },
-      () => { if (refreshInFlight.current?.promise === task) refreshInFlight.current = null; },
-    );
-    return task;
-  }, [establishAccount, isNative]);
+      })();
+      refreshInFlight.current = { operation, promise: task };
+      void task.then(
+        () => {
+          if (refreshInFlight.current?.promise === task) refreshInFlight.current = null;
+        },
+        () => {
+          if (refreshInFlight.current?.promise === task) refreshInFlight.current = null;
+        },
+      );
+      return task;
+    },
+    [establishAccount, isNative],
+  );
   refreshRef.current = refresh;
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   // A sign-in the person started runs to the end: background refreshes wait for it (see
   // SignInGate), and the first backup sync starts as soon as the account is open.
-  const interactiveSignIn = useCallback((authenticate: () => Promise<AccountProfile>) => signInGate.current.run(async () => {
-    const operation = ++authOperationGeneration.current;
-    const account = await establishAccount(await authenticate(), operation);
-    void syncRef.current({ retryAfterFlight: true });
-    return account;
-  }), [establishAccount]);
-  const signUp = useCallback((input: { email: string; password: string; displayName: string }) => interactiveSignIn(() => registerAccount(input)), [interactiveSignIn]);
+  const interactiveSignIn = useCallback(
+    (authenticate: () => Promise<AccountProfile>) =>
+      signInGate.current.run(async () => {
+        const operation = ++authOperationGeneration.current;
+        const account = await establishAccount(await authenticate(), operation);
+        void syncRef.current({ retryAfterFlight: true });
+        return account;
+      }),
+    [establishAccount],
+  );
+  const signUp = useCallback(
+    (input: { email: string; password: string; displayName: string }) => interactiveSignIn(() => registerAccount(input)),
+    [interactiveSignIn],
+  );
   const signIn = useCallback((input: { email: string; password: string }) => interactiveSignIn(() => loginAccount(input)), [interactiveSignIn]);
-  const signInGoogle = useCallback((idToken: string, nonce: string) => interactiveSignIn(() => completeGoogleSignIn(idToken, nonce, isNative ? "native" : "web")), [interactiveSignIn, isNative]);
-  const linkGoogle = useCallback(async (idToken: string, nonce: string) => {
-    const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-    if (!accountId) throw new Error("Sign in again before linking Google.");
-    const generation = sessionGeneration.current;
-    const account = await linkGoogleAccount(idToken, nonce, isNative ? "native" : "web", accountId);
-    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) throw new Error("The signed-in account changed. Retry Google linking.");
-    setState((current) => ({ ...current, account, notice: { kind: "success", message: "Google is now linked to this account." } }));
-  }, [isNative]);
+  const signInGoogle = useCallback(
+    (idToken: string, nonce: string) => interactiveSignIn(() => completeGoogleSignIn(idToken, nonce, isNative ? "native" : "web")),
+    [interactiveSignIn, isNative],
+  );
+  const linkGoogle = useCallback(
+    async (idToken: string, nonce: string) => {
+      const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
+      if (!accountId) throw new Error("Sign in again before linking Google.");
+      const generation = sessionGeneration.current;
+      const account = await linkGoogleAccount(idToken, nonce, isNative ? "native" : "web", accountId);
+      if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+        throw new Error("The signed-in account changed. Retry Google linking.");
+      setState((current) => ({ ...current, account, notice: { kind: "success", message: "Google is now linked to this account." } }));
+    },
+    [isNative],
+  );
 
   const signOut = useCallback(async () => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
@@ -404,15 +473,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return;
     let localCleanupFailed = false;
     if (isNative) {
-      try { await clearLocalNativeSession(); }
-      catch { localCleanupFailed = true; }
+      try {
+        await clearLocalNativeSession();
+      } catch {
+        localCleanupFailed = true;
+      }
     }
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return;
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
     rememberAccount(null);
-    setState((current) => ({ ...current, phase: "guest", account: null, offlineAccountId: null, backup: EMPTY_BACKUP, notice: { kind: localCleanupFailed ? "error" : "success", message: localCleanupFailed ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish." : "You signed out. This account's saved progress stays separately on this device." }, progressRevision: current.progressRevision + 1 }));
+    setState((current) => ({
+      ...current,
+      phase: "guest",
+      account: null,
+      offlineAccountId: null,
+      backup: EMPTY_BACKUP,
+      notice: {
+        kind: localCleanupFailed ? "error" : "success",
+        message: localCleanupFailed
+          ? "You signed out, but this device could not clear its secure session. Reopen the app while online to finish."
+          : "You signed out. This account's saved progress stays separately on this device.",
+      },
+      progressRevision: current.progressRevision + 1,
+    }));
   }, [isNative]);
 
   const sendVerification = useCallback(async () => {
@@ -420,7 +505,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accountId) throw new Error("Sign in again before requesting a verification link.");
     const generation = sessionGeneration.current;
     await requestEmailVerification(accountId);
-    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) throw new Error("The signed-in account changed. Retry the verification request.");
+    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      throw new Error("The signed-in account changed. Retry the verification request.");
   }, []);
   const verifyEmail = useCallback(async (token: string) => {
     const operation = authOperationGeneration.current;
@@ -432,10 +518,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (authOperationGeneration.current !== operation || (accountId && stateRef.current.account?.id !== accountId)) return;
     setState((current) => ({ ...current, account, notice: { kind: "success", message: "Your email address is verified." } }));
   }, []);
-  const requestReset = useCallback(async (email: string) => { await requestPasswordReset(email); }, []);
+  const requestReset = useCallback(async (email: string) => {
+    await requestPasswordReset(email);
+  }, []);
   const resetPassword = useCallback(async (token: string, password: string) => {
     await confirmPasswordReset(token, password);
-    setState((current) => ({ ...current, pendingAction: null, notice: { kind: "success", message: "Your password was changed. Sign in with the new password." } }));
+    setState((current) => ({
+      ...current,
+      pendingAction: null,
+      notice: { kind: "success", message: "Your password was changed. Sign in with the new password." },
+    }));
   }, []);
   const clearPendingAction = useCallback(() => setState((current) => ({ ...current, pendingAction: null })), []);
   const clearNotice = useCallback(() => setState((current) => ({ ...current, notice: null })), []);
@@ -444,15 +536,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accountId) throw new Error("Sign in again before verifying this account.");
     const generation = sessionGeneration.current;
     await reauthenticatePassword(password, accountId);
-    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) throw new Error("The signed-in account changed. Verify it again before continuing.");
+    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      throw new Error("The signed-in account changed. Verify it again before continuing.");
   }, []);
-  const reauthGoogle = useCallback(async (idToken: string, nonce: string) => {
-    const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-    if (!accountId) throw new Error("Sign in again before verifying this account.");
-    const generation = sessionGeneration.current;
-    await reauthenticateGoogle(idToken, nonce, isNative ? "native" : "web", accountId);
-    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) throw new Error("The signed-in account changed. Verify it again before continuing.");
-  }, [isNative]);
+  const reauthGoogle = useCallback(
+    async (idToken: string, nonce: string) => {
+      const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
+      if (!accountId) throw new Error("Sign in again before verifying this account.");
+      const generation = sessionGeneration.current;
+      await reauthenticateGoogle(idToken, nonce, isNative ? "native" : "web", accountId);
+      if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+        throw new Error("The signed-in account changed. Verify it again before continuing.");
+    },
+    [isNative],
+  );
   const googleChallenge = useCallback((purpose: GooglePurpose) => {
     const accountId = purpose === "sign_in" ? undefined : stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : undefined;
     if (purpose !== "sign_in" && !accountId) throw new Error("Sign in again before verifying this account.");
@@ -464,21 +561,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accountId || !foreground.current) return Promise.resolve(null);
     const generation = sessionGeneration.current;
     const flightKey = `${generation}:${accountId.toLowerCase()}`;
-    const isCurrentSession = () => sessionGeneration.current === generation && stateRef.current.phase === "authenticated" && stateRef.current.account?.id?.toLowerCase() === accountId.toLowerCase();
+    const isCurrentSession = () =>
+      sessionGeneration.current === generation &&
+      stateRef.current.phase === "authenticated" &&
+      stateRef.current.account?.id?.toLowerCase() === accountId.toLowerCase();
     const setUnavailableStatus = async (connected: boolean) => {
       const owner = { kind: "account" as const, accountId };
       const [claims, photos] = await Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)]);
       if (isCurrentSession()) {
-        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
-          ? { ...current, backup: {
-            phase: connected ? "pending" : "offline",
-            claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
-            photosPending: photos.filter((photo) => photo.backupState === "pending").length,
-            message: "Your saved progress stays on this device.",
-            updatedAt: current.backup.updatedAt,
-            lastSyncedAt: current.backup.lastSyncedAt,
-          } }
-          : current);
+        setState((current) =>
+          sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+            ? {
+                ...current,
+                backup: {
+                  phase: connected ? "pending" : "offline",
+                  claimsPending: claims.filter((claim) => claim.syncState !== "acknowledged").length,
+                  photosPending: photos.filter((photo) => photo.backupState === "pending").length,
+                  message: "Your saved progress stays on this device.",
+                  updatedAt: current.backup.updatedAt,
+                  lastSyncedAt: current.backup.lastSyncedAt,
+                },
+              }
+            : current,
+        );
       }
       return null;
     };
@@ -491,14 +596,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         controller = new AbortController();
         syncAbortControllers.current.set(flightKey, controller);
-        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
-          ? { ...current, backup: { ...current.backup, phase: "syncing", message: null } }
-          : current);
-        const result = await runProgressSyncWhenReady({
-          accountId,
-          fetchAuthenticated: (input, init) => fetchAuthenticated(input, { ...init, signal: controller?.signal }, accountId),
-          isCurrent: isCurrentSession,
-        }, () => foreground.current, connectivity);
+        setState((current) =>
+          sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+            ? { ...current, backup: { ...current.backup, phase: "syncing", message: null } }
+            : current,
+        );
+        const result = await runProgressSyncWhenReady(
+          {
+            accountId,
+            fetchAuthenticated: (input, init) => fetchAuthenticated(input, { ...init, signal: controller?.signal }, accountId),
+            isCurrent: isCurrentSession,
+          },
+          () => foreground.current,
+          connectivity,
+        );
         if (!result) {
           if (isCurrentSession() && foreground.current) {
             const latest = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
@@ -516,13 +627,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isCurrentSession()) return result;
 
         let lastSyncedAt = stateRef.current.backup.lastSyncedAt;
-        lastSyncedAt = await persistLastCompleteSyncTimestamp(accountId, result, lastSyncedAt, {
-          get: getLastCompleteSyncAt,
-          set: setLastCompleteSyncAt,
-        }, async () => {
-          const currentConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
-          return isCurrentSession() && foreground.current && currentConnectivity.connected && currentConnectivity.allowed;
-        });
+        lastSyncedAt = await persistLastCompleteSyncTimestamp(
+          accountId,
+          result,
+          lastSyncedAt,
+          {
+            get: getLastCompleteSyncAt,
+            set: setLastCompleteSyncAt,
+          },
+          async () => {
+            const currentConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+            return isCurrentSession() && foreground.current && currentConnectivity.connected && currentConnectivity.allowed;
+          },
+        );
         if (!isCurrentSession()) return result;
 
         const afterSyncConnectivity = await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
@@ -541,25 +658,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               : hasPending
                 ? "Your saved progress stays on this device."
                 : "Your account is backed up.";
-        setState((current) => sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
-          ? { ...current, backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt }, progressRevision: current.progressRevision + 1 }
-          : current);
+        setState((current) =>
+          sessionGeneration.current === generation && current.account?.id?.toLowerCase() === accountId.toLowerCase()
+            ? {
+                ...current,
+                backup: { phase, claimsPending: result.claimsPending, photosPending: result.photosPending, message, updatedAt, lastSyncedAt },
+                progressRevision: current.progressRevision + 1,
+              }
+            : current,
+        );
         return result;
       } catch {
-        if (isCurrentSession() && foreground.current) setState((current) => ({ ...current, backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your saved progress is safe on this device." } }));
+        if (isCurrentSession() && foreground.current)
+          setState((current) => ({
+            ...current,
+            backup: { ...current.backup, phase: "error", message: "Progress backup couldn't finish. Your saved progress is safe on this device." },
+          }));
         return null;
       } finally {
         if (controller && syncAbortControllers.current.get(flightKey) === controller) syncAbortControllers.current.delete(flightKey);
       }
     };
-    return coalesceProgressSync(
-      syncInFlight.current,
-      syncRerunRequested.current,
-      flightKey,
-      run,
-      options.retryAfterFlight === true,
-      () => { if (isCurrentSession() && foreground.current) void syncRef.current(); },
-    );
+    return coalesceProgressSync(syncInFlight.current, syncRerunRequested.current, flightKey, run, options.retryAfterFlight === true, () => {
+      if (isCurrentSession() && foreground.current) void syncRef.current();
+    });
   }, []);
   syncRef.current = syncBackup;
 
@@ -571,13 +693,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
     const response = await deleteCurrentAccount(accountId);
-    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
+    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      return response;
     let localCleanupError = false;
-    try { await clearAccountProgressAfterServerDeletion(accountId); }
-    catch { localCleanupError = true; }
-    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
-    if (isNative) await clearLocalNativeSession().catch(() => { localCleanupError = true; });
-    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return response;
+    try {
+      await clearAccountProgressAfterServerDeletion(accountId);
+    } catch {
+      localCleanupError = true;
+    }
+    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      return response;
+    if (isNative)
+      await clearLocalNativeSession().catch(() => {
+        localCleanupError = true;
+      });
+    if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      return response;
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
     sessionGeneration.current += 1;
@@ -588,7 +719,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       account: null,
       offlineAccountId: null,
       backup: EMPTY_BACKUP,
-      notice: { kind: localCleanupError ? "error" : "success", message: localCleanupError ? `The server accepted deletion (${response.receiptId}), but this device could not finish clearing its saved account copy.` : `Account deletion ${response.status === "complete" ? "is complete" : `is being processed (receipt ${response.receiptId})`}.` },
+      notice: {
+        kind: localCleanupError ? "error" : "success",
+        message: localCleanupError
+          ? `The server accepted deletion (${response.receiptId}), but this device could not finish clearing its saved account copy.`
+          : `Account deletion ${response.status === "complete" ? "is complete" : `is being processed (receipt ${response.receiptId})`}.`,
+      },
       progressRevision: current.progressRevision + 1,
     }));
     return response;
@@ -632,8 +768,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (stateRef.current.phase === "authenticated") await syncRef.current({ retryAfterFlight });
       })();
       resumeInFlight.current = task;
-      try { await task; }
-      finally { if (resumeInFlight.current === task) resumeInFlight.current = null; }
+      try {
+        await task;
+      } finally {
+        if (resumeInFlight.current === task) resumeInFlight.current = null;
+      }
     };
     const onVisibility = () => {
       const visible = document.visibilityState !== "hidden";
@@ -651,17 +790,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!previous.connected && connectivity.connected) void resumeWork(false);
     });
     let appListener: { remove: () => Promise<void> } | undefined;
-    if (isNative) void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-      const becameActive = isActive && !foreground.current;
-      setForeground(isActive);
-      if (becameActive) void resumeWork(true);
-    }).then((listener) => { if (live) appListener = listener; else void listener.remove(); }).catch(() => {});
-    if (isNative) void CapacitorApp.getState().then(({ isActive }) => {
-      if (!live) return;
-      const becameActive = isActive && !foreground.current;
-      setForeground(isActive);
-      if (becameActive) void resumeWork(true);
-    }).catch(() => {});
+    if (isNative)
+      void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        const becameActive = isActive && !foreground.current;
+        setForeground(isActive);
+        if (becameActive) void resumeWork(true);
+      })
+        .then((listener) => {
+          if (live) appListener = listener;
+          else void listener.remove();
+        })
+        .catch(() => {});
+    if (isNative)
+      void CapacitorApp.getState()
+        .then(({ isActive }) => {
+          if (!live) return;
+          const becameActive = isActive && !foreground.current;
+          setForeground(isActive);
+          if (becameActive) void resumeWork(true);
+        })
+        .catch(() => {});
     return () => {
       live = false;
       abortProgressRequests(syncAbortControllers.current);
@@ -675,9 +823,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onAccountStorage = (event: StorageEvent) => {
       if (event.key !== LAST_ACCOUNT_KEY) return;
-      const nextId = event.newValue && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.newValue)
-        ? event.newValue
-        : null;
+      const nextId =
+        event.newValue && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.newValue) ? event.newValue : null;
       const currentId = stateRef.current.account?.id ?? stateRef.current.offlineAccountId;
       if ((currentId ?? null)?.toLowerCase() === (nextId ?? null)?.toLowerCase()) return;
       authOperationGeneration.current += 1;
@@ -698,26 +845,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onAccountStorage);
   }, []);
 
-  const handleAuthLink = useCallback(async (rawUrl: string) => {
-    const action = isNative ? parseNativeAuthLink(rawUrl) : parseWebAuthAction();
-    if (!action) return;
-    if (action.kind === "password_reset") {
-      setState((current) => ({ ...current, pendingAction: { kind: "password_reset", token: action.token }, notice: null }));
-      return;
-    }
-    try {
-      const operation = authOperationGeneration.current;
-      const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
-      await confirmEmailVerification(action.token);
-      if (authOperationGeneration.current !== operation) return;
-      let account = stateRef.current.account;
-      if (accountId) account = await getCurrentAccount(accountId);
-      if (authOperationGeneration.current !== operation || (accountId && stateRef.current.account?.id !== accountId)) return;
-      setState((current) => ({ ...current, account, notice: { kind: "success", message: "Your email address is verified." } }));
-    } catch (error) {
-      setState((current) => ({ ...current, notice: { kind: "error", message: error instanceof Error ? error.message : "This verification link could not be used. Request a new one from your account." } }));
-    }
-  }, [isNative]);
+  const handleAuthLink = useCallback(
+    async (rawUrl: string) => {
+      const action = isNative ? parseNativeAuthLink(rawUrl) : parseWebAuthAction();
+      if (!action) return;
+      if (action.kind === "password_reset") {
+        setState((current) => ({ ...current, pendingAction: { kind: "password_reset", token: action.token }, notice: null }));
+        return;
+      }
+      try {
+        const operation = authOperationGeneration.current;
+        const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
+        await confirmEmailVerification(action.token);
+        if (authOperationGeneration.current !== operation) return;
+        let account = stateRef.current.account;
+        if (accountId) account = await getCurrentAccount(accountId);
+        if (authOperationGeneration.current !== operation || (accountId && stateRef.current.account?.id !== accountId)) return;
+        setState((current) => ({ ...current, account, notice: { kind: "success", message: "Your email address is verified." } }));
+      } catch (error) {
+        setState((current) => ({
+          ...current,
+          notice: {
+            kind: "error",
+            message: error instanceof Error ? error.message : "This verification link could not be used. Request a new one from your account.",
+          },
+        }));
+      }
+    },
+    [isNative],
+  );
 
   useEffect(() => {
     if (!isNative) {
@@ -726,18 +882,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     let live = true;
     let stop: (() => Promise<void>) | undefined;
-    void listenForNativeAuthLinks((url) => handleAuthLink(url)).then((cleanup) => {
-      if (live) stop = cleanup;
-      else void cleanup();
-    }).catch(() => {});
-    return () => { live = false; void stop?.(); };
+    void listenForNativeAuthLinks((url) => handleAuthLink(url))
+      .then((cleanup) => {
+        if (live) stop = cleanup;
+        else void cleanup();
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      void stop?.();
+    };
   }, [handleAuthLink, isNative]);
 
   const googleWebClientId = useMemo(() => {
     if (!state.config?.googleWebEnabled || !isValidGoogleWebClientId(state.config.googleWebClientId)) return null;
     return resolveGoogleWebClientId(state.config.googleWebClientId);
   }, [state.config]);
-  const ownerAccountId = state.phase === "authenticated" ? state.account?.id ?? null : state.phase === "offline-account" ? state.offlineAccountId : null;
+  const ownerAccountId = state.phase === "authenticated" ? (state.account?.id ?? null) : state.phase === "offline-account" ? state.offlineAccountId : null;
 
   const value: AuthContextValue = {
     ...state,

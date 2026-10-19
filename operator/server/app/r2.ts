@@ -68,7 +68,11 @@ export class OutboundError extends Error {
 }
 
 function hostOf(input: string): string {
-  try { return new URL(input).host; } catch { return "the remote host"; }
+  try {
+    return new URL(input).host;
+  } catch {
+    return "the remote host";
+  }
 }
 
 /**
@@ -131,7 +135,7 @@ function objectPath(key: string): string {
 /** Cloudflare's own error code and message, which name the problem without echoing credentials. */
 async function cloudflareReason(response: Response): Promise<string> {
   try {
-    const body = await response.json() as { errors?: Array<{ code?: unknown; message?: unknown }> };
+    const body = (await response.json()) as { errors?: Array<{ code?: unknown; message?: unknown }> };
     const first = body.errors?.[0];
     if (first && (typeof first.message === "string" || typeof first.code === "number")) {
       return ` Cloudflare says: ${String(first.code ?? "")} ${failureText(new Error(String(first.message ?? ""))).replace(/^Error: /, "")}`.trimEnd();
@@ -145,7 +149,11 @@ async function cloudflareReason(response: Response): Promise<string> {
 async function failure(response: Response, action: string): Promise<HttpError> {
   const reason = await cloudflareReason(response);
   if (response.status === 401 || response.status === 403) {
-    return new HttpError(502, "cloudflare_denied", `Cloudflare refused to ${action} (HTTP ${response.status}). The token needs R2 read and write on the content bucket.${reason}`);
+    return new HttpError(
+      502,
+      "cloudflare_denied",
+      `Cloudflare refused to ${action} (HTTP ${response.status}). The token needs R2 read and write on the content bucket.${reason}`,
+    );
   }
   return new HttpError(502, "cloudflare_failed", `Cloudflare could not ${action} (HTTP ${response.status}).${reason}`);
 }
@@ -161,7 +169,7 @@ export function createCloudflareR2(env: R2Env, fetcher: Fetcher): R2Client | nul
   async function call(url: string, init: RequestInit, action: string): Promise<Response> {
     let response: Response;
     try {
-      response = await timedFetch(fetcher, url, { ...init, headers: { ...auth, ...init.headers as Record<string, string> } });
+      response = await timedFetch(fetcher, url, { ...init, headers: { ...auth, ...(init.headers as Record<string, string>) } });
     } catch (error) {
       throw new HttpError(502, "cloudflare_unreachable", `Cloudflare could not be reached to ${action}. ${failureText(error)}`);
     }
@@ -177,8 +185,9 @@ export function createCloudflareR2(env: R2Env, fetcher: Fetcher): R2Client | nul
       if (cursor) query.set("cursor", cursor);
       const response = await call(`${base}/objects?${query}`, { method: "GET" }, "list the bucket");
       if (!response.ok) throw await failure(response, "list the bucket");
-      const body = await response.json() as { success?: boolean; result?: unknown; result_info?: { cursor?: unknown; is_truncated?: unknown } };
-      if (body.success !== true || !Array.isArray(body.result)) throw new HttpError(502, "cloudflare_failed", "Cloudflare returned an incomplete bucket listing.");
+      const body = (await response.json()) as { success?: boolean; result?: unknown; result_info?: { cursor?: unknown; is_truncated?: unknown } };
+      if (body.success !== true || !Array.isArray(body.result))
+        throw new HttpError(502, "cloudflare_failed", "Cloudflare returned an incomplete bucket listing.");
       for (const item of body.result as Array<Record<string, unknown>>) {
         if (typeof item.key !== "string") continue;
         rows.push({
@@ -208,11 +217,15 @@ export function createCloudflareR2(env: R2Env, fetcher: Fetcher): R2Client | nul
       return text;
     },
     async putJson(key, body, cacheControl) {
-      const response = await call(`${base}/objects/${objectPath(key)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json", "cache-control": cacheControl },
-        body,
-      }, "write the pointer");
+      const response = await call(
+        `${base}/objects/${objectPath(key)}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json", "cache-control": cacheControl },
+          body,
+        },
+        "write the pointer",
+      );
       if (!response.ok) throw await failure(response, "write the pointer");
     },
     list,

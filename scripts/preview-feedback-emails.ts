@@ -9,7 +9,8 @@ const outDir = resolve(".codex/email-previews");
 const previewReport: FeedbackEmailReport = {
   id: "fb_demo_32f07a91c",
   kind: "bug",
-  message: "PREVIEW SAMPLE: At 200% text size on a small phone, the final walking direction slips below the park sheet. I have to close the sheet to read it. Could the route stay visible while the sheet is open?",
+  message:
+    "PREVIEW SAMPLE: At 200% text size on a small phone, the final walking direction slips below the park sheet. I have to close the sheet to read it. Could the route stay visible while the sheet is open?",
   email: "walker@example.test",
   contact: true,
   context: {
@@ -64,10 +65,7 @@ function runSafetyChecks(): void {
   assert.ok(receipt.html.includes("Feedback receipt"));
   assert.ok(receipt.text.includes("Feedback type: Bug report"));
 
-  assert.throws(
-    () => renderReceiptEmail(previewReport, { appUrl: "javascript:alert(1)" }),
-    /HTTP or HTTPS/i,
-  );
+  assert.throws(() => renderReceiptEmail(previewReport, { appUrl: "javascript:alert(1)" }), /HTTP or HTTPS/i);
 }
 
 async function main(): Promise<void> {
@@ -76,10 +74,7 @@ async function main(): Promise<void> {
 
   const operator = renderOperatorEmail(previewReport, { appUrl });
   const receipt = renderReceiptEmail(previewReport, { appUrl });
-  await Promise.all([
-    writeFile(resolve(outDir, "operator.html"), operator.html, "utf8"),
-    writeFile(resolve(outDir, "receipt.html"), receipt.html, "utf8"),
-  ]);
+  await Promise.all([writeFile(resolve(outDir, "operator.html"), operator.html, "utf8"), writeFile(resolve(outDir, "receipt.html"), receipt.html, "utf8")]);
 
   console.log(`Email safety checks passed. Previews written to ${outDir}`);
 }

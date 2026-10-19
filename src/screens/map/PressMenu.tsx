@@ -25,12 +25,14 @@ export function PressMenu({ mapRef, point, onClose, onFeedback }: Props) {
     const container = mapRef.current?.getContainer();
     const box = menu.current;
     if (!container || !box) return;
-    setPlace(pressMenuPosition(
-      point,
-      { width: container.clientWidth, height: container.clientHeight },
-      { width: box.offsetWidth, height: box.offsetHeight },
-      TOP_CONTROLS,
-    ));
+    setPlace(
+      pressMenuPosition(
+        point,
+        { width: container.clientWidth, height: container.clientHeight },
+        { width: box.offsetWidth, height: box.offsetHeight },
+        TOP_CONTROLS,
+      ),
+    );
   }, [mapRef, point]);
 
   // The pressed spot is fixed on screen, so the menu closes when the map moves or on any tap elsewhere.
@@ -76,7 +78,9 @@ export function PressMenu({ mapRef, point, onClose, onFeedback }: Props) {
         exit={{ opacity: 0, scale: 0.8 }}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
       >
-        <span className="eyebrow press-menu__title" id="press-menu-title">Should something be here?</span>
+        <span className="eyebrow press-menu__title" id="press-menu-title">
+          Should something be here?
+        </span>
         <button role="menuitem" onClick={onFeedback}>
           <Icon name="feedback" size={20} /> Send feedback
         </button>

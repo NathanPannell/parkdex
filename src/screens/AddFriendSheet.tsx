@@ -73,7 +73,9 @@ function AddFriendBody({ onScan, onClose }: { onScan: () => void; onClose: () =>
               {player && <Flag seed={player.flagSeed} size={34} />}
               <span>
                 <strong>{player ? `@${player.handle}` : "Your code"}</strong>
-                <span className="add-friend__code" aria-label={`Friend code ${code.split("").join(" ")}`}>{formatSocialCode(code)}</span>
+                <span className="add-friend__code" aria-label={`Friend code ${code.split("").join(" ")}`}>
+                  {formatSocialCode(code)}
+                </span>
               </span>
             </div>
             <p className="handle-sheet__help">Your friend scans this with Parkdex or their phone's camera, or types the code.</p>
@@ -87,22 +89,27 @@ function AddFriendBody({ onScan, onClose }: { onScan: () => void; onClose: () =>
           <Icon name="share" size={18} /> Share your link
         </motion.button>
       )}
-      {code && (
-        confirmReset ? (
+      {code &&
+        (confirmReset ? (
           <div className="add-friend__reset" role="group" aria-label="Get a new code">
             <p>Your old code, QR and links stop working. Your friends stay.</p>
             <div>
-              <button type="button" className="btn btn--sm btn--paper" disabled={busy} onClick={() => setConfirmReset(false)}>Keep this code</button>
-              <button type="button" className="btn btn--sm btn--ink" disabled={busy || !friends.online} onClick={() => void reset()}>{busy ? "Changing…" : "Get a new code"}</button>
+              <button type="button" className="btn btn--sm btn--paper" disabled={busy} onClick={() => setConfirmReset(false)}>
+                Keep this code
+              </button>
+              <button type="button" className="btn btn--sm btn--ink" disabled={busy || !friends.online} onClick={() => void reset()}>
+                {busy ? "Changing…" : "Get a new code"}
+              </button>
             </div>
           </div>
         ) : (
           <button type="button" className="add-friend__link" onClick={() => setConfirmReset(true)} disabled={!friends.online}>
             Get a new code
           </button>
-        )
-      )}
-      <button type="button" className="add-friend__link" onClick={onClose}>Done</button>
+        ))}
+      <button type="button" className="add-friend__link" onClick={onClose}>
+        Done
+      </button>
     </div>
   );
 }
@@ -128,7 +135,11 @@ export function AddFriendSheet() {
   return (
     <>
       <AnimatePresence>
-        {open && friends.addSheet === "open" && <SheetFrame key="add-friend" onClose={close}><AddFriendBody onScan={() => friends.setAddSheet("scan")} onClose={close} /></SheetFrame>}
+        {open && friends.addSheet === "open" && (
+          <SheetFrame key="add-friend" onClose={close}>
+            <AddFriendBody onScan={() => friends.setAddSheet("scan")} onClose={close} />
+          </SheetFrame>
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {friends.addSheet === "scan" && (
@@ -190,7 +201,8 @@ function FriendNotices() {
     const rejected = fresh.filter((notice) => notice.status === "rejected");
     if (added.length === 1) toast(`You and @${added[0].friend.handle} are friends`, "moss");
     else if (added.length > 1) toast(`${added.length} new friends added`, "moss");
-    if (rejected.length) toast(rejected.length === 1 ? `Friend code ${formatSocialCode(rejected[0].code)} didn't work` : `${rejected.length} friend codes didn't work`, "kip");
+    if (rejected.length)
+      toast(rejected.length === 1 ? `Friend code ${formatSocialCode(rejected[0].code)} didn't work` : `${rejected.length} friend codes didn't work`, "kip");
     clearNotices();
   }, [notices, clearNotices, toast]);
 

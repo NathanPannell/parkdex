@@ -4,11 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-  CDN_ORIGIN,
-  prepareContentChannel,
-  publishContentChannel,
-} from "./publish-content-channel.mjs";
+import { CDN_ORIGIN, prepareContentChannel, publishContentChannel } from "./publish-content-channel.mjs";
 
 const RELEASE = "a".repeat(64);
 const CONTENT = Buffer.from('{"parks":[]}');
@@ -97,10 +93,7 @@ test("prepare verifies the exact published manifest and every asset before writi
   assert.equal(calls.filter((call) => call.url.includes(".r2.cloudflarestorage.com/")).length, 0);
   assert.deepEqual(
     calls.slice(0, 2).map((call) => call.url),
-    [
-      CDN_ORIGIN + "/releases/" + RELEASE + "/manifest.json",
-      sample.item.url,
-    ],
+    [CDN_ORIGIN + "/releases/" + RELEASE + "/manifest.json", sample.item.url],
   );
 });
 
@@ -194,9 +187,7 @@ test("a published manifest with different exact bytes blocks pointer preparation
     }),
     /does not exactly match the snapshot/,
   );
-  assert.deepEqual(calls, [
-    CDN_ORIGIN + "/releases/" + RELEASE + "/manifest.json",
-  ]);
+  assert.deepEqual(calls, [CDN_ORIGIN + "/releases/" + RELEASE + "/manifest.json"]);
 });
 
 test("stale generations and failed byte checks never upload a pointer", async (t) => {
@@ -227,7 +218,10 @@ test("stale generations and failed byte checks never upload a pointer", async (t
     }),
     /generation changed/,
   );
-  assert.equal(staleSetup.calls.some((call) => call.options.method === "PUT"), false);
+  assert.equal(
+    staleSetup.calls.some((call) => call.options.method === "PUT"),
+    false,
+  );
 
   const badSetup = publicFetch(sample);
   const badCalls = [];
@@ -248,5 +242,8 @@ test("stale generations and failed byte checks never upload a pointer", async (t
     }),
     /failed byte\/hash verification/,
   );
-  assert.equal(badCalls.some((call) => call.options.method === "PUT"), false);
+  assert.equal(
+    badCalls.some((call) => call.options.method === "PUT"),
+    false,
+  );
 });

@@ -4,7 +4,21 @@ import { HttpError } from "../../../worker/validation.js";
 import { SHAPE_FOR_CATEGORY } from "../drafts.js";
 import type { MultiPolygon } from "./geometry.js";
 import type { LivePark, LiveParkChanges, LiveParkDetail, LiveParkStore } from "./liveParks.js";
-import { grow, HISTORY_LIMIT, OUTLINE_LIMIT, sourceOf, type Bbox, type ChangeRow, type CoverInput, type CoverPhoto, type HiddenState, type ParkActivity, type ParkManagerStore, type ParkRow, type ParkStats } from "./manager.js";
+import {
+  grow,
+  HISTORY_LIMIT,
+  OUTLINE_LIMIT,
+  sourceOf,
+  type Bbox,
+  type ChangeRow,
+  type CoverInput,
+  type CoverPhoto,
+  type HiddenState,
+  type ParkActivity,
+  type ParkManagerStore,
+  type ParkRow,
+  type ParkStats,
+} from "./manager.js";
 import type { CatalogueNeighbour, OsmStore } from "./osm.js";
 import { outlineFor, REMOVED_REASON, type ParkRemovalStore, type RemovalOutline, type RemovalPlan, type RemovalResult } from "./removal.js";
 import { MemoryFoundingReviewStore, seedDemoReviews } from "./reviewMemory.js";
@@ -22,10 +36,20 @@ export class MemoryLiveParkStore implements LiveParkStore {
   revision = 0;
 
   /** One content revision with the given changes, like one database transaction. */
-  commit(entries: { entity: ChangeRow["entity"]; id: string; operation: ChangeRow["operation"]; value?: Record<string, unknown> | null }[], at = new Date().toISOString()): number {
+  commit(
+    entries: { entity: ChangeRow["entity"]; id: string; operation: ChangeRow["operation"]; value?: Record<string, unknown> | null }[],
+    at = new Date().toISOString(),
+  ): number {
     this.revision += 1;
     for (const entry of entries) {
-      this.changes.push({ revision: this.revision, at, entity: entry.entity, entityId: entry.id, operation: entry.operation, value: entry.entity === "park" && entry.operation === "upsert" ? entry.value ?? null : null });
+      this.changes.push({
+        revision: this.revision,
+        at,
+        entity: entry.entity,
+        entityId: entry.id,
+        operation: entry.operation,
+        value: entry.entity === "park" && entry.operation === "upsert" ? (entry.value ?? null) : null,
+      });
     }
     return this.revision;
   }
@@ -116,22 +140,39 @@ export class MemoryParkManagerStore implements ParkManagerStore {
   async rows(): Promise<ParkRow[]> {
     const visits = new Map<string, number>();
     for (const visit of this.visits) visits.set(visit.parkId, (visits.get(visit.parkId) ?? 0) + 1);
-    return [...this.live.parks.values()].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)).map((park) => {
-      const founder = this.founders.get(park.id);
-      return {
-        id: park.id, name: park.name, short: park.short, category: park.category, region: park.region, lat: park.lat, lng: park.lng,
-        biome: park.biome, rarity: park.rarity, source: sourceOf(park.id, this.legacy.has(park.id), this.proposals.has(park.id)),
-        hidden: this.hidden.get(park.id) ?? null,
-        founder: founder ? { handle: founder.handle, foundedAt: founder.foundedAt, photoSha256: founder.photo.sha256 } : null,
-        visits: visits.get(park.id) ?? 0,
-      };
-    });
+    return [...this.live.parks.values()]
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+      .map((park) => {
+        const founder = this.founders.get(park.id);
+        return {
+          id: park.id,
+          name: park.name,
+          short: park.short,
+          category: park.category,
+          region: park.region,
+          lat: park.lat,
+          lng: park.lng,
+          biome: park.biome,
+          rarity: park.rarity,
+          source: sourceOf(park.id, this.legacy.has(park.id), this.proposals.has(park.id)),
+          hidden: this.hidden.get(park.id) ?? null,
+          founder: founder ? { handle: founder.handle, foundedAt: founder.foundedAt, photoSha256: founder.photo.sha256 } : null,
+          visits: visits.get(park.id) ?? 0,
+        };
+      });
   }
 
   async stats(): Promise<ParkStats> {
     const total = this.live.parks.size;
     const hidden = [...this.hidden.keys()].filter((id) => this.live.parks.has(id)).length;
-    return { live: total - hidden, hidden, founded: this.founders.size, osmOutlines: this.osmOutlines, osmNotInParkdex: this.osmNotInParkdex, osmSourceDate: this.osmSourceDate };
+    return {
+      live: total - hidden,
+      hidden,
+      founded: this.founders.size,
+      osmOutlines: this.osmOutlines,
+      osmNotInParkdex: this.osmNotInParkdex,
+      osmSourceDate: this.osmSourceDate,
+    };
   }
 
   async outlines(bbox: Bbox) {
@@ -151,21 +192,36 @@ export class MemoryParkManagerStore implements ParkManagerStore {
     return {
       source: sourceOf(id, this.legacy.has(id), this.proposals.has(id)),
       hidden: this.hidden.get(id) ?? null,
-      founder: founder ? {
-        handle: founder.handle, foundedAt: founder.foundedAt, source: founder.source, photoSha256: founder.photo.sha256,
-        photoWidth: founder.width, photoHeight: founder.height, photoBytes: founder.photo.bytes.byteLength,
-      } : null,
+      founder: founder
+        ? {
+            handle: founder.handle,
+            foundedAt: founder.foundedAt,
+            source: founder.source,
+            photoSha256: founder.photo.sha256,
+            photoWidth: founder.width,
+            photoHeight: founder.height,
+            photoBytes: founder.photo.bytes.byteLength,
+          }
+        : null,
       visits: {
         total: visits.length,
         last30Days: visits.filter((visit) => at - Date.parse(visit.visitedAt) < 30 * 86_400_000).length,
         uniquePlayers: new Set(visits.map((visit) => visit.accountId)).size,
       },
-      flag: open ? {
-        handle: open.handle, since: open.startedAt, lastVisitAt: open.lastVisitAt,
-        fallsAt: new Date(Date.parse(open.lastVisitAt) + FALL_MS).toISOString(), up: Date.parse(open.lastVisitAt) + FALL_MS > at,
-      } : null,
+      flag: open
+        ? {
+            handle: open.handle,
+            since: open.startedAt,
+            lastVisitAt: open.lastVisitAt,
+            fallsAt: new Date(Date.parse(open.lastVisitAt) + FALL_MS).toISOString(),
+            up: Date.parse(open.lastVisitAt) + FALL_MS > at,
+          }
+        : null,
       tenures: this.tenures.filter((tenure) => tenure.parkId === id).length,
-      history: this.live.changes.filter((change) => change.entityId === id && change.entity !== "asset").reverse().slice(0, HISTORY_LIMIT)
+      history: this.live.changes
+        .filter((change) => change.entityId === id && change.entity !== "asset")
+        .reverse()
+        .slice(0, HISTORY_LIMIT)
         .map(({ entityId: _entityId, ...change }) => structuredClone(change)),
     };
   }
@@ -190,7 +246,8 @@ export class MemoryParkManagerStore implements ParkManagerStore {
 
   async remove(id: string) {
     this.park(id);
-    if (this.enrichment.has(id)) throw new HttpError(409, "park_in_enrichment", "This park is in the art enrichment queue, so it cannot be deleted. Hide it instead.");
+    if (this.enrichment.has(id))
+      throw new HttpError(409, "park_in_enrichment", "This park is in the art enrichment queue, so it cannot be deleted. Hide it instead.");
     this.live.parks.delete(id);
     this.hidden.delete(id);
     this.legacy.delete(id);
@@ -216,10 +273,18 @@ export class MemoryParkManagerStore implements ParkManagerStore {
 }
 
 function boxOf(geometry: MultiPolygon): Bbox {
-  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
-  for (const polygon of geometry.coordinates) for (const ring of polygon) for (const [lng, lat] of ring) {
-    west = Math.min(west, lng); east = Math.max(east, lng); south = Math.min(south, lat); north = Math.max(north, lat);
-  }
+  let west = Infinity,
+    south = Infinity,
+    east = -Infinity,
+    north = -Infinity;
+  for (const polygon of geometry.coordinates)
+    for (const ring of polygon)
+      for (const [lng, lat] of ring) {
+        west = Math.min(west, lng);
+        east = Math.max(east, lng);
+        south = Math.min(south, lat);
+        north = Math.max(north, lat);
+      }
   return { west, south, east, north };
 }
 
@@ -227,13 +292,20 @@ function boxOf(geometry: MultiPolygon): Bbox {
 export class MemoryOsmStore implements OsmStore {
   readonly features: OsmFeature[] = [];
 
-  constructor(readonly live: MemoryLiveParkStore, readonly manager: MemoryParkManagerStore) {}
+  constructor(
+    readonly live: MemoryLiveParkStore,
+    readonly manager: MemoryParkManagerStore,
+  ) {}
 
   async inBox(bbox: Bbox, limit: number) {
-    return this.features.filter((feature) => {
-      const box = boxOf(feature.geometry);
-      return box.west <= bbox.east && box.east >= bbox.west && box.south <= bbox.north && box.north >= bbox.south;
-    }).sort((a, b) => a.areaM2 - b.areaM2).slice(0, limit).map((feature) => structuredClone(feature));
+    return this.features
+      .filter((feature) => {
+        const box = boxOf(feature.geometry);
+        return box.west <= bbox.east && box.east >= bbox.west && box.south <= bbox.north && box.north >= bbox.south;
+      })
+      .sort((a, b) => a.areaM2 - b.areaM2)
+      .slice(0, limit)
+      .map((feature) => structuredClone(feature));
   }
 
   async feature(ref: OsmRef) {
@@ -250,8 +322,20 @@ export class MemoryOsmStore implements OsmStore {
   async publish(park: PublishablePark) {
     if (this.live.parks.has(park.id)) throw new HttpError(409, "already_in_parkdex", "This outline is already a Parkdex park.");
     this.live.parks.set(park.id, {
-      id: park.id, name: park.name, short: park.short, category: park.category, region: park.region, lat: park.lat, lng: park.lng,
-      biome: park.biome, shape: park.shape, rarity: park.rarity, scene: null, seed: park.seed, blurb: park.blurb, geometry: park.geometry,
+      id: park.id,
+      name: park.name,
+      short: park.short,
+      category: park.category,
+      region: park.region,
+      lat: park.lat,
+      lng: park.lng,
+      biome: park.biome,
+      shape: park.shape,
+      rarity: park.rarity,
+      scene: null,
+      seed: park.seed,
+      blurb: park.blurb,
+      geometry: park.geometry,
     });
     return this.live.commit([
       { entity: "park", id: park.id, operation: "upsert", value: this.live.parkValue(park.id) },
@@ -263,12 +347,18 @@ export class MemoryOsmStore implements OsmStore {
 
 /** Remove from map over the memory stores, with the same rules as createSqlParkRemovalStore. */
 export class MemoryParkRemovalStore implements ParkRemovalStore {
-  constructor(readonly live: MemoryLiveParkStore, readonly manager: MemoryParkManagerStore, readonly osm: MemoryOsmStore, readonly reviews: MemoryFoundingReviewStore) {}
+  constructor(
+    readonly live: MemoryLiveParkStore,
+    readonly manager: MemoryParkManagerStore,
+    readonly osm: MemoryOsmStore,
+    readonly reviews: MemoryFoundingReviewStore,
+  ) {}
 
   private pending(id: string, outline: RemovalOutline | null) {
     if (!this.reviews.available) return [];
-    return this.reviews.requests.filter((row) => row.status === "pending"
-      && (row.parkId === id || (outline !== null && row.feature?.type === outline.type && row.feature.id === outline.id)));
+    return this.reviews.requests.filter(
+      (row) => row.status === "pending" && (row.parkId === id || (outline !== null && row.feature?.type === outline.type && row.feature.id === outline.id)),
+    );
   }
 
   async plan(id: string): Promise<RemovalPlan | null> {
@@ -277,7 +367,10 @@ export class MemoryParkRemovalStore implements ParkRemovalStore {
     const found = await outlineFor(park, this.osm);
     const founder = this.manager.founders.get(id);
     return {
-      parkId: id, name: park.name, source: sourceOf(id, this.manager.legacy.has(id), this.manager.proposals.has(id)), hidden: this.manager.hidden.has(id),
+      parkId: id,
+      name: park.name,
+      source: sourceOf(id, this.manager.legacy.has(id), this.manager.proposals.has(id)),
+      hidden: this.manager.hidden.has(id),
       founder: founder ? { handle: founder.handle, foundedAt: founder.foundedAt, source: founder.source } : null,
       pendingReviews: this.pending(id, found.outline).length,
       outline: found.outline,
@@ -291,12 +384,20 @@ export class MemoryParkRemovalStore implements ParkRemovalStore {
   async remove(id: string, input: { at: string }): Promise<RemovalResult> {
     const plan = await this.plan(id);
     if (!plan) throw new HttpError(404, "not_found", "That park is not in Parkdex.");
-    if (plan.blocked || !plan.outline) throw new HttpError(409, plan.blocked?.code ?? "no_outline", plan.blocked?.message ?? "This park has no OpenStreetMap outline.");
+    if (plan.blocked || !plan.outline)
+      throw new HttpError(409, plan.blocked?.code ?? "no_outline", plan.blocked?.message ?? "This park has no OpenStreetMap outline.");
     const founder = this.manager.founders.get(id) ?? null;
     const closed = this.pending(id, plan.outline);
     this.reviews.events.push({
-      type: "park_removed", parkId: id,
-      properties: { source: plan.source, had_founder: founder !== null, founder_source: founder?.source ?? null, reviews_closed: closed.length, outline: `${plan.outline.type}/${plan.outline.id}` },
+      type: "park_removed",
+      parkId: id,
+      properties: {
+        source: plan.source,
+        had_founder: founder !== null,
+        founder_source: founder?.source ?? null,
+        reviews_closed: closed.length,
+        outline: `${plan.outline.type}/${plan.outline.id}`,
+      },
     });
     for (const row of closed) {
       Object.assign(row, { status: "rejected", decidedAt: input.at, reasonCode: "other", reason: REMOVED_REASON });
@@ -306,7 +407,13 @@ export class MemoryParkRemovalStore implements ParkRemovalStore {
     const revision = await this.manager.remove(id);
     this.manager.proposals.delete(id);
     return {
-      parkId: id, name: plan.name, revision, founder: founder ? { handle: founder.handle } : null, reviewsClosed: closed.length, outline: plan.outline, audited: true,
+      parkId: id,
+      name: plan.name,
+      revision,
+      founder: founder ? { handle: founder.handle } : null,
+      reviewsClosed: closed.length,
+      outline: plan.outline,
+      audited: true,
     };
   }
 }
@@ -319,7 +426,11 @@ export function memoryParks() {
   const reviews = new MemoryFoundingReviewStore(live, manager, osm);
   const removal = new MemoryParkRemovalStore(live, manager, osm, reviews);
   const dependencies: ParksDependencies = {
-    liveParkStore: () => live, parkManagerStore: () => manager, osmStore: () => osm, foundingReviewStore: () => reviews, parkRemovalStore: () => removal,
+    liveParkStore: () => live,
+    parkManagerStore: () => manager,
+    osmStore: () => osm,
+    foundingReviewStore: () => reviews,
+    parkRemovalStore: () => removal,
   };
   return { live, manager, osm, reviews, removal, dependencies };
 }
@@ -329,7 +440,8 @@ export function memoryParks() {
 /** An irregular outline around a point, so the demo map does not look like a grid of squares. */
 function blob(lng: number, lat: number, radiusM: number, seed: number, sides = 9): MultiPolygon {
   const ring: [number, number][] = [];
-  const kx = 111_320 * Math.cos((lat * Math.PI) / 180), ky = 110_540;
+  const kx = 111_320 * Math.cos((lat * Math.PI) / 180),
+    ky = 110_540;
   for (let index = 0; index < sides; index += 1) {
     const angle = (index / sides) * Math.PI * 2;
     const wobble = 0.72 + 0.28 * Math.abs(Math.sin(seed * 7.3 + index * 2.1));
@@ -344,7 +456,13 @@ function blob(lng: number, lat: number, radiusM: number, seed: number, sides = 9
 
 /** A small landscape card in place of a founder's photo, so the demo needs no image files. */
 function demoCover(seed: number): CoverPhoto {
-  const hues = [[150, 200], [28, 205], [95, 190], [190, 45], [130, 215]][seed % 5];
+  const hues = [
+    [150, 200],
+    [28, 205],
+    [95, 190],
+    [190, 45],
+    [130, 215],
+  ][seed % 5];
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
 <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hues[1]} 70% 78%)"/><stop offset="1" stop-color="hsl(${hues[1] - 20} 60% 92%)"/></linearGradient></defs>
 <rect width="640" height="420" fill="url(#s)"/><circle cx="${470 - seed * 23}" cy="96" r="38" fill="hsl(45 95% 70%)"/>
@@ -388,16 +506,29 @@ export function demoParks(): ParksDependencies {
   const ago = (days: number, hours = 0) => new Date(now - days * 86_400_000 - hours * 3_600_000).toISOString();
   DEMO_PARKS.forEach(([id, name, category, region, lng, lat, biome, rarity, radiusM], index) => {
     live.parks.set(id, {
-      id, name, short: name.replace(/\s+(Regional|Provincial|Marine|Nature)?\s*(Park|Sanctuary)$/i, "").trim() || name, category, region, lat, lng, biome,
-      shape: SHAPE_FOR_CATEGORY[category], rarity, scene: null, seed: 1000 + index * 37,
+      id,
+      name,
+      short: name.replace(/\s+(Regional|Provincial|Marine|Nature)?\s*(Park|Sanctuary)$/i, "").trim() || name,
+      category,
+      region,
+      lat,
+      lng,
+      biome,
+      shape: SHAPE_FOR_CATEGORY[category],
+      rarity,
+      scene: null,
+      seed: 1000 + index * 37,
       blurb: index === 0 ? "Gardens, ponds and a view across the strait to the Olympic Mountains." : index % 3 === 0 ? "" : `${name} in ${region}.`,
       geometry: blob(lng, lat, radiusM, index),
     });
-    live.commit([
-      { entity: "park", id, operation: "upsert", value: live.parkValue(id) },
-      { entity: "boundary", id, operation: "upsert" },
-      { entity: "drive", id, operation: "upsert" },
-    ], ago(60 - index, index));
+    live.commit(
+      [
+        { entity: "park", id, operation: "upsert", value: live.parkValue(id) },
+        { entity: "boundary", id, operation: "upsert" },
+        { entity: "drive", id, operation: "upsert" },
+      ],
+      ago(60 - index, index),
+    );
   });
   // A later description fix, so the history shows more than the first publication.
   live.parks.get("beacon-hill-park")!.blurb = "Gardens, ponds, peacocks and a view across the strait to the Olympic Mountains.";
@@ -407,7 +538,14 @@ export function demoParks(): ParksDependencies {
   manager.proposals.add("proposed-uplands-park");
   manager.hidden.set("pipers-lagoon", { reason: "Legacy BC municipal and community parks are hidden for now.", source: "category", hiddenAt: ago(2) });
   manager.hidden.set("gonzales-beach", { reason: "Beach access closed for shoreline repairs.", source: "operator", hiddenAt: ago(5, 3) });
-  live.commit([{ entity: "park", id: "gonzales-beach", operation: "delete" }, { entity: "boundary", id: "gonzales-beach", operation: "delete" }, { entity: "drive", id: "gonzales-beach", operation: "delete" }], ago(5, 3));
+  live.commit(
+    [
+      { entity: "park", id: "gonzales-beach", operation: "delete" },
+      { entity: "boundary", id: "gonzales-beach", operation: "delete" },
+      { entity: "drive", id: "gonzales-beach", operation: "delete" },
+    ],
+    ago(5, 3),
+  );
   manager.enrichment.add("fort-rodd-hill");
 
   const founders: Array<[string, string, number, "osm_new" | "existing"]> = [
@@ -429,7 +567,13 @@ export function demoParks(): ParksDependencies {
     }
     if (count > 8 && index % 4 !== 3) {
       const holder = handles[(index * 3) % handles.length];
-      manager.tenures.push({ parkId: id, handle: handles[(index + 1) % handles.length], startedAt: ago(40, index), lastVisitAt: ago(33, index), endedAt: ago(20, index) });
+      manager.tenures.push({
+        parkId: id,
+        handle: handles[(index + 1) % handles.length],
+        startedAt: ago(40, index),
+        lastVisitAt: ago(33, index),
+        endedAt: ago(20, index),
+      });
       manager.tenures.push({ parkId: id, handle: holder, startedAt: ago(20, index), lastVisitAt: ago(index === 5 ? 31 : index % 9, 2), endedAt: null });
     }
   });
@@ -440,8 +584,13 @@ export function demoParks(): ParksDependencies {
     if (id === "proposed-uplands-park") continue;
     const ref = /^osm-(way|relation)-(\d+)$/.exec(id);
     osm.features.push({
-      type: (ref?.[1] as "way" | "relation") ?? "way", id: ref ? Number(ref[2]) : osmId += 17, name, kind: "leisure=park",
-      tags: { leisure: "park", name }, geometry: blob(lng + 0.0004, lat - 0.0003, radiusM * 0.95, osmId), areaM2: Math.round(Math.PI * radiusM * radiusM * 0.7),
+      type: (ref?.[1] as "way" | "relation") ?? "way",
+      id: ref ? Number(ref[2]) : (osmId += 17),
+      name,
+      kind: "leisure=park",
+      tags: { leisure: "park", name },
+      geometry: blob(lng + 0.0004, lat - 0.0003, radiusM * 0.95, osmId),
+      areaM2: Math.round(Math.PI * radiusM * radiusM * 0.7),
     });
   }
   const missing: Array<[string | null, string, number, number, number, Record<string, string>]> = [
@@ -461,8 +610,13 @@ export function demoParks(): ParksDependencies {
   ];
   missing.forEach(([name, kind, lng, lat, radiusM, tags], index) => {
     osm.features.push({
-      type: index % 4 === 3 ? "relation" : "way", id: (osmId += 29), name, kind, tags: name ? { ...tags, name } : tags,
-      geometry: blob(lng, lat, radiusM, index + 40, 7 + (index % 4)), areaM2: Math.round(Math.PI * radiusM * radiusM * 0.7),
+      type: index % 4 === 3 ? "relation" : "way",
+      id: (osmId += 29),
+      name,
+      kind,
+      tags: name ? { ...tags, name } : tags,
+      geometry: blob(lng, lat, radiusM, index + 40, 7 + (index % 4)),
+      areaM2: Math.round(Math.PI * radiusM * radiusM * 0.7),
     });
   });
 

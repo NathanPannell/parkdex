@@ -31,7 +31,10 @@ describe("leaving the plant screen", () => {
   });
 
   it("still returns to the map when the park is unknown", () => {
-    expect(leavePlant(null)).toEqual([{ type: "trip", id: null }, { type: "go", screen: "map" }]);
+    expect(leavePlant(null)).toEqual([
+      { type: "trip", id: null },
+      { type: "go", screen: "map" },
+    ]);
   });
 
   it("lets Android back follow the open screen's phase", () => {

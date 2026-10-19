@@ -59,24 +59,27 @@ export function CrewProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const value = useMemo<CrewContextValue>(() => ({
-    enabled,
-    scanner: enabled ? scanner : null,
-    openScanner: (parkId) => setScanner({ parkId }),
-    closeScanner: () => setScanner(null),
-    join: enabled ? join : null,
-    offerJoin: (target) => {
-      setScanner(null);
-      setJoin(target);
-    },
-    dismissJoin: () => setJoin(null),
-    joining: enabled ? joining : null,
-    beginJoin,
-    endJoin: () => setJoining(null),
-    codeSheet: enabled ? codeSheet : null,
-    openCodeSheet: (parkId) => setCodeSheet(parkId),
-    closeCodeSheet: () => setCodeSheet(null),
-  }), [enabled, scanner, join, joining, beginJoin, codeSheet]);
+  const value = useMemo<CrewContextValue>(
+    () => ({
+      enabled,
+      scanner: enabled ? scanner : null,
+      openScanner: (parkId) => setScanner({ parkId }),
+      closeScanner: () => setScanner(null),
+      join: enabled ? join : null,
+      offerJoin: (target) => {
+        setScanner(null);
+        setJoin(target);
+      },
+      dismissJoin: () => setJoin(null),
+      joining: enabled ? joining : null,
+      beginJoin,
+      endJoin: () => setJoining(null),
+      codeSheet: enabled ? codeSheet : null,
+      openCodeSheet: (parkId) => setCodeSheet(parkId),
+      closeCodeSheet: () => setCodeSheet(null),
+    }),
+    [enabled, scanner, join, joining, beginJoin, codeSheet],
+  );
 
   return <CrewContext.Provider value={value}>{children}</CrewContext.Provider>;
 }

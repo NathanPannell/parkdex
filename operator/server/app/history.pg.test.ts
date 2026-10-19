@@ -13,15 +13,29 @@ let pool: import("pg").Pool;
 let store: OtaHistoryStore;
 
 const row = (overrides: Partial<OtaPublishInput> = {}): OtaPublishInput => ({
-  channel: "staging", generation: 1, previousGeneration: 0, action: "publish", source: "script", sha256: "a".repeat(64), previousSha256: null,
-  version: "1111111-aaaaaaaa", byteSize: 1000, minimumNativeBuild: 12, maximumNativeBuild: 12, sourceCommit: "1".repeat(40),
-  outcome: "confirmed", note: "", publishedAt: "2026-10-01T00:00:00.000Z", ...overrides,
+  channel: "staging",
+  generation: 1,
+  previousGeneration: 0,
+  action: "publish",
+  source: "script",
+  sha256: "a".repeat(64),
+  previousSha256: null,
+  version: "1111111-aaaaaaaa",
+  byteSize: 1000,
+  minimumNativeBuild: 12,
+  maximumNativeBuild: 12,
+  sourceCommit: "1".repeat(40),
+  outcome: "confirmed",
+  note: "",
+  publishedAt: "2026-10-01T00:00:00.000Z",
+  ...overrides,
 });
 
 before(async () => {
   if (!DSN) return;
   const url = new URL(DSN);
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || !url.pathname.slice(1).startsWith("kip_qa_")) throw new Error("The integration tests need a loopback database named kip_qa_*.");
+  if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || !url.pathname.slice(1).startsWith("kip_qa_"))
+    throw new Error("The integration tests need a loopback database named kip_qa_*.");
   const pg = (await import("pg")).default;
   pool = new pg.Pool({ connectionString: DSN, max: 2 });
   pool.on("error", () => undefined);
@@ -44,13 +58,33 @@ test("records are idempotent per move, listed newest first, and summarise each b
   const first = await store.record(row());
   assert.equal(first?.generation, 1);
   assert.equal(await store.record(row()), null, "a retried --record adds nothing");
-  await store.record(row({ generation: 2, previousGeneration: 1, sha256: "b".repeat(64), previousSha256: "a".repeat(64), version: "2222222-bbbbbbbb", minimumNativeBuild: 13, maximumNativeBuild: 14 }));
-  await store.record(row({ channel: "production", generation: 1, action: "promote", source: "dashboard", minimumNativeBuild: 13, maximumNativeBuild: 13, note: "Promoted" }));
+  await store.record(
+    row({
+      generation: 2,
+      previousGeneration: 1,
+      sha256: "b".repeat(64),
+      previousSha256: "a".repeat(64),
+      version: "2222222-bbbbbbbb",
+      minimumNativeBuild: 13,
+      maximumNativeBuild: 14,
+    }),
+  );
+  await store.record(
+    row({ channel: "production", generation: 1, action: "promote", source: "dashboard", minimumNativeBuild: 13, maximumNativeBuild: 13, note: "Promoted" }),
+  );
   // A conflict row never vouches for a bundle.
   await store.record(row({ generation: 3, previousGeneration: 2, sha256: "c".repeat(64), version: "3333333-cccccccc", outcome: "conflict" }));
 
   const listed = await store.list(10);
-  assert.deepEqual(listed.map((item) => [item.channel, item.generation]), [["staging", 3], ["production", 1], ["staging", 2], ["staging", 1]]);
+  assert.deepEqual(
+    listed.map((item) => [item.channel, item.generation]),
+    [
+      ["staging", 3],
+      ["production", 1],
+      ["staging", 2],
+      ["staging", 1],
+    ],
+  );
   assert.equal(listed[1].note, "Promoted");
   assert.equal(listed[0].publishedAt, "2026-10-01T00:00:00.000Z");
 

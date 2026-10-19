@@ -8,7 +8,7 @@ const feedbackMocks = vi.hoisted(() => ({
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: () => feedbackMocks.native,
-    getPlatform: () => feedbackMocks.native ? "android" : "web",
+    getPlatform: () => (feedbackMocks.native ? "android" : "web"),
   },
 }));
 
@@ -63,10 +63,10 @@ describe("feedback transport destination policy", () => {
   });
 
   it("sends native feedback only to the approved origin with redirects and ambient credentials disabled", async () => {
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(
-      JSON.stringify({ id: "feedback-123" }),
-      { status: 201, headers: { "content-type": "application/json" } },
-    ));
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ id: "feedback-123" }), { status: 201, headers: { "content-type": "application/json" } }),
+    );
     vi.stubGlobal("fetch", fetcher);
 
     await expect(submitFeedback(report, "generation-fixture")).resolves.toEqual({ id: "feedback-123" });

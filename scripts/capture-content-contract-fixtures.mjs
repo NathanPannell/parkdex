@@ -53,7 +53,7 @@ function pickParks(parks) {
 function trimSnapshot(snapshot) {
   const parks = pickParks(snapshot.parks);
   const ids = new Set(parks.map((park) => park.id));
-  const scenes = new Set(parks.flatMap((park) => park.scene ? [`art/badges/scenes/${park.scene}.webp`] : []));
+  const scenes = new Set(parks.flatMap((park) => (park.scene ? [`art/badges/scenes/${park.scene}.webp`] : [])));
   return {
     ...snapshot,
     parks,
@@ -68,7 +68,9 @@ function trimChanges(changes) {
     ...changes,
     batches: changes.batches.map((batch) => ({
       ...batch,
-      changes: batch.changes.slice(0, MAX_CHANGES).map((change) => change.entity === "boundary" && change.value ? { ...change, value: simplifyFeature(change.value) } : change),
+      changes: batch.changes
+        .slice(0, MAX_CHANGES)
+        .map((change) => (change.entity === "boundary" && change.value ? { ...change, value: simplifyFeature(change.value) } : change)),
     })),
   };
 }

@@ -83,11 +83,20 @@ export function stripJpegMetadata(input: Uint8Array): StrippedJpeg {
       // Entropy-coded data runs until a marker other than a stuffed 0x00 or a restart marker.
       let j = i;
       while (j < n) {
-        if (input[j] !== 0xff) { j += 1; continue; }
+        if (input[j] !== 0xff) {
+          j += 1;
+          continue;
+        }
         const next = input[j + 1];
         if (next === undefined) throw new JpegError("truncated scan");
-        if (next === 0x00 || isRestart(next)) { j += 2; continue; }
-        if (next === 0xff) { j += 1; continue; }
+        if (next === 0x00 || isRestart(next)) {
+          j += 2;
+          continue;
+        }
+        if (next === 0xff) {
+          j += 1;
+          continue;
+        }
         break;
       }
       kept.push(input.subarray(i, j));

@@ -15,8 +15,19 @@ const releaseId = "a".repeat(64);
 
 function file(path: string, byte_size = 1) {
   const encoded = path.split("/").map(encodeURIComponent).join("/");
-  const content_type = path.endsWith(".geojson") ? "application/geo+json" : path.endsWith(".webp") ? "image/webp" : path.endsWith(".pbf") ? "application/x-protobuf" : path.endsWith(".bin") ? "application/octet-stream" : "application/json";
-  const sha256 = Array.from(path, (character) => character.charCodeAt(0).toString(16).padStart(2, "0")).join("").padEnd(64, "0").slice(0, 64);
+  const content_type = path.endsWith(".geojson")
+    ? "application/geo+json"
+    : path.endsWith(".webp")
+      ? "image/webp"
+      : path.endsWith(".pbf")
+        ? "application/x-protobuf"
+        : path.endsWith(".bin")
+          ? "application/octet-stream"
+          : "application/json";
+  const sha256 = Array.from(path, (character) => character.charCodeAt(0).toString(16).padStart(2, "0"))
+    .join("")
+    .padEnd(64, "0")
+    .slice(0, 64);
   return {
     path,
     key: `releases/${releaseId}/${path}`,
@@ -46,29 +57,35 @@ function fixtureManifest() {
     boundaryIds: ["provincial-one-park"],
     mapManifest: { size: 1, chunkBytes: 1, count: 1 },
   };
-  const channel = parseContentChannel({
-    schema: "parkdex.content-channel/v1",
-    environment: "staging",
-    generation: 1,
-    releaseId,
-    manifestUrl: `https://kip-assets.parkdex.app/releases/${releaseId}/manifest.json`,
-    manifestSha256: "d".repeat(64),
-    minimumReaderVersion: 1,
-  }, "staging");
+  const channel = parseContentChannel(
+    {
+      schema: "parkdex.content-channel/v1",
+      environment: "staging",
+      generation: 1,
+      releaseId,
+      manifestUrl: `https://kip-assets.parkdex.app/releases/${releaseId}/manifest.json`,
+      manifestSha256: "d".repeat(64),
+      minimumReaderVersion: 1,
+    },
+    "staging",
+  );
   return parseContentManifest(raw, channel);
 }
 
 describe("content manifest validation", () => {
   it("accepts the immutable published baseline and excludes bundled Kip/product artwork from downloads", () => {
-    const channel = parseContentChannel({
-      schema: "parkdex.content-channel/v1",
-      environment: "staging",
-      generation: 1,
-      releaseId: baseline.version,
-      manifestUrl: `https://kip-assets.parkdex.app/releases/${baseline.version}/manifest.json`,
-      manifestSha256: "e".repeat(64),
-      minimumReaderVersion: 1,
-    }, "staging");
+    const channel = parseContentChannel(
+      {
+        schema: "parkdex.content-channel/v1",
+        environment: "staging",
+        generation: 1,
+        releaseId: baseline.version,
+        manifestUrl: `https://kip-assets.parkdex.app/releases/${baseline.version}/manifest.json`,
+        manifestSha256: "e".repeat(64),
+        minimumReaderVersion: 1,
+      },
+      "staging",
+    );
     const manifest = parseContentManifest(baseline, channel);
     const required = coreFiles(manifest).map((entry) => entry.path);
     expect(manifest.files.some((entry) => entry.path.startsWith("art/kip/"))).toBe(true);
@@ -88,7 +105,9 @@ describe("content manifest validation", () => {
       manifestSha256: "f".repeat(64),
       minimumReaderVersion: 1,
     };
-    expect(() => parseContentChannel({ ...valid, manifestUrl: `https://evil.example/releases/${releaseId}/manifest.json` }, "staging")).toThrow(ContentValidationError);
+    expect(() => parseContentChannel({ ...valid, manifestUrl: `https://evil.example/releases/${releaseId}/manifest.json` }, "staging")).toThrow(
+      ContentValidationError,
+    );
     expect(() => parseContentChannel(valid, "main")).toThrow(/environment/);
   });
 
@@ -114,7 +133,20 @@ describe("content manifest validation", () => {
     };
     expect(() => parseContentManifest(valid, validChannel)).toThrow(/unsafe file path/);
     expect(() => parseContentManifest({ ...valid, files: [file("data/parks.json")] }, validChannel)).toThrow(/missing data\/drive.json/);
-    expect(() => parseContentManifest({ ...valid, files: [file("data/parks.json"), ...fixtureManifest().files.slice(1).map((entry) => entry.path === "data/drive.json" ? { ...entry, url: entry.url.replace("kip-assets.parkdex.app", "evil.example") } : entry)] }, validChannel)).toThrow();
+    expect(() =>
+      parseContentManifest(
+        {
+          ...valid,
+          files: [
+            file("data/parks.json"),
+            ...fixtureManifest()
+              .files.slice(1)
+              .map((entry) => (entry.path === "data/drive.json" ? { ...entry, url: entry.url.replace("kip-assets.parkdex.app", "evil.example") } : entry)),
+          ],
+        },
+        validChannel,
+      ),
+    ).toThrow();
   });
 
   it("requires park fields, ignores later additions, and requires matching catalog, boundary, scene, and drive references", () => {
@@ -136,11 +168,25 @@ describe("content manifest validation", () => {
     };
     const boundaries = {
       type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        properties: { id: park.id, biome: park.biome },
-        geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
-      }],
+      features: [
+        {
+          type: "Feature",
+          properties: { id: park.id, biome: park.biome },
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [
+                [
+                  [0, 0],
+                  [1, 0],
+                  [1, 1],
+                  [0, 0],
+                ],
+              ],
+            ],
+          },
+        },
+      ],
     };
     const drive = { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [park.id]: { drive: [null], walkM: 0 } } };
     expect(validateContentPayload([park], boundaries, drive, manifest).parks).toEqual([park]);
@@ -170,11 +216,25 @@ describe("incremental content validation", () => {
   };
   const boundaries = {
     type: "FeatureCollection",
-    features: [{
-      type: "Feature",
-      properties: { id: park.id, biome: park.biome },
-      geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
-    }],
+    features: [
+      {
+        type: "Feature",
+        properties: { id: park.id, biome: park.biome },
+        geometry: {
+          type: "MultiPolygon",
+          coordinates: [
+            [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 0],
+              ],
+            ],
+          ],
+        },
+      },
+    ],
   };
   const drive = { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [park.id]: { drive: [null], walkM: 0 } } };
 
@@ -198,7 +258,11 @@ describe("incremental content validation", () => {
       schema: "parkdex.content-sync/v1",
       revision: 2,
       parks: [{ ...park, proposedBy: "someone", accessibility: { stepFree: true } }],
-      boundaries: { ...boundaries, generatedAt: "2026-10-01", features: [{ ...boundaries.features[0], properties: { ...boundaries.features[0]!.properties, area: 12 } }] },
+      boundaries: {
+        ...boundaries,
+        generatedAt: "2026-10-01",
+        features: [{ ...boundaries.features[0], properties: { ...boundaries.features[0]!.properties, area: 12 } }],
+      },
       drive: { ...drive, transit: {} },
       assets: [{ path: "art/stickers/new.webp", key: "x", url: "y", sha256: "0".repeat(64), byte_size: 1, content_type: "image/webp" }],
       map: null,
@@ -237,73 +301,125 @@ describe("incremental content validation", () => {
     expect(parsed.parks.map((entry) => entry.id)).toEqual([park.id]);
     expect(parsed.boundaries.features).toHaveLength(1);
     expect(Object.keys(parsed.drive.parks)).toEqual([park.id]);
-    expect(() => parseContentSnapshot({
-      schema: "parkdex.content-sync/v1", revision: 3, parks: [{ ...park, lat: "north" }], boundaries, drive, assets: [], map: null,
-    })).toThrow(/no readable parks/);
+    expect(() =>
+      parseContentSnapshot({
+        schema: "parkdex.content-sync/v1",
+        revision: 3,
+        parks: [{ ...park, lat: "north" }],
+        boundaries,
+        drive,
+        assets: [],
+        map: null,
+      }),
+    ).toThrow(/no readable parks/);
   });
 
   it("still rejects a breaking snapshot schema", () => {
-    expect(() => parseContentSnapshot({
-      schema: "parkdex.content-sync/v2", revision: 0, parks: [park], boundaries, drive, assets: [], map: null,
-    })).toThrow(/schema is unsupported/);
+    expect(() =>
+      parseContentSnapshot({
+        schema: "parkdex.content-sync/v2",
+        revision: 0,
+        parks: [park],
+        boundaries,
+        drive,
+        assets: [],
+        map: null,
+      }),
+    ).toThrow(/schema is unsupported/);
   });
 
   it("skips changes this build does not understand and unreadable park updates", () => {
-    const parsed = parseContentChanges({
-      schema: "parkdex.content-sync/v1",
-      fromRevision: 4,
-      throughRevision: 5,
-      headRevision: 5,
-      hasMore: false,
-      batches: [{ revision: 5, changes: [
-        { entity: "proposal", op: "upsert", id: "p1", value: {} },
-        { entity: "park", op: "archive", id: park.id },
-        { entity: "asset", op: "upsert", id: "art/stickers/new.webp", value: {} },
-        { entity: "park", op: "upsert", id: "municipal-two-park", value: { ...park, id: "municipal-two-park", seed: "x" } },
-        { entity: "boundary", op: "upsert", id: "municipal-two-park", value: { ...boundaries.features[0], properties: { id: "municipal-two-park", biome: "coast" } } },
-        { entity: "park", op: "upsert", id: park.id, value: { ...park, extra: 1 }, note: "added later" },
-      ] }],
-    }, 4);
+    const parsed = parseContentChanges(
+      {
+        schema: "parkdex.content-sync/v1",
+        fromRevision: 4,
+        throughRevision: 5,
+        headRevision: 5,
+        hasMore: false,
+        batches: [
+          {
+            revision: 5,
+            changes: [
+              { entity: "proposal", op: "upsert", id: "p1", value: {} },
+              { entity: "park", op: "archive", id: park.id },
+              { entity: "asset", op: "upsert", id: "art/stickers/new.webp", value: {} },
+              { entity: "park", op: "upsert", id: "municipal-two-park", value: { ...park, id: "municipal-two-park", seed: "x" } },
+              {
+                entity: "boundary",
+                op: "upsert",
+                id: "municipal-two-park",
+                value: { ...boundaries.features[0], properties: { id: "municipal-two-park", biome: "coast" } },
+              },
+              { entity: "park", op: "upsert", id: park.id, value: { ...park, extra: 1 }, note: "added later" },
+            ],
+          },
+        ],
+      },
+      4,
+    );
     expect(parsed.batches[0]!.changes).toEqual([{ entity: "park", op: "upsert", id: park.id, value: park }]);
   });
 
   it("rejects a skeleton whose scene is not present in the active asset inventory", () => {
-    expect(() => parseContentSnapshot({
-      schema: "parkdex.content-sync/v1",
-      revision: 1,
-      parks: [{ ...park, scene: "coast-one" }],
-      boundaries,
-      drive,
-      assets: [],
-      map: null,
-    })).toThrow(/missing badge art/);
+    expect(() =>
+      parseContentSnapshot({
+        schema: "parkdex.content-sync/v1",
+        revision: 1,
+        parks: [{ ...park, scene: "coast-one" }],
+        boundaries,
+        drive,
+        assets: [],
+        map: null,
+      }),
+    ).toThrow(/missing badge art/);
   });
 
   it("accepts whole contiguous revision batches and a no-change head", () => {
-    const first = parseContentChanges({
-      schema: "parkdex.content-sync/v1",
-      fromRevision: 4,
-      throughRevision: 5,
-      headRevision: 6,
-      hasMore: true,
-      batches: [{ revision: 5, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] }],
-    }, 4);
+    const first = parseContentChanges(
+      {
+        schema: "parkdex.content-sync/v1",
+        fromRevision: 4,
+        throughRevision: 5,
+        headRevision: 6,
+        hasMore: true,
+        batches: [{ revision: 5, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] }],
+      },
+      4,
+    );
     expect(first.batches).toHaveLength(1);
     expect(first.throughRevision).toBe(5);
-    expect(parseContentChanges({
-      schema: "parkdex.content-sync/v1",
-      fromRevision: 6,
-      throughRevision: 6,
-      headRevision: 6,
-      hasMore: false,
-      batches: [],
-    }, 6).throughRevision).toBe(6);
+    expect(
+      parseContentChanges(
+        {
+          schema: "parkdex.content-sync/v1",
+          fromRevision: 6,
+          throughRevision: 6,
+          headRevision: 6,
+          hasMore: false,
+          batches: [],
+        },
+        6,
+      ).throughRevision,
+    ).toBe(6);
   });
 
   it("rejects split or non-contiguous revision batches before client persistence", () => {
     const base = { schema: "parkdex.content-sync/v1", fromRevision: 4, throughRevision: 6, headRevision: 6, hasMore: false };
-    expect(() => parseContentChanges({ ...base, batches: [{ revision: 5, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] }, { revision: 6, changes: [] }] }, 4)).toThrow(/non-empty/);
-    expect(() => parseContentChanges({ ...base, batches: [{ revision: 6, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] }] }, 4)).toThrow(/contiguous/);
+    expect(() =>
+      parseContentChanges(
+        {
+          ...base,
+          batches: [
+            { revision: 5, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] },
+            { revision: 6, changes: [] },
+          ],
+        },
+        4,
+      ),
+    ).toThrow(/non-empty/);
+    expect(() =>
+      parseContentChanges({ ...base, batches: [{ revision: 6, changes: [{ entity: "park", op: "upsert", id: park.id, value: park }] }] }, 4),
+    ).toThrow(/contiguous/);
   });
 
   it("validates the independent map inventory and numbered chunk sizes", () => {
@@ -319,25 +435,33 @@ describe("incremental content validation", () => {
         content_type: path.endsWith(".pbf") ? "application/x-protobuf" : path.endsWith(".bin") ? "application/octet-stream" : "application/json",
       };
     };
-    const inventory = parseContentMapInventory({
-      schema: "parkdex.content-map/v1",
-      version: mapVersion,
-      mapManifest: { size: 9, chunkBytes: 4, count: 3 },
-      files: [
-        mapFile("map/island/manifest.json", 32),
-        mapFile("map/island/000.bin", 4),
-        mapFile("map/island/001.bin", 4),
-        mapFile("map/island/002.bin", 1),
-        mapFile("map/fonts/Noto Sans Regular/0-255.pbf", 2),
-      ],
-    }, mapVersion);
+    const inventory = parseContentMapInventory(
+      {
+        schema: "parkdex.content-map/v1",
+        version: mapVersion,
+        mapManifest: { size: 9, chunkBytes: 4, count: 3 },
+        files: [
+          mapFile("map/island/manifest.json", 32),
+          mapFile("map/island/000.bin", 4),
+          mapFile("map/island/001.bin", 4),
+          mapFile("map/island/002.bin", 1),
+          mapFile("map/fonts/Noto Sans Regular/0-255.pbf", 2),
+        ],
+      },
+      mapVersion,
+    );
     expect(inventory.mapManifest.count).toBe(3);
-    expect(() => parseContentMapInventory({
-      schema: "parkdex.content-map/v1",
-      version: mapVersion,
-      mapManifest: { size: 9, chunkBytes: 4, count: 3 },
-      files: [mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 5)],
-    }, mapVersion)).toThrow(/chunk inventory/);
+    expect(() =>
+      parseContentMapInventory(
+        {
+          schema: "parkdex.content-map/v1",
+          version: mapVersion,
+          mapManifest: { size: 9, chunkBytes: 4, count: 3 },
+          files: [mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 5)],
+        },
+        mapVersion,
+      ),
+    ).toThrow(/chunk inventory/);
   });
 
   it("reads map inventories from any chunk folder, with the layout and every chunk in one folder", () => {
@@ -359,26 +483,52 @@ describe("incremental content validation", () => {
       mapManifest: { size: 5, chunkBytes: 4, count: 2 },
       files: [...files, mapFile("map/fonts/Noto Sans Regular/0-255.pbf", 2)],
     });
-    const detail = parseContentMapInventory(inventory([
-      mapFile("map/detail/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1),
-    ]), mapVersion);
+    const detail = parseContentMapInventory(
+      inventory([mapFile("map/detail/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1)]),
+      mapVersion,
+    );
     expect(detail.files.map((entry) => entry.path)).toContain("map/detail/001.bin");
-    expect(parseContentMapInventory(inventory([
-      mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1),
-    ]), mapVersion).mapManifest.count).toBe(2);
+    expect(
+      parseContentMapInventory(
+        inventory([mapFile("map/island/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1)]),
+        mapVersion,
+      ).mapManifest.count,
+    ).toBe(2);
 
     // Chunks beside a different layout, two layouts, or chunks under fonts are not one map.
-    expect(() => parseContentMapInventory(inventory([
-      mapFile("map/detail/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1),
-    ]), mapVersion)).toThrow(/unexpected size/);
-    expect(() => parseContentMapInventory(inventory([
-      mapFile("map/detail/manifest.json", 32), mapFile("map/island/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1),
-    ]), mapVersion)).toThrow(/chunk inventory/);
-    expect(() => parseContentMapInventory(inventory([
-      mapFile("map/fonts/manifest.json", 32), mapFile("map/fonts/000.bin", 4), mapFile("map/fonts/001.bin", 1),
-    ]), mapVersion)).toThrow();
-    expect(() => parseContentMapInventory(inventory([
-      mapFile("map/detail/manifest.json", 32), mapFile("map/detail/000.bin", 4), mapFile("map/detail/001.bin", 1), mapFile("map/detail/002.bin", 1),
-    ]), mapVersion)).toThrow(/out-of-range/);
+    expect(() =>
+      parseContentMapInventory(
+        inventory([mapFile("map/detail/manifest.json", 32), mapFile("map/island/000.bin", 4), mapFile("map/island/001.bin", 1)]),
+        mapVersion,
+      ),
+    ).toThrow(/unexpected size/);
+    expect(() =>
+      parseContentMapInventory(
+        inventory([
+          mapFile("map/detail/manifest.json", 32),
+          mapFile("map/island/manifest.json", 32),
+          mapFile("map/detail/000.bin", 4),
+          mapFile("map/detail/001.bin", 1),
+        ]),
+        mapVersion,
+      ),
+    ).toThrow(/chunk inventory/);
+    expect(() =>
+      parseContentMapInventory(
+        inventory([mapFile("map/fonts/manifest.json", 32), mapFile("map/fonts/000.bin", 4), mapFile("map/fonts/001.bin", 1)]),
+        mapVersion,
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContentMapInventory(
+        inventory([
+          mapFile("map/detail/manifest.json", 32),
+          mapFile("map/detail/000.bin", 4),
+          mapFile("map/detail/001.bin", 1),
+          mapFile("map/detail/002.bin", 1),
+        ]),
+        mapVersion,
+      ),
+    ).toThrow(/out-of-range/);
   });
 });

@@ -76,7 +76,18 @@ export function Ribbon({ text, p }: { text: string; p: Palette }) {
       <path d="M2 150 L26 146 L26 178 L2 182 L12 166Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
       <path d="M198 150 L174 146 L174 178 L198 182 L188 166Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
       <path d="M18 142 Q100 128 182 142 L182 174 Q100 160 18 174Z" fill={p.ribbon} stroke="#14231C" strokeWidth={2.5} strokeLinejoin="round" />
-      <text x={100} y={156} fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={size} fill={p.ribbonText} letterSpacing={0.4} textAnchor="middle" dominantBaseline="middle" {...(fit ? { textLength: 138, lengthAdjust: "spacingAndGlyphs" } : {})}>
+      <text
+        x={100}
+        y={156}
+        fontFamily="'Bricolage Grotesque Variable', system-ui"
+        fontWeight={800}
+        fontSize={size}
+        fill={p.ribbonText}
+        letterSpacing={0.4}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        {...(fit ? { textLength: 138, lengthAdjust: "spacingAndGlyphs" } : {})}
+      >
         {upper}
       </text>
     </g>
@@ -93,10 +104,29 @@ function Mystery({ label }: { label: string }) {
       {Array.from({ length: 11 }, (_, r) =>
         Array.from({ length: 11 }, (_, c) => <circle key={`${r}-${c}`} cx={c * 20 + (r % 2) * 10} cy={r * 20} r={1.6} fill="#14231C" opacity={0.12} />),
       )}
-      <text x={100} y={112} textAnchor="middle" fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={88} fill="#14231C" opacity={0.22}>
+      <text
+        x={100}
+        y={112}
+        textAnchor="middle"
+        fontFamily="'Bricolage Grotesque Variable', system-ui"
+        fontWeight={800}
+        fontSize={88}
+        fill="#14231C"
+        opacity={0.22}
+      >
         ?
       </text>
-      <text x={100} y={36} textAnchor="middle" fontFamily="'Bricolage Grotesque Variable', system-ui" fontWeight={800} fontSize={12} letterSpacing={2} fill="#14231C" opacity={0.45}>
+      <text
+        x={100}
+        y={36}
+        textAnchor="middle"
+        fontFamily="'Bricolage Grotesque Variable', system-ui"
+        fontWeight={800}
+        fontSize={12}
+        letterSpacing={2}
+        fill="#14231C"
+        opacity={0.45}
+      >
         {label}
       </text>
     </g>
@@ -117,13 +147,18 @@ function Landscape({ p }: { p: Palette }) {
   );
 }
 
-function BadgeImpl({ park, size = 120, state = "earned", animated = false, showName = true, className, style, sceneHref, remoteArt = true }: Props) {
+function BadgeImpl({ park, size = 120, state = "earned", animated: _animated = false, showName = true, className, style, sceneHref, remoteArt = true }: Props) {
   const content = useOptionalContent();
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const live = isLive(park);
-  const resolvedSceneHref = !SHOW_BADGE_ART ? undefined : sceneHref ?? (park.scene
-    ? content?.assetUrls.get(scenePath(park.scene)) ?? content?.retainedSceneUrls.get(park.id) ?? (remoteArt ? content?.remoteSceneUrls?.get(scenePath(park.scene)) : undefined)
-    : undefined);
+  const resolvedSceneHref = !SHOW_BADGE_ART
+    ? undefined
+    : (sceneHref ??
+      (park.scene
+        ? (content?.assetUrls.get(scenePath(park.scene)) ??
+          content?.retainedSceneUrls.get(park.id) ??
+          (remoteArt ? content?.remoteSceneUrls?.get(scenePath(park.scene)) : undefined))
+        : undefined));
   const p = live ? PALETTES[park.biome] : MYSTERY_PALETTE;
   const shape = SHAPES[park.shape];
   const rim = RIM[park.rarity];
@@ -184,27 +219,35 @@ function BadgeImpl({ park, size = 120, state = "earned", animated = false, showN
         )}
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#p${uid})`} />
         <rect x={-10} y={-10} width={220} height={220} fill={`url(#v${uid})`} />
-        {shiny && (
-          <rect x={-60} y={-60} width={320} height={320} fill={`url(#h${uid})`} className="badge__holo" style={{ mixBlendMode: "soft-light" }} />
-        )}
+        {shiny && <rect x={-60} y={-60} width={320} height={320} fill={`url(#h${uid})`} className="badge__holo" style={{ mixBlendMode: "soft-light" }} />}
         {live && state === "earned" && (
           <g transform="rotate(20 100 100)">
-            <rect x={-120} y={-40} width={60} height={280} fill={`url(#g${uid})`} className="badge__shine" style={{ animationDelay: `${(park.seed % 40) / 10}s` }} />
+            <rect
+              x={-120}
+              y={-40}
+              width={60}
+              height={280}
+              fill={`url(#g${uid})`}
+              className="badge__shine"
+              style={{ animationDelay: `${(park.seed % 40) / 10}s` }}
+            />
           </g>
         )}
       </g>
       <path d={shape} fill="none" stroke={`url(#r${uid})`} strokeWidth={10} />
       <path d={shape} fill="none" stroke="#14231C" strokeWidth={3} />
-      <path d={shape} fill="none" stroke="#FFFFFF" strokeOpacity={0.75} strokeWidth={1.6} strokeDasharray="4 3.2" transform="translate(100 100) scale(0.9) translate(-100 -100)" />
+      <path
+        d={shape}
+        fill="none"
+        stroke="#FFFFFF"
+        strokeOpacity={0.75}
+        strokeWidth={1.6}
+        strokeDasharray="4 3.2"
+        transform="translate(100 100) scale(0.9) translate(-100 -100)"
+      />
       <g>
         {Array.from({ length: stars }, (_, i) => (
-          <Star
-            key={i}
-            x={100 + (i - (stars - 1) / 2) * 15}
-            y={live ? (park.shape === "arch" ? 30 : 26) : 20}
-            r={live ? 6.5 : 4.5}
-            fill="#FFD23F"
-          />
+          <Star key={i} x={100 + (i - (stars - 1) / 2) * 15} y={live ? (park.shape === "arch" ? 30 : 26) : 20} r={live ? 6.5 : 4.5} fill="#FFD23F" />
         ))}
       </g>
       {showName && <Ribbon text={park.short} p={p} />}

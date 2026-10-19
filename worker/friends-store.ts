@@ -38,7 +38,7 @@ export interface FriendsStore {
 const ADD_STATUSES = new Set(["added", "already_friends", "own_code", "code_not_found", "handle_required", "account_unavailable", "too_many_friends"]);
 
 function jsonValue(value: unknown): unknown {
-  return typeof value === "string" ? JSON.parse(value) as unknown : value;
+  return typeof value === "string" ? (JSON.parse(value) as unknown) : value;
 }
 
 function iso(value: unknown): string {
@@ -57,8 +57,8 @@ export function addResultFromJson(value: unknown): AddFriendResult {
 
 export function createNeonFriendsStore(databaseUrl: string): FriendsStore {
   const sql = database(databaseUrl);
-  const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
-  const code = (row: Record<string, unknown> | undefined) => row?.code === null || row?.code === undefined ? null : String(row.code);
+  const rows = async (text: string, params: unknown[]) => (await sql.query(text, params)) as Array<Record<string, unknown>>;
+  const code = (row: Record<string, unknown> | undefined) => (row?.code === null || row?.code === undefined ? null : String(row.code));
 
   return {
     async friendCode(accountId) {
@@ -82,10 +82,13 @@ export function createNeonFriendsStore(databaseUrl: string): FriendsStore {
     async week(accountId, now) {
       const [bounds, players] = await Promise.all([
         // Dates as text, so no driver turns a calendar day into a local-midnight instant.
-        rows(`
+        rows(
+          `
           SELECT to_char(kip_social.week_start($1::timestamptz), 'YYYY-MM-DD') AS start,
             to_char(kip_social.week_start($1::timestamptz) + 6, 'YYYY-MM-DD') AS end_day,
-            ((kip_social.week_start($1::timestamptz) + 7)::timestamp AT TIME ZONE 'America/Vancouver') AS resets_at`, [now]),
+            ((kip_social.week_start($1::timestamptz) + 7)::timestamp AT TIME ZONE 'America/Vancouver') AS resets_at`,
+          [now],
+        ),
         rows("SELECT rank, handle, flag_seed, unique_parks, is_me FROM kip_social.friends_week($1::uuid, $2::timestamptz)", [accountId, now]),
       ]);
       return {

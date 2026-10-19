@@ -47,15 +47,24 @@ const KM_PER_DEG_LAT = 110.54;
 
 function kmBox(bbox: Bbox, km: number): Bbox {
   const lat = (bbox.north + bbox.south) / 2;
-  const dLat = km / KM_PER_DEG_LAT, dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
+  const dLat = km / KM_PER_DEG_LAT,
+    dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
   return { west: bbox.west - dLng, south: bbox.south - dLat, east: bbox.east + dLng, north: bbox.north + dLat };
 }
 
 export function featureBbox(geometry: MultiPolygon): Bbox {
-  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
-  for (const polygon of geometry.coordinates) for (const ring of polygon) for (const [lng, lat] of ring) {
-    west = Math.min(west, lng); east = Math.max(east, lng); south = Math.min(south, lat); north = Math.max(north, lat);
-  }
+  let west = Infinity,
+    south = Infinity,
+    east = -Infinity,
+    north = -Infinity;
+  for (const polygon of geometry.coordinates)
+    for (const ring of polygon)
+      for (const [lng, lat] of ring) {
+        west = Math.min(west, lng);
+        east = Math.max(east, lng);
+        south = Math.min(south, lat);
+        north = Math.max(north, lat);
+      }
   return { west, south, east, north };
 }
 
@@ -68,14 +77,19 @@ function toleranceFor(bbox: Bbox): number {
 export function matchOutlines(features: OsmFeature[], catalogue: CataloguePark[], view?: Bbox): OsmOutline[] {
   const tolerance = view ? toleranceFor(view) : 0;
   return features.map((feature) => ({
-    type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, areaM2: feature.areaM2,
+    type: feature.type,
+    id: feature.id,
+    name: feature.name,
+    kind: feature.kind,
+    areaM2: feature.areaM2,
     geometry: tolerance > 1 ? simplifyMultiPolygon(feature.geometry, tolerance) : feature.geometry,
     inParkdex: catalogueMatch(feature, catalogue),
   }));
 }
 
 function distanceKm(a: [number, number], b: [number, number]): number {
-  const dx = (a[0] - b[0]) * 111.32 * Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180), dy = (a[1] - b[1]) * KM_PER_DEG_LAT;
+  const dx = (a[0] - b[0]) * 111.32 * Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180),
+    dy = (a[1] - b[1]) * KM_PER_DEG_LAT;
   return Math.hypot(dx, dy);
 }
 
@@ -120,7 +134,10 @@ export function osmDraft(feature: OsmFeature, catalogue: CatalogueNeighbour[]): 
     blurb: defaultBlurb(feature),
     // Thinned like a published proposal, so one park cannot push the content snapshot over its limit.
     geometry: contentBoundary(feature.geometry),
-    source: { operator: { action: "create_from_osm" }, osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, tags: feature.tags, areaM2: feature.areaM2 } },
+    source: {
+      operator: { action: "create_from_osm" },
+      osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, tags: feature.tags, areaM2: feature.areaM2 },
+    },
   };
 }
 
@@ -157,8 +174,24 @@ export async function createStatements(park: PublishablePark, at: string) {
           lng = EXCLUDED.lng, biome = EXCLUDED.biome, shape = EXCLUDED.shape, rarity = EXCLUDED.rarity, seed = EXCLUDED.seed,
           blurb = EXCLUDED.blurb, updated_at = EXCLUDED.updated_at
         WHERE kip_park_drafts.drafts.status = 'draft'`,
-      params: [park.id, JSON.stringify(park.source), sourceSha256, JSON.stringify(park.geometry), park.name, park.short, park.category,
-        park.region, park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb, at],
+      params: [
+        park.id,
+        JSON.stringify(park.source),
+        sourceSha256,
+        JSON.stringify(park.geometry),
+        park.name,
+        park.short,
+        park.category,
+        park.region,
+        park.lat,
+        park.lng,
+        park.biome,
+        park.shape,
+        park.rarity,
+        park.seed,
+        park.blurb,
+        at,
+      ],
     },
     ...publishStatements(park.id, at, null),
   ];
@@ -187,10 +220,21 @@ export function createSqlOsmStore(db: SqlRunner): OsmStore {
       );
       return rows.flatMap((row) => {
         const geometry = (typeof row.geometry === "string" ? JSON.parse(row.geometry) : row.geometry) as MultiPolygon;
-        const tags = (typeof row.tags === "string" ? JSON.parse(row.tags) : row.tags ?? {}) as Record<string, string>;
-        const type = row.osm_type, id = Number(row.osm_id);
+        const tags = (typeof row.tags === "string" ? JSON.parse(row.tags) : (row.tags ?? {})) as Record<string, string>;
+        const type = row.osm_type,
+          id = Number(row.osm_id);
         if ((type !== "way" && type !== "relation") || !geometry?.coordinates?.length) return [];
-        return [{ type, id, name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null, kind: String(row.kind), tags, geometry, areaM2: Math.round(Number(row.area_m2) || 0) }];
+        return [
+          {
+            type,
+            id,
+            name: typeof row.name === "string" && row.name.trim() ? row.name.trim() : null,
+            kind: String(row.kind),
+            tags,
+            geometry,
+            areaM2: Math.round(Number(row.area_m2) || 0),
+          },
+        ];
       });
     },
     feature: (ref) => table.get(ref),
@@ -204,7 +248,11 @@ export function createSqlOsmStore(db: SqlRunner): OsmStore {
       return rows.map((row) => {
         const geometry = (typeof row.geometry === "string" ? JSON.parse(row.geometry) : row.geometry) as MultiPolygon | null;
         return {
-          id: String(row.id), name: String(row.name), region: String(row.region), lat: Number(row.lat), lng: Number(row.lng),
+          id: String(row.id),
+          name: String(row.name),
+          region: String(row.region),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
           boundary: geometry?.type === "MultiPolygon" && geometry.coordinates?.length ? geometry : null,
         };
       });

@@ -32,9 +32,19 @@ export function validatePosition(value: unknown): DevicePosition {
     throw new HttpError(400, "invalid_position", "Send your position as lat, lng and accuracyM.");
   }
   const { lat, lng, accuracyM } = input as Record<string, unknown>;
-  if (typeof lat !== "number" || typeof lng !== "number" || typeof accuracyM !== "number" ||
-      !Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(accuracyM) ||
-      lat < -90 || lat > 90 || lng < -180 || lng > 180 || accuracyM < 0) {
+  if (
+    typeof lat !== "number" ||
+    typeof lng !== "number" ||
+    typeof accuracyM !== "number" ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    !Number.isFinite(accuracyM) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180 ||
+    accuracyM < 0
+  ) {
     throw new HttpError(400, "invalid_position", "Send your position as lat, lng and accuracyM.");
   }
   if (accuracyM > MAX_ACCURACY_M) throw new HttpError(422, "location_imprecise", IMPRECISE_MESSAGE);

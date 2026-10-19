@@ -13,7 +13,11 @@ vi.mock("@capacitor/app", () => ({
   App: {
     addListener: vi.fn(async (_name: string, listener: (event: { url: string }) => void) => {
       mocks.listeners.push(listener);
-      return { remove: async () => { mocks.removed += 1; } };
+      return {
+        remove: async () => {
+          mocks.removed += 1;
+        },
+      };
     }),
     getLaunchUrl: vi.fn(async () => (mocks.launchUrl ? { url: mocks.launchUrl } : undefined)),
   },
@@ -78,10 +82,22 @@ describe("app links", () => {
   });
 
   it("accepts Parkdex hosts only", () => {
-    for (const url of ["https://web.parkdex.app/x", "https://staging.web.parkdex.app/x", "https://parkdex-kip-git-feat-x.vercel.app/x", "http://localhost:5190/x", "http://127.0.0.1:8787/x"]) {
+    for (const url of [
+      "https://web.parkdex.app/x",
+      "https://staging.web.parkdex.app/x",
+      "https://parkdex-kip-git-feat-x.vercel.app/x",
+      "http://localhost:5190/x",
+      "http://127.0.0.1:8787/x",
+    ]) {
       expect(isParkdexLinkHost(new URL(url)), url).toBe(true);
     }
-    for (const url of ["http://web.parkdex.app/x", "https://parkdex.app.evil.test/x", "https://evilparkdex.app/x", "https://other.vercel.app/x", "javascript:alert(1)"]) {
+    for (const url of [
+      "http://web.parkdex.app/x",
+      "https://parkdex.app.evil.test/x",
+      "https://evilparkdex.app/x",
+      "https://other.vercel.app/x",
+      "javascript:alert(1)",
+    ]) {
       expect(isParkdexLinkHost(new URL(url)), url).toBe(false);
     }
   });

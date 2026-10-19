@@ -20,11 +20,7 @@ function hmac(key, value) {
 function encodePath(value) {
   return value
     .split("/")
-    .map((part) =>
-      encodeURIComponent(part).replace(/[!'()*]/g, (character) =>
-        "%" + character.charCodeAt(0).toString(16).toUpperCase(),
-      ),
-    )
+    .map((part) => encodeURIComponent(part).replace(/[!'()*]/g, (character) => "%" + character.charCodeAt(0).toString(16).toUpperCase()))
     .join("/");
 }
 
@@ -87,15 +83,7 @@ function validateChannel(value, expectedEnvironment) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("current pointer must be an object");
   }
-  const keys = [
-    "schema",
-    "environment",
-    "generation",
-    "releaseId",
-    "manifestUrl",
-    "manifestSha256",
-    "minimumReaderVersion",
-  ];
+  const keys = ["schema", "environment", "generation", "releaseId", "manifestUrl", "manifestSha256", "minimumReaderVersion"];
   if (Object.keys(value).length !== keys.length || keys.some((key) => !Object.hasOwn(value, key))) {
     throw new Error("current pointer has unexpected or missing fields");
   }
@@ -138,12 +126,7 @@ async function readAndCheckSnapshot(snapshotDirectory) {
   for (const item of manifest.files) {
     const file = resolve(contentRoot, ...item.path.split("/"));
     const localPath = relative(contentRoot, file);
-    if (
-      localPath === "" ||
-      localPath === ".." ||
-      localPath.startsWith(".." + sep) ||
-      isAbsolute(localPath)
-    ) {
+    if (localPath === "" || localPath === ".." || localPath.startsWith(".." + sep) || isAbsolute(localPath)) {
       throw new Error("manifest content path escapes the snapshot");
     }
     const bytes = await readFile(file);
@@ -157,17 +140,14 @@ async function readAndCheckSnapshot(snapshotDirectory) {
 async function mapConcurrent(items, concurrency, fn) {
   const results = new Array(items.length);
   let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    async () => {
-      while (true) {
-        const index = nextIndex;
-        nextIndex += 1;
-        if (index >= items.length) return;
-        results[index] = await fn(items[index], index);
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index], index);
+    }
+  });
   await Promise.all(workers);
   return results;
 }
@@ -191,8 +171,7 @@ export async function verifyPublishedRelease(snapshotDirectory, options = {}) {
   }
 
   const snapshot = await readAndCheckSnapshot(snapshotDirectory);
-  const manifestUrl =
-    CDN_ORIGIN + "/releases/" + snapshot.manifest.version + "/manifest.json";
+  const manifestUrl = CDN_ORIGIN + "/releases/" + snapshot.manifest.version + "/manifest.json";
   const publishedManifest = await fetcher(manifestUrl, {
     method: "GET",
     cache: "no-store",
@@ -264,8 +243,7 @@ export function signR2Put({
   const amzDate = dateStamp + "T" + now.toISOString().slice(11, 19).replaceAll(":", "") + "Z";
   const payloadHash = sha256(body);
   const requestUrl = new URL(url);
-  const conditionalHeader =
-    condition.type === "if-match" ? "if-match" : "if-none-match";
+  const conditionalHeader = condition.type === "if-match" ? "if-match" : "if-none-match";
   const conditionalValue = condition.type === "if-match" ? condition.etag : "*";
   const canonicalHeaders = {
     "cache-control": cacheControl,
@@ -281,33 +259,11 @@ export function signR2Put({
     .sort()
     .map((name) => name + ":" + String(canonicalHeaders[name]).trim() + "\n")
     .join("");
-  const canonicalRequest = [
-    "PUT",
-    requestUrl.pathname,
-    requestUrl.search.slice(1),
-    canonicalHeaderText,
-    signedHeaders,
-    payloadHash,
-  ].join("\n");
+  const canonicalRequest = ["PUT", requestUrl.pathname, requestUrl.search.slice(1), canonicalHeaderText, signedHeaders, payloadHash].join("\n");
   const scope = dateStamp + "/auto/s3/aws4_request";
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    scope,
-    sha256(canonicalRequest),
-  ].join("\n");
-  const signature = createHmac("sha256", awsSigningKey(secretAccessKey, dateStamp))
-    .update(stringToSign)
-    .digest("hex");
-  const authorization =
-    "AWS4-HMAC-SHA256 Credential=" +
-    accessKeyId +
-    "/" +
-    scope +
-    ", SignedHeaders=" +
-    signedHeaders +
-    ", Signature=" +
-    signature;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256(canonicalRequest)].join("\n");
+  const signature = createHmac("sha256", awsSigningKey(secretAccessKey, dateStamp)).update(stringToSign).digest("hex");
+  const authorization = "AWS4-HMAC-SHA256 Credential=" + accessKeyId + "/" + scope + ", SignedHeaders=" + signedHeaders + ", Signature=" + signature;
   const headers = {
     "Cache-Control": cacheControl,
     "Content-Type": contentType,
@@ -321,22 +277,10 @@ export function signR2Put({
 }
 
 export function r2ObjectUrl(accountId, bucket, key) {
-  return (
-    "https://" +
-    accountId +
-    ".r2.cloudflarestorage.com/" +
-    encodeURIComponent(bucket) +
-    "/" +
-    encodePath(key)
-  );
+  return "https://" + accountId + ".r2.cloudflarestorage.com/" + encodeURIComponent(bucket) + "/" + encodePath(key);
 }
 
-async function checkExpectedPointer({
-  environment,
-  expectedGeneration,
-  expectedEtag,
-  fetcher,
-}) {
+async function checkExpectedPointer({ environment, expectedGeneration, expectedEtag, fetcher }) {
   if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) {
     throw new Error("expected generation must be a non-negative integer");
   }
@@ -363,10 +307,7 @@ async function checkExpectedPointer({
   try {
     pointer = validateChannel(await response.json(), environment);
   } catch (error) {
-    throw new Error(
-      "current pointer is invalid: " +
-        (error instanceof Error ? error.message : "invalid JSON"),
-    );
+    throw new Error("current pointer is invalid: " + (error instanceof Error ? error.message : "invalid JSON"));
   }
   if (pointer.generation !== expectedGeneration) {
     throw new Error("current pointer generation changed; refusing a stale update");
@@ -397,9 +338,7 @@ export async function publishContentChannel(options) {
   const accessKeyId = options.accessKeyId;
   const secretAccessKey = options.secretAccessKey;
   if (!accountId || !bucket || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY are required to publish",
-    );
+    throw new Error("R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY are required to publish");
   }
 
   const url = r2ObjectUrl(accountId, bucket, "channels/" + environment + "/current.json");
@@ -513,10 +452,7 @@ async function main() {
         manifestSha256: result.manifestSha256,
         verifiedAssetCount: result.verifiedAssetCount,
         pointerSha256: sha256(result.pointerBytes),
-        conditionalWrite:
-          result.condition.type === "if-match"
-            ? { header: "If-Match", value: result.condition.etag }
-            : { header: "If-None-Match", value: "*" },
+        conditionalWrite: result.condition.type === "if-match" ? { header: "If-Match", value: result.condition.etag } : { header: "If-None-Match", value: "*" },
         output: resolve(args.output),
       }) + "\n",
     );
@@ -551,11 +487,7 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((error) => {
-    process.stderr.write(
-      "publish-content-channel: " +
-        (error instanceof Error ? error.message : "publication failed") +
-        "\n",
-    );
+    process.stderr.write("publish-content-channel: " + (error instanceof Error ? error.message : "publication failed") + "\n");
     process.exitCode = 1;
   });
 }

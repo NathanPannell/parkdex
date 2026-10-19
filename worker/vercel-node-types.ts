@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 // The two Node function types the API entrypoint uses, declared here so the app does not
 // depend on the @vercel/node package (types only), whose pinned undici and path-to-regexp

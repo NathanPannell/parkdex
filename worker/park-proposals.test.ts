@@ -11,7 +11,11 @@ function request(path: string, options: { method?: string; body?: unknown; origi
   const headers = new Headers({ "cf-connecting-ip": "203.0.113.5" });
   if (options.origin) headers.set("origin", options.origin);
   if (options.body !== undefined) headers.set("content-type", "application/json");
-  return new Request(`${API_ORIGIN}${path}`, { method: options.method ?? "GET", headers, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
+  return new Request(`${API_ORIGIN}${path}`, {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
 }
 
 const proposal = {
@@ -28,7 +32,7 @@ test("anonymous proposals are retired: installed builds get 410 with a message t
   const response = await worker.fetch(request("/api/park-proposals", { method: "POST", body: proposal, origin: "https://localhost" }), env);
   assert.equal(response.status, 410);
   assert.equal(response.headers.get("access-control-allow-origin"), "https://localhost");
-  const body = await response.json() as { code: string; message: string };
+  const body = (await response.json()) as { code: string; message: string };
   assert.equal(body.code, "proposals_retired");
   assert.equal(body.message, PROPOSALS_RETIRED_MESSAGE);
   // src/lib/parkProposal.ts shows messages of up to 200 characters as the error.
@@ -39,6 +43,9 @@ test("anonymous proposals are retired: installed builds get 410 with a message t
 test("the app no longer lists or reviews proposals; the operator dashboard does", async () => {
   const worker = createFeedbackWorker();
   assert.equal((await worker.fetch(request("/api/operator/park-proposals?status=new"), env)).status, 404);
-  const patch = await worker.fetch(request("/api/operator/park-proposals/00000000-0000-4000-8000-000000000001", { method: "PATCH", body: { status: "accepted" }, origin: API_ORIGIN }), env);
+  const patch = await worker.fetch(
+    request("/api/operator/park-proposals/00000000-0000-4000-8000-000000000001", { method: "PATCH", body: { status: "accepted" }, origin: API_ORIGIN }),
+    env,
+  );
   assert.equal(patch.status, 404);
 });

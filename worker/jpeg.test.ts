@@ -22,12 +22,14 @@ function markers(bytes: Uint8Array): number[] {
 function synthetic(scan: number[], extra: number[] = []): Uint8Array {
   const segment = (marker: number, body: number[]) => [0xff, marker, (body.length + 2) >> 8, (body.length + 2) & 0xff, ...body];
   return new Uint8Array([
-    0xff, 0xd8,
+    0xff,
+    0xd8,
     ...segment(0xe0, [0x4a, 0x46, 0x49, 0x46, 0x00, 1, 1, 0, 0, 1, 0, 1, 0, 0]),
     ...segment(0xc0, [8, 0, 3, 0, 4, 1, 1, 0x11, 0]),
     ...segment(0xda, [1, 1, 0, 0, 63, 0]),
     ...scan,
-    0xff, 0xd9,
+    0xff,
+    0xd9,
     ...extra,
   ]);
 }
@@ -35,7 +37,10 @@ function synthetic(scan: number[], extra: number[] = []): Uint8Array {
 test("a phone JPEG loses its EXIF GPS, XMP and comment and keeps everything the image needs", () => {
   const original = new Uint8Array(EXIF_GPS_JPEG);
   assert.ok(text(original).includes("QA Camera Maker") && text(original).includes("GPSLatitude") && text(original).includes("QA secret comment"));
-  assert.deepEqual(markers(original).filter((marker) => marker === 0xe1 || marker === 0xfe), [0xe1, 0xe1, 0xfe]);
+  assert.deepEqual(
+    markers(original).filter((marker) => marker === 0xe1 || marker === 0xfe),
+    [0xe1, 0xe1, 0xfe],
+  );
 
   const stripped = stripJpegMetadata(original);
   assert.equal(stripped.width, 16);

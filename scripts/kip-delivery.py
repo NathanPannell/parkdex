@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Explicit, journaled CI, staging and production delivery for Parkdex Kip."""
+
 from __future__ import annotations
 
 import argparse
@@ -18,7 +19,6 @@ import urllib.parse
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -64,8 +64,22 @@ def redact(value: str) -> str:
 
 def safe_env(*, gh: bool = False, extra: dict[str, str] | None = None) -> dict[str, str]:
     allowed = {
-        "PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR",
-        "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "CI", "LANG", "LC_ALL", "LC_CTYPE",
+        "PATH",
+        "PATHEXT",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "CI",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
     }
     env = {key: value for key, value in os.environ.items() if key.upper() in allowed}
     env["CI"] = "1"
@@ -99,7 +113,7 @@ def failure_detail(stdout: str, stderr: str) -> str:
         first = next((index for index, line in enumerate(lines) if FAILURE_MARKER.search(line)), None)
         parts = []
         if first is not None:
-            excerpt = "\n".join(lines[max(0, first - 2):first + 12])[:FAILURE_EXCERPT_CHARS]
+            excerpt = "\n".join(lines[max(0, first - 2) : first + 12])[:FAILURE_EXCERPT_CHARS]
             parts.append(f"first error:\n{excerpt}")
         else:
             parts.append(f"start of output:\n{output[:FAILURE_EXCERPT_CHARS]}")
@@ -361,8 +375,7 @@ def is_transient(exc: Exception) -> bool:
     return isinstance(exc, TRANSIENT_ERRORS)
 
 
-def urlopen_read(request: urllib.request.Request, *, timeout: float, limit: int | None = None,
-                 sleep=time.sleep) -> tuple[int, bytes]:
+def urlopen_read(request: urllib.request.Request, *, timeout: float, limit: int | None = None, sleep=time.sleep) -> tuple[int, bytes]:
     delays = GET_RETRY_DELAYS if request.get_method() == "GET" else ()
     for attempt, delay in enumerate((*delays, None), start=1):
         try:
@@ -375,8 +388,18 @@ def urlopen_read(request: urllib.request.Request, *, timeout: float, limit: int 
             sleep(delay)
 
 
-def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dict | None = None,
-             query: dict | None = None, not_found_ok: bool = False, timeout: float = 30, sleep=time.sleep):
+def api_json(
+    base: str,
+    path: str,
+    *,
+    token: str,
+    method: str = "GET",
+    body: dict | None = None,
+    query: dict | None = None,
+    not_found_ok: bool = False,
+    timeout: float = 30,
+    sleep=time.sleep,
+):
     url = base + path
     if query:
         url += "?" + urllib.parse.urlencode(query)
@@ -408,8 +431,7 @@ def api_json(base: str, path: str, *, token: str, method: str = "GET", body: dic
         raise DeliveryError(f"{urllib.parse.urlsplit(url).netloc} API returned invalid JSON.") from exc
 
 
-def neon_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None,
-                 query: dict | None = None, timeout: float = 30):
+def neon_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None, query: dict | None = None, timeout: float = 30):
     key = os.environ.get("NEON_API_KEY", "")
     if not key:
         raise DeliveryError("NEON_API_KEY is required for this Neon operation.")
@@ -426,15 +448,19 @@ def vercel_token(config: dict) -> str:
     return token
 
 
-def vercel_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None,
-                   query: dict | None = None, not_found_ok: bool = False):
+def vercel_request(config: dict, path: str, *, method: str = "GET", body: dict | None = None, query: dict | None = None, not_found_ok: bool = False):
     params = dict(query or {})
     params["teamId"] = os.environ.get(config["vercelTeamIdEnvironment"], "")
     if not params["teamId"]:
         raise DeliveryError(f"{config['vercelTeamIdEnvironment']} is required for this Vercel operation.")
     return api_json(
-        VERCEL_API, path, token=vercel_token(config), method=method, body=body,
-        query=params, not_found_ok=not_found_ok,
+        VERCEL_API,
+        path,
+        token=vercel_token(config),
+        method=method,
+        body=body,
+        query=params,
+        not_found_ok=not_found_ok,
     )
 
 
@@ -648,8 +674,18 @@ def psql_executable() -> str:
 
 def psql_args(uri: urllib.parse.SplitResult, username: str, database: str) -> list[str]:
     return [
-        psql_executable(), "-X", "-v", "ON_ERROR_STOP=1", "-h", uri.hostname,
-        "-p", str(uri.port or 5432), "-U", username, "-d", database,
+        psql_executable(),
+        "-X",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-h",
+        uri.hostname,
+        "-p",
+        str(uri.port or 5432),
+        "-U",
+        username,
+        "-d",
+        database,
     ]
 
 
@@ -776,20 +812,27 @@ def content_sync_present(config: dict, candidate_root: Path) -> bool:
     importer_name = feature.get("legacyImporterPath")
     importer_test_name = feature.get("legacyImporterTestPath")
     if (
-        not isinstance(migration_names, list) or not migration_names
-        or not isinstance(api_names, list) or not api_names
-        or not isinstance(bootstrap_name, str) or not bootstrap_name
-        or not isinstance(qa_sql_name, str) or not qa_sql_name
-        or not isinstance(python_test_names, list) or not python_test_names
-        or not isinstance(python_requirements_name, str) or not python_requirements_name
-        or not isinstance(importer_name, str) or not importer_name
+        not isinstance(migration_names, list)
+        or not migration_names
+        or not isinstance(api_names, list)
+        or not api_names
+        or not isinstance(bootstrap_name, str)
+        or not bootstrap_name
+        or not isinstance(qa_sql_name, str)
+        or not qa_sql_name
+        or not isinstance(python_test_names, list)
+        or not python_test_names
+        or not isinstance(python_requirements_name, str)
+        or not python_requirements_name
+        or not isinstance(importer_name, str)
+        or not importer_name
         or not isinstance(importer_test_name, str)
         or any(not isinstance(name, str) or not name for name in [*migration_names, *api_names])
         or any(not isinstance(name, str) or not name for name in python_test_names)
     ):
         raise DeliveryError("The content sync delivery allowlist is invalid.")
     marker_names = [*migration_names, *api_names, bootstrap_name, qa_sql_name]
-    present = [ (candidate_root / name).is_file() for name in marker_names ]
+    present = [(candidate_root / name).is_file() for name in marker_names]
     if any(present) and not all(present):
         raise DeliveryError("The content sync migration, API routes, bootstrap helper, SQL QA, and Python test assets must ship together.")
     if not any(present):
@@ -858,8 +901,12 @@ def run_content_sync_sql_qa(config: dict, candidate_root: Path) -> None:
     qa_env["PGDATABASE"] = database_name
     try:
         table_count = run(
-            [*candidate_psql_args(qa_env), "-qAt", "-c",
-             "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'"],
+            [
+                *candidate_psql_args(qa_env),
+                "-qAt",
+                "-c",
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'",
+            ],
             cwd=candidate_root,
             env=qa_env,
             label="candidate PostgreSQL initialization check",
@@ -906,21 +953,31 @@ def run_legacy_import_postgres_qa(config: dict, candidate_root: Path) -> None:
     admin_psql = candidate_psql_args(admin_env, database_override="postgres")
     existing = run(
         [*admin_psql, "-qAt", "-c", f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{database_name}'"],
-        cwd=candidate_root, env=admin_env, label="candidate legacy import QA database ownership check",
+        cwd=candidate_root,
+        env=admin_env,
+        label="candidate legacy import QA database ownership check",
     ).strip()
     if existing:
         raise DeliveryError("The unique legacy import QA database name already exists; refusing to use or remove it.")
     run(
         [*admin_psql, "-c", f'CREATE DATABASE "{database_name}"'],
-        cwd=candidate_root, env=admin_env, label="create owned legacy import QA database",
+        cwd=candidate_root,
+        env=admin_env,
+        label="create owned legacy import QA database",
     )
     qa_env = dict(admin_env)
     qa_env["PGDATABASE"] = database_name
     try:
         table_count = run(
-            [*candidate_psql_args(qa_env), "-qAt", "-c",
-             "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'"],
-            cwd=candidate_root, env=qa_env, label="candidate legacy import QA initialization check",
+            [
+                *candidate_psql_args(qa_env),
+                "-qAt",
+                "-c",
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') AND table_type = 'BASE TABLE'",
+            ],
+            cwd=candidate_root,
+            env=qa_env,
+            label="candidate legacy import QA initialization check",
         ).strip()
         if table_count != "0":
             raise DeliveryError("The newly created legacy import QA database is not empty.")
@@ -934,7 +991,9 @@ def run_legacy_import_postgres_qa(config: dict, candidate_root: Path) -> None:
     finally:
         run(
             [*admin_psql, "-c", f'DROP DATABASE "{database_name}"'],
-            cwd=candidate_root, env=admin_env, label="drop owned legacy import QA database",
+            cwd=candidate_root,
+            env=admin_env,
+            label="drop owned legacy import QA database",
         )
 
 
@@ -993,7 +1052,17 @@ def require_account_runtime(config: dict, bundle: dict, candidate_root: Path, *,
         raise DeliveryError("Operator, account, photo, and retention secrets must be distinct.")
     url = urllib.parse.urlsplit(bundle.get("KIP_PHOTO_SERVICE_URL", ""))
     expected_host = config["privatePhotos"][f"{environment}WorkerName"] + "."
-    if url.scheme != "https" or not url.hostname or not url.hostname.startswith(expected_host) or not url.hostname.endswith(".workers.dev") or url.path not in ("", "/") or url.query or url.fragment or url.username or url.port:
+    if (
+        url.scheme != "https"
+        or not url.hostname
+        or not url.hostname.startswith(expected_host)
+        or not url.hostname.endswith(".workers.dev")
+        or url.path not in ("", "/")
+        or url.query
+        or url.fragment
+        or url.username
+        or url.port
+    ):
         raise DeliveryError(f"KIP_PHOTO_SERVICE_URL must be the dedicated HTTPS {environment} Worker origin.")
     if not GOOGLE_CLIENT_ID_PATTERN.fullmatch(bundle.get("GOOGLE_WEB_CLIENT_ID", "")):
         raise DeliveryError(f"{environment.capitalize()} accounts require a configured Google Web OAuth client.")
@@ -1005,6 +1074,7 @@ def require_account_runtime(config: dict, bundle: dict, candidate_root: Path, *,
 
 def photo_provider():
     import kip_private_photos
+
     return kip_private_photos
 
 
@@ -1013,13 +1083,14 @@ def run_vercel(config: dict, args: list[str], auth_dir: Path, *, cwd: Path = ROO
     project_id = os.environ.get(config["vercelProjectIdEnvironment"], "")
     if os.environ.get("VERCEL_PROJECT_ID") and os.environ["VERCEL_PROJECT_ID"] != project_id:
         raise DeliveryError("Ambient VERCEL_PROJECT_ID does not match the configured Kip project.")
-    env = safe_env(extra={
-        config["vercelTeamIdEnvironment"]: os.environ.get(config["vercelTeamIdEnvironment"], ""),
-        "VERCEL_PROJECT_ID": project_id,
-        **(env_extra or {}),
-    })
-    command = [*cli, *args, "--scope", os.environ.get(config["vercelTeamIdEnvironment"], ""),
-               "--global-config", str(auth_dir)]
+    env = safe_env(
+        extra={
+            config["vercelTeamIdEnvironment"]: os.environ.get(config["vercelTeamIdEnvironment"], ""),
+            "VERCEL_PROJECT_ID": project_id,
+            **(env_extra or {}),
+        }
+    )
+    command = [*cli, *args, "--scope", os.environ.get(config["vercelTeamIdEnvironment"], ""), "--global-config", str(auth_dir)]
     return run(command, cwd=cwd, env=env, label="Vercel CLI", timeout=1800)
 
 
@@ -1091,8 +1162,13 @@ def verify_main_content_channel(config: dict | None = None) -> None:
     pinned_manifest_sha = hashlib.sha256(pinned_bytes).hexdigest()
     status, pointer = http_json(origin + "/channels/main/current.json")
     expected_keys = {
-        "schema", "environment", "generation", "releaseId", "manifestUrl",
-        "manifestSha256", "minimumReaderVersion",
+        "schema",
+        "environment",
+        "generation",
+        "releaseId",
+        "manifestUrl",
+        "manifestSha256",
+        "minimumReaderVersion",
     }
     if (
         status != 200
@@ -1193,13 +1269,10 @@ def ensure_previous_release_resolved(config: dict, project_id: str, environment:
     deployments = list_vercel_deployments(config, project_id, int((time.time() - 90 * 86400) * 1000))
     expected_target = "production" if environment == "production" else None
     previous = [
-        item for item in deployments
+        item
+        for item in deployments
         if deployment_meta(item).get("kipEnvironment") == environment
-        and (
-            item.get("target") == expected_target
-            if environment == "production"
-            else item.get("target") in (None, "preview")
-        )
+        and (item.get("target") == expected_target if environment == "production" else item.get("target") in (None, "preview"))
     ]
     if not previous:
         return
@@ -1213,11 +1286,7 @@ def ensure_previous_release_resolved(config: dict, project_id: str, environment:
     expected_release = {"sha": previous_sha, "environment": environment}
     if status == 200 and release == expected_release:
         return
-    if (
-        environment == "staging"
-        and previous_sha == config.get("legacyStagingCutoverSha")
-        and config.get("legacyStagingAlias")
-    ):
+    if environment == "staging" and previous_sha == config.get("legacyStagingCutoverSha") and config.get("legacyStagingAlias"):
         legacy_url = "https://" + config["legacyStagingAlias"]
         legacy_status, legacy_release = http_json(legacy_url + config["releasePath"])
         if legacy_status == 200 and legacy_release == expected_release:
@@ -1320,13 +1389,27 @@ def dispatch_release(args, environment: str) -> None:
         local_config_path = runtime_dir / "vercel.json"
         save_json(local_config_path, local_config)
         release_id = f"{environment}-{args.sha}"
-        output = run_vercel(config, [
-            "deploy", "--cwd", str(ROOT), "--yes", *vercel_release_target_args(environment), "--no-wait",
-            "--local-config", str(local_config_path),
-            "--meta", f"githubCommitSha={args.sha}",
-            "--meta", f"kipReleaseId={release_id}",
-            "--meta", f"kipEnvironment={environment}",
-        ], auth_dir, cwd=ROOT)
+        output = run_vercel(
+            config,
+            [
+                "deploy",
+                "--cwd",
+                str(ROOT),
+                "--yes",
+                *vercel_release_target_args(environment),
+                "--no-wait",
+                "--local-config",
+                str(local_config_path),
+                "--meta",
+                f"githubCommitSha={args.sha}",
+                "--meta",
+                f"kipReleaseId={release_id}",
+                "--meta",
+                f"kipEnvironment={environment}",
+            ],
+            auth_dir,
+            cwd=ROOT,
+        )
         urls = re.findall(r"https://[A-Za-z0-9.-]+\.vercel\.app", output)
         if urls:
             print(f"deployment-url={urls[-1]}")
@@ -1403,8 +1486,12 @@ def provision_main_photos(args) -> None:
     staging_sha, _ = assert_clean_staging_harness(config)
     path = state_root() / "persistent" / "private-photos-production.json"
     photo_provider().provision_production(
-        sys.modules[__name__], config, path, apply=args.apply,
-        candidate_root=ROOT, release_sha=staging_sha,
+        sys.modules[__name__],
+        config,
+        path,
+        apply=args.apply,
+        candidate_root=ROOT,
+        release_sha=staging_sha,
     )
 
 

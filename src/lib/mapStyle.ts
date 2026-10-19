@@ -86,9 +86,7 @@ export function mapStyle(releaseId?: string | null): StyleSpecification {
     .filter((layer) => layer.type !== "symbol" && layer.type !== "background")
     .map((layer) => ({ ...layer, id: `overview-${layer.id}`, source: "baseOverview" }));
   const backgroundIndex = base.findIndex((layer) => layer.type === "background");
-  const withOverview = backgroundIndex < 0
-    ? [...overview, ...base]
-    : [...base.slice(0, backgroundIndex + 1), ...overview, ...base.slice(backgroundIndex + 1)];
+  const withOverview = backgroundIndex < 0 ? [...overview, ...base] : [...base.slice(0, backgroundIndex + 1), ...overview, ...base.slice(backgroundIndex + 1)];
   const waterIndex = hasRelease ? withOverview.findIndex((l) => l.id === "water") : -1;
   // An offset copy of the water under itself gives coastlines a soft sticker edge.
   const shadow: LayerSpecification = {
@@ -100,23 +98,23 @@ export function mapStyle(releaseId?: string | null): StyleSpecification {
     filter: ["==", "$type", "Polygon"],
     paint: { "fill-color": "#7FC7D6", "fill-translate": [0, 2.5] },
   };
-  const style = waterIndex >= 0
-    ? [...withOverview.slice(0, waterIndex), shadow, ...withOverview.slice(waterIndex)]
-    : withOverview;
+  const style = waterIndex >= 0 ? [...withOverview.slice(0, waterIndex), shadow, ...withOverview.slice(waterIndex)] : withOverview;
   return {
     version: 8,
     ...(hasRelease ? { glyphs: `contentglyph://${encodeURIComponent(releaseId)}/map/fonts/{fontstack}/{range}.pbf` } : {}),
     sources: {
-      ...(hasRelease ? {
-        protomaps: {
-          type: "vector" as const,
-          tiles: [`pmtiles://${encodeURIComponent(releaseId!)}/{z}/{x}/{y}`],
-          minzoom: 0,
-          maxzoom: 14,
-          bounds: DETAIL_BOUNDS,
-          attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
-        },
-      } : {}),
+      ...(hasRelease
+        ? {
+            protomaps: {
+              type: "vector" as const,
+              tiles: [`pmtiles://${encodeURIComponent(releaseId!)}/{z}/{x}/{y}`],
+              minzoom: 0,
+              maxzoom: 14,
+              bounds: DETAIL_BOUNDS,
+              attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+            },
+          }
+        : {}),
       baseOverview: {
         type: "vector",
         tiles: [`pmtiles://${BASE_OVERVIEW_KEY}/{z}/{x}/{y}`],

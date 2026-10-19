@@ -4,8 +4,17 @@ import test from "node:test";
 import { createFeedbackWorker, type WorkerEnvironment } from "./index.js";
 import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.js";
 import {
-  visitFromJson, type BadgeRecord, type BadgeUnlock, type CrewRecord, type FoundingReviewRecord, type GameStore, type JoinCrewResult, type PlayerRecord,
-  type RecordVisitResult, type SetPatchesResult, type VisitRecord,
+  visitFromJson,
+  type BadgeRecord,
+  type BadgeUnlock,
+  type CrewRecord,
+  type FoundingReviewRecord,
+  type GameStore,
+  type JoinCrewResult,
+  type PlayerRecord,
+  type RecordVisitResult,
+  type SetPatchesResult,
+  type VisitRecord,
 } from "./game-store.js";
 import { FOUNDING_DECISIONS_LIMIT, flagSeedFor, validateJoinBody, validatePatchesBody, visitEvents, type GameEvent } from "./game.js";
 import { normalizeCrewCode } from "./crewCodes.js";
@@ -29,10 +38,18 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 
 function session(transport: "native" | "web"): StoredSession {
   return {
-    id: ACCOUNT, email: "player@example.test", emailVerified: true, displayName: "Player", providers: ["email"],
-    sessionId: "22222222-2222-4222-8222-222222222222", tokenHash: hash(transport === "native" ? bearer : cookieToken),
-    csrfHash: transport === "web" ? hash(csrfToken) : null, transport,
-    expiresAt: "2099-01-01T00:00:00Z", absoluteExpiresAt: "2099-02-01T00:00:00Z", reauthenticatedAt: null,
+    id: ACCOUNT,
+    email: "player@example.test",
+    emailVerified: true,
+    displayName: "Player",
+    providers: ["email"],
+    sessionId: "22222222-2222-4222-8222-222222222222",
+    tokenHash: hash(transport === "native" ? bearer : cookieToken),
+    csrfHash: transport === "web" ? hash(csrfToken) : null,
+    transport,
+    expiresAt: "2099-01-01T00:00:00Z",
+    absoluteExpiresAt: "2099-02-01T00:00:00Z",
+    reauthenticatedAt: null,
   };
 }
 
@@ -46,32 +63,59 @@ const authStore = {
 
 const player: PlayerRecord = { handle: "sam", flagSeed: "0123456789abcdef", createdAt: "2026-10-01T00:00:00.000Z", takeoversSeenAt: null };
 const tookVisit: VisitRecord = {
-  visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 7, pointsBreakdown: { base: 4, days: 3 }, previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" },
-  flagSince: "2026-10-08T17:00:00.000Z", visitedAt: "2026-10-08T17:00:00.000Z", fell: false, protected: null,
+  visitId: VISIT,
+  parkId: PARK,
+  outcome: "took",
+  pointsEarned: 7,
+  pointsBreakdown: { base: 4, days: 3 },
+  previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" },
+  flagSince: "2026-10-08T17:00:00.000Z",
+  visitedAt: "2026-10-08T17:00:00.000Z",
+  fell: false,
+  protected: null,
 };
 const CODE = "K7QX2M";
 const crew: CrewRecord = {
-  parkId: PARK, leader: { handle: "bee", flagSeed: "fedcba9876543210", patches: ["crew-1"] },
+  parkId: PARK,
+  leader: { handle: "bee", flagSeed: "fedcba9876543210", patches: ["crew-1"] },
   members: [
     { handle: "bee", flagSeed: "fedcba9876543210", joinedAt: "2026-10-08T16:30:00.000Z", leader: true, patches: ["crew-1"] },
     { handle: "sam", flagSeed: player.flagSeed, joinedAt: "2026-10-08T17:00:00.000Z", leader: false },
   ],
-  size: 2, cap: 8, flagSince: "2026-10-08T16:30:00.000Z", protectedUntil: "2026-10-08T17:30:00.000Z",
-  member: true, code: CODE, codeExpiresAt: "2026-10-08T17:30:00.000Z",
+  size: 2,
+  cap: 8,
+  flagSince: "2026-10-08T16:30:00.000Z",
+  protectedUntil: "2026-10-08T17:30:00.000Z",
+  member: true,
+  code: CODE,
+  codeExpiresAt: "2026-10-08T17:30:00.000Z",
 };
 // The crew as the API sends it: every member has patches (#175), [] when they wear none.
 const apiCrewShape = { ...crew, members: crew.members.map((member) => ({ ...member, patches: member.patches ?? [] })) };
 const joinedVisit: VisitRecord = {
-  ...tookVisit, outcome: "joined", pointsEarned: 2, pointsBreakdown: { base: 2, days: 0 }, previousHolder: null, flagSince: "2026-10-08T16:30:00.000Z",
+  ...tookVisit,
+  outcome: "joined",
+  pointsEarned: 2,
+  pointsBreakdown: { base: 2, days: 0 },
+  previousHolder: null,
+  flagSince: "2026-10-08T16:30:00.000Z",
 };
 const loggedVisit: VisitRecord = {
-  ...tookVisit, outcome: "logged", pointsEarned: 1, pointsBreakdown: { base: 1, days: 0 }, previousHolder: null, flagSince: null,
+  ...tookVisit,
+  outcome: "logged",
+  pointsEarned: 1,
+  pointsBreakdown: { base: 1, days: 0 },
+  previousHolder: null,
+  flagSince: null,
   protected: { until: "2026-10-08T17:30:00.000Z", leader: { handle: "bee", flagSeed: "fedcba9876543210" }, crewSize: 3 },
 };
 
 class MemoryGameStore implements GameStore {
   players = new Map<string, PlayerRecord>([[ACCOUNT, player]]);
-  owners = new Map<string, string>([["taken_one", "99999999-9999-4999-8999-999999999999"], ["sam", ACCOUNT]]);
+  owners = new Map<string, string>([
+    ["taken_one", "99999999-9999-4999-8999-999999999999"],
+    ["sam", ACCOUNT],
+  ]);
   visitResult: RecordVisitResult = { status: "recorded", visit: tookVisit };
   visitCalls: Array<{ accountId: string; visitId: string; parkId: string; visitedAt: string }> = [];
   joinResult: JoinCrewResult = { status: "joined", visit: joinedVisit, crew };
@@ -80,10 +124,12 @@ class MemoryGameStore implements GameStore {
   crewCalls: Array<{ parkId: string; accountId: string; now: string }> = [];
   seenAt: string | null = null;
 
-  async getPlayer(accountId: string) { return this.players.get(accountId) ?? null; }
+  async getPlayer(accountId: string) {
+    return this.players.get(accountId) ?? null;
+  }
   async handleOwner(handle: string, accountId: string) {
     const owner = this.owners.get(handle);
-    return owner === undefined ? "none" as const : owner === accountId ? "self" as const : "other" as const;
+    return owner === undefined ? ("none" as const) : owner === accountId ? ("self" as const) : ("other" as const);
   }
   async setHandle(accountId: string, handle: string) {
     const saved = { ...player, handle };
@@ -97,9 +143,12 @@ class MemoryGameStore implements GameStore {
   }
   async summary() {
     return {
-      score: 12, parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7, hours: 185, crew: { size: 2, leader: false, protectedUntil: null } }],
+      score: 12,
+      parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7, hours: 185, crew: { size: 2, leader: false, protectedUntil: null } }],
       takeovers: [{ parkId: "regional-x", byHandle: "bee", byFlagSeed: "fedcba9876543210", at: "2026-10-07T00:00:00.000Z" }],
-      visitedToday: [PARK], visitedTodayUntil: "2026-10-09T07:00:00.000Z", loggedToday: ["regional-y"],
+      visitedToday: [PARK],
+      visitedTodayUntil: "2026-10-09T07:00:00.000Z",
+      loggedToday: ["regional-y"],
     };
   }
   async markTakeoversSeen(_accountId: string, at: string) {
@@ -107,7 +156,16 @@ class MemoryGameStore implements GameStore {
     return { ...player, takeoversSeenAt: at };
   }
   async flags() {
-    return [{ parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z", crew: { size: 5, memberSeeds: ["1111111111111111", "2222222222222222", "3333333333333333"], protectedUntil: null }, patches: ["hold-7", "parks-1"] }];
+    return [
+      {
+        parkId: PARK,
+        handle: "sam",
+        flagSeed: player.flagSeed,
+        since: "2026-10-01T00:00:00.000Z",
+        crew: { size: 5, memberSeeds: ["1111111111111111", "2222222222222222", "3333333333333333"], protectedUntil: null },
+        patches: ["hold-7", "parks-1"],
+      },
+    ];
   }
   async joinCrew(accountId: string, code: string, visitId: string, now: string) {
     this.joinCalls.push({ accountId, code, visitId, now });
@@ -117,9 +175,15 @@ class MemoryGameStore implements GameStore {
     this.crewCalls.push({ parkId, accountId, now });
     return this.crew;
   }
-  async leaderboard() { return [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1, patches: ["parks-1"] }]; }
-  async founders() { return [{ parkId: PARK, handle: "sam", photoSha256: "a".repeat(64) }]; }
-  async founderPoints() { return 24; }
+  async leaderboard() {
+    return [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1, patches: ["parks-1"] }];
+  }
+  async founders() {
+    return [{ parkId: PARK, handle: "sam", photoSha256: "a".repeat(64) }];
+  }
+  async founderPoints() {
+    return 24;
+  }
   // Badges (#175).
   awarded: BadgeUnlock[] = [];
   awardCalls: Array<{ accountId: string; now: string }> = [];
@@ -134,13 +198,17 @@ class MemoryGameStore implements GameStore {
     this.awardCalls.push({ accountId, now });
     return this.awarded;
   }
-  async badges() { return { badges: this.badgeList, patches: this.patches }; }
+  async badges() {
+    return { badges: this.badgeList, patches: this.patches };
+  }
   async setFlagPatches(accountId: string, patches: string[]) {
     this.patchCalls.push({ accountId, patches });
     return this.patchesResult ?? { status: "saved" as const, patches };
   }
   reviews: FoundingReviewRecord[] = [];
-  async foundingReviews() { return this.reviews; }
+  async foundingReviews() {
+    return this.reviews;
+  }
   dexCalls: Array<{ accountId: string; now: string }> = [];
   async dex(accountId: string, now: string) {
     this.dexCalls.push({ accountId, now });
@@ -156,7 +224,14 @@ function setup(options: { fetch?: typeof fetch; envOverride?: Partial<WorkerEnvi
   const events: GameEvent[] = [];
   const worker = createFeedbackWorker({
     auth: { createStore: () => authStore },
-    game: { createStore: () => store, now: () => NOW, fetch: options.fetch, onEvent: (event) => { events.push(event); } },
+    game: {
+      createStore: () => store,
+      now: () => NOW,
+      fetch: options.fetch,
+      onEvent: (event) => {
+        events.push(event);
+      },
+    },
   });
   const call = (method: string, path: string, body?: unknown, auth: "bearer" | "cookie" | "cookie-no-csrf" | "none" = "bearer") => {
     const headers = new Headers({ origin });
@@ -165,19 +240,28 @@ function setup(options: { fetch?: typeof fetch; envOverride?: Partial<WorkerEnvi
     if (auth === "cookie" || auth === "cookie-no-csrf") headers.set("cookie", `kip_account_session=${cookieToken}; kip_account_csrf=${csrfToken}`);
     if (auth === "cookie") headers.set("x-csrf-token", csrfToken);
     if (auth !== "none") headers.set("x-kip-account-id", ACCOUNT);
-    return worker.fetch(new Request(origin + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), { ...env, ...options.envOverride });
+    return worker.fetch(new Request(origin + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), {
+      ...env,
+      ...options.envOverride,
+    });
   };
   return { store, events, call };
 }
 
 async function code(response: Response): Promise<string> {
-  return (await response.json() as { code: string }).code;
+  return ((await response.json()) as { code: string }).code;
 }
 
 test("authenticated game routes require an account and public routes do not", async () => {
   const { call, store } = setup();
-  for (const [method, path, body] of [["GET", "/api/game/me"], ["PUT", "/api/game/handle", { handle: "newname" }], ["POST", "/api/game/visits", { visitId: VISIT, parkId: PARK }], ["POST", "/api/game/takeovers/seen", { at: new Date(NOW).toISOString() }],
-    ["POST", "/api/game/crews/join", { visitId: VISIT, code: CODE }], ["GET", `/api/game/parks/${PARK}/crew`]] as const) {
+  for (const [method, path, body] of [
+    ["GET", "/api/game/me"],
+    ["PUT", "/api/game/handle", { handle: "newname" }],
+    ["POST", "/api/game/visits", { visitId: VISIT, parkId: PARK }],
+    ["POST", "/api/game/takeovers/seen", { at: new Date(NOW).toISOString() }],
+    ["POST", "/api/game/crews/join", { visitId: VISIT, code: CODE }],
+    ["GET", `/api/game/parks/${PARK}/crew`],
+  ] as const) {
     const response = await call(method, path, body, "none");
     assert.equal(response.status, 401, path);
     assert.equal(await code(response), "authentication_required");
@@ -209,7 +293,15 @@ test("routing rejects wrong methods and unknown game paths", async () => {
 
 test("visit bodies are strictly validated before the store is touched", async () => {
   const { call, store } = setup();
-  for (const body of [{}, { visitId: VISIT }, { visitId: VISIT, parkId: PARK, visitedAt: "2026-01-01T00:00:00Z" }, { visitId: "not-a-uuid", parkId: PARK }, { visitId: VISIT, parkId: "Bad Park" }, { visitId: VISIT, parkId: "a".repeat(161) }, [VISIT, PARK]]) {
+  for (const body of [
+    {},
+    { visitId: VISIT },
+    { visitId: VISIT, parkId: PARK, visitedAt: "2026-01-01T00:00:00Z" },
+    { visitId: "not-a-uuid", parkId: PARK },
+    { visitId: VISIT, parkId: "Bad Park" },
+    { visitId: VISIT, parkId: "a".repeat(161) },
+    [VISIT, PARK],
+  ]) {
     const response = await call("POST", "/api/game/visits", body);
     assert.equal(response.status, 400, JSON.stringify(body));
   }
@@ -220,16 +312,25 @@ test("a visit uses the server clock and returns the contract shape", async () =>
   const { call, store, events } = setup();
   const response = await call("POST", "/api/game/visits", { visitId: VISIT.toUpperCase(), parkId: PARK });
   assert.equal(response.status, 200);
-  const body = await response.json() as { visit: Record<string, unknown>; newBadges: unknown };
+  const body = (await response.json()) as { visit: Record<string, unknown>; newBadges: unknown };
   // newBadges is additive (#175): the badges this visit unlocked.
   assert.deepEqual(Object.keys(body), ["visit", "newBadges"]);
   assert.deepEqual(body.newBadges, []);
   assert.deepEqual(body.visit, {
-    visitId: VISIT, parkId: PARK, outcome: "took", pointsEarned: 7, pointsBreakdown: { base: 4, days: 3 },
-    previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: "2026-10-08T17:00:00.000Z", protected: null,
+    visitId: VISIT,
+    parkId: PARK,
+    outcome: "took",
+    pointsEarned: 7,
+    pointsBreakdown: { base: 4, days: 3 },
+    previousHolder: { handle: "bee", flagSeed: "fedcba9876543210" },
+    flagSince: "2026-10-08T17:00:00.000Z",
+    protected: null,
   });
   assert.deepEqual(store.visitCalls, [{ accountId: ACCOUNT, visitId: VISIT, parkId: PARK, visitedAt: new Date(NOW).toISOString() }]);
-  assert.deepEqual(events.map((event) => event.name), ["flag_taken"]);
+  assert.deepEqual(
+    events.map((event) => event.name),
+    ["flag_taken"],
+  );
 });
 
 test("visit store outcomes map to the documented errors", async () => {
@@ -255,7 +356,13 @@ test("a visit during someone else's protected hour is logged with the crew detai
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     visit: {
-      visitId: VISIT, parkId: PARK, outcome: "logged", pointsEarned: 1, pointsBreakdown: { base: 1, days: 0 }, previousHolder: null, flagSince: null,
+      visitId: VISIT,
+      parkId: PARK,
+      outcome: "logged",
+      pointsEarned: 1,
+      pointsBreakdown: { base: 1, days: 0 },
+      previousHolder: null,
+      flagSince: null,
       protected: { until: "2026-10-08T17:30:00.000Z", leader: { handle: "bee", flagSeed: "fedcba9876543210" }, crewSize: 3 },
     },
     newBadges: [],
@@ -268,10 +375,22 @@ test("a visit during someone else's protected hour is logged with the crew detai
 });
 
 test("visit events cover falls and skip replays", () => {
-  const fell: RecordVisitResult = { status: "recorded", visit: { ...tookVisit, outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, fell: true } };
-  assert.deepEqual(visitEvents(fell, ACCOUNT).map((event) => event.name), ["flag_fell", "flag_planted"]);
+  const fell: RecordVisitResult = {
+    status: "recorded",
+    visit: { ...tookVisit, outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, fell: true },
+  };
+  assert.deepEqual(
+    visitEvents(fell, ACCOUNT).map((event) => event.name),
+    ["flag_fell", "flag_planted"],
+  );
   assert.deepEqual(visitEvents({ status: "replayed", visit: tookVisit }, ACCOUNT), []);
-  assert.deepEqual(visitEvents({ status: "already_today", visit: { ...tookVisit, outcome: "already_today", pointsEarned: 0, pointsBreakdown: { base: 0, days: 0 } } }, ACCOUNT).map((event) => event.name), ["visit_already_today"]);
+  assert.deepEqual(
+    visitEvents(
+      { status: "already_today", visit: { ...tookVisit, outcome: "already_today", pointsEarned: 0, pointsBreakdown: { base: 0, days: 0 } } },
+      ACCOUNT,
+    ).map((event) => event.name),
+    ["visit_already_today"],
+  );
   assert.deepEqual(visitEvents({ status: "handle_required" }, ACCOUNT), []);
 });
 
@@ -301,7 +420,11 @@ test("handle moderation asks OpenRouter when the key is set and falls back when 
     fetch: async (url, init) => {
       requests.push(String(url));
       assert.deepEqual(JSON.parse(String(init?.body)).state, { handle: "jane_doe_555" });
-      return new Response(JSON.stringify({ answers: { handle: { type: "choice", choice: "reject", confidence: 0.8, probabilities: { allow: 0.15, reject: 0.8, unsure: 0.05 } } } }));
+      return new Response(
+        JSON.stringify({
+          answers: { handle: { type: "choice", choice: "reject", confidence: 0.8, probabilities: { allow: 0.15, reject: 0.8, unsure: 0.05 } } },
+        }),
+      );
     },
   });
   const rejected = await rejecting.call("PUT", "/api/game/handle", { handle: "jane_doe_555" });
@@ -313,12 +436,22 @@ test("handle moderation asks OpenRouter when the key is set and falls back when 
   assert.equal((await failing.call("PUT", "/api/game/handle", { handle: "jane_doe_555" })).status, 200);
 
   let called = false;
-  const keyless = setup({ fetch: async () => { called = true; return new Response("{}"); } });
+  const keyless = setup({
+    fetch: async () => {
+      called = true;
+      return new Response("{}");
+    },
+  });
   assert.equal((await keyless.call("PUT", "/api/game/handle", { handle: "jane_doe_555" })).status, 200);
   assert.equal(called, false);
 
   // Keeping the current handle never re-asks the model.
-  const keep = setup({ envOverride: { OPENROUTER_API_KEY: "test-key" }, fetch: async () => { throw new Error("must not be called"); } });
+  const keep = setup({
+    envOverride: { OPENROUTER_API_KEY: "test-key" },
+    fetch: async () => {
+      throw new Error("must not be called");
+    },
+  });
   assert.equal((await keep.call("PUT", "/api/game/handle", { handle: "sam" })).status, 200);
 });
 
@@ -326,7 +459,9 @@ test("me returns the player summary, or a flag seed and empty state before a han
   const { call, store } = setup();
   const response = await call("GET", "/api/game/me");
   assert.deepEqual(await response.json(), {
-    player: { handle: "sam", flagSeed: player.flagSeed }, flagSeed: player.flagSeed, score: 12,
+    player: { handle: "sam", flagSeed: player.flagSeed },
+    flagSeed: player.flagSeed,
+    score: 12,
     // days drives flag weathering; hours is the holding points so far (#169).
     // crew is additive (#170): a member's park is held like the leader's.
     parks: [{ parkId: PARK, since: "2026-10-01T00:00:00.000Z", days: 7, hours: 185, crew: { size: 2, leader: false, protectedUntil: null } }],
@@ -346,10 +481,22 @@ test("me returns the player summary, or a flag seed and empty state before a han
     serverTime: new Date(NOW).toISOString(),
   });
   store.players.clear();
-  const empty = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
+  const empty = (await (await call("GET", "/api/game/me")).json()) as Record<string, unknown>;
   assert.deepEqual(empty, {
-    player: null, flagSeed: await flagSeedFor(ACCOUNT), score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, loggedToday: [], founderPoints: 0,
-    foundingReviews: { pending: [], decided: [] }, badges: [], flagPatches: [], newBadges: [], serverTime: new Date(NOW).toISOString(),
+    player: null,
+    flagSeed: await flagSeedFor(ACCOUNT),
+    score: 0,
+    parks: [],
+    takeovers: [],
+    visitedToday: [],
+    visitedTodayUntil: null,
+    loggedToday: [],
+    founderPoints: 0,
+    foundingReviews: { pending: [], decided: [] },
+    badges: [],
+    flagPatches: [],
+    newBadges: [],
+    serverTime: new Date(NOW).toISOString(),
   });
   assert.equal(store.awardCalls.length, 1, "a player without a handle has no badges to check");
   assert.match(String(empty.flagSeed), /^[0-9a-f]{16}$/);
@@ -357,27 +504,106 @@ test("me returns the player summary, or a flag seed and empty state before a han
 
 test("me lists pending founding reviews and unseen decisions in the documented shape (#153)", async () => {
   const { call, store } = setup();
-  const base = { osm: null, reason: null, founderHandle: null, founderIsPlayer: false, coverSha256: null, decidedAt: null, createdAt: "2026-10-08T10:00:00.000Z" };
+  const base = {
+    osm: null,
+    reason: null,
+    founderHandle: null,
+    founderIsPlayer: false,
+    coverSha256: null,
+    decidedAt: null,
+    createdAt: "2026-10-08T10:00:00.000Z",
+  };
   store.reviews = [
     { ...base, requestId: "r-pending", status: "pending", parkId: "osm-way-5", osm: { type: "way", id: 5 }, parkName: "Paterson Park" },
-    { ...base, requestId: "r-approved", status: "approved", parkId: PARK, parkName: "Beacon Hill Park", founderHandle: "sam", founderIsPlayer: true, coverSha256: "b".repeat(64), decidedAt: "2026-10-08T12:00:00.000Z" },
-    { ...base, requestId: "r-rejected", status: "rejected", parkId: "regional-x", parkName: "X Park", reason: "There are people in the photo.", decidedAt: "2026-10-08T13:00:00.000Z" },
-    { ...base, requestId: "r-superseded", status: "superseded", parkId: "regional-y", parkName: "Y Park", founderHandle: "bee", coverSha256: "c".repeat(64), decidedAt: "2026-10-08T14:00:00.000Z" },
+    {
+      ...base,
+      requestId: "r-approved",
+      status: "approved",
+      parkId: PARK,
+      parkName: "Beacon Hill Park",
+      founderHandle: "sam",
+      founderIsPlayer: true,
+      coverSha256: "b".repeat(64),
+      decidedAt: "2026-10-08T12:00:00.000Z",
+    },
+    {
+      ...base,
+      requestId: "r-rejected",
+      status: "rejected",
+      parkId: "regional-x",
+      parkName: "X Park",
+      reason: "There are people in the photo.",
+      decidedAt: "2026-10-08T13:00:00.000Z",
+    },
+    {
+      ...base,
+      requestId: "r-superseded",
+      status: "superseded",
+      parkId: "regional-y",
+      parkName: "Y Park",
+      founderHandle: "bee",
+      coverSha256: "c".repeat(64),
+      decidedAt: "2026-10-08T14:00:00.000Z",
+    },
     // Approved, but the operator has since removed this player as founder: no stale cover.
     { ...base, requestId: "r-cleared", status: "approved", parkId: "regional-z", parkName: "Z Park", decidedAt: "2026-10-08T15:00:00.000Z" },
   ];
-  const { foundingReviews } = await (await call("GET", "/api/game/me")).json() as { foundingReviews: Record<string, unknown> };
+  const { foundingReviews } = (await (await call("GET", "/api/game/me")).json()) as { foundingReviews: Record<string, unknown> };
   assert.deepEqual(foundingReviews, {
     pending: [{ requestId: "r-pending", parkId: "osm-way-5", osm: { type: "way", id: 5 }, parkName: "Paterson Park", createdAt: "2026-10-08T10:00:00.000Z" }],
     decided: [
-      { requestId: "r-approved", status: "approved", parkId: PARK, parkName: "Beacon Hill Park", reason: null, coverUrl: `${origin}/api/parks/${PARK}/cover/${"b".repeat(64)}.jpg`, founderHandle: "sam", decidedAt: "2026-10-08T12:00:00.000Z" },
-      { requestId: "r-rejected", status: "rejected", parkId: "regional-x", parkName: "X Park", reason: "There are people in the photo.", coverUrl: null, founderHandle: null, decidedAt: "2026-10-08T13:00:00.000Z" },
-      { requestId: "r-superseded", status: "superseded", parkId: "regional-y", parkName: "Y Park", reason: null, coverUrl: null, founderHandle: "bee", decidedAt: "2026-10-08T14:00:00.000Z" },
-      { requestId: "r-cleared", status: "approved", parkId: "regional-z", parkName: "Z Park", reason: null, coverUrl: null, founderHandle: null, decidedAt: "2026-10-08T15:00:00.000Z" },
+      {
+        requestId: "r-approved",
+        status: "approved",
+        parkId: PARK,
+        parkName: "Beacon Hill Park",
+        reason: null,
+        coverUrl: `${origin}/api/parks/${PARK}/cover/${"b".repeat(64)}.jpg`,
+        founderHandle: "sam",
+        decidedAt: "2026-10-08T12:00:00.000Z",
+      },
+      {
+        requestId: "r-rejected",
+        status: "rejected",
+        parkId: "regional-x",
+        parkName: "X Park",
+        reason: "There are people in the photo.",
+        coverUrl: null,
+        founderHandle: null,
+        decidedAt: "2026-10-08T13:00:00.000Z",
+      },
+      {
+        requestId: "r-superseded",
+        status: "superseded",
+        parkId: "regional-y",
+        parkName: "Y Park",
+        reason: null,
+        coverUrl: null,
+        founderHandle: "bee",
+        decidedAt: "2026-10-08T14:00:00.000Z",
+      },
+      {
+        requestId: "r-cleared",
+        status: "approved",
+        parkId: "regional-z",
+        parkName: "Z Park",
+        reason: null,
+        coverUrl: null,
+        founderHandle: null,
+        decidedAt: "2026-10-08T15:00:00.000Z",
+      },
     ],
   });
-  store.reviews = Array.from({ length: FOUNDING_DECISIONS_LIMIT + 5 }, (_, index) => ({ ...base, requestId: `r${index}`, status: "rejected" as const, parkId: PARK, parkName: "B", reason: "No.", decidedAt: base.createdAt }));
-  const limited = await (await call("GET", "/api/game/me")).json() as { foundingReviews: { decided: unknown[] } };
+  store.reviews = Array.from({ length: FOUNDING_DECISIONS_LIMIT + 5 }, (_, index) => ({
+    ...base,
+    requestId: `r${index}`,
+    status: "rejected" as const,
+    parkId: PARK,
+    parkName: "B",
+    reason: "No.",
+    decidedAt: base.createdAt,
+  }));
+  const limited = (await (await call("GET", "/api/game/me")).json()) as { foundingReviews: { decided: unknown[] } };
   assert.equal(limited.foundingReviews.decided.length, FOUNDING_DECISIONS_LIMIT);
 });
 
@@ -387,56 +613,102 @@ test("takeovers seen clamps the marker to server time and validates the body", a
   const response = await call("POST", "/api/game/takeovers/seen", { at: future });
   assert.equal(response.status, 200);
   assert.equal(store.seenAt, new Date(NOW).toISOString());
-  assert.deepEqual(events.map((event) => event.name), ["takeover_message_seen"]);
+  assert.deepEqual(
+    events.map((event) => event.name),
+    ["takeover_message_seen"],
+  );
   assert.equal((await call("POST", "/api/game/takeovers/seen", { at: "yesterday" })).status, 400);
   assert.equal((await call("POST", "/api/game/takeovers/seen", {})).status, 400);
 });
 
 test("public flags and leaderboard return the contract shape without account IDs", async () => {
   const { call, events } = setup();
-  const flags = await (await call("GET", "/api/game/flags", undefined, "none")).json() as Record<string, unknown>;
+  const flags = (await (await call("GET", "/api/game/flags", undefined, "none")).json()) as Record<string, unknown>;
   assert.deepEqual(flags, {
     // The leader is the flag's handle and seed; crew adds up to 3 more seeds and the size (#170).
     // patches are additive (#175): the holder's badges, drawn on their flag.
-    flags: [{
-      parkId: PARK, handle: "sam", flagSeed: player.flagSeed, since: "2026-10-01T00:00:00.000Z",
-      crew: { size: 5, memberSeeds: ["1111111111111111", "2222222222222222", "3333333333333333"], protectedUntil: null }, patches: ["hold-7", "parks-1"],
-    }],
+    flags: [
+      {
+        parkId: PARK,
+        handle: "sam",
+        flagSeed: player.flagSeed,
+        since: "2026-10-01T00:00:00.000Z",
+        crew: { size: 5, memberSeeds: ["1111111111111111", "2222222222222222", "3333333333333333"], protectedUntil: null },
+        patches: ["hold-7", "parks-1"],
+      },
+    ],
     // Founded parks carry an absolute cover URL, so native builds can load it cross-origin.
     founders: [{ parkId: PARK, handle: "sam", coverUrl: `${origin}/api/parks/${PARK}/cover/${"a".repeat(64)}.jpg` }],
     serverTime: new Date(NOW).toISOString(),
   });
-  const board = await (await call("GET", "/api/game/leaderboard", undefined, "none")).json() as Record<string, unknown>;
-  assert.deepEqual(board, { players: [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1, patches: ["parks-1"] }], serverTime: new Date(NOW).toISOString() });
+  const board = (await (await call("GET", "/api/game/leaderboard", undefined, "none")).json()) as Record<string, unknown>;
+  assert.deepEqual(board, {
+    players: [{ rank: 1, handle: "sam", flagSeed: player.flagSeed, score: 12, parksHeld: 1, patches: ["parks-1"] }],
+    serverTime: new Date(NOW).toISOString(),
+  });
   assert.doesNotMatch(JSON.stringify([flags, board]), new RegExp(ACCOUNT));
-  assert.deepEqual(events.map((event) => event.name), ["leaderboard_viewed"]);
+  assert.deepEqual(
+    events.map((event) => event.name),
+    ["leaderboard_viewed"],
+  );
 });
 
 test("a game event hook failure never breaks a visit", async () => {
   const store = new MemoryGameStore();
   const worker = createFeedbackWorker({
     auth: { createStore: () => authStore },
-    game: { createStore: () => store, now: () => NOW, onEvent: () => { throw new Error("analytics down"); } },
+    game: {
+      createStore: () => store,
+      now: () => NOW,
+      onEvent: () => {
+        throw new Error("analytics down");
+      },
+    },
   });
-  const response = await worker.fetch(new Request(origin + "/api/game/visits", {
-    method: "POST",
-    headers: { origin, "content-type": "application/json", authorization: `Bearer ${bearer}`, "x-kip-account-id": ACCOUNT },
-    body: JSON.stringify({ visitId: VISIT, parkId: PARK }),
-  }), env);
+  const response = await worker.fetch(
+    new Request(origin + "/api/game/visits", {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", authorization: `Bearer ${bearer}`, "x-kip-account-id": ACCOUNT },
+      body: JSON.stringify({ visitId: VISIT, parkId: PARK }),
+    }),
+    env,
+  );
   assert.equal(response.status, 200);
 });
 
 test("stored visits parse their points breakdown, and game_001's shape falls back to the base", () => {
-  const stored = { visitId: VISIT.toUpperCase(), parkId: PARK, outcome: "took", pointsEarned: 7, previousHolder: null, flagSince: null, visitedAt: "2026-10-08T17:00:00Z", fell: false };
+  const stored = {
+    visitId: VISIT.toUpperCase(),
+    parkId: PARK,
+    outcome: "took",
+    pointsEarned: 7,
+    previousHolder: null,
+    flagSince: null,
+    visitedAt: "2026-10-08T17:00:00Z",
+    fell: false,
+  };
   assert.deepEqual(visitFromJson({ ...stored, pointsBreakdown: { base: 4, days: 3 } }).pointsBreakdown, { base: 4, days: 3 });
   assert.deepEqual(visitFromJson(stored).pointsBreakdown, { base: 7, days: 0 });
   assert.equal(visitFromJson(stored).visitId, VISIT);
 });
 
 test("stored crew outcomes and protected details parse (#170)", () => {
-  const stored = { visitId: VISIT, parkId: PARK, outcome: "logged", pointsEarned: 1, pointsBreakdown: { base: 1, days: 0 }, previousHolder: null, flagSince: null, visitedAt: "2026-10-08T17:00:00Z", fell: false };
+  const stored = {
+    visitId: VISIT,
+    parkId: PARK,
+    outcome: "logged",
+    pointsEarned: 1,
+    pointsBreakdown: { base: 1, days: 0 },
+    previousHolder: null,
+    flagSince: null,
+    visitedAt: "2026-10-08T17:00:00Z",
+    fell: false,
+  };
   assert.equal(visitFromJson(stored).protected, null, "game_002's shape has no protected field");
-  const logged = visitFromJson({ ...stored, protected: { until: "2026-10-08T17:30:00Z", leader: { handle: "bee", flagSeed: "fedcba9876543210" }, crewSize: 2 } });
+  const logged = visitFromJson({
+    ...stored,
+    protected: { until: "2026-10-08T17:30:00Z", leader: { handle: "bee", flagSeed: "fedcba9876543210" }, crewSize: 2 },
+  });
   assert.deepEqual(logged.protected, { until: "2026-10-08T17:30:00.000Z", leader: { handle: "bee", flagSeed: "fedcba9876543210" }, crewSize: 2 });
   assert.equal(visitFromJson({ ...stored, outcome: "joined" }).outcome, "joined");
   assert.throws(() => visitFromJson({ ...stored, outcome: "stolen" }));
@@ -451,7 +723,16 @@ test("crew codes are normalised to the friend code alphabet", () => {
 
 test("join bodies are strictly validated before the store is touched", async () => {
   const { call, store } = setup();
-  for (const body of [{}, { visitId: VISIT }, { code: CODE }, { visitId: VISIT, code: CODE, parkId: PARK }, { visitId: "nope", code: CODE }, { visitId: VISIT, code: "ABC" }, { visitId: VISIT, code: 123456 }, [VISIT, CODE]]) {
+  for (const body of [
+    {},
+    { visitId: VISIT },
+    { code: CODE },
+    { visitId: VISIT, code: CODE, parkId: PARK },
+    { visitId: "nope", code: CODE },
+    { visitId: VISIT, code: "ABC" },
+    { visitId: VISIT, code: 123456 },
+    [VISIT, CODE],
+  ]) {
     const response = await call("POST", "/api/game/crews/join", body);
     assert.equal(response.status, 400, JSON.stringify(body));
   }
@@ -466,19 +747,25 @@ test("joining a crew uses the server clock, returns the visit and crew, and reco
   const { call, store, events } = setup();
   const response = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: "k7q-x2m" });
   assert.equal(response.status, 200);
-  const body = await response.json() as Record<string, unknown>;
+  const body = (await response.json()) as Record<string, unknown>;
   assert.deepEqual(Object.keys(body), ["status", "visit", "crew", "newBadges"]);
   assert.equal(body.status, "joined");
   assert.deepEqual(body.visit, {
-    visitId: VISIT, parkId: PARK, outcome: "joined", pointsEarned: 2, pointsBreakdown: { base: 2, days: 0 }, previousHolder: null,
-    flagSince: "2026-10-08T16:30:00.000Z", protected: null,
+    visitId: VISIT,
+    parkId: PARK,
+    outcome: "joined",
+    pointsEarned: 2,
+    pointsBreakdown: { base: 2, days: 0 },
+    previousHolder: null,
+    flagSince: "2026-10-08T16:30:00.000Z",
+    protected: null,
   });
   assert.deepEqual(body.crew, apiCrewShape);
   assert.deepEqual(store.joinCalls, [{ accountId: ACCOUNT, code: CODE, visitId: VISIT, now: new Date(NOW).toISOString() }]);
   assert.deepEqual(events, [{ name: "crew_joined", accountId: ACCOUNT, parkId: PARK, pointsEarned: 2, crewSize: 2 }]);
 
   store.joinResult = { status: "replayed", visit: joinedVisit, crew };
-  const replay = await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json() as Record<string, unknown>;
+  const replay = (await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json()) as Record<string, unknown>;
   assert.equal(replay.status, "joined", "a replay answers like the first join");
   store.joinResult = { status: "already_member", crew };
   const member = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE });
@@ -537,8 +824,22 @@ test("GET /api/game/dex lists visited parks with their visit days for the signed
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.deepEqual(await response.json(), {
     parks: [
-      { parkId: PARK, visits: 2, days: ["2026-10-01", "2026-10-08"], firstVisitAt: "2026-10-01T18:00:00.000Z", lastVisitAt: "2026-10-08T17:00:00.000Z", hidden: false },
-      { parkId: "municipal-hidden", visits: 1, days: ["2026-09-30"], firstVisitAt: "2026-09-30T18:00:00.000Z", lastVisitAt: "2026-09-30T18:00:00.000Z", hidden: true },
+      {
+        parkId: PARK,
+        visits: 2,
+        days: ["2026-10-01", "2026-10-08"],
+        firstVisitAt: "2026-10-01T18:00:00.000Z",
+        lastVisitAt: "2026-10-08T17:00:00.000Z",
+        hidden: false,
+      },
+      {
+        parkId: "municipal-hidden",
+        visits: 1,
+        days: ["2026-09-30"],
+        firstVisitAt: "2026-09-30T18:00:00.000Z",
+        lastVisitAt: "2026-09-30T18:00:00.000Z",
+        hidden: true,
+      },
     ],
     serverTime: new Date(NOW).toISOString(),
   });
@@ -555,25 +856,39 @@ test("GET /api/game/dex answers 503 where the store cannot list a Dex", async ()
 
 test("visits, joins and me announce new badges and record badge_unlocked; replays record nothing (#175)", async () => {
   const { call, store, events } = setup();
-  const unlocked = [{ id: "parks-1", unlockedAt: new Date(NOW).toISOString() }, { id: "taker-5", unlockedAt: new Date(NOW).toISOString() }];
+  const unlocked = [
+    { id: "parks-1", unlockedAt: new Date(NOW).toISOString() },
+    { id: "taker-5", unlockedAt: new Date(NOW).toISOString() },
+  ];
   store.visitResult = { status: "recorded", visit: tookVisit, badges: unlocked };
-  const visit = await (await call("POST", "/api/game/visits", { visitId: VISIT, parkId: PARK })).json() as Record<string, unknown>;
+  const visit = (await (await call("POST", "/api/game/visits", { visitId: VISIT, parkId: PARK })).json()) as Record<string, unknown>;
   assert.deepEqual(visit.newBadges, unlocked);
-  assert.deepEqual(events.map((event) => [event.name, event.badgeId, event.parkId]), [
-    ["flag_taken", undefined, PARK], ["badge_unlocked", "parks-1", PARK], ["badge_unlocked", "taker-5", PARK],
-  ]);
+  assert.deepEqual(
+    events.map((event) => [event.name, event.badgeId, event.parkId]),
+    [
+      ["flag_taken", undefined, PARK],
+      ["badge_unlocked", "parks-1", PARK],
+      ["badge_unlocked", "taker-5", PARK],
+    ],
+  );
   store.visitResult = { status: "replayed", visit: tookVisit, badges: unlocked };
-  const replay = await (await call("POST", "/api/game/visits", { visitId: VISIT, parkId: PARK })).json() as Record<string, unknown>;
+  const replay = (await (await call("POST", "/api/game/visits", { visitId: VISIT, parkId: PARK })).json()) as Record<string, unknown>;
   assert.deepEqual(replay.newBadges, unlocked, "a replay announces the same badges");
   assert.equal(events.length, 3, "and records nothing");
 
   store.joinResult = { status: "joined", visit: joinedVisit, crew, badges: [{ id: "crew-1", unlockedAt: new Date(NOW).toISOString() }] };
-  const joined = await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json() as Record<string, unknown>;
+  const joined = (await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json()) as Record<string, unknown>;
   assert.deepEqual(joined.newBadges, [{ id: "crew-1", unlockedAt: new Date(NOW).toISOString() }]);
-  assert.deepEqual(events.slice(3).map((event) => [event.name, event.badgeId]), [["crew_joined", undefined], ["badge_unlocked", "crew-1"]]);
+  assert.deepEqual(
+    events.slice(3).map((event) => [event.name, event.badgeId]),
+    [
+      ["crew_joined", undefined],
+      ["badge_unlocked", "crew-1"],
+    ],
+  );
 
   store.awarded = [{ id: "hold-7", unlockedAt: new Date(NOW).toISOString() }];
-  const me = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
+  const me = (await (await call("GET", "/api/game/me")).json()) as Record<string, unknown>;
   assert.deepEqual(me.newBadges, store.awarded, "time-based badges unlock when me is read");
   assert.deepEqual(store.awardCalls.at(-1), { accountId: ACCOUNT, now: new Date(NOW).toISOString() });
   assert.deepEqual(events.at(-1), { name: "badge_unlocked", accountId: ACCOUNT, parkId: undefined, badgeId: "hold-7" });
@@ -584,7 +899,7 @@ test("me works with a store that has no badges (#175)", async () => {
   const bare = store as Partial<MemoryGameStore>;
   bare.awardBadges = undefined;
   bare.badges = undefined;
-  const me = await (await call("GET", "/api/game/me")).json() as Record<string, unknown>;
+  const me = (await (await call("GET", "/api/game/me")).json()) as Record<string, unknown>;
   assert.deepEqual([me.badges, me.flagPatches, me.newBadges], [[], [], []]);
   bare.setFlagPatches = undefined;
   assert.equal((await call("PUT", "/api/game/me/patches", { patches: [] })).status, 503);
@@ -593,9 +908,23 @@ test("me works with a store that has no badges (#175)", async () => {
 test("patch bodies hold up to 3 different badge IDs (#175)", () => {
   assert.deepEqual(validatePatchesBody({ patches: [] }), []);
   assert.deepEqual(validatePatchesBody({ patches: ["parks-1", "hold-7", "coast-to-coast"] }), ["parks-1", "hold-7", "coast-to-coast"]);
-  for (const body of [{}, { patches: "parks-1" }, { patches: ["a", "b", "c", "d"] }, { patches: ["parks-1", "parks-1"] }, { patches: ["Parks-1"] },
-    { patches: ["parks 1"] }, { patches: [1] }, { patches: ["x".repeat(41)] }, { patches: [], extra: true }, [["parks-1"]]]) {
-    assert.throws(() => validatePatchesBody(body), (error: unknown) => (error as { status?: number }).status === 400, JSON.stringify(body));
+  for (const body of [
+    {},
+    { patches: "parks-1" },
+    { patches: ["a", "b", "c", "d"] },
+    { patches: ["parks-1", "parks-1"] },
+    { patches: ["Parks-1"] },
+    { patches: ["parks 1"] },
+    { patches: [1] },
+    { patches: ["x".repeat(41)] },
+    { patches: [], extra: true },
+    [["parks-1"]],
+  ]) {
+    assert.throws(
+      () => validatePatchesBody(body),
+      (error: unknown) => (error as { status?: number }).status === 400,
+      JSON.stringify(body),
+    );
   }
 });
 

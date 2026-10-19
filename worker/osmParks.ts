@@ -62,7 +62,10 @@ const BOUNDARY = ["protected_area", "national_park"] as const;
 export type Position = [number, number];
 export type MultiPolygon = { type: "MultiPolygon"; coordinates: Position[][][] };
 export type OsmType = "way" | "relation";
-export interface OsmRef { type: OsmType; id: number }
+export interface OsmRef {
+  type: OsmType;
+  id: number;
+}
 
 export interface OsmFeature extends OsmRef {
   name: string | null;
@@ -81,7 +84,22 @@ export interface OsmCandidate extends OsmFeature {
 }
 
 /** Tags worth keeping for the operator and the moderation model. Everything else is dropped. */
-const KEPT_TAGS = ["name", "leisure", "boundary", "protect_class", "protection_title", "access", "operator", "owner", "designation", "website", "wikidata", "garden:type", "landuse", "natural"];
+const KEPT_TAGS = [
+  "name",
+  "leisure",
+  "boundary",
+  "protect_class",
+  "protection_title",
+  "access",
+  "operator",
+  "owner",
+  "designation",
+  "website",
+  "wikidata",
+  "garden:type",
+  "landuse",
+  "natural",
+];
 
 // ---------------------------------------------------------------- geometry
 
@@ -103,8 +121,9 @@ export function ringArea(ring: Position[]): number {
   const kx = mPerDegLng(lat0);
   let sum = 0;
   for (let index = 0; index < ring.length - 1; index += 1) {
-    const [x1, y1] = ring[index], [x2, y2] = ring[index + 1];
-    sum += (x1 * kx) * (y2 * M_PER_DEG_LAT) - (x2 * kx) * (y1 * M_PER_DEG_LAT);
+    const [x1, y1] = ring[index],
+      [x2, y2] = ring[index + 1];
+    sum += x1 * kx * (y2 * M_PER_DEG_LAT) - x2 * kx * (y1 * M_PER_DEG_LAT);
   }
   return Math.abs(sum) / 2;
 }
@@ -120,8 +139,9 @@ export function multiPolygonArea(geometry: MultiPolygon): number {
 export function pointInRing(point: Position, ring: Position[]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    const [xi, yi] = ring[i], [xj, yj] = ring[j];
-    if ((yi > point[1]) !== (yj > point[1]) && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) inside = !inside;
+    const [xi, yi] = ring[i],
+      [xj, yj] = ring[j];
+    if (yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
 }
@@ -133,9 +153,14 @@ export function pointInMultiPolygon(point: Position, geometry: MultiPolygon): bo
 
 function segmentDistanceM(point: Position, a: Position, b: Position): number {
   const kx = mPerDegLng(point[1]);
-  const px = point[0] * kx, py = point[1] * M_PER_DEG_LAT;
-  const ax = a[0] * kx, ay = a[1] * M_PER_DEG_LAT, bx = b[0] * kx, by = b[1] * M_PER_DEG_LAT;
-  const dx = bx - ax, dy = by - ay;
+  const px = point[0] * kx,
+    py = point[1] * M_PER_DEG_LAT;
+  const ax = a[0] * kx,
+    ay = a[1] * M_PER_DEG_LAT,
+    bx = b[0] * kx,
+    by = b[1] * M_PER_DEG_LAT;
+  const dx = bx - ax,
+    dy = by - ay;
   const length = dx * dx + dy * dy;
   const t = length === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / length));
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
@@ -178,10 +203,14 @@ function simplifyRing(ring: Position[], toleranceM: number): Position[] {
   const stack: [number, number][] = [[0, ring.length - 1]];
   while (stack.length) {
     const [start, end] = stack.pop()!;
-    let index = -1, farthest = 0;
+    let index = -1,
+      farthest = 0;
     for (let i = start + 1; i < end; i += 1) {
       const distance = segmentDistanceM(ring[i], ring[start], ring[end]);
-      if (distance > farthest) { farthest = distance; index = i; }
+      if (distance > farthest) {
+        farthest = distance;
+        index = i;
+      }
     }
     if (index !== -1 && farthest > toleranceM) {
       keep[index] = 1;
@@ -259,7 +288,8 @@ export function elementGeometry(element: OverpassElement): MultiPolygon | null {
     return { type: "MultiPolygon", coordinates: [[ring]] };
   }
   if (element.type !== "relation" || !Array.isArray(element.members)) return null;
-  const outers: Position[][] = [], inners: Position[][] = [];
+  const outers: Position[][] = [],
+    inners: Position[][] = [];
   for (const member of element.members) {
     if (member.type !== "way") continue;
     const segment = line(member.geometry);
@@ -269,9 +299,7 @@ export function elementGeometry(element: OverpassElement): MultiPolygon | null {
   }
   const outerRings = assembleRings(outers);
   if (!outerRings.length) return null;
-  const polygons: Position[][][] = outerRings
-    .sort((a, b) => ringArea(b) - ringArea(a))
-    .map((ring) => [ring]);
+  const polygons: Position[][][] = outerRings.sort((a, b) => ringArea(b) - ringArea(a)).map((ring) => [ring]);
   for (const hole of assembleRings(inners)) {
     // A hole belongs to the smallest outer ring that contains it.
     const owner = [...polygons].reverse().find(([outer]) => pointInRing(hole[0], outer) || pointInRing(hole[Math.floor(hole.length / 2)], outer));
@@ -351,13 +379,16 @@ export interface OverpassEnv {
 
 /** The configured Overpass endpoints: OVERPASS_URLS, else OVERPASS_URL, else the defaults. Only https URLs count. */
 export function overpassEndpoints(env: OverpassEnv): string[] {
-  const configured = (env.OVERPASS_URLS ?? env.OVERPASS_URL ?? "").split(",").map((value) => value.trim()).filter((value) => {
-    try {
-      return new URL(value).protocol === "https:";
-    } catch {
-      return false;
-    }
-  });
+  const configured = (env.OVERPASS_URLS ?? env.OVERPASS_URL ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => {
+      try {
+        return new URL(value).protocol === "https:";
+      } catch {
+        return false;
+      }
+    });
   return configured.length ? [...new Set(configured)] : [...DEFAULT_OVERPASS_URLS];
 }
 
@@ -392,9 +423,10 @@ function ring(value: unknown): Position[] | null {
 function nominatimFeature(value: unknown, toleranceM: number): OsmFeature | null {
   const feature = value as { properties?: Record<string, unknown>; geometry?: { type?: unknown; coordinates?: unknown } } | null;
   const properties = feature?.properties ?? {};
-  const type = properties.osm_type, id = Number(properties.osm_id);
+  const type = properties.osm_type,
+    id = Number(properties.osm_id);
   if ((type !== "way" && type !== "relation") || !Number.isSafeInteger(id) || id <= 0) return null;
-  const extratags = properties.extratags && typeof properties.extratags === "object" ? properties.extratags as Record<string, string> : {};
+  const extratags = properties.extratags && typeof properties.extratags === "object" ? (properties.extratags as Record<string, string>) : {};
   const name = typeof properties.name === "string" && properties.name.trim() ? properties.name.trim() : null;
   const tags: Record<string, string> = { ...extratags, [String(properties.category)]: String(properties.type), ...(name ? { name } : {}) };
   const kind = parkKind(tags);
@@ -410,7 +442,15 @@ function nominatimFeature(value: unknown, toleranceM: number): OsmFeature | null
     coordinates.push(rings as Position[][]);
   }
   const raw: MultiPolygon = { type: "MultiPolygon", coordinates };
-  return { type, id, name: name?.slice(0, 140) ?? null, kind, tags: keptTags(tags), geometry: simplifyMultiPolygon(raw, toleranceM), areaM2: Math.round(multiPolygonArea(raw)) };
+  return {
+    type,
+    id,
+    name: name?.slice(0, 140) ?? null,
+    kind,
+    tags: keptTags(tags),
+    geometry: simplifyMultiPolygon(raw, toleranceM),
+    areaM2: Math.round(multiPolygonArea(raw)),
+  };
 }
 
 /** Inside first, then nearest, then the smaller (more specific) place. */
@@ -421,11 +461,12 @@ function sortByPin(candidates: OsmCandidate[]): OsmCandidate[] {
 /** The parks that contain the position, allowing `toleranceM` outside the edge, best first. */
 function containing(features: OsmFeature[], lat: number, lng: number, toleranceM: number): OsmCandidate[] {
   const pin: Position = [lng, lat];
-  return sortByPin(features
-    .map((feature) => ({ feature, distance: distanceToMultiPolygon(pin, feature.geometry) }))
-    .filter(({ distance }) => distance <= toleranceM)
-    .map(({ feature, distance }) => ({ ...feature, containsPin: distance === 0, distanceM: Math.round(distance) })))
-    .slice(0, MAX_CANDIDATES);
+  return sortByPin(
+    features
+      .map((feature) => ({ feature, distance: distanceToMultiPolygon(pin, feature.geometry) }))
+      .filter(({ distance }) => distance <= toleranceM)
+      .map(({ feature, distance }) => ({ ...feature, containsPin: distance === 0, distanceM: Math.round(distance) })),
+  ).slice(0, MAX_CANDIDATES);
 }
 
 /** Worth trying the next endpoint: timeouts, network errors, 429, 5xx, unreadable answers and Overpass runtime errors. */
@@ -503,14 +544,14 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
         if (!response.ok) throw new HttpError(503, "osm_unavailable", "OpenStreetMap could not answer that search.");
         let body: { elements?: unknown; remark?: unknown };
         try {
-          body = await response.json() as typeof body;
+          body = (await response.json()) as typeof body;
         } catch {
           // Also covers a body cut off by the timeout.
           throw new OverpassAttemptError("unreadable");
         }
         // Overpass reports its own timeouts as a remark on an otherwise successful response.
         if (typeof body.remark === "string" && /runtime error|timed out|out of memory/i.test(body.remark)) throw new OverpassAttemptError("remark");
-        return Array.isArray(body.elements) ? body.elements as OverpassElement[] : [];
+        return Array.isArray(body.elements) ? (body.elements as OverpassElement[]) : [];
       } finally {
         clearTimeout(timer);
       }
@@ -555,7 +596,7 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     try {
       const response = await fetcher(url, { headers: { accept: "application/json", "user-agent": OSM_USER_AGENT }, signal: controller.signal });
       if (!response.ok) return null;
-      const body = await response.json() as unknown;
+      const body = (await response.json()) as unknown;
       remember(url, body as OverpassElement[]);
       return body;
     } catch {
@@ -569,29 +610,39 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   async function nominatimOutlines(refs: OsmRef[], toleranceM: number, threshold: number | null): Promise<OsmFeature[] | null> {
     if (!nominatim) return null;
     if (!refs.length) return [];
-    const ids = refs.slice(0, NOMINATIM_LOOKUP_IDS).map((ref) => `${ref.type === "way" ? "W" : "R"}${ref.id}`).join(",");
+    const ids = refs
+      .slice(0, NOMINATIM_LOOKUP_IDS)
+      .map((ref) => `${ref.type === "way" ? "W" : "R"}${ref.id}`)
+      .join(",");
     const thin = threshold === null ? "" : `&polygon_threshold=${threshold}`;
-    const body = await nominatimGet(`${nominatim}/lookup?osm_ids=${ids}&format=geojson&polygon_geojson=1&extratags=1${thin}`) as { features?: unknown } | null;
+    const body = (await nominatimGet(`${nominatim}/lookup?osm_ids=${ids}&format=geojson&polygon_geojson=1&extratags=1${thin}`)) as {
+      features?: unknown;
+    } | null;
     if (!body || !Array.isArray(body.features)) return null;
     return body.features.map((item) => nominatimFeature(item, toleranceM)).filter((feature): feature is OsmFeature => feature !== null);
   }
 
   /** Park-like ways and relations from one bounded /search, with their bounding boxes. Null when it fails. */
   async function nominatimFind(q: string, lat: number, lng: number, halfSideM: number): Promise<{ ref: OsmRef; bboxM: number }[] | null> {
-    const dLat = halfSideM / M_PER_DEG_LAT, dLng = halfSideM / mPerDegLng(lat);
+    const dLat = halfSideM / M_PER_DEG_LAT,
+      dLng = halfSideM / mPerDegLng(lat);
     const viewbox = [lng - dLng, lat + dLat, lng + dLng, lat - dLat].map((value) => value.toFixed(5)).join(",");
-    const results = await nominatimGet(`${nominatim}/search?q=${encodeURIComponent(q)}&viewbox=${viewbox}&bounded=1&format=jsonv2&limit=${NOMINATIM_LIMIT}&extratags=1`);
+    const results = await nominatimGet(
+      `${nominatim}/search?q=${encodeURIComponent(q)}&viewbox=${viewbox}&bounded=1&format=jsonv2&limit=${NOMINATIM_LIMIT}&extratags=1`,
+    );
     if (!Array.isArray(results)) return null;
     const found: { ref: OsmRef; bboxM: number }[] = [];
     for (const item of results as Record<string, unknown>[]) {
-      const tags = { [String(item.category)]: String(item.type), ...(item.extratags && typeof item.extratags === "object" ? item.extratags as Record<string, string> : {}) };
+      const tags = {
+        [String(item.category)]: String(item.type),
+        ...(item.extratags && typeof item.extratags === "object" ? (item.extratags as Record<string, string>) : {}),
+      };
       const id = Number(item.osm_id);
       if ((item.osm_type !== "way" && item.osm_type !== "relation") || !Number.isSafeInteger(id) || id <= 0 || !parkKind(tags) || !publicPlace(tags)) continue;
       // jsonv2 bounding boxes are [south, north, west, east] as strings.
       const box = Array.isArray(item.boundingbox) ? item.boundingbox.map(Number) : [];
-      const bboxM = box.length === 4 && box.every(Number.isFinite)
-        ? bboxDistanceM({ minlat: box[0], maxlat: box[1], minlon: box[2], maxlon: box[3] }, lat, lng)
-        : 0;
+      const bboxM =
+        box.length === 4 && box.every(Number.isFinite) ? bboxDistanceM({ minlat: box[0], maxlat: box[1], minlon: box[2], maxlon: box[3] }, lat, lng) : 0;
       found.push({ ref: { type: item.osm_type, id }, bboxM });
     }
     return found;
@@ -601,7 +652,8 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     const unavailable = new HttpError(503, "osm_unavailable", "OpenStreetMap is busy right now. Try again in a minute.");
     if (!nominatim) throw unavailable;
     // About 10 m of rounding lets nearby retries share the cache.
-    const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
+    const rlat = Math.round(lat * 1e4) / 1e4,
+      rlng = Math.round(lng * 1e4) / 1e4;
     const parks = await nominatimFind("park", rlat, rlng, NOMINATIM_BOX_M);
     if (!parks) throw unavailable;
     const near = parks.length >= NOMINATIM_LIMIT ? await nominatimFind("park", rlat, rlng, NOMINATIM_NEAR_BOX_M) : [];
@@ -610,7 +662,10 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
     const byKey = new Map<string, { ref: OsmRef; bboxM: number }>();
     for (const item of [...(near ?? []), ...parks, ...(reserves ?? [])]) byKey.set(`${item.ref.type}/${item.ref.id}`, item);
     // A park whose bounding box is farther than the tolerance cannot contain the position, so skip its outline.
-    const refs = [...byKey.values()].filter((item) => item.bboxM <= toleranceM + 50).sort((a, b) => a.bboxM - b.bboxM).map((item) => item.ref);
+    const refs = [...byKey.values()]
+      .filter((item) => item.bboxM <= toleranceM + 50)
+      .sort((a, b) => a.bboxM - b.bboxM)
+      .map((item) => item.ref);
     if (!refs.length) return [];
     const features = await nominatimOutlines(refs, 3, NOMINATIM_POLYGON_THRESHOLD);
     if (!features) throw unavailable;
@@ -618,19 +673,28 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
   }
 
   async function overpassSearch(lat: number, lng: number, toleranceM: number): Promise<OsmCandidate[]> {
-      // About 10 m of rounding lets nearby retries share the cache.
-      const rlat = Math.round(lat * 1e4) / 1e4, rlng = Math.round(lng * 1e4) / 1e4;
-      const found = await run(searchQuery(rlat, rlng));
-      const summaries = found.elements
-        .filter((element) => (element.type === "way" || element.type === "relation") && element.bounds && parkKind(element.tags ?? {}) && publicPlace(element.tags ?? {}))
-        .filter((element) => bboxDiagonalM(element.bounds!) <= MAX_BBOX_DIAGONAL_M);
-      const unique = [...new Map(summaries.map((element) => [`${element.type}/${element.id}`, element])).values()]
-        .sort((a, b) => bboxDistanceM(a.bounds!, rlat, rlng) - bboxDistanceM(b.bounds!, rlat, rlng) || bboxDiagonalM(a.bounds!) - bboxDiagonalM(b.bounds!))
-        .slice(0, MAX_CANDIDATES);
-      if (!unique.length) return [];
-      // The instance that answered the search has the same data, so ask it for the geometry first.
-      const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
-      return containing(detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null), lat, lng, toleranceM);
+    // About 10 m of rounding lets nearby retries share the cache.
+    const rlat = Math.round(lat * 1e4) / 1e4,
+      rlng = Math.round(lng * 1e4) / 1e4;
+    const found = await run(searchQuery(rlat, rlng));
+    const summaries = found.elements
+      .filter(
+        (element) =>
+          (element.type === "way" || element.type === "relation") && element.bounds && parkKind(element.tags ?? {}) && publicPlace(element.tags ?? {}),
+      )
+      .filter((element) => bboxDiagonalM(element.bounds!) <= MAX_BBOX_DIAGONAL_M);
+    const unique = [...new Map(summaries.map((element) => [`${element.type}/${element.id}`, element])).values()]
+      .sort((a, b) => bboxDistanceM(a.bounds!, rlat, rlng) - bboxDistanceM(b.bounds!, rlat, rlng) || bboxDiagonalM(a.bounds!) - bboxDiagonalM(b.bounds!))
+      .slice(0, MAX_CANDIDATES);
+    if (!unique.length) return [];
+    // The instance that answered the search has the same data, so ask it for the geometry first.
+    const detailed = await run(geometryQuery(unique.map((element) => ({ type: element.type as OsmType, id: element.id }))), found.endpoint);
+    return containing(
+      detailed.elements.map((element) => featureFrom(element, 3)).filter((feature): feature is OsmFeature => feature !== null),
+      lat,
+      lng,
+      toleranceM,
+    );
   }
 
   /**
@@ -653,7 +717,10 @@ export function createOsmClient(env: OverpassEnv = {}, fetcher: typeof fetch = f
       const own = await tableSearch(lat, lng, toleranceM);
       if (own) return own;
       // Overpass starts at the same time; while its endpoints are cooling down it settles at once.
-      const overpass = overpassSearch(lat, lng, toleranceM).then((parks) => ({ parks }), (error: unknown) => ({ error }));
+      const overpass = overpassSearch(lat, lng, toleranceM).then(
+        (parks) => ({ parks }),
+        (error: unknown) => ({ error }),
+      );
       let primary: OsmCandidate[];
       try {
         primary = await nominatimSearch(lat, lng, toleranceM);
@@ -730,7 +797,7 @@ export async function handleOsmParksRequest(request: Request, handlers: OsmRoute
   const lat = coordinateParam(url.searchParams.get("lat"), -90, 90);
   const lng = coordinateParam(url.searchParams.get("lng"), -180, 180);
   const accuracyM = accuracyParam(url.searchParams.get("accuracy"));
-  if (!await handlers.allow()) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a minute and try again.");
+  if (!(await handlers.allow())) throw new HttpError(429, "rate_limited_osm", "Too many map searches. Wait a minute and try again.");
   const [candidates, catalogue] = await Promise.all([
     handlers.osm().search(lat, lng, toleranceFor(accuracyM)),
     // Marking is a convenience: without the catalogue every candidate is offered and founding still checks.
@@ -738,18 +805,27 @@ export async function handleOsmParksRequest(request: Request, handlers: OsmRoute
   ]);
   const matched = candidates.map((candidate) => ({ candidate, inCatalogue: catalogueMatch(candidate, catalogue) }));
   const ids = [...new Set(matched.flatMap(({ inCatalogue }) => (inCatalogue ? [inCatalogue.parkId] : [])))];
-  const known = ids.length && handlers.founders
-    ? await handlers.founders(ids).catch(() => ({ founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() }))
-    : { founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() };
+  const known =
+    ids.length && handlers.founders
+      ? await handlers.founders(ids).catch(() => ({ founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() }))
+      : { founders: new Map<string, { handle: string | null }>(), hidden: new Set<string>() };
   return handlers.json({
     attribution: OSM_ATTRIBUTION,
     parks: matched
       .filter(({ candidate, inCatalogue }) => (inCatalogue ? !known.hidden.has(inCatalogue.parkId) : candidate.name !== null))
       .map(({ candidate, inCatalogue }) => {
         const { type, id, name, kind, areaM2, containsPin, distanceM, geometry } = candidate;
-        const founder = inCatalogue ? known.founders.get(inCatalogue.parkId) ?? null : null;
+        const founder = inCatalogue ? (known.founders.get(inCatalogue.parkId) ?? null) : null;
         return {
-          type, id, name, kind, areaM2, containsPin, distanceM, geometry, inCatalogue,
+          type,
+          id,
+          name,
+          kind,
+          areaM2,
+          containsPin,
+          distanceM,
+          geometry,
+          inCatalogue,
           founder: founder ? { handle: founder.handle } : null,
           hasCover: founder !== null,
         };

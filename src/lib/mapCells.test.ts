@@ -31,8 +31,14 @@ describe("map squares", () => {
     expect(index.version).toBe(BUILD_MAP_POINTER.version);
     expect(Object.keys(index.cells).length).toBeGreaterThan(1150);
     const places: [number, number][] = [
-      [-123.3656, 48.4284], [-123.12, 49.28], [-119.496, 49.888], [-122.75, 53.92], // Victoria, Vancouver, Kelowna, Prince George
-      [-63.5752, 44.6488], [-65.2, 44.4], [-60.65, 46.73], [-66.12, 43.84], // Halifax, Kejimkujik, Cape Breton Highlands, Yarmouth
+      [-123.3656, 48.4284],
+      [-123.12, 49.28],
+      [-119.496, 49.888],
+      [-122.75, 53.92], // Victoria, Vancouver, Kelowna, Prince George
+      [-63.5752, 44.6488],
+      [-65.2, 44.4],
+      [-60.65, 46.73],
+      [-66.12, 43.84], // Halifax, Kejimkujik, Cape Breton Highlands, Yarmouth
     ];
     for (const place of places) {
       expect(isPointInsideContentBounds(place)).toBe(true);
@@ -71,7 +77,11 @@ describe("map squares", () => {
 
   it("keeps chunks a remaining square still shares when one is removed", () => {
     const index: CellIndex = {
-      schema: "parkdex.map-cells/v1", version: BUILD_MAP_POINTER.version, zoom: 9, chunkBytes: 10, size: 95,
+      schema: "parkdex.map-cells/v1",
+      version: BUILD_MAP_POINTER.version,
+      zoom: 9,
+      chunkBytes: 10,
+      size: 95,
       cells: { "1/1": [0, [3, 5]], "2/1": [0, 5, 6], "3/1": [9] },
     };
     expect(chunksToRemove(index, ["1/1"], ["2/1"])).toEqual([3, 4]);

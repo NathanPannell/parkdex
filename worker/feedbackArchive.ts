@@ -70,12 +70,14 @@ const SEARCH_CLAUSE = `($1::text IS NULL OR r.message ILIKE $1 OR r.context->>'p
 export function createSqlFeedbackArchiveStore(run: QueryRunner): FeedbackArchiveStore {
   return {
     async listBoard(limit, status, cursor) {
-      const rows = await run(`${selectWithArchive()}
+      const rows = await run(
+        `${selectWithArchive()}
         WHERE r.archived_at IS NULL
           AND ($1::text IS NULL OR r.status = $1::text)
           AND ($2::timestamptz IS NULL OR (r.created_at, r.id) < ($2::timestamptz, $3::uuid))
         ORDER BY r.created_at DESC, r.id DESC LIMIT $4`,
-      [status, cursor?.createdAt ?? null, cursor?.id ?? null, Math.min(Math.max(limit, 1), 101)]);
+        [status, cursor?.createdAt ?? null, cursor?.id ?? null, Math.min(Math.max(limit, 1), 101)],
+      );
       return rows.map(toRecord);
     },
     async getReport(id) {
@@ -83,20 +85,25 @@ export function createSqlFeedbackArchiveStore(run: QueryRunner): FeedbackArchive
       return rows[0] ? toRecord(rows[0]) : null;
     },
     async listArchive(limit, search, cursor) {
-      const rows = await run(`${selectWithArchive()}
+      const rows = await run(
+        `${selectWithArchive()}
         WHERE r.archived_at IS NOT NULL AND ${SEARCH_CLAUSE}
           AND ($3::timestamptz IS NULL OR (r.archived_at, r.id) < ($3::timestamptz, $4::uuid))
         ORDER BY r.archived_at DESC, r.id DESC LIMIT $5`,
-      [search ? containsPattern(search) : null, search, cursor?.createdAt ?? null, cursor?.id ?? null, Math.min(Math.max(limit, 1), 101)]);
+        [search ? containsPattern(search) : null, search, cursor?.createdAt ?? null, cursor?.id ?? null, Math.min(Math.max(limit, 1), 101)],
+      );
       return rows.map(toRecord);
     },
     async countArchive(search) {
-      const rows = await run(`SELECT count(*)::int AS count FROM kip_feedback.reports r WHERE r.archived_at IS NOT NULL AND ${SEARCH_CLAUSE}`,
-        [search ? containsPattern(search) : null, search]);
+      const rows = await run(`SELECT count(*)::int AS count FROM kip_feedback.reports r WHERE r.archived_at IS NOT NULL AND ${SEARCH_CLAUSE}`, [
+        search ? containsPattern(search) : null,
+        search,
+      ]);
       return Number(rows[0]?.count ?? 0);
     },
     async archiveDone(limit) {
-      const rows = await run(`
+      const rows = await run(
+        `
         WITH done AS MATERIALIZED (
           SELECT id FROM kip_feedback.reports
           WHERE status = 'closed' AND archived_at IS NULL
@@ -104,14 +111,19 @@ export function createSqlFeedbackArchiveStore(run: QueryRunner): FeedbackArchive
           FOR UPDATE SKIP LOCKED
         )
         UPDATE kip_feedback.reports r SET archived_at = now(), updated_at = now()
-        FROM done WHERE r.id = done.id RETURNING r.id`, [Math.min(Math.max(limit, 1), CLEAR_DONE_LIMIT)]);
+        FROM done WHERE r.id = done.id RETURNING r.id`,
+        [Math.min(Math.max(limit, 1), CLEAR_DONE_LIMIT)],
+      );
       return rows.map((row) => String(row.id));
     },
     async restore(ids) {
       if (ids.length === 0) return [];
-      const rows = await run(`
+      const rows = await run(
+        `
         UPDATE kip_feedback.reports SET archived_at = NULL, updated_at = now()
-        WHERE id = ANY($1::uuid[]) AND archived_at IS NOT NULL RETURNING id`, [ids]);
+        WHERE id = ANY($1::uuid[]) AND archived_at IS NOT NULL RETURNING id`,
+        [ids],
+      );
       return rows.map((row) => String(row.id));
     },
     async liveCounts() {
@@ -141,7 +153,8 @@ export function archiveDeletesAt(archivedAt: string): string {
  * Reports still on the board are never touched, however old they are.
  */
 export async function purgeArchivedFeedback(run: QueryRunner, cutoff: string, batchLimit = FEEDBACK_PURGE_BATCH_LIMIT): Promise<FeedbackPurgeResult> {
-  const rows = await run(`
+  const rows = await run(
+    `
     WITH expired AS MATERIALIZED (
       SELECT id FROM kip_feedback.reports
       WHERE archived_at IS NOT NULL AND archived_at <= $1::timestamptz
@@ -152,7 +165,9 @@ export async function purgeArchivedFeedback(run: QueryRunner, cutoff: string, ba
     )
     SELECT (SELECT count(*) FROM removed)::int AS deleted,
       ((SELECT count(*) FROM kip_feedback.reports WHERE archived_at IS NOT NULL AND archived_at <= $1::timestamptz)
-        - (SELECT count(*) FROM removed))::int AS remaining`, [cutoff, batchLimit]);
+        - (SELECT count(*) FROM removed))::int AS remaining`,
+    [cutoff, batchLimit],
+  );
   return { deleted: Number(rows[0]?.deleted ?? 0), remainingExpired: Math.max(0, Number(rows[0]?.remaining ?? 0)) };
 }
 

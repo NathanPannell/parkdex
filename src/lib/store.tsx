@@ -187,7 +187,16 @@ export function reducer(state: State, action: Action): State {
       const claimRevision = state.claimRevision + 1;
       return {
         ...state,
-        claims: { ...state.claims, [action.id]: { claimId: action.claimId, at: action.at, photo: action.photo, parkSnapshot: action.parkSnapshot, contentReleaseId: action.contentReleaseId } },
+        claims: {
+          ...state.claims,
+          [action.id]: {
+            claimId: action.claimId,
+            at: action.at,
+            photo: action.photo,
+            parkSnapshot: action.parkSnapshot,
+            contentReleaseId: action.contentReleaseId,
+          },
+        },
         claimRevision,
         claimRevisionByPark: { ...state.claimRevisionByPark, [action.id]: claimRevision },
         tripId: null,
@@ -285,7 +294,13 @@ export function projectClaims(claims: Awaited<ReturnType<typeof loadPersonalProg
   // Rows are sorted oldest to newest. The badge shows the latest visit while the
   // personal store retains every historical claim UUID for backup and restore.
   for (const claim of claims) {
-    projected[claim.parkId] = { claimId: claim.claimId, at: claim.claimedAt, photo: photos[claim.parkId] ?? "", parkSnapshot: claim.parkSnapshot, contentReleaseId: claim.contentReleaseId };
+    projected[claim.parkId] = {
+      claimId: claim.claimId,
+      at: claim.claimedAt,
+      photo: photos[claim.parkId] ?? "",
+      parkSnapshot: claim.parkSnapshot,
+      contentReleaseId: claim.contentReleaseId,
+    };
   }
   return projected;
 }
@@ -304,13 +319,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const unavailable = new Promise<null>((resolve) => {
       timeout = setTimeout(() => resolve(null), 1500);
     });
-    void Promise.race([getNativeInstallIdentity(), unavailable]).then((packageInstallIdentity) => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative, overTheAir: isOverTheAirBundle() });
-    }).catch(() => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative, overTheAir: isOverTheAirBundle() });
-    }).finally(() => {
-      clearTimeout(timeout);
-    });
+    void Promise.race([getNativeInstallIdentity(), unavailable])
+      .then((packageInstallIdentity) => {
+        if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative, overTheAir: isOverTheAirBundle() });
+      })
+      .catch(() => {
+        if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative, overTheAir: isOverTheAirBundle() });
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
     return () => {
       live = false;
       clearTimeout(timeout);
@@ -337,18 +355,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           metadataOnly: true,
         });
       }
-    }).then(({ claims, photos }) => {
-      if (live && currentOwnerKey.current === key) dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
-    }).catch(() => {
-      if (live && currentOwnerKey.current === key) dispatch({
-        type: "progressFailed",
-        ownerKey: key,
-        message: metadataPublished
-          ? "Some saved photos could not be opened. Your saved parks are still available."
-          : "Saved progress could not be opened. Retry from your account.",
+    })
+      .then(({ claims, photos }) => {
+        if (live && currentOwnerKey.current === key)
+          dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
+      })
+      .catch(() => {
+        if (live && currentOwnerKey.current === key)
+          dispatch({
+            type: "progressFailed",
+            ownerKey: key,
+            message: metadataPublished
+              ? "Some saved photos could not be opened. Your saved parks are still available."
+              : "Saved progress could not be opened. Retry from your account.",
+          });
       });
-    });
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [key, owner, auth.progressRevision, state.claimRevision]);
 
   useEffect(() => {
@@ -357,15 +381,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [auth.phase, state.startupReady, state.onboarded, state.muted, state.currentBuildId, state.currentPackageIdentity]);
 
   const wrapped = useCallback((action: Action) => dispatch(action), []);
-  const visibleState = state.progressOwnerKey === key ? state : {
-    ...state,
-    claims: {},
-    progressReady: false,
-    progressError: null,
-    selectedId: null,
-    tripId: null,
-    pendingPhoto: null,
-  };
+  const visibleState =
+    state.progressOwnerKey === key
+      ? state
+      : {
+          ...state,
+          claims: {},
+          progressReady: false,
+          progressError: null,
+          selectedId: null,
+          tripId: null,
+          pendingPhoto: null,
+        };
 
   return <Ctx.Provider value={{ state: visibleState, dispatch: wrapped }}>{children}</Ctx.Provider>;
 }

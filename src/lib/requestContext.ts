@@ -21,7 +21,8 @@ let bundleOverride: string | null = null;
 
 /** Read (or create) the installation ID once; later calls reuse the same answer. */
 export function loadInstallationId(outbox: Pick<InteractionOutbox, "getInstallationId"> = new InteractionOutbox()): Promise<string | null> {
-  installationLoad ??= outbox.getInstallationId()
+  installationLoad ??= outbox
+    .getInstallationId()
     .then((value) => {
       installationId = UUID.test(value) ? value.toLowerCase() : null;
       return installationId;

@@ -75,15 +75,23 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
 
   useEffect(() => {
     let live = true;
-    void getContentConnectivity().then((connectivity) => { if (live) setWifi(connectivity.wifi); });
+    void getContentConnectivity().then((connectivity) => {
+      if (live) setWifi(connectivity.wifi);
+    });
     const unsubscribe = subscribeContentConnectivity((connectivity) => setWifi(connectivity.wifi));
-    return () => { live = false; unsubscribe(); };
+    return () => {
+      live = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    void navigator.storage?.estimate?.().then((estimate) => {
-      if (estimate.quota !== undefined && estimate.usage !== undefined) setFreeBytes(Math.max(0, estimate.quota - estimate.usage));
-    }).catch(() => {});
+    void navigator.storage
+      ?.estimate?.()
+      .then((estimate) => {
+        if (estimate.quota !== undefined && estimate.usage !== undefined) setFreeBytes(Math.max(0, estimate.quota - estimate.usage));
+      })
+      .catch(() => {});
   }, [saved]);
 
   useEffect(() => () => abort.current?.abort(), []);
@@ -127,7 +135,13 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
   // Each square's full size and park count, shown once squares are large enough to label.
   // Only parks with badge art count; "coming soon" parks have no scene yet.
   const labels = useMemo(
-    () => (index ? squareLabels(index, (content?.parks ?? []).filter((park) => park.scene)) : null),
+    () =>
+      index
+        ? squareLabels(
+            index,
+            (content?.parks ?? []).filter((park) => park.scene),
+          )
+        : null,
     [index, content?.parks],
   );
 
@@ -195,22 +209,35 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
     };
   }, [mapRef, index, states, labels]);
 
-  useEffect(() => () => {
-    const map = mapRef.current;
-    if (!map) return;
-    for (const layer of [LABEL, LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
-    for (const source of [LABEL_SOURCE, SOURCE]) if (map.getSource(source)) map.removeSource(source);
-  }, [mapRef]);
+  useEffect(
+    () => () => {
+      const map = mapRef.current;
+      if (!map) return;
+      for (const layer of [LABEL, LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
+      for (const source of [LABEL_SOURCE, SOURCE]) if (map.getSource(source)) map.removeSource(source);
+    },
+    [mapRef],
+  );
 
   const savedBytes = index ? bytesForChunks(index, chunkIdsForCells(index, saved)) : 0;
   const addBytes = useMemo(() => {
     if (!index) return 0;
     const have = chunkIdsForCells(index, saved);
-    return bytesForChunks(index, [...chunkIdsForCells(index, toAdd)].filter((id) => !have.has(id)));
+    return bytesForChunks(
+      index,
+      [...chunkIdsForCells(index, toAdd)].filter((id) => !have.has(id)),
+    );
   }, [index, toAdd, saved]);
   const removeBytes = useMemo(() => {
     if (!index) return 0;
-    return bytesForChunks(index, chunksToRemove(index, toRemove, [...saved].filter((key) => !toRemove.has(key))));
+    return bytesForChunks(
+      index,
+      chunksToRemove(
+        index,
+        toRemove,
+        [...saved].filter((key) => !toRemove.has(key)),
+      ),
+    );
   }, [index, toRemove, saved]);
 
   const releaseId = content?.releaseId;
@@ -276,9 +303,7 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
     }
   }
 
-  const instruction = loadError
-    ? "Map squares are unavailable in this build."
-    : "Tap a square to download it, or tap a saved square to remove it.";
+  const instruction = loadError ? "Map squares are unavailable in this build." : "Tap a square to download it, or tap a saved square to remove it.";
 
   return (
     <div className="dlmaps" aria-label="Download maps">
@@ -287,7 +312,14 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
           <span className="eyebrow">Download maps</span>
           <p>{instruction}</p>
         </div>
-        <button className="btn btn--paper btn--icon" onClick={() => { abort.current?.abort(); onClose(); }} aria-label="Close download maps">
+        <button
+          className="btn btn--paper btn--icon"
+          onClick={() => {
+            abort.current?.abort();
+            onClose();
+          }}
+          aria-label="Close download maps"
+        >
           <Icon name="close" size={18} />
         </button>
       </div>
@@ -296,17 +328,23 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
         <dl className="dlmaps-stats">
           <div>
             <dt>To download</dt>
-            <dd>{toAdd.size} {toAdd.size === 1 ? "square" : "squares"} · {formatMegabytes(addBytes)}</dd>
+            <dd>
+              {toAdd.size} {toAdd.size === 1 ? "square" : "squares"} · {formatMegabytes(addBytes)}
+            </dd>
           </div>
           {toRemove.size > 0 && (
             <div>
               <dt>To remove</dt>
-              <dd>{toRemove.size} {toRemove.size === 1 ? "square" : "squares"} · {formatMegabytes(removeBytes)}</dd>
+              <dd>
+                {toRemove.size} {toRemove.size === 1 ? "square" : "squares"} · {formatMegabytes(removeBytes)}
+              </dd>
             </div>
           )}
           <div>
             <dt>Saved on this phone</dt>
-            <dd>{saved.size} {saved.size === 1 ? "square" : "squares"} · {formatMegabytes(savedBytes)}</dd>
+            <dd>
+              {saved.size} {saved.size === 1 ? "square" : "squares"} · {formatMegabytes(savedBytes)}
+            </dd>
           </div>
           {freeBytes !== null && (
             <div>
@@ -318,7 +356,9 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
 
         {progress && (
           <div className="dlmaps-progress" role="status">
-            <span className="dlmaps-progress__bar"><span style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 100}%` }} /></span>
+            <span className="dlmaps-progress__bar">
+              <span style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 100}%` }} />
+            </span>
             <span>
               {progress.waitingForWifi && !wifi && !mobileData
                 ? "Waiting for Wi-Fi…"
@@ -329,14 +369,22 @@ export function DownloadMaps({ mapRef, user, hasFix, onClose }: Props) {
         {(toAdd.size > 0 || progress) && !wifi && !mobileData && (
           <div className="dlmaps-wifi">
             <p className="dlmaps-note">Downloads wait for Wi-Fi.</p>
-            <button className="btn btn--paper btn--sm" onClick={() => writeAllowMobileMapData(true)}>Use mobile data</button>
+            <button className="btn btn--paper btn--sm" onClick={() => writeAllowMobileMapData(true)}>
+              Use mobile data
+            </button>
           </div>
         )}
         {!mapReady && !loadError && <p className="dlmaps-note">Detailed maps are still getting ready. Try again in a moment.</p>}
-        {error && <p className="dlmaps-error" role="alert">{error}</p>}
+        {error && (
+          <p className="dlmaps-error" role="alert">
+            {error}
+          </p>
+        )}
 
         {busy ? (
-          <button className="btn btn--paper btn--block" onClick={() => abort.current?.abort()}>Stop download</button>
+          <button className="btn btn--paper btn--block" onClick={() => abort.current?.abort()}>
+            Stop download
+          </button>
         ) : (
           <div className="dlmaps-actions">
             {toRemove.size > 0 && (

@@ -26,15 +26,22 @@ const privateHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Strict-Transport-Security", value: "max-age=31536000" },
 ];
-await writeFile(path.join(output, "config.json"), JSON.stringify({
-  version: 3,
-  routes: [
-    { src: "/(.*)", headers: Object.fromEntries(privateHeaders.map(({ key, value }) => [key, value])), continue: true },
-    { src: "/api/(.*)", dest: "/api?__path=$1" },
-    { handle: "filesystem" },
-    { src: "/(.*)", dest: "/index.html" },
-  ],
-}, null, 2));
+await writeFile(
+  path.join(output, "config.json"),
+  JSON.stringify(
+    {
+      version: 3,
+      routes: [
+        { src: "/(.*)", headers: Object.fromEntries(privateHeaders.map(({ key, value }) => [key, value])), continue: true },
+        { src: "/api/(.*)", dest: "/api?__path=$1" },
+        { handle: "filesystem" },
+        { src: "/(.*)", dest: "/index.html" },
+      ],
+    },
+    null,
+    2,
+  ),
+);
 // `vercel deploy --prebuilt` takes its target from this file and defaults to production
 // without it. This app must only ever be a preview deployment (see README).
 await writeFile(path.join(output, "builds.json"), JSON.stringify({ "//": "Written by scripts/build.mjs", target: "preview", argv: [], builds: [] }, null, 2));

@@ -3,8 +3,20 @@ import type { DashboardEnv, SectionContext } from "../api.js";
 import { allowMethods, databaseUrl, HttpError, json, plainObject } from "../http.js";
 import { createAccountDeleter, photoServiceFor, type AccountDeleter, type AccountDeletionEnv, type DeletionSetup } from "./deletion.js";
 import {
-  csvHeader, csvRow, DB_EVENT_TYPES, decodeAccountCursor, decodeEventCursor, encodeAccountCursor, encodeEventCursor, EXPORT_LIMIT, EXPORT_PAGE,
-  HISTOGRAM_DB_DAYS, histogramBucket, isUuid, OVERVIEW_DAYS, parseEventQuery,
+  csvHeader,
+  csvRow,
+  DB_EVENT_TYPES,
+  decodeAccountCursor,
+  decodeEventCursor,
+  encodeAccountCursor,
+  encodeEventCursor,
+  EXPORT_LIMIT,
+  EXPORT_PAGE,
+  HISTOGRAM_DB_DAYS,
+  histogramBucket,
+  isUuid,
+  OVERVIEW_DAYS,
+  parseEventQuery,
 } from "./filters.js";
 import { createPostHogClient, type PostHogClient, type PostHogEnv, type TemplateParams } from "./posthog.js";
 import { unavailableNotes } from "./schema.js";
@@ -102,7 +114,11 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
   const deleter = (): AccountDeleter => {
     const setup = deletionSetup();
     if (!setup.available) {
-      throw new HttpError(503, "photo_service_unconfigured", `Account deletion needs ${setup.missing.join(" and ")} on this deployment, so private photos are deleted too.`);
+      throw new HttpError(
+        503,
+        "photo_service_unconfigured",
+        `Account deletion needs ${setup.missing.join(" and ")} on this deployment, so private photos are deleted too.`,
+      );
     }
     if (dependencies.accountDeleter) return dependencies.accountDeleter(context.env);
     const { service } = photoServiceFor(context.baseEnv, staging(context));
@@ -125,9 +141,15 @@ export async function analyticsRoutes(request: Request, context: SectionContext)
     if (state && state !== "active" && state !== "deleting") throw new HttpError(400, "invalid_query", "State must be active or deleting.");
     const cursorToken = url.searchParams.get("cursor");
     const analytics = store();
-    const rows = await analytics.listAccounts({
-      search, state: state as DeletionState | null, cursor: cursorToken ? decodeAccountCursor(cursorToken) : null, limit: ACCOUNT_PAGE + 1,
-    }, now());
+    const rows = await analytics.listAccounts(
+      {
+        search,
+        state: state as DeletionState | null,
+        cursor: cursorToken ? decodeAccountCursor(cursorToken) : null,
+        limit: ACCOUNT_PAGE + 1,
+      },
+      now(),
+    );
     const page = rows.slice(0, ACCOUNT_PAGE);
     return json({
       accounts: page,

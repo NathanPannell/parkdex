@@ -17,7 +17,13 @@ const DSN = process.env.OPERATOR_PARK_MANAGER_TEST_DATABASE_URL;
 const ORIGIN = "https://operator.example.test";
 const env: DashboardEnv = { DATABASE_URL: "postgres://unused" };
 
-const ring = (x: number, y: number, size = 0.004): [number, number][] => [[x, y], [x + size, y], [x + size, y + size], [x, y + size], [x, y]];
+const ring = (x: number, y: number, size = 0.004): [number, number][] => [
+  [x, y],
+  [x + size, y],
+  [x + size, y + size],
+  [x, y + size],
+  [x, y],
+];
 const multi = (x: number, y: number, size?: number) => ({ type: "MultiPolygon" as const, coordinates: [[ring(x, y, size)]] });
 
 let pool: import("pg").Pool;
@@ -29,7 +35,13 @@ let visitor: string;
 /** Every migration a deploy applies, in deploy order (deployment.json), like scripts/qa-founders-sql.mjs. */
 function inventory(): string[] {
   const config = JSON.parse(readFileSync(new URL("../../../deployment.json", import.meta.url), "utf8"));
-  return [config.migrationPath, ...config.contentSync.supportingMigrationPaths, ...config.optionalMigrationPaths, ...config.contentSync.migrationPaths, ...config.independentMigrationPaths];
+  return [
+    config.migrationPath,
+    ...config.contentSync.supportingMigrationPaths,
+    ...config.optionalMigrationPaths,
+    ...config.contentSync.migrationPaths,
+    ...config.independentMigrationPaths,
+  ];
 }
 
 async function publish(id: string, overrides: Record<string, unknown>) {
@@ -39,7 +51,10 @@ async function publish(id: string, overrides: Record<string, unknown>) {
 
 async function account(name: string): Promise<string> {
   const id = randomUUID();
-  await pool.query("INSERT INTO kip_account.accounts (id, normalized_email, password_hash) VALUES ($1, $2, 'qa-hash')", [id, `parks-${name}-${id.slice(0, 6)}@example.test`]);
+  await pool.query("INSERT INTO kip_account.accounts (id, normalized_email, password_hash) VALUES ($1, $2, 'qa-hash')", [
+    id,
+    `parks-${name}-${id.slice(0, 6)}@example.test`,
+  ]);
   await pool.query("INSERT INTO kip_game.players (account_id, handle, flag_seed) VALUES ($1, $2, kip_game.flag_seed($1))", [id, `qa_${name}`]);
   return id;
 }
@@ -54,7 +69,7 @@ async function changes(since: number) {
 }
 
 const count = async (sql: string, params: unknown[] = []) => Number((await pool.query(sql, params)).rows[0].count);
-const json = async <T>(response: Response) => await response.json() as T;
+const json = async <T>(response: Response) => (await response.json()) as T;
 
 before(async () => {
   if (!DSN) return;
@@ -63,7 +78,16 @@ before(async () => {
   pool.on("error", () => undefined);
   runner = opened.runner;
   await publish("regional-thetis-lake", { geometry: multi(-123.47, 48.46), lat: 48.462, lng: -123.468 });
-  await publish("municipal-beacon-hill", { name: "Beacon Hill Park", short: "Beacon Hill", category: "municipal", shape: "circle", region: "Victoria", geometry: multi(-123.37, 48.41), lat: 48.412, lng: -123.368 });
+  await publish("municipal-beacon-hill", {
+    name: "Beacon Hill Park",
+    short: "Beacon Hill",
+    category: "municipal",
+    shape: "circle",
+    region: "Victoria",
+    geometry: multi(-123.37, 48.41),
+    lat: 48.412,
+    lng: -123.368,
+  });
   founder = await account("founder");
   visitor = await account("visitor");
   const photo = Buffer.from(EXIF_GPS_JPEG);
@@ -72,7 +96,11 @@ before(async () => {
      VALUES ('regional-thetis-lake', $1, $2, 'existing', $3, $4, 16, 12, '{"version":1}'::jsonb)`,
     [founder, randomUUID(), createHash("sha256").update(photo).digest("hex"), photo],
   );
-  for (const [accountId, at] of [[founder, "2026-10-08T17:00:00Z"], [visitor, "2026-10-09T17:00:00Z"], [visitor, "2026-08-01T17:00:00Z"]]) {
+  for (const [accountId, at] of [
+    [founder, "2026-10-08T17:00:00Z"],
+    [visitor, "2026-10-09T17:00:00Z"],
+    [visitor, "2026-08-01T17:00:00Z"],
+  ]) {
     const result = await pool.query("SELECT kip_game.record_visit($1, $2, 'regional-thetis-lake', $3) AS r", [randomUUID(), accountId, at]);
     assert.equal(result.rows[0].r.status, "recorded");
   }
@@ -109,13 +137,22 @@ after(async () => {
 });
 
 test("the catalogue, stats and a park's activity read from the real tables", { skip: !DSN }, async () => {
-  const { parks } = await json<{ parks: Array<{ id: string; source: string; founder: { handle: string } | null; visits: number; hidden: unknown }> }>(await call("/api/parks"));
-  assert.deepEqual(parks.map((park) => [park.id, park.source, park.founder?.handle ?? null, park.visits]), [
-    ["municipal-beacon-hill", "curated", null, 0],
-    ["regional-thetis-lake", "curated", "qa_founder", 3],
-  ]);
+  const { parks } = await json<{ parks: Array<{ id: string; source: string; founder: { handle: string } | null; visits: number; hidden: unknown }> }>(
+    await call("/api/parks"),
+  );
+  assert.deepEqual(
+    parks.map((park) => [park.id, park.source, park.founder?.handle ?? null, park.visits]),
+    [
+      ["municipal-beacon-hill", "curated", null, 0],
+      ["regional-thetis-lake", "curated", "qa_founder", 3],
+    ],
+  );
   const { stats } = await json<{ stats: Record<string, unknown> }>(await call("/api/parks/stats"));
-  assert.deepEqual([stats.live, stats.hidden, stats.founded, stats.osmOutlines, stats.osmNotInParkdex], [2, 0, 1, 2, 1], "Mill Hill has no Parkdex pin in its box");
+  assert.deepEqual(
+    [stats.live, stats.hidden, stats.founded, stats.osmOutlines, stats.osmNotInParkdex],
+    [2, 0, 1, 2, 1],
+    "Mill Hill has no Parkdex pin in its box",
+  );
   assert.equal(stats.osmSourceDate, "2026-10-01T00:00:00.000Z", "several extracts report the oldest");
 
   const { activity } = await json<{ activity: Record<string, any> }>(await call("/api/parks/regional-thetis-lake"));
@@ -124,16 +161,32 @@ test("the catalogue, stats and a park's activity read from the real tables", { s
   assert.equal(activity.flag.up, true);
   assert.equal(activity.founder.handle, "qa_founder");
   assert.equal(activity.founder.photoBytes, EXIF_GPS_JPEG.byteLength);
-  assert.ok(activity.history.some((change: { entity: string; operation: string; value: { name?: string } | null }) => change.entity === "park" && change.operation === "upsert" && change.value?.name === "Thetis Lake Regional Park"));
+  assert.ok(
+    activity.history.some(
+      (change: { entity: string; operation: string; value: { name?: string } | null }) =>
+        change.entity === "park" && change.operation === "upsert" && change.value?.name === "Thetis Lake Regional Park",
+    ),
+  );
 
   const cover = await call("/api/parks/regional-thetis-lake/cover");
   assert.equal(cover.status, 200);
   assert.equal(Buffer.from(await cover.arrayBuffer()).equals(Buffer.from(EXIF_GPS_JPEG)), true);
 
-  const osm = await json<{ outlines: Array<{ id: number; inParkdex: { parkId: string } | null }> }>(await call("/api/parks/osm?bbox=-123.5,48.44,-123.44,48.47"));
-  assert.deepEqual(osm.outlines.map((outline) => [outline.id, outline.inParkdex?.parkId ?? null]), [[222, null], [111, "regional-thetis-lake"]]);
+  const osm = await json<{ outlines: Array<{ id: number; inParkdex: { parkId: string } | null }> }>(
+    await call("/api/parks/osm?bbox=-123.5,48.44,-123.44,48.47"),
+  );
+  assert.deepEqual(
+    osm.outlines.map((outline) => [outline.id, outline.inParkdex?.parkId ?? null]),
+    [
+      [222, null],
+      [111, "regional-thetis-lake"],
+    ],
+  );
   const outlines = await json<{ outlines: Array<{ id: string }> }>(await call("/api/parks/outlines?bbox=-123.5,48.44,-123.44,48.47"));
-  assert.deepEqual(outlines.outlines.map((outline) => outline.id), ["regional-thetis-lake"]);
+  assert.deepEqual(
+    outlines.outlines.map((outline) => outline.id),
+    ["regional-thetis-lake"],
+  );
 });
 
 test("hide and unhide round trip through the visibility triggers, one revision each", { skip: !DSN }, async () => {
@@ -142,7 +195,9 @@ test("hide and unhide round trip through the visibility triggers, one revision e
   assert.equal(hidden.status, 200, await hidden.clone().text());
   assert.equal((await json<{ revision: number }>(hidden)).revision, start + 1);
   assert.deepEqual(await changes(start), ["boundary:municipal-beacon-hill:delete", "drive:municipal-beacon-hill:delete", "park:municipal-beacon-hill:delete"]);
-  assert.deepEqual((await pool.query("SELECT reason, source FROM public.content_park_hidden WHERE park_id = 'municipal-beacon-hill'")).rows, [{ reason: "Closed for an event", source: "operator" }]);
+  assert.deepEqual((await pool.query("SELECT reason, source FROM public.content_park_hidden WHERE park_id = 'municipal-beacon-hill'")).rows, [
+    { reason: "Closed for an event", source: "operator" },
+  ]);
   assert.equal((await call("/api/parks/municipal-beacon-hill/hide", { method: "POST" })).status, 409);
   assert.equal(await revision(), start + 1, "a refused hide writes nothing");
 
@@ -170,19 +225,43 @@ test("an OpenStreetMap outline is created through the publish transaction, and a
   const prefill = await json<{ draft: Record<string, unknown>; inParkdex: unknown }>(await call("/api/parks/osm/relation-222"));
   assert.equal(prefill.inParkdex, null);
   assert.deepEqual([prefill.draft.id, prefill.draft.category, prefill.draft.region], ["osm-relation-222", "regional", "Capital Region"]);
-  const fields = { name: "Mill Hill Regional Park", short: "Mill Hill", category: "regional", region: "Capital Region", biome: "mountain", rarity: "common", blurb: "Garry oak meadows on a quiet hill." };
+  const fields = {
+    name: "Mill Hill Regional Park",
+    short: "Mill Hill",
+    category: "regional",
+    region: "Capital Region",
+    biome: "mountain",
+    rarity: "common",
+    blurb: "Garry oak meadows on a quiet hill.",
+  };
   const before = await revision();
   const created = await call("/api/parks/osm/relation-222", { method: "POST", body: { park: fields } });
   assert.equal(created.status, 201, await created.clone().text());
   assert.equal((await json<{ revision: number }>(created)).revision, before + 1);
   const park = (await pool.query("SELECT name, short, category, shape, biome, region, blurb FROM public.parks WHERE id = 'osm-relation-222'")).rows[0];
-  assert.deepEqual(park, { name: "Mill Hill Regional Park", short: "Mill Hill", category: "regional", shape: "hex", biome: "mountain", region: "Capital Region", blurb: "Garry oak meadows on a quiet hill." });
+  assert.deepEqual(park, {
+    name: "Mill Hill Regional Park",
+    short: "Mill Hill",
+    category: "regional",
+    shape: "hex",
+    biome: "mountain",
+    region: "Capital Region",
+    blurb: "Garry oak meadows on a quiet hill.",
+  });
   assert.equal(await count("SELECT count(*) FROM public.park_drive WHERE park_id = 'osm-relation-222'"), 2, "drive rows for every hub");
   assert.equal((await pool.query("SELECT status FROM kip_park_drafts.drafts WHERE id = 'osm-relation-222'")).rows[0].status, "published");
   assert.deepEqual(await changes(before), ["boundary:osm-relation-222:upsert", "drive:osm-relation-222:upsert", "park:osm-relation-222:upsert"]);
 
-  assert.equal((await call("/api/parks/osm/relation-222", { method: "POST", body: { park: fields } })).status, 409, "an outline already published is matched by its id");
-  assert.equal((await call("/api/parks/osm/way-111", { method: "POST", body: { park: fields } })).status, 409, "an outline that is a catalogue park is refused");
+  assert.equal(
+    (await call("/api/parks/osm/relation-222", { method: "POST", body: { park: fields } })).status,
+    409,
+    "an outline already published is matched by its id",
+  );
+  assert.equal(
+    (await call("/api/parks/osm/way-111", { method: "POST", body: { park: fields } })).status,
+    409,
+    "an outline that is a catalogue park is refused",
+  );
   assert.equal(await count("SELECT count(*) FROM public.parks WHERE id = 'osm-way-111'"), 0);
 });
 
@@ -195,7 +274,13 @@ test("delete removes the park and its founder in one revision and keeps visits a
   assert.equal(deleted.status, 200, await deleted.clone().text());
   assert.equal((await json<{ revision: number }>(deleted)).revision, start + 1);
   assert.deepEqual(await changes(start), ["boundary:regional-thetis-lake:delete", "drive:regional-thetis-lake:delete", "park:regional-thetis-lake:delete"]);
-  for (const table of ["public.parks WHERE id", "public.boundaries WHERE park_id", "public.park_drive WHERE park_id", "kip_founders.parks WHERE park_id", "kip_park_drafts.drafts WHERE id"]) {
+  for (const table of [
+    "public.parks WHERE id",
+    "public.boundaries WHERE park_id",
+    "public.park_drive WHERE park_id",
+    "kip_founders.parks WHERE park_id",
+    "kip_park_drafts.drafts WHERE id",
+  ]) {
     assert.equal(await count(`SELECT count(*) FROM ${table} = 'regional-thetis-lake'`), 0, table);
   }
   assert.equal(await count("SELECT count(*) FROM kip_game.visits WHERE park_id = 'regional-thetis-lake'"), 3, "visits stay as history");
@@ -204,7 +289,12 @@ test("delete removes the park and its founder in one revision and keeps visits a
   assert.equal((await call("/api/parks/regional-thetis-lake", { method: "DELETE" })).status, 404);
 
   // Without the draft left behind, the same OpenStreetMap park can be published again.
-  const recreated = await call("/api/parks/osm/way-111", { method: "POST", body: { park: { name: "Thetis Lake", short: "Thetis Lake", category: "regional", region: "Capital Region", biome: "lake", rarity: "common", blurb: "Two lakes." } } });
+  const recreated = await call("/api/parks/osm/way-111", {
+    method: "POST",
+    body: {
+      park: { name: "Thetis Lake", short: "Thetis Lake", category: "regional", region: "Capital Region", biome: "lake", rarity: "common", blurb: "Two lakes." },
+    },
+  });
   assert.equal(recreated.status, 201, await recreated.clone().text());
 
   await pool.query("INSERT INTO public.park_enrichment_jobs (rank, park_id) VALUES (1, 'municipal-beacon-hill')");

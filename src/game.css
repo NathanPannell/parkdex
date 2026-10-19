@@ -578,7 +578,9 @@ button.game-row:active {
   width: 64px;
   height: 64px;
   margin-left: -32px;
-  box-shadow: 0 4px 0 var(--ink), 0 0 0 4px var(--paper);
+  box-shadow:
+    0 4px 0 var(--ink),
+    0 0 0 4px var(--paper);
 }
 
 .nav--four .fab__hint {
@@ -806,7 +808,9 @@ button.game-row:active {
   color: var(--sun);
   -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
-  text-shadow: 0 6px 0 var(--ink), 0 0 30px rgba(255, 201, 60, 0.6);
+  text-shadow:
+    0 6px 0 var(--ink),
+    0 0 30px rgba(255, 201, 60, 0.6);
 }
 
 .plant-score span {

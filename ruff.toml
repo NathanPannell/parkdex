@@ -1,0 +1,3 @@
+# Python lint and format settings for the delivery, content and import scripts.
+line-length = 160
+target-version = "py312"

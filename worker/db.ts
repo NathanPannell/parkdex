@@ -142,7 +142,12 @@ type AnyQueryPromise = NeonQueryPromise<false, false>;
 function instrument<T extends AnyQueryPromise>(promise: T): T {
   const execute = promise.execute;
   const context = currentRequestContext();
-  promise.execute = ((queryData, opts) => timed(context, () => classifySql(queryText(queryData)), () => execute(queryData, opts))) as typeof execute;
+  promise.execute = ((queryData, opts) =>
+    timed(
+      context,
+      () => classifySql(queryText(queryData)),
+      () => execute(queryData, opts),
+    )) as typeof execute;
   return promise;
 }
 
@@ -158,9 +163,10 @@ export function database(databaseUrl: string, create: (url: string) => SqlClient
       texts = list.map((item) => queryText(item?.queryData));
       return list;
     };
-    const input = typeof queries === "function"
-      ? (txn: unknown) => collect((queries as (txn: unknown) => Array<{ queryData?: unknown }>)(txn))
-      : collect(queries as Array<{ queryData?: unknown }>);
+    const input =
+      typeof queries === "function"
+        ? (txn: unknown) => collect((queries as (txn: unknown) => Array<{ queryData?: unknown }>)(txn))
+        : collect(queries as Array<{ queryData?: unknown }>);
     return timed(
       currentRequestContext(),
       () => mergeClassifications(texts.map(classifySql)),

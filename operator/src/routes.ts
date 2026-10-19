@@ -33,7 +33,11 @@ export interface SectionRoute {
 export const SECTIONS: readonly SectionRoute[] = [
   { id: "feedback", path: "/feedback", label: "Feedback", icon: "inbox", description: "Player reports, from new to done" },
   {
-    id: "parks", path: "/parks", label: "Parks", icon: "park", description: "The live park catalogue and founding reviews",
+    id: "parks",
+    path: "/parks",
+    label: "Parks",
+    icon: "park",
+    description: "The live park catalogue and founding reviews",
     children: [
       // The catalogue owns /parks and every park page under it; the more specific Review wins below.
       { path: "/parks", label: "Catalogue", icon: "park" },
@@ -41,7 +45,11 @@ export const SECTIONS: readonly SectionRoute[] = [
     ],
   },
   {
-    id: "analytics", path: "/analytics", label: "Analytics", icon: "chart", description: "Players, accounts and events",
+    id: "analytics",
+    path: "/analytics",
+    label: "Analytics",
+    icon: "chart",
+    description: "Players, accounts and events",
     children: [
       { path: "/analytics/overview", label: "Overview", icon: "chart" },
       { path: "/analytics/accounts", label: "Accounts", icon: "users" },
@@ -49,7 +57,11 @@ export const SECTIONS: readonly SectionRoute[] = [
     ],
   },
   {
-    id: "app", path: "/app", label: "App and updates", icon: "rocket", description: "Build config and over-the-air updates",
+    id: "app",
+    path: "/app",
+    label: "App and updates",
+    icon: "rocket",
+    description: "Build config and over-the-air updates",
     children: [
       { path: "/app/builds", label: "Build config", icon: "sliders", database: "production" },
       // Both update channels and their history live in production, like build config.

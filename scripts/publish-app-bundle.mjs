@@ -253,8 +253,15 @@ export async function publishAppBundle(prepared, options) {
   const zipKey = "app-bundles/" + prepared.zipSha256 + ".zip";
   const zipUrl = r2ObjectUrl(accountId, bucket, zipKey);
   const zipHeaders = signR2Put({
-    url: zipUrl, body: prepared.zip, accessKeyId, secretAccessKey, sessionToken, now,
-    condition: { type: "if-none-match" }, contentType: "application/zip", cacheControl: BUNDLE_CACHE_CONTROL,
+    url: zipUrl,
+    body: prepared.zip,
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    now,
+    condition: { type: "if-none-match" },
+    contentType: "application/zip",
+    cacheControl: BUNDLE_CACHE_CONTROL,
   });
   const zipUpload = await fetcher(zipUrl, { method: "PUT", headers: zipHeaders, body: prepared.zip });
   // 412 means this exact content-addressed object already exists; the CDN check below proves it.
@@ -264,8 +271,15 @@ export async function publishAppBundle(prepared, options) {
   const pointerKey = "app-bundles/channels/" + channel + "/current.json";
   const pointerUrl = r2ObjectUrl(accountId, bucket, pointerKey);
   const pointerHeaders = signR2Put({
-    url: pointerUrl, body: prepared.pointerBytes, accessKeyId, secretAccessKey, sessionToken, now,
-    condition, contentType: "application/json", cacheControl: POINTER_CACHE_CONTROL,
+    url: pointerUrl,
+    body: prepared.pointerBytes,
+    accessKeyId,
+    secretAccessKey,
+    sessionToken,
+    now,
+    condition,
+    contentType: "application/json",
+    cacheControl: POINTER_CACHE_CONTROL,
   });
   const pointerUpload = await fetcher(pointerUrl, { method: "PUT", headers: pointerHeaders, body: prepared.pointerBytes });
   if (pointerUpload.status === 412) throw new Error("the pointer changed during publication; nothing was moved");
@@ -279,7 +293,11 @@ export async function publishAppBundle(prepared, options) {
  */
 export async function verifyPointerThroughCdn(fetcher, pointer) {
   try {
-    const response = await fetcher(CDN_ORIGIN + "/app-bundles/channels/" + pointer.channel + "/current.json", { method: "GET", cache: "no-store", headers: { Range: "bytes=0-" } });
+    const response = await fetcher(CDN_ORIGIN + "/app-bundles/channels/" + pointer.channel + "/current.json", {
+      method: "GET",
+      cache: "no-store",
+      headers: { Range: "bytes=0-" },
+    });
     if (response.status !== 200 && response.status !== 206) return "cdn_pending";
     const served = await response.json();
     return served?.generation === pointer.generation && served?.sha256 === pointer.sha256 ? "confirmed" : "cdn_pending";
@@ -320,8 +338,23 @@ export async function recordPublication(query, row) {
       "minimum_native_build, maximum_native_build, source_commit, outcome, note, published_at) " +
       "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz) " +
       "ON CONFLICT (channel, generation, sha256) DO NOTHING RETURNING id",
-    [row.channel, row.generation, row.previousGeneration, row.action, row.source, row.sha256, row.previousSha256, row.version, row.byteSize,
-      row.minimumNativeBuild, row.maximumNativeBuild, row.sourceCommit, row.outcome, row.note, row.publishedAt],
+    [
+      row.channel,
+      row.generation,
+      row.previousGeneration,
+      row.action,
+      row.source,
+      row.sha256,
+      row.previousSha256,
+      row.version,
+      row.byteSize,
+      row.minimumNativeBuild,
+      row.maximumNativeBuild,
+      row.sourceCommit,
+      row.outcome,
+      row.note,
+      row.publishedAt,
+    ],
   );
   return rows.length > 0;
 }
@@ -423,11 +456,18 @@ async function main() {
         const outcome = await verifyPointerThroughCdn(fetch, prepared.pointer);
         const { neon } = await import("@neondatabase/serverless");
         const sql = neon(process.env.OTA_HISTORY_DATABASE_URL);
-        const inserted = await recordPublication((text, params) => sql.query(text, params), publicationRow(prepared.pointer, previous, { outcome, note: args.note ?? "" }));
+        const inserted = await recordPublication(
+          (text, params) => sql.query(text, params),
+          publicationRow(prepared.pointer, previous, { outcome, note: args.note ?? "" }),
+        );
         Object.assign(summary, { recorded: inserted ? "inserted" : "already-recorded", cdn: outcome });
       } catch (error) {
         Object.assign(summary, { recorded: "failed" });
-        process.stderr.write("publish-app-bundle: published, but the history row was not written: " + (error instanceof Error ? error.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "<database url>").slice(0, 200) : "unknown error") + "\n");
+        process.stderr.write(
+          "publish-app-bundle: published, but the history row was not written: " +
+            (error instanceof Error ? error.message.replace(/postgres(?:ql)?:\/\/\S+/gi, "<database url>").slice(0, 200) : "unknown error") +
+            "\n",
+        );
       }
     }
   }

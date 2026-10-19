@@ -28,12 +28,7 @@ type HandlerOptions = {
 };
 
 const CDN_ORIGIN = "https://kip-assets.parkdex.app";
-const ALLOWED_ORIGINS = new Set([
-  "https://localhost",
-  "https://staging.web.parkdex.app",
-  "https://web.parkdex.app",
-  "https://parkdex-kip-staging.vercel.app",
-]);
+const ALLOWED_ORIGINS = new Set(["https://localhost", "https://staging.web.parkdex.app", "https://web.parkdex.app", "https://parkdex-kip-staging.vercel.app"]);
 const PUBLIC_CACHE_CONTROL = "public, max-age=60, s-maxage=60";
 const NO_STORE_CACHE_CONTROL = "no-store";
 const HEX_SHA256 = /^[a-f0-9]{64}$/;
@@ -65,11 +60,7 @@ function configuredChannel(env: Record<string, string | undefined>): ChannelEnvi
   }
 
   const deployment = env.VERCEL_ENV;
-  if (
-    deployment === "preview" ||
-    deployment === "development" ||
-    (deployment !== "production" && env.NODE_ENV !== "production")
-  ) {
+  if (deployment === "preview" || deployment === "development" || (deployment !== "production" && env.NODE_ENV !== "production")) {
     return "staging";
   }
   throw new Error("CONTENT_CHANNEL is required in production");
@@ -80,19 +71,8 @@ function validateChannel(value: unknown, expectedEnvironment: ChannelEnvironment
     throw new Error("content channel must be an object");
   }
   const channel = value as Record<string, unknown>;
-  const expectedKeys = [
-    "schema",
-    "environment",
-    "generation",
-    "releaseId",
-    "manifestUrl",
-    "manifestSha256",
-    "minimumReaderVersion",
-  ];
-  if (
-    Object.keys(channel).length !== expectedKeys.length ||
-    expectedKeys.some((key) => !Object.hasOwn(channel, key))
-  ) {
+  const expectedKeys = ["schema", "environment", "generation", "releaseId", "manifestUrl", "manifestSha256", "minimumReaderVersion"];
+  if (Object.keys(channel).length !== expectedKeys.length || expectedKeys.some((key) => !Object.hasOwn(channel, key))) {
     throw new Error("content channel has unexpected or missing fields");
   }
   if (channel.schema !== "parkdex.content-channel/v1") {
@@ -107,29 +87,20 @@ function validateChannel(value: unknown, expectedEnvironment: ChannelEnvironment
   if (typeof channel.releaseId !== "string" || !HEX_SHA256.test(channel.releaseId)) {
     throw new Error("content channel releaseId is invalid");
   }
-  const expectedManifestUrl =
-    CDN_ORIGIN + "/releases/" + channel.releaseId + "/manifest.json";
+  const expectedManifestUrl = CDN_ORIGIN + "/releases/" + channel.releaseId + "/manifest.json";
   if (channel.manifestUrl !== expectedManifestUrl) {
     throw new Error("content channel manifestUrl does not match its releaseId");
   }
   if (typeof channel.manifestSha256 !== "string" || !HEX_SHA256.test(channel.manifestSha256)) {
     throw new Error("content channel manifestSha256 is invalid");
   }
-  if (
-    !Number.isSafeInteger(channel.minimumReaderVersion) ||
-    (channel.minimumReaderVersion as number) < 1
-  ) {
+  if (!Number.isSafeInteger(channel.minimumReaderVersion) || (channel.minimumReaderVersion as number) < 1) {
     throw new Error("content channel minimumReaderVersion must be a positive integer");
   }
   return channel as ContentChannel;
 }
 
-function sendError(
-  response: ResponseLike,
-  status: number,
-  message: string,
-  cacheControl = NO_STORE_CACHE_CONTROL,
-): void {
+function sendError(response: ResponseLike, status: number, message: string, cacheControl = NO_STORE_CACHE_CONTROL): void {
   response.statusCode = status;
   response.setHeader("Cache-Control", cacheControl);
   response.setHeader("Content-Type", "application/json; charset=utf-8");

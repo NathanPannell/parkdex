@@ -68,9 +68,18 @@ test("sections share one error shape, and unknown errors never leak details", as
 test("each section gets the toggled database, production and the other database", async () => {
   const api = createDashboardApi({}, [recorder("/api/parks", [])]);
   const both = { ...env, DATABASE_URL: "postgres://prod", STAGING_DATABASE_URL: "postgres://staging" };
-  assert.deepEqual(await (await api(request("/api/parks"), both)).json(), { section: "/api/parks", database: "postgres://prod", base: "postgres://prod", other: "postgres://staging" });
-  assert.deepEqual(await (await api(request("/api/parks", { cookie: "parkdex_operator_db=staging" }), both)).json(),
-    { section: "/api/parks", database: "postgres://staging", base: "postgres://prod", other: "postgres://prod" });
+  assert.deepEqual(await (await api(request("/api/parks"), both)).json(), {
+    section: "/api/parks",
+    database: "postgres://prod",
+    base: "postgres://prod",
+    other: "postgres://staging",
+  });
+  assert.deepEqual(await (await api(request("/api/parks", { cookie: "parkdex_operator_db=staging" }), both)).json(), {
+    section: "/api/parks",
+    database: "postgres://staging",
+    base: "postgres://prod",
+    other: "postgres://prod",
+  });
   const unconfigured = await api(request("/api/parks", { cookie: "parkdex_operator_db=staging" }), { ...both, STAGING_DATABASE_URL: undefined });
   assert.equal(unconfigured.status, 503, "staging is never silently replaced by production");
 });
@@ -83,7 +92,10 @@ test("writes through any section must come from the dashboard origin", async () 
 });
 
 test("the four sections are registered once each", () => {
-  assert.deepEqual(SECTIONS.map((section) => section.prefix), ["/api/feedback", "/api/parks", "/api/analytics", "/api/app"]);
+  assert.deepEqual(
+    SECTIONS.map((section) => section.prefix),
+    ["/api/feedback", "/api/parks", "/api/analytics", "/api/app"],
+  );
   assert.equal(sectionFor("/api/app")?.prefix, "/api/app");
   assert.equal(sectionFor("/api/app/updates/staging")?.prefix, "/api/app");
   assert.equal(sectionFor("/api/apps"), null);
@@ -102,7 +114,17 @@ test("health reports the data environment, and a missing database fails closed",
 
 test("the local demo serves every section that has data", async () => {
   const api = createDashboardApi(demoDependencies());
-  for (const path of ["/api/feedback", "/api/feedback/other-database", "/api/parks", "/api/parks/regions", "/api/app/builds", "/api/analytics/overview", "/api/analytics/accounts", "/api/analytics/events", "/api/analytics/posthog/status"]) {
+  for (const path of [
+    "/api/feedback",
+    "/api/feedback/other-database",
+    "/api/parks",
+    "/api/parks/regions",
+    "/api/app/builds",
+    "/api/analytics/overview",
+    "/api/analytics/accounts",
+    "/api/analytics/events",
+    "/api/analytics/posthog/status",
+  ]) {
     assert.equal((await api(request(path), { ...env, STAGING_DATABASE_URL: "demo" })).status, 200, path);
   }
 });
@@ -127,7 +149,15 @@ test("a production deployment refuses to serve data because Vercel login would n
 // Keeps the context shape stable for the section agents: adding a field is fine, removing one is not.
 test("the section context exposes the agreed fields", async () => {
   let seen: SectionContext | null = null;
-  const api = createDashboardApi({}, [{ prefix: "/api/app", route: async (_request, context) => { seen = context; return json({}); } }]);
+  const api = createDashboardApi({}, [
+    {
+      prefix: "/api/app",
+      route: async (_request, context) => {
+        seen = context;
+        return json({});
+      },
+    },
+  ]);
   await api(request("/api/app/x?y=1"), env);
   const context = seen as unknown as SectionContext;
   assert.equal(context.path, "/api/app/x");

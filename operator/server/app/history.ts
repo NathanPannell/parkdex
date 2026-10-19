@@ -93,12 +93,15 @@ export function createSqlOtaHistoryStore(run: Run): OtaHistoryStore {
       return rows[0]?.ready === true;
     },
     async list(limit) {
-      const rows = await run(`SELECT ${COLUMNS} FROM kip_app_config.ota_publishes ORDER BY recorded_at DESC, id DESC LIMIT $1`, [Math.min(Math.max(limit, 1), 200)]);
+      const rows = await run(`SELECT ${COLUMNS} FROM kip_app_config.ota_publishes ORDER BY recorded_at DESC, id DESC LIMIT $1`, [
+        Math.min(Math.max(limit, 1), 200),
+      ]);
       return rows.map(toPublish);
     },
     async bundles() {
       // Conflict rows describe a pointer someone else replaced, so they do not vouch for a bundle.
-      const rows = await run(`
+      const rows = await run(
+        `
         SELECT g.sha256, g.needs, g.channels, l.version, l.source_commit, l.byte_size, l.maximum_native_build, l.published_at
         FROM (
           SELECT sha256, max(minimum_native_build) AS needs, string_agg(DISTINCT channel, ',' ORDER BY channel) AS channels
@@ -109,7 +112,9 @@ export function createSqlOtaHistoryStore(run: Run): OtaHistoryStore {
           FROM kip_app_config.ota_publishes p
           WHERE p.sha256 = g.sha256 AND p.outcome <> 'conflict'
           ORDER BY p.recorded_at DESC, p.id DESC LIMIT 1
-        ) l`, []);
+        ) l`,
+        [],
+      );
       return rows.map((row) => ({
         sha256: String(row.sha256),
         version: String(row.version),
@@ -117,20 +122,39 @@ export function createSqlOtaHistoryStore(run: Run): OtaHistoryStore {
         byteSize: Number(row.byte_size),
         minimumNativeBuild: Number(row.needs),
         maximumNativeBuild: Number(row.maximum_native_build),
-        channels: String(row.channels ?? "").split(",").filter(Boolean) as AppBundleChannel[],
+        channels: String(row.channels ?? "")
+          .split(",")
+          .filter(Boolean) as AppBundleChannel[],
         lastPublishedAt: iso(row.published_at),
       }));
     },
     async record(input) {
-      const rows = await run(`
+      const rows = await run(
+        `
         INSERT INTO kip_app_config.ota_publishes
           (channel, generation, previous_generation, action, source, sha256, previous_sha256, version, byte_size,
            minimum_native_build, maximum_native_build, source_commit, outcome, note, published_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::timestamptz)
         ON CONFLICT (channel, generation, sha256) DO NOTHING
         RETURNING ${COLUMNS}`,
-      [input.channel, input.generation, input.previousGeneration, input.action, input.source, input.sha256, input.previousSha256, input.version,
-        input.byteSize, input.minimumNativeBuild, input.maximumNativeBuild, input.sourceCommit, input.outcome, input.note, input.publishedAt]);
+        [
+          input.channel,
+          input.generation,
+          input.previousGeneration,
+          input.action,
+          input.source,
+          input.sha256,
+          input.previousSha256,
+          input.version,
+          input.byteSize,
+          input.minimumNativeBuild,
+          input.maximumNativeBuild,
+          input.sourceCommit,
+          input.outcome,
+          input.note,
+          input.publishedAt,
+        ],
+      );
       return rows[0] ? toPublish(rows[0]) : null;
     },
   };

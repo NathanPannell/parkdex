@@ -16,7 +16,11 @@ import { BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, title, type OsmDraft,
 type Form = Pick<OsmDraft, "name" | "short" | "category" | "region" | "biome" | "rarity" | "blurb">;
 
 function BackLink() {
-  return <a className="back-link" href="/parks" onClick={linkHandler("/parks")}><Icon name="chevron" size={14} className="flip" /> All parks</a>;
+  return (
+    <a className="back-link" href="/parks" onClick={linkHandler("/parks")}>
+      <Icon name="chevron" size={14} className="flip" /> All parks
+    </a>
+  );
 }
 
 export function CreateFromOsm({ refKey }: { refKey: string }) {
@@ -41,12 +45,28 @@ export function CreateFromOsm({ refKey }: { refKey: string }) {
         const { name, short, category, region, biome, rarity, blurb } = loaded.draft;
         setForm({ name, short, category, region, biome, rarity, blurb });
       })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorText(reason, "Could not load this outline.")); });
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setError(errorText(reason, "Could not load this outline."));
+      });
     return () => controller.abort();
   }, [path]);
 
-  if (error) return <section className="page"><BackLink /><Notice tone="error">{error}</Notice></section>;
-  if (!outline || !draft || !form) return <section className="page"><BackLink /><div className="drawer__state"><Spinner /> Loading the outline...</div></section>;
+  if (error)
+    return (
+      <section className="page">
+        <BackLink />
+        <Notice tone="error">{error}</Notice>
+      </section>
+    );
+  if (!outline || !draft || !form)
+    return (
+      <section className="page">
+        <BackLink />
+        <div className="drawer__state">
+          <Spinner /> Loading the outline...
+        </div>
+      </section>
+    );
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm({ ...form, [key]: value });
   const missing = (["name", "short", "region", "blurb"] as const).filter((key) => !form[key].trim());
@@ -60,7 +80,10 @@ export function CreateFromOsm({ refKey }: { refKey: string }) {
       icon: "plus",
       body: (
         <>
-          <p>Adds <strong>{draft.id}</strong> to the {environment || "selected"} catalogue in one content change, with this outline, the pin inside it and unverified drive data.</p>
+          <p>
+            Adds <strong>{draft.id}</strong> to the {environment || "selected"} catalogue in one content change, with this outline, the pin inside it and
+            unverified drive data.
+          </p>
           <ul>
             <li>Every player's app shows it on its next content sync.</li>
             <li>It has no founder; the first player to stand in it with an approved photo can found it.</li>
@@ -88,65 +111,147 @@ export function CreateFromOsm({ refKey }: { refKey: string }) {
         id="create-title"
         eyebrow={`Create from OpenStreetMap · ${outline.type} ${outline.id}`}
         title={form.name || outline.name || "Unnamed outline"}
-        lede={match ? `This outline is already in Parkdex as ${match.name}.` : "Check the fields, then publish. The outline and pin come from OpenStreetMap; you can redraw them after publishing."}
-        actions={<>
-          <a className="button button--ghost" href="/parks" onClick={linkHandler("/parks")}>Cancel</a>
-          <button type="button" className="button button--primary" disabled={!ready || saving} onClick={() => void publish()}>
-            {saving ? <><Spinner small /> Publishing</> : <><Icon name="plus" size={16} /> Publish to Parkdex</>}
-          </button>
-        </>}
+        lede={
+          match
+            ? `This outline is already in Parkdex as ${match.name}.`
+            : "Check the fields, then publish. The outline and pin come from OpenStreetMap; you can redraw them after publishing."
+        }
+        actions={
+          <>
+            <a className="button button--ghost" href="/parks" onClick={linkHandler("/parks")}>
+              Cancel
+            </a>
+            <button type="button" className="button button--primary" disabled={!ready || saving} onClick={() => void publish()}>
+              {saving ? (
+                <>
+                  <Spinner small /> Publishing
+                </>
+              ) : (
+                <>
+                  <Icon name="plus" size={16} /> Publish to Parkdex
+                </>
+              )}
+            </button>
+          </>
+        }
       />
 
       {match && (
-        <Notice action={<a className="button button--small" href={`/parks/${encodeURIComponent(match.parkId)}`} onClick={linkHandler(`/parks/${encodeURIComponent(match.parkId)}`)}>Open {match.name}</a>}>
+        <Notice
+          action={
+            <a
+              className="button button--small"
+              href={`/parks/${encodeURIComponent(match.parkId)}`}
+              onClick={linkHandler(`/parks/${encodeURIComponent(match.parkId)}`)}
+            >
+              Open {match.name}
+            </a>
+          }
+        >
           Founding and the catalogue match treat this outline as {match.name}, so it is not published a second time.
         </Notice>
       )}
 
       <div className="editor">
         <div className="editor__side">
-          <MapEditor boundary={draft.geometry} pin={[draft.lng, draft.lat]} editable={false} onBoundary={() => false} onPin={() => undefined} fitKey={draft.id} />
-          <p className="muted map-legend"><span className="legend-pin" /> Pin inside the outline <span className="legend-boundary" /> OpenStreetMap outline ({outline.kind})</p>
+          <MapEditor
+            boundary={draft.geometry}
+            pin={[draft.lng, draft.lat]}
+            editable={false}
+            onBoundary={() => false}
+            onPin={() => undefined}
+            fitKey={draft.id}
+          />
+          <p className="muted map-legend">
+            <span className="legend-pin" /> Pin inside the outline <span className="legend-boundary" /> OpenStreetMap outline ({outline.kind})
+          </p>
         </div>
         <div className="editor__main">
           <fieldset className="panel form-panel" disabled={saving || Boolean(match)}>
             <h3>New park</h3>
             <div className="field-row">
-              <label className="field"><span>Name</span><input value={form.name} maxLength={140} onChange={(event) => set("name", event.target.value)} /></label>
-              <label className="field"><span>Short name</span><input value={form.short} maxLength={140} onChange={(event) => set("short", event.target.value)} /></label>
+              <label className="field">
+                <span>Name</span>
+                <input value={form.name} maxLength={140} onChange={(event) => set("name", event.target.value)} />
+              </label>
+              <label className="field">
+                <span>Short name</span>
+                <input value={form.short} maxLength={140} onChange={(event) => set("short", event.target.value)} />
+              </label>
             </div>
             <div className="field-row">
-              <label className="field"><span>Category (guessed from the tags)</span>
+              <label className="field">
+                <span>Category (guessed from the tags)</span>
                 <select value={form.category} onChange={(event) => set("category", event.target.value)}>
-                  {CATEGORIES.map((value) => <option key={value} value={value}>{title(value)}</option>)}
+                  {CATEGORIES.map((value) => (
+                    <option key={value} value={value}>
+                      {title(value)}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className="field"><span>Region (from the nearest park)</span><RegionSelect value={form.region} onChange={(value) => set("region", value)} /></label>
+              <label className="field">
+                <span>Region (from the nearest park)</span>
+                <RegionSelect value={form.region} onChange={(value) => set("region", value)} />
+              </label>
             </div>
             <div className="field">
               <span>Rarity</span>
               <div className="rarity-picker" role="radiogroup" aria-label="Rarity">
                 {RARITIES.map((value) => (
-                  <button key={value} type="button" role="radio" aria-checked={form.rarity === value} className={`rarity rarity--${value}${form.rarity === value ? " is-on" : ""}`} onClick={() => set("rarity", value)}>{value}</button>
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.rarity === value}
+                    className={`rarity rarity--${value}${form.rarity === value ? " is-on" : ""}`}
+                    onClick={() => set("rarity", value)}
+                  >
+                    {value}
+                  </button>
                 ))}
               </div>
             </div>
             <div className="field-row">
-              <label className="field"><span>Biome</span>
-                <select value={form.biome} onChange={(event) => set("biome", event.target.value)}>{BIOMES.map((value) => <option key={value} value={value}>{title(value)}</option>)}</select>
+              <label className="field">
+                <span>Biome</span>
+                <select value={form.biome} onChange={(event) => set("biome", event.target.value)}>
+                  {BIOMES.map((value) => (
+                    <option key={value} value={value}>
+                      {title(value)}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <div className="field"><span>Badge shape</span><p className="derived">{title(SHAPE_FOR_CATEGORY[form.category] ?? "circle")}</p></div>
+              <div className="field">
+                <span>Badge shape</span>
+                <p className="derived">{title(SHAPE_FOR_CATEGORY[form.category] ?? "circle")}</p>
+              </div>
             </div>
             <label className="field">
               <span>Description</span>
               <textarea rows={4} maxLength={800} value={form.blurb} onChange={(event) => set("blurb", event.target.value)} />
               <small className="muted counter">{form.blurb.length} / 800</small>
             </label>
-            {missing.length > 0 && !match && <p className="muted pp-help">Fill in the {missing.map((key) => key === "blurb" ? "description" : key === "short" ? "short name" : key).join(", ")}: claim backups refuse a park without them.</p>}
+            {missing.length > 0 && !match && (
+              <p className="muted pp-help">
+                Fill in the {missing.map((key) => (key === "blurb" ? "description" : key === "short" ? "short name" : key)).join(", ")}: claim backups refuse a
+                park without them.
+              </p>
+            )}
             <dl className="pp-facts">
-              <div><dt>Park id</dt><dd>{draft.id}</dd></div>
-              <div><dt>Seed</dt><dd>{draft.seed}</dd></div>
-              <div><dt>Area</dt><dd>{(outline.areaM2 / 10_000).toFixed(1)} ha</dd></div>
+              <div>
+                <dt>Park id</dt>
+                <dd>{draft.id}</dd>
+              </div>
+              <div>
+                <dt>Seed</dt>
+                <dd>{draft.seed}</dd>
+              </div>
+              <div>
+                <dt>Area</dt>
+                <dd>{(outline.areaM2 / 10_000).toFixed(1)} ha</dd>
+              </div>
             </dl>
           </fieldset>
         </div>

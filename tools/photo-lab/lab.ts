@@ -125,7 +125,8 @@ export function validateManifest(value: unknown): string[] {
   for (const [index, photo] of value.photos.entries()) {
     if (!isRecord(photo) || !isRecord(photo.source) || photo.source.type !== "derived" || typeof photo.source.from !== "string") continue;
     const parent = ids.get(photo.source.from);
-    if (!parent || !isRecord(parent.source) || parent.source.type !== "commons") errors.push(`photos[${index}]: from must name a Commons photo in the manifest`);
+    if (!parent || !isRecord(parent.source) || parent.source.type !== "commons")
+      errors.push(`photos[${index}]: from must name a Commons photo in the manifest`);
   }
   return errors;
 }
@@ -241,7 +242,7 @@ async function keyUsage(env: ModerationEnv, fetchImpl: ModerationFetch): Promise
   try {
     const response = await fetchImpl(KEY_ENDPOINT, { headers: { Authorization: `Bearer ${env.OPENROUTER_API_KEY}` } });
     if (!response.ok) return null;
-    const body = await response.json() as { data?: { usage?: unknown } };
+    const body = (await response.json()) as { data?: { usage?: unknown } };
     return typeof body.data?.usage === "number" ? body.data.usage : null;
   } catch {
     return null;
@@ -306,8 +307,13 @@ export async function classify(options: ClassifyOptions = {}): Promise<RunFile> 
       }
       if (answers?.model) model = answers.model;
       results[photoId] = {
-        answers: answers?.answers ?? null, model: answers?.model ?? null, error, latencyMs: Date.now() - t0,
-        attempts: record.attempts, costUsd: record.costUsd, queriedIn: id,
+        answers: answers?.answers ?? null,
+        model: answers?.model ?? null,
+        error,
+        latencyMs: Date.now() - t0,
+        attempts: record.attempts,
+        costUsd: record.costUsd,
+        queriedIn: id,
       };
       done += 1;
       if (error) failed += 1;

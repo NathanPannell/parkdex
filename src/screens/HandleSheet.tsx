@@ -104,10 +104,23 @@ export function HandleSheet() {
         </button>
         <AnimatePresence mode="wait" initial={false}>
           {revealed ? (
-            <motion.div key="reveal" className="handle-sheet__body handle-reveal" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <motion.div
+              key="reveal"
+              className="handle-sheet__body handle-reveal"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
               <span className="eyebrow">Your flag</span>
-              <h2 id="handle-title" style={handleFit(revealed.handle)}>Meet your flag, @{revealed.handle}</h2>
-              <motion.div className="handle-reveal__flag" initial={{ scale: 0.3, rotate: -14 }} animate={{ scale: 1, rotate: -3 }} transition={{ type: "spring", stiffness: 260, damping: 13 }}>
+              <h2 id="handle-title" style={handleFit(revealed.handle)}>
+                Meet your flag, @{revealed.handle}
+              </h2>
+              <motion.div
+                className="handle-reveal__flag"
+                initial={{ scale: 0.3, rotate: -14 }}
+                animate={{ scale: 1, rotate: -3 }}
+                transition={{ type: "spring", stiffness: 260, damping: 13 }}
+              >
                 <Flag seed={revealed.flagSeed} size={176} label={`Flag of @${revealed.handle}`} />
               </motion.div>
               <p className="handle-sheet__help">It's yours for good. Everyone sees it on the parks you hold.</p>
@@ -116,24 +129,43 @@ export function HandleSheet() {
               </button>
             </motion.div>
           ) : (
-            <motion.form key="pick" className="handle-sheet__body" onSubmit={(event) => void submit(event)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
+            <motion.form
+              key="pick"
+              className="handle-sheet__body"
+              onSubmit={(event) => void submit(event)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
               <span className="eyebrow">{existing ? "Your handle" : "Before you plant"}</span>
               <h2 id="handle-title">{existing ? "Change your handle" : "Pick your handle"}</h2>
               <div className="handle-sheet__preview" style={handleFit(handle || "yourname")}>
                 <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} className={previewSeed ? "is-waving" : undefined} />
                 <span>
-                  <motion.strong key={handle.length} initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 600, damping: 20 }}>@{handle || "yourname"}</motion.strong>
+                  <motion.strong
+                    key={handle.length}
+                    initial={{ scale: 1.08 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 600, damping: 20 }}
+                  >
+                    @{handle || "yourname"}
+                  </motion.strong>
                   <em>{existing ? "Your flag stays the same." : previewSeed ? "This flag comes with it." : "Your flag comes with it."}</em>
                 </span>
               </div>
-              <label className="fb-label" htmlFor="handle-input">Handle</label>
+              <label className="fb-label" htmlFor="handle-input">
+                Handle
+              </label>
               <motion.div className="handle-input" animate={field}>
                 <span aria-hidden="true">@</span>
                 <input
                   id="handle-input"
                   className="fb-input"
                   value={value}
-                  onChange={(event) => { setValue(event.target.value); setError(null); }}
+                  onChange={(event) => {
+                    setValue(event.target.value);
+                    setError(null);
+                  }}
                   onBlur={() => setTouched(true)}
                   maxLength={21}
                   autoComplete="off"
@@ -150,7 +182,11 @@ export function HandleSheet() {
               <p id="handle-help" className={`handle-sheet__help ${touched && problem ? "is-error" : ""}`}>
                 {touched && problem ? problem : "3 to 20 letters, numbers or underscores. Friends see it on the map and the leaderboard."}
               </p>
-              {error && <p className="handle-sheet__error" role="alert">{error}</p>}
+              {error && (
+                <p className="handle-sheet__error" role="alert">
+                  {error}
+                </p>
+              )}
               <motion.button whileTap={press} className="btn btn--sun btn--block" type="submit" disabled={busy || (touched && !!problem)}>
                 {busy ? "Saving…" : existing ? "Save handle" : "Use this handle"}
               </motion.button>

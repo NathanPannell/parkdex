@@ -58,7 +58,10 @@ beforeEach(() => {
   vi.stubEnv("VITE_CONTENT_API_URL", `${API_ORIGIN}/api/content/current`);
   vi.stubGlobal("location", { origin: API_ORIGIN });
   vi.stubGlobal("document", undefined);
-  vi.stubGlobal("fetch", vi.fn(async () => new Response("web response")));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("web response")),
+  );
 });
 
 describe("account backup Wi-Fi routing", () => {
@@ -84,7 +87,9 @@ describe("account backup Wi-Fi routing", () => {
     await expect(auth.fetchAuthenticated("/api/claims", { method: "PUT", body: "{}" }, ACCOUNT_ID)).rejects.toThrow();
     await expect(auth.fetchAuthenticated(`/api/claims/${CLAIM_ID}`, { method: "GET" }, ACCOUNT_ID)).rejects.toThrow();
     await expect(auth.fetchAuthenticated(`/api/claims/${CLAIM_ID}/photo/extra`, { method: "PUT", body: "x" }, ACCOUNT_ID)).rejects.toThrow();
-    await expect(auth.fetchAuthenticated(`https://attacker.example/api/claims/${CLAIM_ID}/photo`, { method: "GET" }, ACCOUNT_ID)).rejects.toThrow("configured HTTPS account API");
+    await expect(auth.fetchAuthenticated(`https://attacker.example/api/claims/${CLAIM_ID}/photo`, { method: "GET" }, ACCOUNT_ID)).rejects.toThrow(
+      "configured HTTPS account API",
+    );
 
     expect(mocks.nativeCalls).toHaveLength(0);
     expect(globalThis.fetch).not.toHaveBeenCalled();
@@ -112,11 +117,15 @@ describe("account backup Wi-Fi routing", () => {
     vi.stubGlobal("fetch", fetchMock);
     const auth = await import("./authClient");
 
-    await auth.fetchAuthenticated(`/api/claims/${CLAIM_ID}/photo`, {
-      method: "PUT",
-      headers: { "Content-Type": "image/png" },
-      body: new Blob(["photo"], { type: "image/png" }),
-    }, ACCOUNT_ID);
+    await auth.fetchAuthenticated(
+      `/api/claims/${CLAIM_ID}/photo`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "image/png" },
+        body: new Blob(["photo"], { type: "image/png" }),
+      },
+      ACCOUNT_ID,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];

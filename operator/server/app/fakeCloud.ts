@@ -14,7 +14,10 @@ type StoredObject = { body: Uint8Array; etag: string; uploaded: string };
 const encoder = new TextEncoder();
 
 function cfJson(result: unknown, status = 200, info: Record<string, unknown> = {}): Response {
-  return new Response(JSON.stringify({ success: status < 400, errors: [], messages: [], result, result_info: info }), { status, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify({ success: status < 400, errors: [], messages: [], result, result_info: info }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 export class FakeBundleCloud {
@@ -33,7 +36,7 @@ export class FakeBundleCloud {
   put(key: string, body: string | Uint8Array, uploaded = new Date().toISOString()) {
     this.counter += 1;
     const bytes = typeof body === "string" ? encoder.encode(body) : body;
-    this.objects.set(key, { body: bytes, etag: `${(this.counter * 2654435761 >>> 0).toString(16).padStart(8, "0")}${"0".repeat(24)}`, uploaded });
+    this.objects.set(key, { body: bytes, etag: `${((this.counter * 2654435761) >>> 0).toString(16).padStart(8, "0")}${"0".repeat(24)}`, uploaded });
   }
 
   readonly fetch: Fetcher = async (input, init = {}) => {
@@ -54,7 +57,9 @@ export class FakeBundleCloud {
     if (!match) return cfJson(null, 404);
     if (!match[2]) {
       const prefix = url.searchParams.get("prefix") ?? "";
-      const rows = [...this.objects.entries()].filter(([key]) => key.startsWith(prefix)).sort(([a], [b]) => a.localeCompare(b))
+      const rows = [...this.objects.entries()]
+        .filter(([key]) => key.startsWith(prefix))
+        .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, object]) => ({ key, size: object.body.byteLength, etag: object.etag, last_modified: object.uploaded, http_metadata: {} }));
       return cfJson(rows, 200, { is_truncated: false, cursor: "" });
     }
@@ -77,7 +82,8 @@ export class FakeBundleCloud {
     const pointer = /^app-bundles\/channels\/(staging|production)\/current\.json$/.test(path);
     const zip = /^app-bundles\/[a-f0-9]{64}\.zip$/.test(path);
     const routed = this.servesAppBundles && (pointer || zip);
-    if (method === "POST") return new Response("Method Not Allowed", { status: 405, headers: { allow: routed && pointer ? "GET, HEAD" : "GET, HEAD, OPTIONS" } });
+    if (method === "POST")
+      return new Response("Method Not Allowed", { status: 405, headers: { allow: routed && pointer ? "GET, HEAD" : "GET, HEAD, OPTIONS" } });
     if (!routed) return new Response("Not Found", { status: 404 });
     let object = this.objects.get(path);
     if (pointer && object) {
@@ -94,7 +100,11 @@ export class FakeBundleCloud {
 
   private endpoint(channel: AppBundleChannel, body: string): Response {
     let parsed: unknown = null;
-    try { parsed = JSON.parse(body); } catch { /* invalid below */ }
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      /* invalid below */
+    }
     const check = parseUpdateCheck(parsed);
     if (!check) return Response.json({ kind: "failed", error: "invalid_request" }, { status: 400 });
     const object = this.servesAppBundles ? this.objects.get(`app-bundles/channels/${channel}/current.json`) : undefined;
@@ -140,7 +150,9 @@ export class MemoryOtaHistory implements OtaHistoryStore {
   readonly rows: OtaPublish[] = [];
   ready = true;
 
-  async available() { return this.ready; }
+  async available() {
+    return this.ready;
+  }
 
   async list(limit: number) {
     return [...this.rows].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.id - a.id).slice(0, limit);
@@ -152,9 +164,14 @@ export class MemoryOtaHistory implements OtaHistoryStore {
     return [...bySha.entries()].map(([sha256, rows]) => {
       const newest = [...rows].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt) || b.id - a.id)[0];
       return {
-        sha256, version: newest.version, sourceCommit: newest.sourceCommit, byteSize: newest.byteSize,
-        minimumNativeBuild: Math.max(...rows.map((row) => row.minimumNativeBuild)), maximumNativeBuild: newest.maximumNativeBuild,
-        channels: [...new Set(rows.map((row) => row.channel))], lastPublishedAt: newest.publishedAt,
+        sha256,
+        version: newest.version,
+        sourceCommit: newest.sourceCommit,
+        byteSize: newest.byteSize,
+        minimumNativeBuild: Math.max(...rows.map((row) => row.minimumNativeBuild)),
+        maximumNativeBuild: newest.maximumNativeBuild,
+        channels: [...new Set(rows.map((row) => row.channel))],
+        lastPublishedAt: newest.publishedAt,
       };
     });
   }

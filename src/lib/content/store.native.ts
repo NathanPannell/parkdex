@@ -1,7 +1,21 @@
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from "@capacitor-community/sqlite";
 import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
-import { CONTENT_READER_VERSION, isMapChunkPath, type ArchivedScene, type ContentChangeBatch, type ContentEnvironment, type ContentFile, type ContentMapInventory, type ContentMapPointer, type ContentStore, type DeleteFileOptions, type ContentSyncCursor, type ContentSyncState, type RetainedPark, type StoredRelease } from "./contracts";
+import {
+  CONTENT_READER_VERSION,
+  isMapChunkPath,
+  type ArchivedScene,
+  type ContentChangeBatch,
+  type ContentEnvironment,
+  type ContentMapInventory,
+  type ContentMapPointer,
+  type ContentStore,
+  type DeleteFileOptions,
+  type ContentSyncCursor,
+  type ContentSyncState,
+  type RetainedPark,
+  type StoredRelease,
+} from "./contracts";
 import { assertArchivedSceneDescriptor, assertArchivedSceneIdentity } from "./archived-art";
 
 const DATABASE = "parkdex_content";
@@ -46,20 +60,45 @@ function isReadableRelease(value: unknown, id: string): value is StoredRelease {
   const channel = value.channel;
   const manifest = value.manifest;
   const mapManifest = manifest.mapManifest;
-  return channel.releaseId === id && Number.isSafeInteger(channel.generation) && typeof channel.environment === "string" &&
-    typeof channel.manifestUrl === "string" && typeof channel.manifestSha256 === "string" &&
-    typeof manifest.version === "string" && typeof manifest.sourceCommit === "string" && typeof manifest.cdnOrigin === "string" &&
-    Array.isArray(manifest.files) && Array.isArray(manifest.parkIds) && Array.isArray(manifest.boundaryIds) &&
-    isObjectRecord(mapManifest) && Number.isSafeInteger(mapManifest.size) && Number.isSafeInteger(mapManifest.chunkBytes) && Number.isSafeInteger(mapManifest.count) &&
-    (value.readiness === "candidate" || value.readiness === "starter" || value.readiness === "complete") && typeof value.healthy === "boolean";
+  return (
+    channel.releaseId === id &&
+    Number.isSafeInteger(channel.generation) &&
+    typeof channel.environment === "string" &&
+    typeof channel.manifestUrl === "string" &&
+    typeof channel.manifestSha256 === "string" &&
+    typeof manifest.version === "string" &&
+    typeof manifest.sourceCommit === "string" &&
+    typeof manifest.cdnOrigin === "string" &&
+    Array.isArray(manifest.files) &&
+    Array.isArray(manifest.parkIds) &&
+    Array.isArray(manifest.boundaryIds) &&
+    isObjectRecord(mapManifest) &&
+    Number.isSafeInteger(mapManifest.size) &&
+    Number.isSafeInteger(mapManifest.chunkBytes) &&
+    Number.isSafeInteger(mapManifest.count) &&
+    (value.readiness === "candidate" || value.readiness === "starter" || value.readiness === "complete") &&
+    typeof value.healthy === "boolean"
+  );
 }
 
 function isReadablePark(value: unknown): value is RetainedPark["park"] {
   if (!isObjectRecord(value)) return false;
-  return typeof value.id === "string" && value.id.length > 0 && typeof value.name === "string" && typeof value.short === "string" &&
-    typeof value.category === "string" && typeof value.region === "string" && Number.isFinite(value.lat) && Number.isFinite(value.lng) &&
-    typeof value.biome === "string" && typeof value.shape === "string" && typeof value.rarity === "string" && Number.isSafeInteger(value.seed) &&
-    typeof value.blurb === "string" && (value.scene === null || typeof value.scene === "string");
+  return (
+    typeof value.id === "string" &&
+    value.id.length > 0 &&
+    typeof value.name === "string" &&
+    typeof value.short === "string" &&
+    typeof value.category === "string" &&
+    typeof value.region === "string" &&
+    Number.isFinite(value.lat) &&
+    Number.isFinite(value.lng) &&
+    typeof value.biome === "string" &&
+    typeof value.shape === "string" &&
+    typeof value.rarity === "string" &&
+    Number.isSafeInteger(value.seed) &&
+    typeof value.blurb === "string" &&
+    (value.scene === null || typeof value.scene === "string")
+  );
 }
 
 function parseReleaseRow(id: unknown, json: unknown): StoredRelease | undefined {
@@ -286,10 +325,7 @@ export class NativeContentStore implements ContentStore {
   async putRelease(release: StoredRelease): Promise<void> {
     assertRelease(release);
     await this.exclusive(async () => {
-      await this.db().run(
-        "INSERT OR REPLACE INTO content_releases(id, release_json) VALUES(?, ?)",
-        [release.id, JSON.stringify(release)],
-      );
+      await this.db().run("INSERT OR REPLACE INTO content_releases(id, release_json) VALUES(?, ?)", [release.id, JSON.stringify(release)]);
     });
   }
 
@@ -417,47 +453,51 @@ export class NativeContentStore implements ContentStore {
     const key = assertHash(hash);
     // Optional copies (map chunks, badge art) may go even while current content lists them.
     const required = (path: string) => !(options.optionalMapChunk && isMapChunkPath(path)) && !(options.optionalArt && path.startsWith("art/badges/scenes/"));
-    await this.withFileLock(key, () => this.exclusive(async () => {
-      const activeId = await this.getActiveId();
-      const active = activeId ? await this.getRelease(activeId) : undefined;
-      if (activeId && !active) throw new Error("Cannot collect content while the active release metadata is unreadable");
-      const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key && required(file.path)) ?? false;
-      const retainedRows = (await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks", [])).values ?? [];
-      const retainedParks = retainedRows.map(parseRetainedParkRow);
-      if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
-      const retainedReferencesFile = retainedParks.some((park) => park?.sceneFile?.sha256.toLowerCase() === key);
-      const syncState = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'asset'", [])).values ?? [];
-      const syncReferencesFile = !options.optionalArt && syncState.some((row) => {
-        const file = JSON.parse(String(row.value_json)) as { sha256?: unknown };
-        return file.sha256 === key;
-      });
-      const archivedFiles = (await this.db().query("SELECT release_id, scene, file_json FROM content_archived_scenes", [])).values ?? [];
-      const archivedDescriptors = archivedFiles.map(parseArchivedSceneRow);
-      if (archivedDescriptors.some((scene) => !scene)) throw new Error("Cannot collect content while archived scene metadata is unreadable");
-      const archivedReferencesFile = archivedDescriptors.some((scene) => scene?.file.sha256 === key);
-      const pointers = (await this.db().query("SELECT pointer_json FROM content_cached_maps", [])).values ?? [];
-      const currentMapVersions = new Set(pointers.map((row) => (JSON.parse(String(row.pointer_json)) as ContentMapPointer).version));
-      const currentMapRows = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'map'", [])).values ?? [];
-      for (const row of currentMapRows) currentMapVersions.add((JSON.parse(String(row.value_json)) as ContentMapPointer).version);
-      const inventories = (await this.db().query("SELECT version, inventory_json FROM content_map_inventories", [])).values ?? [];
-      const mapReferencesFile = inventories.some((row) => {
-        if (!currentMapVersions.has(String(row.version))) return false;
-        const inventory = JSON.parse(String(row.inventory_json)) as ContentMapInventory;
-        return inventory.files.some((file) => file.sha256 === key && required(file.path));
-      });
-      if (activeReferencesFile || retainedReferencesFile || syncReferencesFile || archivedReferencesFile || mapReferencesFile) {
-        throw new Error(`Cannot delete content file referenced by active or retained content: ${key}`);
-      }
-      const path = blobPath(key);
-      try {
-        await Filesystem.deleteFile({ path, directory: Directory.Data });
-      } catch (error) {
-        if (!isMissingFile(error)) throw error;
-      }
-      await this.db().run("DELETE FROM content_files WHERE hash = ?", [key]);
-      this.recordedSizes?.delete(key);
-      this.revokeHashUrls(key);
-    }));
+    await this.withFileLock(key, () =>
+      this.exclusive(async () => {
+        const activeId = await this.getActiveId();
+        const active = activeId ? await this.getRelease(activeId) : undefined;
+        if (activeId && !active) throw new Error("Cannot collect content while the active release metadata is unreadable");
+        const activeReferencesFile = active?.manifest.files.some((file) => file.sha256.toLowerCase() === key && required(file.path)) ?? false;
+        const retainedRows = (await this.db().query("SELECT park_json, scene_file_json FROM content_retained_parks", [])).values ?? [];
+        const retainedParks = retainedRows.map(parseRetainedParkRow);
+        if (retainedParks.some((park) => !park)) throw new Error("Cannot collect content while retained park metadata is unreadable");
+        const retainedReferencesFile = retainedParks.some((park) => park?.sceneFile?.sha256.toLowerCase() === key);
+        const syncState = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'asset'", [])).values ?? [];
+        const syncReferencesFile =
+          !options.optionalArt &&
+          syncState.some((row) => {
+            const file = JSON.parse(String(row.value_json)) as { sha256?: unknown };
+            return file.sha256 === key;
+          });
+        const archivedFiles = (await this.db().query("SELECT release_id, scene, file_json FROM content_archived_scenes", [])).values ?? [];
+        const archivedDescriptors = archivedFiles.map(parseArchivedSceneRow);
+        if (archivedDescriptors.some((scene) => !scene)) throw new Error("Cannot collect content while archived scene metadata is unreadable");
+        const archivedReferencesFile = archivedDescriptors.some((scene) => scene?.file.sha256 === key);
+        const pointers = (await this.db().query("SELECT pointer_json FROM content_cached_maps", [])).values ?? [];
+        const currentMapVersions = new Set(pointers.map((row) => (JSON.parse(String(row.pointer_json)) as ContentMapPointer).version));
+        const currentMapRows = (await this.db().query("SELECT value_json FROM content_sync_rows WHERE entity = 'map'", [])).values ?? [];
+        for (const row of currentMapRows) currentMapVersions.add((JSON.parse(String(row.value_json)) as ContentMapPointer).version);
+        const inventories = (await this.db().query("SELECT version, inventory_json FROM content_map_inventories", [])).values ?? [];
+        const mapReferencesFile = inventories.some((row) => {
+          if (!currentMapVersions.has(String(row.version))) return false;
+          const inventory = JSON.parse(String(row.inventory_json)) as ContentMapInventory;
+          return inventory.files.some((file) => file.sha256 === key && required(file.path));
+        });
+        if (activeReferencesFile || retainedReferencesFile || syncReferencesFile || archivedReferencesFile || mapReferencesFile) {
+          throw new Error(`Cannot delete content file referenced by active or retained content: ${key}`);
+        }
+        const path = blobPath(key);
+        try {
+          await Filesystem.deleteFile({ path, directory: Directory.Data });
+        } catch (error) {
+          if (!isMissingFile(error)) throw error;
+        }
+        await this.db().run("DELETE FROM content_files WHERE hash = ?", [key]);
+        this.recordedSizes?.delete(key);
+        this.revokeHashUrls(key);
+      }),
+    );
   }
 
   async getRetainedParks(): Promise<RetainedPark[]> {
@@ -479,7 +519,8 @@ export class NativeContentStore implements ContentStore {
       const db = this.db();
       await db.executeSet(
         [...unique].map(([parkId, retained]) => ({
-          statement: "INSERT OR REPLACE INTO content_retained_parks(park_id, park_json, scene_file_json) VALUES(?, ?, COALESCE(?, (SELECT scene_file_json FROM content_retained_parks WHERE park_id = ?)))",
+          statement:
+            "INSERT OR REPLACE INTO content_retained_parks(park_id, park_json, scene_file_json) VALUES(?, ?, COALESCE(?, (SELECT scene_file_json FROM content_retained_parks WHERE park_id = ?)))",
           values: [parkId, JSON.stringify(retained.park), retained.sceneFile ? JSON.stringify(retained.sceneFile) : null, parkId],
         })),
         true,
@@ -489,10 +530,10 @@ export class NativeContentStore implements ContentStore {
 
   async clearActiveRelease(expectedActiveId: string): Promise<void> {
     await this.exclusive(async () => {
-      const result = await this.db().run(
-        "UPDATE content_active SET release_id = NULL WHERE singleton = ? AND release_id = ?",
-        [ACTIVE_POINTER, expectedActiveId],
-      );
+      const result = await this.db().run("UPDATE content_active SET release_id = NULL WHERE singleton = ? AND release_id = ?", [
+        ACTIVE_POINTER,
+        expectedActiveId,
+      ]);
       if ((result.changes?.changes ?? 0) !== 1 && (await this.getActiveId()) !== null) {
         throw new Error("Active content changed before its legacy pointer could be cleared");
       }
@@ -501,10 +542,10 @@ export class NativeContentStore implements ContentStore {
 
   async getArchivedScene(releaseId: string, scene: string): Promise<ArchivedScene | undefined> {
     assertArchivedSceneIdentity(releaseId, scene);
-    const rows = await this.db().query(
-      "SELECT release_id, scene, file_json FROM content_archived_scenes WHERE release_id = ? AND scene = ?",
-      [releaseId, scene],
-    );
+    const rows = await this.db().query("SELECT release_id, scene, file_json FROM content_archived_scenes WHERE release_id = ? AND scene = ?", [
+      releaseId,
+      scene,
+    ]);
     const row = rows.values?.[0];
     if (!row) return undefined;
     if (row.release_id !== releaseId || row.scene !== scene || typeof row.file_json !== "string") {
@@ -518,17 +559,16 @@ export class NativeContentStore implements ContentStore {
     const descriptor: ArchivedScene = { releaseId: scene.releaseId, scene: scene.scene, file: { ...scene.file } };
     const fileJson = JSON.stringify(descriptor.file);
     await this.exclusive(async () => {
-      await this.db().run(
-        "INSERT OR REPLACE INTO content_archived_scenes(release_id, scene, file_json) VALUES(?, ?, ?)",
-        [descriptor.releaseId, descriptor.scene, fileJson],
-      );
+      await this.db().run("INSERT OR REPLACE INTO content_archived_scenes(release_id, scene, file_json) VALUES(?, ?, ?)", [
+        descriptor.releaseId,
+        descriptor.scene,
+        fileJson,
+      ]);
     });
   }
 
   async listArchivedScenes(): Promise<ArchivedScene[]> {
-    const rows = await this.db().query(
-      "SELECT release_id, scene, file_json FROM content_archived_scenes ORDER BY release_id, scene",
-    );
+    const rows = await this.db().query("SELECT release_id, scene, file_json FROM content_archived_scenes ORDER BY release_id, scene");
     return (rows.values ?? []).flatMap((row) => {
       const descriptor = parseArchivedSceneRow(row);
       return descriptor ? [descriptor] : [];
@@ -540,7 +580,9 @@ export class NativeContentStore implements ContentStore {
       const db = this.db();
       await db.beginTransaction();
       try {
-        const rows = await db.query("SELECT entity, row_id, value_json FROM content_sync_rows WHERE environment = ? ORDER BY entity, position, row_id", [environment]);
+        const rows = await db.query("SELECT entity, row_id, value_json FROM content_sync_rows WHERE environment = ? ORDER BY entity, position, row_id", [
+          environment,
+        ]);
         const cursorRows = await db.query("SELECT revision, source_id FROM content_sync_cursors WHERE environment = ?", [environment]);
         const rawCursor = cursorRows.values?.[0]?.revision;
         const rawSource = cursorRows.values?.[0]?.source_id;
@@ -562,7 +604,9 @@ export class NativeContentStore implements ContentStore {
         }
         const parks = parsed.filter((row) => row.entity === "park").map((row) => row.value as ContentSyncState["parks"][number]);
         const boundaries = parsed.filter((row) => row.entity === "boundary").map((row) => row.value as ContentSyncState["boundaries"]["features"][number]);
-        const drives = Object.fromEntries(parsed.filter((row) => row.entity === "drive").map((row) => [row.id, row.value as ContentSyncState["drive"]["parks"][string]]));
+        const drives = Object.fromEntries(
+          parsed.filter((row) => row.entity === "drive").map((row) => [row.id, row.value as ContentSyncState["drive"]["parks"][string]]),
+        );
         const hubs = parsed.find((row) => row.entity === "hubs")?.value as ContentSyncState["drive"]["hubs"] | undefined;
         if (!Array.isArray(hubs)) {
           await db.commitTransaction();
@@ -575,7 +619,7 @@ export class NativeContentStore implements ContentStore {
           boundaries: { type: "FeatureCollection", features: boundaries },
           drive: { hubs, parks: drives },
           assets: parsed.filter((row) => row.entity === "asset").map((row) => row.value as ContentSyncState["assets"][number]),
-          map: parsed.find((row) => row.entity === "map")?.value as ContentSyncState["map"] ?? null,
+          map: (parsed.find((row) => row.entity === "map")?.value as ContentSyncState["map"]) ?? null,
         };
         const catalogue = parsed.find((row) => row.entity === "catalogue")?.value as ContentSyncState["catalogue"] | undefined;
         if (catalogue) state.catalogue = catalogue;
@@ -596,8 +640,16 @@ export class NativeContentStore implements ContentStore {
     return { revision: row.revision, sourceId: row.source_id, readerVersion };
   }
 
-  async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false): Promise<void> {
-    if (!resetCursor && expectedRevision !== null && state.revision < expectedRevision) throw new Error("Content snapshot cannot move the sync cursor backwards");
+  async replaceSyncState(
+    environment: ContentEnvironment,
+    expectedRevision: number | null,
+    state: ContentSyncState,
+    sourceId: string,
+    expectedSourceId: string | null,
+    resetCursor = false,
+  ): Promise<void> {
+    if (!resetCursor && expectedRevision !== null && state.revision < expectedRevision)
+      throw new Error("Content snapshot cannot move the sync cursor backwards");
     await this.exclusive(async () => {
       const rows: Array<{ entity: string; id: string; value: unknown; position: number }> = [];
       state.parks.forEach((value, position) => rows.push({ entity: "park", id: value.id, value, position }));
@@ -609,15 +661,39 @@ export class NativeContentStore implements ContentStore {
       // Older builds skip this row; without it they read the stored boundaries as incomplete and fetch a fresh snapshot.
       if (state.catalogue) rows.push({ entity: "catalogue", id: "default", value: state.catalogue, position: 0 });
       const statements = [
-        { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN ((? IS NULL AND NOT EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ?)) OR EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id IS ?)) OR (? = 1 AND ? IS NULL AND ? IS NULL AND EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND (typeof(revision) != 'integer' OR revision < -9007199254740991 OR revision > 9007199254740991 OR typeof(source_id) != 'text'))) THEN 1 ELSE 0 END", values: [expectedRevision, environment, environment, expectedRevision, expectedSourceId, resetCursor ? 1 : 0, expectedRevision, expectedSourceId, environment] },
+        {
+          statement:
+            "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN ((? IS NULL AND NOT EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ?)) OR EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id IS ?)) OR (? = 1 AND ? IS NULL AND ? IS NULL AND EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND (typeof(revision) != 'integer' OR revision < -9007199254740991 OR revision > 9007199254740991 OR typeof(source_id) != 'text'))) THEN 1 ELSE 0 END",
+          values: [
+            expectedRevision,
+            environment,
+            environment,
+            expectedRevision,
+            expectedSourceId,
+            resetCursor ? 1 : 0,
+            expectedRevision,
+            expectedSourceId,
+            environment,
+          ],
+        },
         { statement: "DELETE FROM content_sync_guard", values: [] },
         { statement: "DELETE FROM content_sync_rows WHERE environment = ?", values: [environment] },
         ...rows.map((row) => ({
           statement: "INSERT OR REPLACE INTO content_sync_rows(environment, entity, row_id, position, value_json) VALUES(?, ?, ?, ?, ?)",
           values: [environment, row.entity, row.id, row.position, JSON.stringify(row.value)],
         })),
-        ...(state.map ? [{ statement: "INSERT OR REPLACE INTO content_cached_maps(environment, pointer_json) VALUES(?, ?)", values: [environment, JSON.stringify(state.map)] }] : []),
-        { statement: "INSERT OR REPLACE INTO content_sync_cursors(environment, revision, source_id, reader_version) VALUES(?, ?, ?, ?)", values: [environment, state.revision, sourceId, CONTENT_READER_VERSION] },
+        ...(state.map
+          ? [
+              {
+                statement: "INSERT OR REPLACE INTO content_cached_maps(environment, pointer_json) VALUES(?, ?)",
+                values: [environment, JSON.stringify(state.map)],
+              },
+            ]
+          : []),
+        {
+          statement: "INSERT OR REPLACE INTO content_sync_cursors(environment, revision, source_id, reader_version) VALUES(?, ?, ?, ?)",
+          values: [environment, state.revision, sourceId, CONTENT_READER_VERSION],
+        },
       ];
       await this.db().executeSet(statements, true);
     });
@@ -629,26 +705,40 @@ export class NativeContentStore implements ContentStore {
         throw new Error("Content sync cursor changed before the batch could be committed");
       }
       const statements: Array<{ statement: string; values: (string | number | null)[] }> = [
-        { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id = ?) THEN 1 ELSE 0 END", values: [environment, expectedRevision, sourceId] },
+        {
+          statement:
+            "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id = ?) THEN 1 ELSE 0 END",
+          values: [environment, expectedRevision, sourceId],
+        },
         { statement: "DELETE FROM content_sync_guard", values: [] },
         ...batch.changes.flatMap((change) => {
-        if (change.entity === "map" && change.op === "upsert" && change.value === null) return [{
-          statement: "DELETE FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?",
-          values: [environment, change.entity, change.id],
-        }];
-        if (change.op === "delete") return [{
-          statement: "DELETE FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?",
-          values: [environment, change.entity, change.id],
-        }];
-        const mutation = [{
-          statement: "INSERT OR REPLACE INTO content_sync_rows(environment, entity, row_id, position, value_json) VALUES(?, ?, ?, COALESCE((SELECT position FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?), (SELECT COALESCE(MAX(position), -1) + 1 FROM content_sync_rows WHERE environment = ? AND entity = ?)), ?)",
-          values: [environment, change.entity, change.id, environment, change.entity, change.id, environment, change.entity, JSON.stringify(change.value)],
-        }];
-        if (change.entity === "map" && change.value) mutation.push({
-          statement: "INSERT OR REPLACE INTO content_cached_maps(environment, pointer_json) VALUES(?, ?)",
-          values: [environment, JSON.stringify(change.value)],
-        });
-        return mutation;
+          if (change.entity === "map" && change.op === "upsert" && change.value === null)
+            return [
+              {
+                statement: "DELETE FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?",
+                values: [environment, change.entity, change.id],
+              },
+            ];
+          if (change.op === "delete")
+            return [
+              {
+                statement: "DELETE FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?",
+                values: [environment, change.entity, change.id],
+              },
+            ];
+          const mutation = [
+            {
+              statement:
+                "INSERT OR REPLACE INTO content_sync_rows(environment, entity, row_id, position, value_json) VALUES(?, ?, ?, COALESCE((SELECT position FROM content_sync_rows WHERE environment = ? AND entity = ? AND row_id = ?), (SELECT COALESCE(MAX(position), -1) + 1 FROM content_sync_rows WHERE environment = ? AND entity = ?)), ?)",
+              values: [environment, change.entity, change.id, environment, change.entity, change.id, environment, change.entity, JSON.stringify(change.value)],
+            },
+          ];
+          if (change.entity === "map" && change.value)
+            mutation.push({
+              statement: "INSERT OR REPLACE INTO content_cached_maps(environment, pointer_json) VALUES(?, ?)",
+              values: [environment, JSON.stringify(change.value)],
+            });
+          return mutation;
         }),
       ];
       statements.push({
@@ -657,33 +747,44 @@ export class NativeContentStore implements ContentStore {
       });
       await this.db().executeSet(statements, true);
       const confirmed = await this.db().query("SELECT revision, source_id FROM content_sync_cursors WHERE environment = ?", [environment]);
-      if (confirmed.values?.[0]?.revision !== batch.revision || confirmed.values?.[0]?.source_id !== sourceId) throw new Error("Content sync cursor was not advanced with its batch");
+      if (confirmed.values?.[0]?.revision !== batch.revision || confirmed.values?.[0]?.source_id !== sourceId)
+        throw new Error("Content sync cursor was not advanced with its batch");
     });
   }
 
   async advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string): Promise<void> {
     await this.exclusive(async () => {
       if (revision < expectedRevision) throw new Error("Content sync cursor cannot move backwards");
-      await this.db().executeSet([
-        { statement: "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id = ?) THEN 1 ELSE 0 END", values: [environment, expectedRevision, sourceId] },
-        { statement: "DELETE FROM content_sync_guard", values: [] },
-        { statement: "UPDATE content_sync_cursors SET revision = ? WHERE environment = ? AND revision = ? AND source_id = ?", values: [revision, environment, expectedRevision, sourceId] },
-      ], true);
+      await this.db().executeSet(
+        [
+          {
+            statement:
+              "INSERT INTO content_sync_guard(ok) SELECT CASE WHEN EXISTS (SELECT 1 FROM content_sync_cursors WHERE environment = ? AND revision = ? AND source_id = ?) THEN 1 ELSE 0 END",
+            values: [environment, expectedRevision, sourceId],
+          },
+          { statement: "DELETE FROM content_sync_guard", values: [] },
+          {
+            statement: "UPDATE content_sync_cursors SET revision = ? WHERE environment = ? AND revision = ? AND source_id = ?",
+            values: [revision, environment, expectedRevision, sourceId],
+          },
+        ],
+        true,
+      );
     });
   }
 
   async getMapInventory(version: string): Promise<ContentMapInventory | null> {
     const rows = await this.db().query("SELECT inventory_json FROM content_map_inventories WHERE version = ?", [version]);
     const value = rows.values?.[0]?.inventory_json;
-    return typeof value === "string" ? JSON.parse(value) as ContentMapInventory : null;
+    return typeof value === "string" ? (JSON.parse(value) as ContentMapInventory) : null;
   }
 
   async putMapInventory(inventory: ContentMapInventory): Promise<void> {
     await this.exclusive(async () => {
-      await this.db().run(
-        "INSERT OR REPLACE INTO content_map_inventories(version, inventory_json) VALUES(?, ?)",
-        [inventory.version, JSON.stringify(inventory)],
-      );
+      await this.db().run("INSERT OR REPLACE INTO content_map_inventories(version, inventory_json) VALUES(?, ?)", [
+        inventory.version,
+        JSON.stringify(inventory),
+      ]);
     });
   }
 
@@ -692,17 +793,21 @@ export class NativeContentStore implements ContentStore {
       const rows = (await this.db().query("SELECT version FROM content_map_inventories", [])).values ?? [];
       const keep = new Set(keepVersions);
       const stale = rows.map((row) => String(row.version)).filter((version) => !keep.has(version));
-      if (stale.length) await this.db().executeSet(stale.map((version) => ({
-        statement: "DELETE FROM content_map_inventories WHERE version = ?",
-        values: [version],
-      })), true);
+      if (stale.length)
+        await this.db().executeSet(
+          stale.map((version) => ({
+            statement: "DELETE FROM content_map_inventories WHERE version = ?",
+            values: [version],
+          })),
+          true,
+        );
     });
   }
 
   async getCachedMapPointer(environment: ContentEnvironment): Promise<ContentMapPointer | null> {
     const rows = await this.db().query("SELECT pointer_json FROM content_cached_maps WHERE environment = ?", [environment]);
     const value = rows.values?.[0]?.pointer_json;
-    return typeof value === "string" ? JSON.parse(value) as ContentMapPointer : null;
+    return typeof value === "string" ? (JSON.parse(value) as ContentMapPointer) : null;
   }
 
   async close(): Promise<void> {
@@ -793,19 +898,18 @@ export class NativeContentStore implements ContentStore {
   }
 
   private async recordFile(hash: string, size: number) {
-    await this.db().run(
-      "INSERT OR REPLACE INTO content_files(hash, byte_size) VALUES(?, ?)",
-      [hash, size],
-    );
+    await this.db().run("INSERT OR REPLACE INTO content_files(hash, byte_size) VALUES(?, ?)", [hash, size]);
     this.recordedSizes?.set(hash, size);
   }
 
   private recordedFiles(): Promise<Map<string, number>> {
-    this.recordedSizesLoad ??= this.db().query("SELECT hash, byte_size FROM content_files", []).then((result) => {
-      const sizes = new Map((result.values ?? []).map((row) => [String(row.hash), Number(row.byte_size)]));
-      this.recordedSizes = sizes;
-      return sizes;
-    });
+    this.recordedSizesLoad ??= this.db()
+      .query("SELECT hash, byte_size FROM content_files", [])
+      .then((result) => {
+        const sizes = new Map((result.values ?? []).map((row) => [String(row.hash), Number(row.byte_size)]));
+        this.recordedSizes = sizes;
+        return sizes;
+      });
     return this.recordedSizesLoad;
   }
 

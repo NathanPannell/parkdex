@@ -5,12 +5,15 @@ const mocks = vi.hoisted(() => ({
   build: "42",
   storage: new Map<string, string>(),
   getInfo: vi.fn(async () => ({ build: mocks.build, version: "1.0.0", id: "app.parkdex", name: "Parkdex" })),
-  getNativePackageInstallInfo: vi.fn(async () => null as {
-    packageName: string;
-    firstInstallTime: number;
-    lastUpdateTime: number;
-    versionCode: number;
-  } | null),
+  getNativePackageInstallInfo: vi.fn(
+    async () =>
+      null as {
+        packageName: string;
+        firstInstallTime: number;
+        lastUpdateTime: number;
+        versionCode: number;
+      } | null,
+  ),
   resumeListener: null as (() => void) | null,
   clearLocalNativeSession: vi.fn(async () => undefined),
   addListener: vi.fn(async (_event: string, listener: () => void) => {
@@ -39,7 +42,21 @@ vi.mock("./accounts/authClient", () => ({ clearLocalNativeSession: mocks.clearLo
 import { FEATURE_FLAGS } from "../../worker/appConfig";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { activeAppConfig, checkInAppConfig, currentUpdateStatus, FEATURE_FLAG_DEFAULTS, initAppConfig, isFeatureEnabled, parseRemoteAppConfig, remoteFlag, startAppConfigCheckIns, subscribeFeatureFlags, subscribeUpdateStatus, useFeatureFlag, useRemoteFlag } from "./appConfig";
+import {
+  activeAppConfig,
+  checkInAppConfig,
+  currentUpdateStatus,
+  FEATURE_FLAG_DEFAULTS,
+  initAppConfig,
+  isFeatureEnabled,
+  parseRemoteAppConfig,
+  remoteFlag,
+  startAppConfigCheckIns,
+  subscribeFeatureFlags,
+  subscribeUpdateStatus,
+  useFeatureFlag,
+  useRemoteFlag,
+} from "./appConfig";
 import { apiEnvironment, apiPointerOverride } from "./apiPointer";
 import { contentChannelOverride } from "./contentChannel";
 
@@ -106,7 +123,10 @@ describe("app config", () => {
     vi.useFakeTimers();
     mocks.getInfo.mockImplementation(() => new Promise(() => undefined));
     mocks.getNativePackageInstallInfo.mockResolvedValue({
-      packageName: "app.parkdex", firstInstallTime: 1_790_000_000_000, lastUpdateTime: 1_790_000_000_000, versionCode: 42,
+      packageName: "app.parkdex",
+      firstInstallTime: 1_790_000_000_000,
+      lastUpdateTime: 1_790_000_000_000,
+      versionCode: 42,
     });
 
     const initialized = initAppConfig();
@@ -121,7 +141,10 @@ describe("app config", () => {
   it("falls back to package install info when App.getInfo fails", async () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValue({
-      packageName: "app.parkdex", firstInstallTime: 1_790_000_000_000, lastUpdateTime: 1_790_000_000_000, versionCode: 42,
+      packageName: "app.parkdex",
+      firstInstallTime: 1_790_000_000_000,
+      lastUpdateTime: 1_790_000_000_000,
+      versionCode: 42,
     });
 
     await expect(initAppConfig()).resolves.toMatchObject({ platform: "android", build: 42 });
@@ -131,10 +154,13 @@ describe("app config", () => {
   it("retries unknown Android build info on resume without checking in or caching build zero", async () => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-    mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: 0, contentChannel: "main", flags: { crews: true } }),
-      fetchedAt: "2026-09-01T00:00:00.000Z",
-    }));
+    mocks.storage.set(
+      "parkdex.app-config.v1",
+      JSON.stringify({
+        config: answer({ build: 0, contentChannel: "main", flags: { crews: true } }),
+        fetchedAt: "2026-09-01T00:00:00.000Z",
+      }),
+    );
 
     const initial = await initAppConfig();
     expect(initial).toMatchObject({ platform: "android", build: 0, contentChannel: null, fetchedAt: null });
@@ -148,7 +174,10 @@ describe("app config", () => {
     expect(fetcher).not.toHaveBeenCalled();
 
     mocks.getNativePackageInstallInfo.mockResolvedValue({
-      packageName: "app.parkdex", firstInstallTime: 1_790_000_000_000, lastUpdateTime: 1_790_000_000_000, versionCode: 42,
+      packageName: "app.parkdex",
+      firstInstallTime: 1_790_000_000_000,
+      lastUpdateTime: 1_790_000_000_000,
+      versionCode: 42,
     });
     mocks.resumeListener?.();
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
@@ -170,23 +199,31 @@ describe("app config", () => {
   ])("uses only the recovered build's cached update gate while offline (cache build $cacheBuild)", async ({ cacheBuild, expectedUpdate }) => {
     mocks.getInfo.mockRejectedValue(new Error("App plugin unavailable"));
     mocks.getNativePackageInstallInfo.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-    mocks.storage.set("parkdex.app-config.v1", JSON.stringify({
-      config: answer({ build: cacheBuild, contentChannel: "main", flags: { crews: true }, update: "required" }),
-      fetchedAt: "2026-09-01T00:00:00.000Z",
-    }));
+    mocks.storage.set(
+      "parkdex.app-config.v1",
+      JSON.stringify({
+        config: answer({ build: cacheBuild, contentChannel: "main", flags: { crews: true }, update: "required" }),
+        fetchedAt: "2026-09-01T00:00:00.000Z",
+      }),
+    );
 
     const initial = await initAppConfig();
     expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { crews: false } });
     expect(currentUpdateStatus()).toBe("none");
 
-    const fetcher = vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch;
+    const fetcher = vi.fn(async () => {
+      throw new TypeError("offline");
+    }) as unknown as typeof fetch;
     vi.stubGlobal("fetch", fetcher);
     startAppConfigCheckIns();
     await vi.waitFor(() => expect(mocks.getNativePackageInstallInfo).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(mocks.resumeListener).toBeTypeOf("function"));
 
     mocks.getNativePackageInstallInfo.mockResolvedValue({
-      packageName: "app.parkdex", firstInstallTime: 1_790_000_000_000, lastUpdateTime: 1_790_000_000_000, versionCode: 42,
+      packageName: "app.parkdex",
+      firstInstallTime: 1_790_000_000_000,
+      lastUpdateTime: 1_790_000_000_000,
+      versionCode: 42,
     });
     mocks.resumeListener?.();
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
@@ -258,7 +295,13 @@ describe("app config", () => {
     await initAppConfig();
     expect(await checkInAppConfig(respond({ error: "down" }, 503))).toBeNull();
     expect(await checkInAppConfig(respond(answer({ build: 7 })))).toBeNull();
-    expect(await checkInAppConfig(vi.fn(async () => { throw new TypeError("offline"); }) as unknown as typeof fetch)).toBeNull();
+    expect(
+      await checkInAppConfig(
+        vi.fn(async () => {
+          throw new TypeError("offline");
+        }) as unknown as typeof fetch,
+      ),
+    ).toBeNull();
     expect(mocks.storage.has("parkdex.app-config.v1")).toBe(false);
   });
 

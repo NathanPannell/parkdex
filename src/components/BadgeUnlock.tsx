@@ -34,7 +34,11 @@ export function BadgeUnlock({ unlocks, onOpen, variants, compact = false }: Prop
       onClick={onOpen}
       aria-label={`Badge earned: ${badges.map((badge) => badge.name).join(", ")}. Open your badges.`}
     >
-      <motion.span initial={{ rotate: -20, scale: 0.4 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 12, delay: 0.3 }}>
+      <motion.span
+        initial={{ rotate: -20, scale: 0.4 }}
+        animate={{ rotate: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 420, damping: 12, delay: 0.3 }}
+      >
         <AchievementBadge badge={first} size={compact ? 30 : 58} />
       </motion.span>
       <span className="badge-unlock__text">

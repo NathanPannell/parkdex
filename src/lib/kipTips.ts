@@ -11,15 +11,7 @@ import { captureProductEvent } from "./productAnalytics";
  * re-teach it means bumping its version.
  */
 
-export type KipTipId =
-  | "crew-leader"
-  | "crew-outsider"
-  | "crew-joined"
-  | "points"
-  | "photo-crop"
-  | "dex"
-  | "badge-first"
-  | "install-web";
+export type KipTipId = "crew-leader" | "crew-outsider" | "crew-joined" | "points" | "photo-crop" | "dex" | "badge-first" | "install-web";
 
 export type KipTipPage = { title: string; body: string; pose: KipPose };
 export type KipTip = { id: KipTipId; version: number; pages: readonly [KipTipPage] | readonly [KipTipPage, KipTipPage] };
@@ -44,12 +36,16 @@ export const KIP_TIPS: { readonly [Id in KipTipId]: KipTip & { id: Id } } = {
   "crew-joined": {
     id: "crew-joined",
     version: 1,
-    pages: [{ pose: "cheer", title: "You're in the crew!", body: "You all hold this park now. If anyone takes it, the whole crew loses it, so keep visiting." }],
+    pages: [
+      { pose: "cheer", title: "You're in the crew!", body: "You all hold this park now. If anyone takes it, the whole crew loses it, so keep visiting." },
+    ],
   },
   points: {
     id: "points",
     version: 1,
-    pages: [{ pose: "talk", title: "Points by the hour", body: "Your flag earns 1 point every hour it flies. Planting, taking and visiting add a little extra." }],
+    pages: [
+      { pose: "talk", title: "Points by the hour", body: "Your flag earns 1 point every hour it flies. Planting, taking and visiting add a little extra." },
+    ],
   },
   "photo-crop": {
     id: "photo-crop",
@@ -59,7 +55,13 @@ export const KIP_TIPS: { readonly [Id in KipTipId]: KipTip & { id: Id } } = {
   dex: {
     id: "dex",
     version: 1,
-    pages: [{ pose: "map", title: "This is your Dex", body: "Every park you visit lands here, sorted by region. Turn off “Only my visits” to see what's left to find." }],
+    pages: [
+      {
+        pose: "map",
+        title: "This is your Dex",
+        body: "Every park you visit lands here, sorted by region. Turn off “Only my visits” to see what's left to find.",
+      },
+    ],
   },
   "badge-first": {
     id: "badge-first",
@@ -201,7 +203,7 @@ export function setKipTipsPaused(value: boolean): void {
 
 /** The tip to show now, or null. Stable between changes, for useSyncExternalStore. */
 export function currentKipTip(): ShownKipTip | null {
-  return paused ? null : queue[0] ?? null;
+  return paused ? null : (queue[0] ?? null);
 }
 
 /** Called by the host once a tip is on screen. Records it for this session and sends `tip_shown` once. */

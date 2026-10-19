@@ -64,12 +64,13 @@ function restoredClaim(id: string, rarity: Rarity): Claim {
 describe("claim progress hydration", () => {
   it("waits on the splash until the same build and package install are confirmed", () => {
     vi.stubGlobal("localStorage", {
-      getItem: () => JSON.stringify({
-        onboarded: true,
-        muted: true,
-        onboardingBuildId: "source-sha",
-        onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
-      }),
+      getItem: () =>
+        JSON.stringify({
+          onboarded: true,
+          muted: true,
+          onboardingBuildId: "source-sha",
+          onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+        }),
     });
 
     const loaded = load();
@@ -81,12 +82,14 @@ describe("claim progress hydration", () => {
       onboardingBuildId: "source-sha",
       onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
     });
-    expect(reducer(loaded, {
-      type: "installReady",
-      buildId: "source-sha",
-      packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
-      native: true,
-    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
+    expect(
+      reducer(loaded, {
+        type: "installReady",
+        buildId: "source-sha",
+        packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
+        native: true,
+      }),
+    ).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("keeps the splash for a visitor who has not completed onboarding", () => {
@@ -131,19 +134,18 @@ describe("claim progress hydration", () => {
       getItem: () => JSON.stringify({ onboarded: true, muted: false, onboardingBuildId: "old-source-sha", onboardingPackageIdentity: null }),
     });
 
-    expect(reducer(load(), {
-      type: "installReady",
-      buildId: "new-source-sha",
-      packageInstallIdentity: null,
-      native: false,
-    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
+    expect(
+      reducer(load(), {
+        type: "installReady",
+        buildId: "new-source-sha",
+        packageInstallIdentity: null,
+        native: false,
+      }),
+    ).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("preserves the legacy claims and other local preferences when saving onboarding identity", () => {
-    const stored = new Map([[
-      "parkdex-mockup-v1",
-      JSON.stringify({ claims: { "park-a": { at: "saved", photo: "old-photo" } }, unrelatedPreference: "keep" }),
-    ]]);
+    const stored = new Map([["parkdex-mockup-v1", JSON.stringify({ claims: { "park-a": { at: "saved", photo: "old-photo" } }, unrelatedPreference: "keep" })]]);
     const storage = {
       getItem: (key: string) => stored.get(key) ?? null,
       setItem: (key: string, value: string) => stored.set(key, value),
@@ -168,18 +170,24 @@ describe("claim progress hydration", () => {
 
   it("restores every owner claim and marks progress ready", () => {
     const restoredClaims: Record<string, Claim> = {};
-    for (const [rarity, count] of [["common", 3], ["uncommon", 3]] as const) {
+    for (const [rarity, count] of [
+      ["common", 3],
+      ["uncommon", 3],
+    ] as const) {
       for (let index = 0; index < count; index += 1) {
         const id = `${rarity}-${index}`;
         restoredClaims[id] = restoredClaim(id, rarity);
       }
     }
 
-    const restored = reducer({ ...readyState, claims: {}, progressReady: false }, {
-      type: "progressLoaded",
-      ownerKey: "guest",
-      claims: restoredClaims,
-    });
+    const restored = reducer(
+      { ...readyState, claims: {}, progressReady: false },
+      {
+        type: "progressLoaded",
+        ownerKey: "guest",
+        claims: restoredClaims,
+      },
+    );
     expect(restored.progressReady).toBe(true);
     expect(Object.keys(restored.claims).sort()).toEqual(Object.keys(restoredClaims).sort());
   });
@@ -255,12 +263,15 @@ describe("claim progress hydration", () => {
   });
 
   it("keeps metadata ready when later photo hydration fails", () => {
-    const afterMetadata = reducer({ ...readyState, claims: {}, progressReady: false }, {
-      type: "progressLoaded",
-      ownerKey: "guest",
-      metadataOnly: true,
-      claims: { [park.id]: restoredClaim(park.id, "common") },
-    });
+    const afterMetadata = reducer(
+      { ...readyState, claims: {}, progressReady: false },
+      {
+        type: "progressLoaded",
+        ownerKey: "guest",
+        metadataOnly: true,
+        claims: { [park.id]: restoredClaim(park.id, "common") },
+      },
+    );
     const afterPhotoFailure = reducer(afterMetadata, {
       type: "progressFailed",
       ownerKey: "guest",

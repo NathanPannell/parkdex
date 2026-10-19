@@ -17,7 +17,6 @@ import {
   type MapManifest,
   type ContentMapPointer,
   type ContentPayload,
-  type ContentSnapshot,
   type ContentSyncState,
   type ContentChangesResponse,
   type ContentChange,
@@ -26,9 +25,7 @@ import {
 } from "../contracts";
 import type { Park } from "../../parks";
 
-const PARK_FIELDS = [
-  "id", "name", "short", "category", "region", "lat", "lng", "biome", "shape", "rarity", "scene", "seed", "blurb",
-] as const;
+const PARK_FIELDS = ["id", "name", "short", "category", "region", "lat", "lng", "biome", "shape", "rarity", "scene", "seed", "blurb"] as const;
 const CATEGORIES = new Set(["national", "provincial", "regional", "municipal", "community"]);
 const BIOMES = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPES = new Set(["circle", "hex", "shield", "arch", "seal"]);
@@ -86,7 +83,10 @@ function uniqueStringArray(value: unknown, label: string, pattern?: RegExp): str
 }
 
 function encodeLogicalPath(path: string) {
-  return path.split("/").map((part) => encodeURIComponent(part)).join("/");
+  return path
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
 }
 
 function assertSafeLogicalPath(path: string) {
@@ -176,12 +176,17 @@ function parseMapManifestLayout(value: unknown, label: string): MapManifest {
 }
 
 function isSupportedManifestPath(path: string): boolean {
-  return path === "data/parks.json" || path === "data/drive.json" || path === "boundaries.geojson" ||
+  return (
+    path === "data/parks.json" ||
+    path === "data/drive.json" ||
+    path === "boundaries.geojson" ||
     /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(path) ||
     /^art\/kip\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.webp$/.test(path) ||
     /^art\/products\/[A-Za-z0-9._ -]+\.webp$/.test(path) ||
-    /^map\/island\/manifest\.json$/.test(path) || /^map\/island\/\d{3,}\.bin$/.test(path) ||
-    /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path);
+    /^map\/island\/manifest\.json$/.test(path) ||
+    /^map\/island\/\d{3,}\.bin$/.test(path) ||
+    /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)
+  );
 }
 
 function expectedFileUrl(path: string, releaseId: string) {
@@ -256,7 +261,8 @@ export function parseContentManifest(value: unknown, channel: ContentChannel): C
     chunkBytes: positiveInteger(mapManifestValue.chunkBytes, "manifest.mapManifest.chunkBytes"),
     count: positiveInteger(mapManifestValue.count, "manifest.mapManifest.count"),
   };
-  if (mapManifest.count !== Math.ceil(mapManifest.size / mapManifest.chunkBytes)) throw new ContentValidationError("map manifest chunk count does not match its size");
+  if (mapManifest.count !== Math.ceil(mapManifest.size / mapManifest.chunkBytes))
+    throw new ContentValidationError("map manifest chunk count does not match its size");
   const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
   if (chunks.length !== mapManifest.count) throw new ContentValidationError("map chunk inventory does not match its manifest");
   for (let index = 0; index < mapManifest.count; index++) {
@@ -323,7 +329,21 @@ function validatePark(value: unknown, index: number): Park {
     scene = string(park.scene, `${label}.scene`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(scene)) throw new ContentValidationError(`${label}.scene is invalid`);
   }
-  return { id, name, short, category: category as Park["category"], region, lat, lng, biome: biome as Park["biome"], shape: shape as Park["shape"], rarity: rarity as Park["rarity"], seed: park.seed, blurb, scene };
+  return {
+    id,
+    name,
+    short,
+    category: category as Park["category"],
+    region,
+    lat,
+    lng,
+    biome: biome as Park["biome"],
+    shape: shape as Park["shape"],
+    rarity: rarity as Park["rarity"],
+    seed: park.seed,
+    blurb,
+    scene,
+  };
 }
 
 export function validateParkRecord(value: unknown, label = "park"): Park {
@@ -341,7 +361,8 @@ function validateCoordinates(value: unknown, label: string) {
     finiteNumber(position[0], `${label}[${index}].longitude`, -180, 180);
     finiteNumber(position[1], `${label}[${index}].latitude`, -90, 90);
     for (let coordinate = 2; coordinate < position.length; coordinate++) {
-      if (typeof position[coordinate] !== "number" || !Number.isFinite(position[coordinate])) throw new ContentValidationError(`${label}[${index}] has a non-finite coordinate`);
+      if (typeof position[coordinate] !== "number" || !Number.isFinite(position[coordinate]))
+        throw new ContentValidationError(`${label}[${index}] has a non-finite coordinate`);
     }
     if (index === 0) first = position;
     if (index === value.length - 1) last = position;
@@ -383,7 +404,12 @@ function validateBoundaries(value: unknown, parks: Park[], manifest: ContentMani
     return rawFeature;
   });
   if (seen.size !== parks.length) throw new ContentValidationError("boundary park references do not match the catalog");
-  if (!sameOrderedIds(features.map((feature) => (feature as { properties: { id: string } }).properties.id), manifest.boundaryIds)) {
+  if (
+    !sameOrderedIds(
+      features.map((feature) => (feature as { properties: { id: string } }).properties.id),
+      manifest.boundaryIds,
+    )
+  ) {
     throw new ContentValidationError("boundary ids do not match the immutable manifest order");
   }
   return collection as unknown as ContentBoundaries;
@@ -391,8 +417,13 @@ function validateBoundaries(value: unknown, parks: Park[], manifest: ContentMani
 
 export function validateBoundaryFeature(value: unknown, park: Park, label = "boundary"): ContentBoundaries["features"][number] {
   const manifest: ContentManifest = {
-    version: "0".repeat(64), sourceCommit: "0".repeat(40), cdnOrigin: CONTENT_CDN_ORIGIN,
-    files: [], parkIds: [park.id], boundaryIds: [park.id], mapManifest: { size: 1, chunkBytes: 1, count: 1 },
+    version: "0".repeat(64),
+    sourceCommit: "0".repeat(40),
+    cdnOrigin: CONTENT_CDN_ORIGIN,
+    files: [],
+    parkIds: [park.id],
+    boundaryIds: [park.id],
+    mapManifest: { size: 1, chunkBytes: 1, count: 1 },
   };
   const parsed = validateBoundaries({ type: "FeatureCollection", features: [value] }, [park], manifest);
   const feature = parsed.features[0];
@@ -408,7 +439,11 @@ function validateDrive(value: unknown, parks: Park[]): DriveData {
     const label = `data/drive.json.hubs[${index}]`;
     const hub = record(rawHub, label);
     exactKeys(hub, ["name", "lng", "lat"], label);
-    return { name: string(hub.name, `${label}.name`), lng: finiteNumber(hub.lng, `${label}.lng`, -180, 180), lat: finiteNumber(hub.lat, `${label}.lat`, -90, 90) };
+    return {
+      name: string(hub.name, `${label}.name`),
+      lng: finiteNumber(hub.lng, `${label}.lng`, -180, 180),
+      lat: finiteNumber(hub.lat, `${label}.lat`, -90, 90),
+    };
   });
   const rawParks = record(drive.parks, "data/drive.json.parks");
   const parkIds = parks.map((park) => park.id);
@@ -419,11 +454,15 @@ function validateDrive(value: unknown, parks: Park[]): DriveData {
   for (const id of parkIds) {
     const rawData = record(rawParks[id], `data/drive.json.parks.${id}`);
     exactKeys(rawData, ["drive", "walkM"], `data/drive.json.parks.${id}`);
-    if (!Array.isArray(rawData.drive) || rawData.drive.length !== hubs.length) throw new ContentValidationError(`drive routes for ${id} do not match the hub count`);
+    if (!Array.isArray(rawData.drive) || rawData.drive.length !== hubs.length)
+      throw new ContentValidationError(`drive routes for ${id} do not match the hub count`);
     const routes = rawData.drive.map((route, index): [number, number] | null => {
       if (route === null) return null;
       if (!Array.isArray(route) || route.length !== 2) throw new ContentValidationError(`drive route ${id}[${index}] is invalid`);
-      return [finiteNumber(route[0], `drive route ${id}[${index}].distance`, 0, Number.MAX_SAFE_INTEGER), finiteNumber(route[1], `drive route ${id}[${index}].minutes`, 0, Number.MAX_SAFE_INTEGER)];
+      return [
+        finiteNumber(route[0], `drive route ${id}[${index}].distance`, 0, Number.MAX_SAFE_INTEGER),
+        finiteNumber(route[1], `drive route ${id}[${index}].minutes`, 0, Number.MAX_SAFE_INTEGER),
+      ];
     });
     driveParks[id] = { drive: routes, walkM: finiteNumber(rawData.walkM, `drive walk distance ${id}`, 0, Number.MAX_SAFE_INTEGER) };
   }
@@ -463,12 +502,7 @@ function sameOrderedIds(left: string[], right: string[]) {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
-export function validateContentPayload(
-  parksValue: unknown,
-  boundariesValue: unknown,
-  driveValue: unknown,
-  manifest: ContentManifest,
-): ContentPayload {
+export function validateContentPayload(parksValue: unknown, boundariesValue: unknown, driveValue: unknown, manifest: ContentManifest): ContentPayload {
   if (!Array.isArray(parksValue) || parksValue.length === 0) throw new ContentValidationError("data/parks.json must be a non-empty array");
   const parks = parksValue.map(validatePark);
   const parkIds = parks.map((park) => park.id);
@@ -511,7 +545,9 @@ export function validateContentSyncState(value: ContentSyncState): ContentSyncSt
   const parks = value.parks.map((park, index) => validatePark(park, index));
   if (new Set(parks.map((park) => park.id)).size !== parks.length) throw new ContentValidationError("snapshot contains duplicate park ids");
   if (!Array.isArray(value.assets)) throw new ContentValidationError("snapshot.assets must be an array");
-  const assets = value.assets.map((file, index) => parseSyncFile(file, `snapshot.assets[${index}]`, (path) => /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(path)));
+  const assets = value.assets.map((file, index) =>
+    parseSyncFile(file, `snapshot.assets[${index}]`, (path) => /^art\/badges\/scenes\/[a-z0-9][a-z0-9-]*\.webp$/.test(path)),
+  );
   if (new Set(assets.map((file) => file.path)).size !== assets.length) throw new ContentValidationError("snapshot.assets contains duplicate paths");
   let payload: ContentPayload;
   if (parks.length === 0) {
@@ -524,7 +560,8 @@ export function validateContentSyncState(value: ContentSyncState): ContentSyncSt
     exactKeys(drive, ["hubs", "parks"], "snapshot.drive");
     const hubs = validateHubs(drive.hubs, "snapshot.drive.hubs");
     const driveParks = record(drive.parks, "snapshot.drive.parks");
-    if (Object.keys(driveParks).length !== 0 || assets.length !== 0) throw new ContentValidationError("empty catalog cannot contain drive rows or scene assets");
+    if (Object.keys(driveParks).length !== 0 || assets.length !== 0)
+      throw new ContentValidationError("empty catalog cannot contain drive rows or scene assets");
     payload = { parks: [], boundaries: { type: "FeatureCollection", features: [] }, drive: { hubs, parks: {} } };
   } else {
     payload = validateContentPayload(parks, value.boundaries, { hubs: value.drive?.hubs, parks: value.drive?.parks }, syncValidationManifest(assets, parks));
@@ -545,7 +582,7 @@ export function parseContentSnapshot(value: unknown): ContentSyncState {
     parks,
     boundaries: snapshot.boundaries as ContentBoundaries,
     drive: snapshot.drive as DriveData,
-    assets: Array.isArray(snapshot.assets) ? snapshot.assets as ContentFile[] : [],
+    assets: Array.isArray(snapshot.assets) ? (snapshot.assets as ContentFile[]) : [],
     map: parseMapPointer(snapshot.map),
   };
   return validateContentSyncState(state);
@@ -559,8 +596,16 @@ export function parseContentMapInventory(value: unknown, expectedVersion: string
   if (!SHA256.test(version) || version !== expectedVersion) throw new ContentValidationError("map manifest version does not match its pointer");
   const mapManifest = parseMapManifestLayout(manifest.mapManifest, "map manifest.mapManifest");
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) throw new ContentValidationError("map manifest.files must be a non-empty array");
-  const files = manifest.files.map((file, index) => parseSyncFile(file, `map manifest.files[${index}]`, (path) =>
-    path === "map/island/manifest.json" || /^map\/island\/\d{3,}\.bin$/.test(path) || /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path)));
+  const files = manifest.files.map((file, index) =>
+    parseSyncFile(
+      file,
+      `map manifest.files[${index}]`,
+      (path) =>
+        path === "map/island/manifest.json" ||
+        /^map\/island\/\d{3,}\.bin$/.test(path) ||
+        /^map\/fonts\/[A-Za-z0-9._ -]+(?:\/[A-Za-z0-9._ -]+)*\.pbf$/.test(path),
+    ),
+  );
   if (new Set(files.map((file) => file.path)).size !== files.length) throw new ContentValidationError("map manifest contains duplicate paths");
   const mapFile = files.find((file) => file.path === "map/island/manifest.json");
   const chunks = files.filter((file) => /^map\/island\/\d{3,}\.bin$/.test(file.path));
@@ -642,7 +687,8 @@ export function parseContentChanges(value: unknown, requestedAfter: number): Con
   const throughRevision = nonNegativeSafeInteger(response.throughRevision, "changes.throughRevision");
   const headRevision = nonNegativeSafeInteger(response.headRevision, "changes.headRevision");
   if (fromRevision !== requestedAfter) throw new ContentValidationError("changes.fromRevision does not match the requested cursor");
-  if (headRevision < fromRevision || throughRevision < fromRevision || throughRevision > headRevision) throw new ContentValidationError("changes revision range is invalid");
+  if (headRevision < fromRevision || throughRevision < fromRevision || throughRevision > headRevision)
+    throw new ContentValidationError("changes revision range is invalid");
   if (typeof response.hasMore !== "boolean") throw new ContentValidationError("changes.hasMore must be a boolean");
   if (!Array.isArray(response.batches) || response.batches.length > 50) throw new ContentValidationError("changes.batches must contain at most 50 revisions");
   const batches = response.batches.map((rawBatch, batchIndex) => {
@@ -664,7 +710,7 @@ export function parseContentChanges(value: unknown, requestedAfter: number): Con
   } else if (throughRevision !== fromRevision || headRevision !== fromRevision) {
     throw new ContentValidationError("empty changes response cannot skip revisions");
   }
-  if (response.hasMore !== (throughRevision < headRevision)) throw new ContentValidationError("changes.hasMore does not match the revision range");
+  if (response.hasMore !== throughRevision < headRevision) throw new ContentValidationError("changes.hasMore does not match the revision range");
   return { schema: "parkdex.content-sync/v1", fromRevision, throughRevision, headRevision, hasMore: response.hasMore, batches };
 }
 
@@ -678,12 +724,28 @@ export function applyContentChangeBatch(state: ContentSyncState, batch: ContentC
   for (const change of batch.changes) {
     const deleting = change.op === "delete";
     switch (change.entity) {
-      case "park": if (deleting) parks.delete(change.id); else parks.set(change.id, change.value); break;
-      case "boundary": if (deleting) boundaries.delete(change.id); else boundaries.set(change.id, change.value); break;
-      case "drive": if (deleting) drives.delete(change.id); else drives.set(change.id, change.value); break;
-      case "asset": if (deleting) assets.delete(change.id); else assets.set(change.id, change.value); break;
-      case "hubs": if (!deleting) hubs = change.value; break;
-      case "map": if (!deleting) map = change.value; break;
+      case "park":
+        if (deleting) parks.delete(change.id);
+        else parks.set(change.id, change.value);
+        break;
+      case "boundary":
+        if (deleting) boundaries.delete(change.id);
+        else boundaries.set(change.id, change.value);
+        break;
+      case "drive":
+        if (deleting) drives.delete(change.id);
+        else drives.set(change.id, change.value);
+        break;
+      case "asset":
+        if (deleting) assets.delete(change.id);
+        else assets.set(change.id, change.value);
+        break;
+      case "hubs":
+        if (!deleting) hubs = change.value;
+        break;
+      case "map":
+        if (!deleting) map = change.value;
+        break;
     }
   }
   const candidate: ContentSyncState = {

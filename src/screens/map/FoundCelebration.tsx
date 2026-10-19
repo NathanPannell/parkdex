@@ -78,17 +78,31 @@ export function FoundCelebration({ result, photo, photoAspect = 3 / 4, flagSeed,
       sfx.claim();
       setDone(true);
     })();
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, []);
 
   return (
-    <motion.div className="screen claim found-done" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }} role="dialog" aria-label={`You're the founder of ${name}`}>
+    <motion.div
+      className="screen claim found-done"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.3 } }}
+      role="dialog"
+      aria-label={`You're the founder of ${name}`}
+    >
       <motion.div className="claim__glow" style={{ opacity: landed ? 1 : 0.4, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }} />
 
       <div className="claim__head">
         <AnimatePresence mode="wait">
           {landed ? (
-            <motion.div key="stamp" initial={{ scale: 2.4, rotate: -16, opacity: 0 }} animate={{ scale: 1, rotate: -3, opacity: 1 }} transition={{ type: "spring", stiffness: 520, damping: 15 }}>
+            <motion.div
+              key="stamp"
+              initial={{ scale: 2.4, rotate: -16, opacity: 0 }}
+              animate={{ scale: 1, rotate: -3, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 520, damping: 15 }}
+            >
               <span className="claim__stamp plant__stamp">Founder!</span>
               <h1 className="found-done__title">You're the founder of {name}</h1>
             </motion.div>
@@ -121,7 +135,13 @@ export function FoundCelebration({ result, photo, photoAspect = 3 / 4, flagSeed,
             <span className="polaroid__caption">Your founder photo</span>
           </motion.div>
           {landed && !reduce && (
-            <motion.span className="found-done__ring" initial={{ scale: 0.3, opacity: 0.9 }} animate={{ scale: 2.4, opacity: 0 }} transition={{ duration: 0.7, ease: "easeOut" }} aria-hidden="true" />
+            <motion.span
+              className="found-done__ring"
+              initial={{ scale: 0.3, opacity: 0.9 }}
+              animate={{ scale: 2.4, opacity: 0 }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+              aria-hidden="true"
+            />
           )}
         </motion.div>
 
@@ -145,7 +165,13 @@ export function FoundCelebration({ result, photo, photoAspect = 3 / 4, flagSeed,
 
         <AnimatePresence>
           {landed && (
-            <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.25 }}>
+            <motion.div
+              key="kip"
+              className="plant-kip"
+              initial={{ y: 160, rotate: 20 }}
+              animate={{ y: 0, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.25 }}
+            >
               <Kip pose="celebrate" size={104} flip />
             </motion.div>
           )}
@@ -155,15 +181,26 @@ export function FoundCelebration({ result, photo, photoAspect = 3 / 4, flagSeed,
       <div className="claim__foot">
         <AnimatePresence>
           {done && (
-            <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } } }}>
+            <motion.div
+              key="done"
+              className="claim__done"
+              initial="hidden"
+              animate="show"
+              variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } } }}
+            >
               <motion.div className="claim__kip plant__bubble" variants={pop}>
-                <Bubble side="to-right" style={{ position: "relative" }}>KLEEP! Your photo is the cover now!</Bubble>
+                <Bubble side="to-right" style={{ position: "relative" }}>
+                  KLEEP! Your photo is the cover now!
+                </Bubble>
               </motion.div>
               {headline && (
                 <motion.div className={`found-done__visit${visitWon ? " is-won" : ""}`} variants={pop}>
                   {flagSeed ? <Flag seed={flagSeed} size={40} className="is-waving" /> : <Icon name="flag" size={22} />}
                   <span>
-                    <strong>{headline.title}{visit && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}</strong>
+                    <strong>
+                      {headline.title}
+                      {visit && visit.pointsEarned > 0 ? ` · +${visit.pointsEarned}` : ""}
+                    </strong>
                     <em>{headline.detail}</em>
                   </span>
                 </motion.div>

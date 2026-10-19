@@ -123,7 +123,16 @@ export function subscribeUpdateStatus(listener: () => void): () => void {
 }
 
 function defaults(info: { platform: AppPlatform; build: number }): AppConfig {
-  return { ...info, apiPointer: null, contentChannel: null, flags: { ...FEATURE_FLAG_DEFAULTS }, remoteFlags: {}, update: "none", analytics: null, fetchedAt: null };
+  return {
+    ...info,
+    apiPointer: null,
+    contentChannel: null,
+    flags: { ...FEATURE_FLAG_DEFAULTS },
+    remoteFlags: {},
+    update: "none",
+    analytics: null,
+    fetchedAt: null,
+  };
 }
 
 /** The content database this build was made for. */
@@ -138,7 +147,7 @@ export function parseRemoteAppConfig(value: unknown, expected: { platform: AppPl
   const channel = body.contentChannel ?? null;
   if (channel !== null && channel !== "staging" && channel !== "main") return null;
   // Older servers only send a content channel, which then decides the pointer too.
-  const pointer = "apiPointer" in body ? body.apiPointer ?? null : channel === "main" ? "production" : channel;
+  const pointer = "apiPointer" in body ? (body.apiPointer ?? null) : channel === "main" ? "production" : channel;
   if (pointer !== null && pointer !== "production" && pointer !== "staging") return null;
   const flags: Record<string, boolean> = {};
   if (typeof body.flags === "object" && body.flags !== null && !Array.isArray(body.flags)) {
@@ -201,11 +210,7 @@ function writeCache(config: RemoteAppConfig, fetchedAt: string): void {
 }
 
 function androidBuildNumber(value: unknown): number | null {
-  const build = typeof value === "number"
-    ? value
-    : typeof value === "string" && /^\d+$/.test(value.trim())
-      ? Number(value.trim())
-      : Number.NaN;
+  const build = typeof value === "number" ? value : typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value.trim()) : Number.NaN;
   return Number.isSafeInteger(build) && build > 0 ? build : null;
 }
 
@@ -273,7 +278,12 @@ async function signOutIfServerChanged(server: ApiPointer): Promise<void> {
 async function settleWithin(work: Promise<unknown>, ms: number): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.race([work, new Promise((resolve) => { timeout = setTimeout(resolve, ms); })]);
+    await Promise.race([
+      work,
+      new Promise((resolve) => {
+        timeout = setTimeout(resolve, ms);
+      }),
+    ]);
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
   }
@@ -285,7 +295,7 @@ export async function initAppConfig(): Promise<AppConfig> {
   buildInfo = await readBuildInfo();
   setNativeBuild(buildInfo?.platform === "android" ? buildInfo.build : null);
   const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
-  const launch = buildInfo ? readCache(buildInfo) ?? defaults(buildInfo) : defaults(defaultsInfo);
+  const launch = buildInfo ? (readCache(buildInfo) ?? defaults(buildInfo)) : defaults(defaultsInfo);
   const previous = active;
   active = launch;
   if (!sameFlags(previous.flags, launch.flags) || !sameFlags(previous.remoteFlags, launch.remoteFlags)) {
@@ -293,9 +303,7 @@ export async function initAppConfig(): Promise<AppConfig> {
   }
   // Only native production and staging builds switch servers; web pages always use their own host.
   const baked = bakedApiPointer();
-  const pointer = buildInfo?.platform === "android" && baked && active.apiPointer && active.apiPointer !== baked
-    ? active.apiPointer
-    : null;
+  const pointer = buildInfo?.platform === "android" && baked && active.apiPointer && active.apiPointer !== baked ? active.apiPointer : null;
   if (buildInfo?.platform === "android" && baked) await signOutIfServerChanged(pointer ?? baked);
   setApiPointerOverride(pointer);
   setContentChannelOverride(pointer === "production" ? "main" : pointer === "staging" ? "staging" : null);

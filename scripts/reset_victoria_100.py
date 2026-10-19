@@ -4,6 +4,7 @@ Apply is opt-in. The command requires a source-attributed, complete seed bundle,
 an exact target database binding, an expected content revision, a reviewed plan
 hash, and a verified public-only export before it writes any catalogue rows.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,8 +38,19 @@ RANKED_SOURCE_NAME = "victoria-top-100-staging-2026-09-27.json"
 SKELETON_BLURB = "A new park to explore. Badge and park story coming soon."
 UNRESOLVED_RANK_69_ID = "municipal-district-of-north-saanich-1850"
 PARK_FIELDS = (
-    "id", "name", "short", "category", "region", "lat", "lng", "biome",
-    "shape", "rarity", "scene", "seed", "blurb",
+    "id",
+    "name",
+    "short",
+    "category",
+    "region",
+    "lat",
+    "lng",
+    "biome",
+    "shape",
+    "rarity",
+    "scene",
+    "seed",
+    "blurb",
 )
 FIELD_SET = set(PARK_FIELDS)
 BIOMES = {"coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"}
@@ -106,8 +118,11 @@ def _pairs_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _strict_json(raw: bytes, label: str) -> Any:
     try:
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs_without_duplicates,
-                          parse_constant=lambda value: (_ for _ in ()).throw(ResetError(f"{label} contains invalid number {value}")))
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_pairs_without_duplicates,
+            parse_constant=lambda value: (_ for _ in ()).throw(ResetError(f"{label} contains invalid number {value}")),
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ResetError(f"{label} is not valid UTF-8 JSON") from exc
 
@@ -194,14 +209,9 @@ def _validate_ranked_list(path: Path, historical_path: Path | None = None) -> tu
         if _rank_order_sha256(checked) != HISTORICAL_RANK_ORDER_SHA256:
             raise ResetError("corrected ranked source IDs/order do not match the pinned historical source")
     rank69 = checked[68]
-    if (
-        rank69.get("id") == UNRESOLVED_RANK_69_ID
-        and rank69.get("current_official_name") == "Cy Hampson Park"
-    ):
+    if rank69.get("id") == UNRESOLVED_RANK_69_ID and rank69.get("current_official_name") == "Cy Hampson Park":
         raise ResetError("rank 69 still labels OID 1850 as Cy Hampson Park; use the corrected, source-pinned Bazan Bay identity")
-    if rank69.get("id") == UNRESOLVED_RANK_69_ID and (
-        rank69.get("name") != "Bazan Bay Park" or rank69.get("current_official_name") != "Bazan Bay Park"
-    ):
+    if rank69.get("id") == UNRESOLVED_RANK_69_ID and (rank69.get("name") != "Bazan Bay Park" or rank69.get("current_official_name") != "Bazan Bay Park"):
         raise ResetError("rank 69 Bazan Bay identity is not fully corrected in the executable ranked source")
     return checked, ranked_sha, historical_sha
 
@@ -243,11 +253,19 @@ def _validate_park(raw_park: Any, expected_rank: int, expected_ranked: dict[str,
     if seed > 2147483647:
         raise ResetError(f"seed park value is outside PostgreSQL integer range: {park_id}")
     result = {
-        "id": park_id, "name": name, "short": short, "category": category, "region": region,
+        "id": park_id,
+        "name": name,
+        "short": short,
+        "category": category,
+        "region": region,
         "lat": _number(park["lat"], f"seed park {park_id}.lat", -90, 90),
         "lng": _number(park["lng"], f"seed park {park_id}.lng", -180, 180),
-        "biome": biome, "shape": shape, "rarity": rarity, "scene": None,
-        "seed": seed, "blurb": park["blurb"],
+        "biome": biome,
+        "shape": shape,
+        "rarity": rarity,
+        "scene": None,
+        "seed": seed,
+        "blurb": park["blurb"],
     }
     if not name.strip() or not short.strip():
         raise ResetError(f"seed park has an empty name or short label: {park_id}")
@@ -277,8 +295,7 @@ def _validate_boundary(raw_feature: Any, park: dict[str, Any]) -> dict[str, Any]
             for point in ring:
                 if not isinstance(point, list) or len(point) != 2:
                     raise ResetError(f"boundary coordinate is invalid: {park['id']}")
-                points.append((_number(point[0], f"boundary {park['id']} longitude", -180, 180),
-                               _number(point[1], f"boundary {park['id']} latitude", -90, 90)))
+                points.append((_number(point[0], f"boundary {park['id']} longitude", -180, 180), _number(point[1], f"boundary {park['id']} latitude", -90, 90)))
             if points[0] != points[-1]:
                 raise ResetError(f"boundary ring is not closed: {park['id']}")
     return feature
@@ -328,8 +345,7 @@ def _validate_source_attribution(value: Any, expected_ids: set[str], ranked_sha:
     return attribution
 
 
-def load_seed(bundle_path: Path, ranked_path: Path = RANKED_LIST,
-              historical_ranked_path: Path | None = None) -> Seed:
+def load_seed(bundle_path: Path, ranked_path: Path = RANKED_LIST, historical_ranked_path: Path | None = None) -> Seed:
     try:
         raw_bundle = bundle_path.read_bytes()
     except OSError as exc:
@@ -372,8 +388,13 @@ def load_seed(bundle_path: Path, ranked_path: Path = RANKED_LIST,
     for position, raw_hub in enumerate(raw_hubs):
         hub = _object(raw_hub, f"drive hub {position}")
         name = _text(hub.get("name"), f"drive hub {position}.name")
-        hubs.append({"name": name, "lng": _number(hub.get("lng"), f"drive hub {position}.lng", -180, 180),
-                     "lat": _number(hub.get("lat"), f"drive hub {position}.lat", -90, 90)})
+        hubs.append(
+            {
+                "name": name,
+                "lng": _number(hub.get("lng"), f"drive hub {position}.lng", -180, 180),
+                "lat": _number(hub.get("lat"), f"drive hub {position}.lat", -90, 90),
+            }
+        )
     if len({hub["name"] for hub in hubs}) != 8:
         raise ResetError("drive hub names must be unique")
 
@@ -407,8 +428,10 @@ def load_seed(bundle_path: Path, ranked_path: Path = RANKED_LIST,
         if distance is None:
             pair = (None, None)
         else:
-            pair = (_number(distance, f"drive route distance for {park_id}", 0, 9007199254740991),
-                    _number(duration, f"drive route duration for {park_id}", 0, 9007199254740991))
+            pair = (
+                _number(distance, f"drive route distance for {park_id}", 0, 9007199254740991),
+                _number(duration, f"drive route duration for {park_id}", 0, 9007199254740991),
+            )
         routes[(park_id, position)] = pair
     expected_pairs = {(park_id, position) for park_id in expected_ids for position in range(8)}
     if set(routes) != expected_pairs:
@@ -479,12 +502,20 @@ def load_database_state(conn: Any) -> DatabaseState:
         """)
         jobs = {
             int(row[0]): {
-                "park_id": row[1], "state": row[2], "lease_token": row[3],
-                "lease_expires_at": row[4], "attempt_count": int(row[5]),
-                "frozen_research": row[6], "selected_art": row[7],
-                "publication_result": row[8], "published_at": row[9], "last_error": row[10],
-                "render_calls_started": int(row[11]), "run_manifest_path": row[12],
-                "run_manifest_sha256": row[13], "render_call_log": row[14],
+                "park_id": row[1],
+                "state": row[2],
+                "lease_token": row[3],
+                "lease_expires_at": row[4],
+                "attempt_count": int(row[5]),
+                "frozen_research": row[6],
+                "selected_art": row[7],
+                "publication_result": row[8],
+                "published_at": row[9],
+                "last_error": row[10],
+                "render_calls_started": int(row[11]),
+                "run_manifest_path": row[12],
+                "run_manifest_sha256": row[13],
+                "render_call_log": row[14],
             }
             for row in cursor.fetchall()
         }
@@ -495,10 +526,25 @@ def load_database_state(conn: Any) -> DatabaseState:
              WHERE singleton = true
         """)
         marker_row = cursor.fetchone()
-        marker = None if marker_row is None else dict(zip((
-            "source_bundle_sha256", "ranked_list_sha256", "expected_count", "applied_content_revision",
-            "target_environment", "target_id", "database_host",
-        ), marker_row, strict=True))
+        marker = (
+            None
+            if marker_row is None
+            else dict(
+                zip(
+                    (
+                        "source_bundle_sha256",
+                        "ranked_list_sha256",
+                        "expected_count",
+                        "applied_content_revision",
+                        "target_environment",
+                        "target_id",
+                        "database_host",
+                    ),
+                    marker_row,
+                    strict=True,
+                )
+            )
+        )
         cursor.execute("SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true")
         map_row = cursor.fetchone()
         map_pointer = None if map_row is None else dict(zip(("version", "manifest_url", "manifest_sha256"), map_row, strict=True))
@@ -522,11 +568,16 @@ def load_database_state(conn: Any) -> DatabaseState:
             cursor.execute(f'SELECT count(*) FROM public."{table_name}"')
             count_row = cursor.fetchone()
             public_table_counts[table_name] = int(count_row[0])
-    return DatabaseState(revision, parks, boundaries, hubs, settings, routes, jobs, marker, map_pointer,
-                         account_tables, account_table_counts, public_table_counts)
+    return DatabaseState(
+        revision, parks, boundaries, hubs, settings, routes, jobs, marker, map_pointer, account_tables, account_table_counts, public_table_counts
+    )
 
 
-def _legacy_source(root: Path = ROOT) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[int, tuple[str, float, float]], dict[str, float], dict[tuple[str, int], tuple[float | None, float | None]]]:
+def _legacy_source(
+    root: Path = ROOT,
+) -> tuple[
+    dict[str, dict[str, Any]], dict[str, Any], dict[int, tuple[str, float, float]], dict[str, float], dict[tuple[str, int], tuple[float | None, float | None]]
+]:
     try:
         raw_parks = _strict_json((root / "src/data/parks.json").read_bytes(), "tracked legacy parks")
         raw_boundaries = _strict_json((root / "public/boundaries.geojson").read_bytes(), "tracked legacy boundaries")
@@ -551,19 +602,29 @@ def _legacy_source(root: Path = ROOT) -> tuple[dict[str, dict[str, Any]], dict[s
     return parks, boundaries, hubs, settings, routes
 
 
-def _seed_rows(seed: Seed) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[int, tuple[str, float, float]], dict[str, float], dict[tuple[str, int], tuple[float | None, float | None]]]:
+def _seed_rows(
+    seed: Seed,
+) -> tuple[
+    dict[str, dict[str, Any]], dict[str, Any], dict[int, tuple[str, float, float]], dict[str, float], dict[tuple[str, int], tuple[float | None, float | None]]
+]:
     parks = {park["id"]: dict(park) for park in seed.parks}
     boundaries = deepcopy(seed.boundaries)
     hubs = {position: (hub["name"], hub["lng"], hub["lat"]) for position, hub in enumerate(seed.hubs)}
     return parks, boundaries, hubs, dict(seed.settings), dict(seed.routes)
 
 
-def _same_rows(state: DatabaseState, rows: tuple[dict[str, dict[str, Any]], dict[str, Any], dict[int, tuple[str, float, float]], dict[str, float], dict[tuple[str, int], tuple[float | None, float | None]]]) -> bool:
+def _same_rows(
+    state: DatabaseState,
+    rows: tuple[
+        dict[str, dict[str, Any]],
+        dict[str, Any],
+        dict[int, tuple[str, float, float]],
+        dict[str, float],
+        dict[tuple[str, int], tuple[float | None, float | None]],
+    ],
+) -> bool:
     parks, boundaries, hubs, settings, routes = rows
-    return (
-        state.parks == parks and state.boundaries == boundaries and state.hubs == hubs
-        and state.settings == settings and state.routes == routes
-    )
+    return state.parks == parks and state.boundaries == boundaries and state.hubs == hubs and state.settings == settings and state.routes == routes
 
 
 def _job_mapping(seed: Seed) -> dict[int, str]:
@@ -636,11 +697,16 @@ def classify_state(state: DatabaseState, seed: Seed, target: Target, root: Path 
             _verify_published_replay(state, seed)
             return "published-replay"
         progressed = any(
-            job.get("state") != "queued" or job.get("lease_token") is not None
-            or job.get("lease_expires_at") is not None or job.get("attempt_count") != 0
-            or job.get("frozen_research") is not None or job.get("selected_art") is not None
-            or job.get("last_error") is not None or job.get("render_calls_started") != 0
-            or job.get("run_manifest_path") is not None or job.get("run_manifest_sha256") is not None
+            job.get("state") != "queued"
+            or job.get("lease_token") is not None
+            or job.get("lease_expires_at") is not None
+            or job.get("attempt_count") != 0
+            or job.get("frozen_research") is not None
+            or job.get("selected_art") is not None
+            or job.get("last_error") is not None
+            or job.get("render_calls_started") != 0
+            or job.get("run_manifest_path") is not None
+            or job.get("run_manifest_sha256") is not None
             or job.get("render_call_log") not in (None, [])
             for job in state.jobs.values()
         )
@@ -699,10 +765,11 @@ def estimate_wire_sizes(state: DatabaseState, seed: Seed) -> tuple[int, int]:
         "revision": state.revision + 1,
         "parks": [parks[park_id] for park_id in sorted(parks)],
         "boundaries": {"type": "FeatureCollection", "features": [boundaries[park_id] for park_id in sorted(boundaries)]},
-        "drive": {"hubs": [{"name": hubs[position][0], "lng": hubs[position][1], "lat": hubs[position][2]} for position in sorted(hubs)],
-                  "parks": drive_parks},
+        "drive": {"hubs": [{"name": hubs[position][0], "lng": hubs[position][1], "lat": hubs[position][2]} for position in sorted(hubs)], "parks": drive_parks},
         "assets": [],
-        "map": None if state.map_pointer is None else {
+        "map": None
+        if state.map_pointer is None
+        else {
             "version": state.map_pointer["version"],
             "manifestUrl": state.map_pointer["manifest_url"],
             "manifestSha256": state.map_pointer["manifest_sha256"],
@@ -723,8 +790,14 @@ def estimate_wire_sizes(state: DatabaseState, seed: Seed) -> tuple[int, int]:
         changes.append({"entity": "drive", "op": "delete", "id": park_id})
     for park_id in sorted(parks):
         changes.append({"entity": "drive", "op": "upsert", "id": park_id, "value": drive_parks[park_id]})
-    changes.append({"entity": "hubs", "op": "upsert", "id": "default",
-                    "value": [{"name": hubs[position][0], "lng": hubs[position][1], "lat": hubs[position][2]} for position in sorted(hubs)]})
+    changes.append(
+        {
+            "entity": "hubs",
+            "op": "upsert",
+            "id": "default",
+            "value": [{"name": hubs[position][0], "lng": hubs[position][1], "lat": hubs[position][2]} for position in sorted(hubs)],
+        }
+    )
     batch = {
         "schema": SYNC_SCHEMA,
         "fromRevision": state.revision,
@@ -774,18 +847,19 @@ def _insert_or_update_catalogue(cursor: Any, seed: Seed, state: DatabaseState, j
     cursor.execute("DELETE FROM public.park_drive_settings")
     cursor.execute("DELETE FROM public.drive_hubs")
     for position, hub in enumerate(seed.hubs):
-        cursor.execute("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (%s, %s, %s, %s)",
-                       (position, hub["name"], hub["lng"], hub["lat"]))
+        cursor.execute("INSERT INTO public.drive_hubs (position, name, lng, lat) VALUES (%s, %s, %s, %s)", (position, hub["name"], hub["lng"], hub["lat"]))
     for park_id in seed.park_ids:
-        cursor.execute("INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES (%s, %s)",
-                       (park_id, seed.settings[park_id]))
+        cursor.execute("INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES (%s, %s)", (park_id, seed.settings[park_id]))
     for park_id in seed.park_ids:
         for position in range(8):
             distance, duration = seed.routes[(park_id, position)]
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min)
                 VALUES (%s, %s, %s, %s)
-            """, (park_id, position, distance, duration))
+            """,
+                (park_id, position, distance, duration),
+            )
 
 
 def apply_reset(conn: Any, seed: Seed, state: DatabaseState, target: Target, jsonb_factory: Any) -> int:
@@ -803,21 +877,35 @@ def apply_reset(conn: Any, seed: Seed, state: DatabaseState, target: Target, jso
         revision = int(clock[0])
         if revision != state.revision + 1:
             raise ResetError(f"reset must create exactly one content revision, got {state.revision} to {revision}")
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO public.park_enrichment_rollout
                 (singleton, source_bundle_sha256, ranked_list_sha256, expected_count,
                  applied_content_revision, target_environment, target_id, database_host)
             VALUES (true, %s, %s, 100, %s, %s, %s, %s)
-        """, (seed.bundle_sha256, seed.ranked_sha256, revision, target.environment, target.target_id, target.database_host))
+        """,
+            (seed.bundle_sha256, seed.ranked_sha256, revision, target.environment, target.target_id, target.database_host),
+        )
         return revision
     finally:
         cursor.close()
 
 
 BACKUP_TABLES = {
-    "parks", "boundaries", "drive_hubs", "park_drive_settings", "park_drive", "content_map",
-    "content_clock", "content_bootstrap_receipt", "r2_objects", "version_manifests",
-    "content_change_batches", "content_changes", "park_enrichment_rollout", "park_enrichment_jobs",
+    "parks",
+    "boundaries",
+    "drive_hubs",
+    "park_drive_settings",
+    "park_drive",
+    "content_map",
+    "content_clock",
+    "content_bootstrap_receipt",
+    "r2_objects",
+    "version_manifests",
+    "content_change_batches",
+    "content_changes",
+    "park_enrichment_rollout",
+    "park_enrichment_jobs",
 }
 
 
@@ -863,8 +951,11 @@ def validate_public_export(path: Path, expected_sha256: str, target: Target, sta
     if export_target.get("environment") != target.environment or export_target.get("targetId") != target.target_id:
         raise ResetError("public backup export target does not match the requested reset target")
     database = _object(export.get("database"), "backup database identity")
-    if (database.get("host", "").lower().rstrip(".") != target.database_host
-            or database.get("name") != target.database_name or database.get("role") != target.database_user):
+    if (
+        database.get("host", "").lower().rstrip(".") != target.database_host
+        or database.get("name") != target.database_name
+        or database.get("role") != target.database_user
+    ):
         raise ResetError("public backup export database identity does not match the active connection")
     export_revision = _safe_integer(export.get("revision"), "backup export revision")
     if export_revision != state.revision:
@@ -911,8 +1002,9 @@ def validate_public_export(path: Path, expected_sha256: str, target: Target, sta
     return {"path": str(path.resolve()), "sha256": actual_sha256, "revision": export_revision}
 
 
-def build_plan_report(seed: Seed, target: Target, state: DatabaseState, backup: dict[str, Any], mode: str,
-                      snapshot_size: int, batch_size: int) -> dict[str, Any]:
+def build_plan_report(
+    seed: Seed, target: Target, state: DatabaseState, backup: dict[str, Any], mode: str, snapshot_size: int, batch_size: int
+) -> dict[str, Any]:
     reset = mode == "reset"
     report: dict[str, Any] = {
         "schema": PLAN_SCHEMA,
@@ -939,8 +1031,7 @@ def build_plan_report(seed: Seed, target: Target, state: DatabaseState, backup: 
             "limitBytes": MAX_SYNC_RESPONSE_BYTES,
         },
     }
-    plan_bytes = json.dumps(_normalize_json_numbers(report), ensure_ascii=False, sort_keys=True,
-                            separators=(",", ":"), allow_nan=False).encode("utf-8")
+    plan_bytes = json.dumps(_normalize_json_numbers(report), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
     report["planSha256"] = hashlib.sha256(plan_bytes).hexdigest()
     return report
 
@@ -970,25 +1061,26 @@ def _account_table_counts(cursor: Any) -> dict[str, int]:
 
 
 def _plan_json(report: dict[str, Any]) -> str:
-    return json.dumps(_normalize_json_numbers(report), ensure_ascii=False, sort_keys=True,
-                      separators=(",", ":"), allow_nan=False)
+    return json.dumps(_normalize_json_numbers(report), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
 def _plan_text(report: dict[str, Any]) -> str:
     backup = report["backup"]
     operations = report["operations"]
     wire = report["wireSizes"]
-    return "\n".join((
-        f"mode={report['mode']}",
-        f"target={report['target']['environment']}{' PR #' + report['target']['targetId'] if report['target']['targetId'] else ''}",
-        f"database={report['database']['name']}@{report['database']['host']}",
-        f"content-revision={report['expectedRevision']}",
-        f"seed={report['seedBundleSha256']}",
-        f"backup={backup['path']} sha256={backup['sha256']}",
-        f"plan-sha256={report['planSha256']}",
-        f"operations={json.dumps(operations, sort_keys=True, separators=(',', ':'))}",
-        f"snapshot-wire-size={wire['contentSnapshotBytes']} bytes; reset-batch-wire-size={wire['resetRevisionBatchBytes']} bytes; limit={wire['limitBytes']} bytes",
-    ))
+    return "\n".join(
+        (
+            f"mode={report['mode']}",
+            f"target={report['target']['environment']}{' PR #' + report['target']['targetId'] if report['target']['targetId'] else ''}",
+            f"database={report['database']['name']}@{report['database']['host']}",
+            f"content-revision={report['expectedRevision']}",
+            f"seed={report['seedBundleSha256']}",
+            f"backup={backup['path']} sha256={backup['sha256']}",
+            f"plan-sha256={report['planSha256']}",
+            f"operations={json.dumps(operations, sort_keys=True, separators=(',', ':'))}",
+            f"snapshot-wire-size={wire['contentSnapshotBytes']} bytes; reset-batch-wire-size={wire['resetRevisionBatchBytes']} bytes; limit={wire['limitBytes']} bytes",
+        )
+    )
 
 
 def run(args: argparse.Namespace) -> str:
@@ -1056,10 +1148,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--database-url", help="defaults to DATABASE_URL; never printed")
     parser.add_argument("--target", choices=("staging", "owned-preview"), required=True)
     parser.add_argument("--target-id", help="required as 18 for an owned PR 18 preview")
-    parser.add_argument("--expected-database-host", required=True,
-                        help="exact Neon/database host expected for the chosen target")
-    parser.add_argument("--expected-revision", type=int,
-                        help="content revision shown by the reviewed dry run; required with --apply")
+    parser.add_argument("--expected-database-host", required=True, help="exact Neon/database host expected for the chosen target")
+    parser.add_argument("--expected-revision", type=int, help="content revision shown by the reviewed dry run; required with --apply")
     parser.add_argument("--backup-path", required=True, help="public-only export created for this exact database and revision")
     parser.add_argument("--backup-sha256", required=True, help="exact SHA-256 of --backup-path")
     parser.add_argument("--reviewed-plan-sha256", help="planSha256 from the reviewed dry-run JSON; required with --apply")

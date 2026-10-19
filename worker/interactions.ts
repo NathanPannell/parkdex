@@ -70,12 +70,19 @@ const FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_BATCH_EVENTS = 50;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_REQUESTS_PER_WINDOW = 30;
-const RATE_WINDOW_MS = 15 * 60 * 1000;
 export const INTERACTION_PURGE_BATCH_LIMIT = 5000;
 
 const BASE_KEYS = [
-  "eventId", "installationId", "sessionId", "occurredAt", "schemaVersion", "appVersion", "appBuild",
-  "contentReleaseId", "environment", "parkId",
+  "eventId",
+  "installationId",
+  "sessionId",
+  "occurredAt",
+  "schemaVersion",
+  "appVersion",
+  "appBuild",
+  "contentReleaseId",
+  "environment",
+  "parkId",
 ] as const;
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response {
@@ -189,8 +196,7 @@ export function validateInteractionEvent(value: unknown, now: number): Interacti
 }
 
 export function validateInteractionBatch(value: unknown, now: number): InteractionEvent[] {
-  if (!record(value) || !hasExactKeys(value, ["events"]) || !Array.isArray(value.events) ||
-    value.events.length < 1 || value.events.length > MAX_BATCH_EVENTS) {
+  if (!record(value) || !hasExactKeys(value, ["events"]) || !Array.isArray(value.events) || value.events.length < 1 || value.events.length > MAX_BATCH_EVENTS) {
     throw new HttpError(400, "invalid_request", `An interaction batch must contain 1 to ${MAX_BATCH_EVENTS} events.`);
   }
   const byId = new Map<string, InteractionEvent>();
@@ -227,11 +233,7 @@ function responseMethod(request: Request, path: string, method: string): Respons
   return json({ error: { code: "method_not_allowed", message: "This method is not allowed." } }, 405, { allow: method });
 }
 
-export async function handleInteractionRequest(
-  request: Request,
-  env: InteractionEnv,
-  dependencies: InteractionDependencies = {},
-): Promise<Response | null> {
+export async function handleInteractionRequest(request: Request, env: InteractionEnv, dependencies: InteractionDependencies = {}): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== "/api/interactions") return null;
   if (request.method !== "POST") return responseMethod(request, "/api/interactions", "POST");
@@ -246,13 +248,19 @@ export async function handleInteractionRequest(
     const store = interactionStore(env, dependencies);
     const address = getClientAddress(request);
     const subjectHash = await keyedHash(env.KIP_RETENTION_SECRET, "kip-interactions-rate-limit-v1", address);
-    if (!await store.consumeRateLimit(subjectHash)) throw new HttpError(429, "rate_limited", "Please wait before sending more interactions.");
+    if (!(await store.consumeRateLimit(subjectHash))) throw new HttpError(429, "rate_limited", "Please wait before sending more interactions.");
     const hashed = await Promise.all(events.map(async (event) => ({ event, payloadHash: await payloadHash(event) })));
     const saved = await store.saveBatch(hashed);
     if (saved.conflictingEventIds.length > 0) {
-      return json({ error: { code: "event_id_reused", message: "An event ID was already used for different content." }, conflictingEventIds: saved.conflictingEventIds }, 409);
+      return json(
+        { error: { code: "event_id_reused", message: "An event ID was already used for different content." }, conflictingEventIds: saved.conflictingEventIds },
+        409,
+      );
     }
-    return json({ accepted: events.length, inserted: saved.inserted, duplicates: events.length - saved.inserted }, saved.inserted === events.length ? 201 : 200);
+    return json(
+      { accepted: events.length, inserted: saved.inserted, duplicates: events.length - saved.inserted },
+      saved.inserted === events.length ? 201 : 200,
+    );
   } catch (error) {
     return errorResponse(error);
   }
@@ -273,11 +281,7 @@ export function retentionAuthorized(request: Request, secret: string): boolean {
   return constantTimeEqual(provided.slice(7), secret);
 }
 
-export async function handleRetentionRequest(
-  request: Request,
-  env: InteractionEnv,
-  dependencies: InteractionDependencies = {},
-): Promise<Response | null> {
+export async function handleRetentionRequest(request: Request, env: InteractionEnv, dependencies: InteractionDependencies = {}): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (path !== "/api/retention/interactions/purge") return null;
   if (request.method !== "POST") return responseMethod(request, path, "POST");
@@ -356,15 +360,16 @@ export function createNeonInteractionStore(databaseUrl: string): InteractionStor
       const lockInputs = JSON.stringify(inputs.map(({ eventId }) => ({ eventId })));
       // Acquire event locks before the conflict query. In READ COMMITTED, the second
       // statement gets a fresh snapshot after any lock wait and sees the winning row.
-      const transaction = await sql.transaction([
-        sql`
+      const transaction = await sql.transaction(
+        [
+          sql`
         WITH input AS MATERIALIZED (
           SELECT "eventId" FROM jsonb_to_recordset(${lockInputs}::jsonb) AS x("eventId" uuid)
         )
         SELECT pg_advisory_xact_lock(hashtextextended("eventId"::text, 0))
         FROM input
         ORDER BY "eventId"`,
-        sql`
+          sql`
         WITH input AS MATERIALIZED (
           SELECT * FROM jsonb_to_recordset(${JSON.stringify(inputs)}::jsonb) AS x(
             "eventId" uuid, "eventType" text, "installationId" uuid, "sessionId" uuid,
@@ -398,7 +403,9 @@ export function createNeonInteractionStore(databaseUrl: string): InteractionStor
           (SELECT count(*) FROM inserted) AS inserted,
           (SELECT count(*) FROM conflicts) AS conflict_count,
           COALESCE((SELECT json_agg(event_id::text) FROM conflicts), '[]'::json) AS conflict_ids`,
-      ], { isolationLevel: "ReadCommitted" });
+        ],
+        { isolationLevel: "ReadCommitted" },
+      );
       const rows = transaction[1] as Array<Record<string, unknown>>;
       const row = rows[0] as Record<string, unknown> | undefined;
       if (!row) throw new Error("interaction batch write returned no result");

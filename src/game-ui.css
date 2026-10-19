@@ -317,7 +317,9 @@
 
 /* Nearby cards for your own parks wear a gold ring. */
 .nearby__card.is-mine {
-  box-shadow: 0 0 0 3px var(--sun), var(--pop);
+  box-shadow:
+    0 0 0 3px var(--sun),
+    var(--pop);
 }
 
 /* The text block stays a column when a bounty chip follows it. */

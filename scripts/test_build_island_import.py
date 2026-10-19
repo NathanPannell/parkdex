@@ -85,10 +85,7 @@ class IslandImportBundleTests(unittest.TestCase):
 
             normalized = load(bundle / "sources" / "island-boundaries.normalized.geojson")
             normalized_by_id = {feature["properties"]["id"]: feature for feature in normalized["features"]}
-            baseline_by_id = {
-                feature["properties"]["id"]: feature
-                for feature in snapshot["boundaries"]["features"]
-            }
+            baseline_by_id = {feature["properties"]["id"]: feature for feature in snapshot["boundaries"]["features"]}
             actual = load(bundle / "boundaries.geojson")["features"]
             actual_ids = [feature["properties"]["id"] for feature in actual]
             self.assertEqual(set(actual_ids), selected_set)

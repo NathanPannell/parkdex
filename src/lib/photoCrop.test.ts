@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
-  clampCrop, CROP_ASPECT, CROP_STAGE_GUTTER, cropFrameSize, cropImageStyle, cropPixels, cropZoom, isPhotoCrop, largestCrop, MAX_CROP_ZOOM, maxCropZoom, MIN_CROP_EDGE_PX,
-  panCrop, PARK_COVER_ASPECT, roundCrop, zoomCrop, type PhotoCrop,
+  clampCrop,
+  CROP_ASPECT,
+  CROP_STAGE_GUTTER,
+  cropFrameSize,
+  cropImageStyle,
+  cropPixels,
+  cropZoom,
+  isPhotoCrop,
+  largestCrop,
+  MAX_CROP_ZOOM,
+  maxCropZoom,
+  MIN_CROP_EDGE_PX,
+  panCrop,
+  PARK_COVER_ASPECT,
+  roundCrop,
+  zoomCrop,
+  type PhotoCrop,
 } from "./photoCrop";
 import { uprightSize } from "./photoOrientation";
 
@@ -164,7 +179,12 @@ describe("storing and showing a crop", () => {
 
   it("positions the original so only the crop shows in a 3:4 box", () => {
     expect(cropImageStyle({ x: 0.25, y: 0.1, width: 0.5, height: 0.5 })).toEqual({
-      position: "absolute", left: "-50%", top: "-20%", width: "200%", height: "200%", maxWidth: "none",
+      position: "absolute",
+      left: "-50%",
+      top: "-20%",
+      width: "200%",
+      height: "200%",
+      maxWidth: "none",
     });
   });
 });

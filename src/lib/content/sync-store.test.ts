@@ -37,7 +37,16 @@ function boundary(): ContentSyncState["boundaries"]["features"][number] {
     properties: { id: PARK_ID, biome: "forest" },
     geometry: {
       type: "MultiPolygon",
-      coordinates: [[[[west, south], [west + 0.01, south], [west + 0.01, south + 0.01], [west, south]]]],
+      coordinates: [
+        [
+          [
+            [west, south],
+            [west + 0.01, south],
+            [west + 0.01, south + 0.01],
+            [west, south],
+          ],
+        ],
+      ],
     },
   };
 }
@@ -191,7 +200,9 @@ describe("WebContentStore sync persistence", () => {
 
     await expect(store.applySyncBatch(ENVIRONMENT, 7, staleBatch, SOURCE)).rejects.toThrow(/cursor changed/);
     await expect(store.applySyncBatch(ENVIRONMENT, 8, { ...staleBatch, revision: 9 }, "other-source")).rejects.toThrow(/cursor changed/);
-    await expect(store.replaceSyncState(ENVIRONMENT, 8, syncState(9, "new-scene", "other-source"), "other-source", "stale-source", true)).rejects.toThrow(/cursor changed/);
+    await expect(store.replaceSyncState(ENVIRONMENT, 8, syncState(9, "new-scene", "other-source"), "other-source", "stale-source", true)).rejects.toThrow(
+      /cursor changed/,
+    );
 
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toEqual(before);
   });

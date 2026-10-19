@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Park } from "./parks";
 import { searchParks } from "./parkSearch";
 
-const park = (id: string, name: string, short: string, region = "Capital Region") => ({ id, name, short, region } as Park);
+const park = (id: string, name: string, short: string, region = "Capital Region") => ({ id, name, short, region }) as Park;
 const items = [
   { park: park("a", "Thetis Lake Regional Park", "Thetis Lake"), km: 10 },
   { park: park("b", "Swan Lake Christmas Hill", "Swan Lake"), km: 4 },

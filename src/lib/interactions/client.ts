@@ -5,14 +5,7 @@ import { Network } from "@capacitor/network";
 import { InteractionOutbox } from "./outbox";
 import { resolveUserDataApiOrigin } from "../userDataDestination";
 import { requestContextHeaders } from "../requestContext";
-import type {
-  InteractionBase,
-  InteractionEntryPoint,
-  InteractionEnvironment,
-  InteractionEvent,
-  InteractionProvider,
-  InteractionTravelMode,
-} from "./types";
+import type { InteractionBase, InteractionEntryPoint, InteractionEnvironment, InteractionEvent, InteractionProvider, InteractionTravelMode } from "./types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9][a-z0-9-]{0,127}$/;
@@ -74,11 +67,12 @@ function environmentValue(): InteractionEnvironment {
 }
 
 function defaultApiBaseUrl(): string {
-  const configured = (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
-    || (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim()
-    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim()
-    || (Capacitor.isNativePlatform() ? (import.meta.env.VITE_APP_URL ?? "").trim() : "");
-  return configured ? apiUrl(configured) ?? "" : "";
+  const configured =
+    (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim() ||
+    (import.meta.env.VITE_FEEDBACK_API_URL ?? "").trim() ||
+    (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim() ||
+    (Capacitor.isNativePlatform() ? (import.meta.env.VITE_APP_URL ?? "").trim() : "");
+  return configured ? (apiUrl(configured) ?? "") : "";
 }
 
 function isBaseInputValid(parkId: string, contentReleaseId: string): boolean {
@@ -125,18 +119,34 @@ export class InteractionClient {
   }
 
   recordDirectionsOpened(input: DirectionsOpenedInput): Promise<void> {
-    if (!isBaseInputValid(input.parkId, input.contentReleaseId) || !ENTRY_POINTS.includes(input.entryPoint) ||
-      !PROVIDERS.includes(input.provider) || !TRAVEL_MODES.includes(input.travelMode)) return Promise.resolve();
+    if (
+      !isBaseInputValid(input.parkId, input.contentReleaseId) ||
+      !ENTRY_POINTS.includes(input.entryPoint) ||
+      !PROVIDERS.includes(input.provider) ||
+      !TRAVEL_MODES.includes(input.travelMode)
+    )
+      return Promise.resolve();
     return this.enqueue(input.parkId, input.contentReleaseId, (base) => ({
-      ...base, type: "directions_opened", entryPoint: input.entryPoint, provider: input.provider, travelMode: input.travelMode,
+      ...base,
+      type: "directions_opened",
+      entryPoint: input.entryPoint,
+      provider: input.provider,
+      travelMode: input.travelMode,
     }));
   }
 
   recordParkClaimed(input: ParkClaimedInput): Promise<void> {
-    if (!isBaseInputValid(input.parkId, input.contentReleaseId) || !UUID.test(input.claimId) ||
-      (input.claimStatus !== "first" && input.claimStatus !== "repeat")) return Promise.resolve();
+    if (
+      !isBaseInputValid(input.parkId, input.contentReleaseId) ||
+      !UUID.test(input.claimId) ||
+      (input.claimStatus !== "first" && input.claimStatus !== "repeat")
+    )
+      return Promise.resolve();
     return this.enqueue(input.parkId, input.contentReleaseId, (base) => ({
-      ...base, type: "park_claimed", claimId: input.claimId.toLowerCase(), claimStatus: input.claimStatus,
+      ...base,
+      type: "park_claimed",
+      claimId: input.claimId.toLowerCase(),
+      claimStatus: input.claimStatus,
     }));
   }
 
@@ -154,11 +164,7 @@ export class InteractionClient {
     }
   }
 
-  private async enqueue(
-    parkId: string,
-    contentReleaseId: string,
-    createEvent: (base: InteractionBase) => InteractionEvent,
-  ): Promise<void> {
+  private async enqueue(parkId: string, contentReleaseId: string, createEvent: (base: InteractionBase) => InteractionEvent): Promise<void> {
     try {
       const installationId = await this.outbox.getInstallationId();
       this.sessionId ??= createUuid();
@@ -189,15 +195,16 @@ export class InteractionClient {
     if (this.resolvedApiBaseUrl !== undefined) return this.resolvedApiBaseUrl;
     try {
       const configured = this.configuredApiBaseUrl ?? defaultApiBaseUrl();
-      this.resolvedApiBaseUrl = Capacitor.isNativePlatform() && !configured
-        ? null
-        : resolveUserDataApiOrigin(configured, {
-          native: Capacitor.isNativePlatform(),
-          webOrigin: typeof location === "undefined" ? undefined : location.origin,
-          allowLoopbackHttp: import.meta.env.DEV,
-          environment: apiEnvironment(),
-          previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
-        });
+      this.resolvedApiBaseUrl =
+        Capacitor.isNativePlatform() && !configured
+          ? null
+          : resolveUserDataApiOrigin(configured, {
+              native: Capacitor.isNativePlatform(),
+              webOrigin: typeof location === "undefined" ? undefined : location.origin,
+              allowLoopbackHttp: import.meta.env.DEV,
+              environment: apiEnvironment(),
+              previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+            });
     } catch {
       this.resolvedApiBaseUrl = null;
     }
@@ -242,7 +249,9 @@ export class InteractionClient {
       }
       if (response.status === 409 && responseBody(body) && Array.isArray(body.conflictingEventIds)) {
         const batchIds = new Set(events.map((event) => event.eventId));
-        const conflicts = body.conflictingEventIds.filter((value): value is string => typeof value === "string" && UUID.test(value) && batchIds.has(value.toLowerCase()));
+        const conflicts = body.conflictingEventIds.filter(
+          (value): value is string => typeof value === "string" && UUID.test(value) && batchIds.has(value.toLowerCase()),
+        );
         if (conflicts.length > 0) {
           await this.outbox.remove(conflicts.map((id) => id.toLowerCase()));
           return "conflict";
@@ -253,8 +262,13 @@ export class InteractionClient {
       const accepted = body.accepted;
       const inserted = body.inserted;
       const duplicates = body.duplicates;
-      if (accepted !== events.length || !Number.isInteger(inserted) || !Number.isInteger(duplicates) ||
-        (inserted as number) + (duplicates as number) !== events.length) return "retry";
+      if (
+        accepted !== events.length ||
+        !Number.isInteger(inserted) ||
+        !Number.isInteger(duplicates) ||
+        (inserted as number) + (duplicates as number) !== events.length
+      )
+        return "retry";
       return "accepted";
     } catch {
       return "retry";
@@ -270,7 +284,9 @@ export class InteractionClient {
       this.connected = true;
       void this.flush(true).catch(() => {});
     });
-    window.addEventListener("offline", () => { this.connected = false; });
+    window.addEventListener("offline", () => {
+      this.connected = false;
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") void this.flush(true).catch(() => {});
     });
@@ -278,10 +294,12 @@ export class InteractionClient {
       if (document.visibilityState === "visible") void this.flush(true).catch(() => {});
       return;
     }
-    void Network.getStatus().then((status) => {
-      this.connected = status.connected;
-      if (status.connected) void this.flush(true).catch(() => {});
-    }).catch(() => {});
+    void Network.getStatus()
+      .then((status) => {
+        this.connected = status.connected;
+        if (status.connected) void this.flush(true).catch(() => {});
+      })
+      .catch(() => {});
     void Network.addListener("networkStatusChange", (status) => {
       this.connected = status.connected;
       if (status.connected) void this.flush(true).catch(() => {});

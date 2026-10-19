@@ -28,7 +28,12 @@ export type QrScannerProps = {
   onClose(): void;
 };
 
-type Decoder = (data: Uint8ClampedArray, width: number, height: number, options?: { inversionAttempts?: "dontInvert" | "onlyInvert" | "attemptBoth" | "invertFirst" }) => { data: string } | null;
+type Decoder = (
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: { inversionAttempts?: "dontInvert" | "onlyInvert" | "attemptBoth" | "invertFirst" },
+) => { data: string } | null;
 
 const SCAN_EVERY_MS = 160;
 const MAX_SCAN_WIDTH = 640;
@@ -37,10 +42,12 @@ const REPEAT_MS = 2500;
 
 let decoderPromise: Promise<Decoder> | null = null;
 function loadDecoder(): Promise<Decoder> {
-  decoderPromise ??= import("jsqr").then((module) => module.default as Decoder).catch((error) => {
-    decoderPromise = null;
-    throw error;
-  });
+  decoderPromise ??= import("jsqr")
+    .then((module) => module.default as Decoder)
+    .catch((error) => {
+      decoderPromise = null;
+      throw error;
+    });
   return decoderPromise;
 }
 
@@ -86,9 +93,13 @@ export function QrScanner({ title, hint, codeLength, typeLabel = "Type code inst
     let decode: Decoder | null = null;
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d", { willReadFrequently: true });
-    void loadDecoder().then((loaded) => { decode = loaded; }).catch(() => {
-      if (!stopped) setError("The scanner couldn't start. Type the code instead.");
-    });
+    void loadDecoder()
+      .then((loaded) => {
+        decode = loaded;
+      })
+      .catch(() => {
+        if (!stopped) setError("The scanner couldn't start. Type the code instead.");
+      });
     const timer = window.setInterval(() => {
       const frame = video.current;
       if (stopped || !decode || !context || !frame || busyRef.current || frame.readyState < 2 || !frame.videoWidth) return;
@@ -149,12 +160,17 @@ export function QrScanner({ title, hint, codeLength, typeLabel = "Type code inst
             exit={{ y: 30, opacity: 0 }}
           >
             {cameraOff && <p className="qr-scanner__note">The camera isn't available, so type the code instead.</p>}
-            <label className="fb-label" htmlFor="qr-scanner-code">Code</label>
+            <label className="fb-label" htmlFor="qr-scanner-code">
+              Code
+            </label>
             <input
               id="qr-scanner-code"
               className="fb-input qr-scanner__input"
               value={formatSocialCode(typed)}
-              onChange={(event) => { setTyped(cleanSocialCodeInput(event.target.value, codeLength)); setError(null); }}
+              onChange={(event) => {
+                setTyped(cleanSocialCodeInput(event.target.value, codeLength));
+                setError(null);
+              }}
               autoComplete="off"
               autoCapitalize="characters"
               autoCorrect="off"
@@ -165,12 +181,23 @@ export function QrScanner({ title, hint, codeLength, typeLabel = "Type code inst
               aria-describedby={error ? "qr-scanner-error" : undefined}
               autoFocus
             />
-            {error && <p id="qr-scanner-error" className="qr-scanner__error" role="alert">{error}</p>}
+            {error && (
+              <p id="qr-scanner-error" className="qr-scanner__error" role="alert">
+                {error}
+              </p>
+            )}
             <motion.button whileTap={press} type="submit" className="btn btn--sun btn--block" disabled={busy || typed.length !== codeLength}>
               {busy ? "Checking…" : "Use this code"}
             </motion.button>
             {!cameraOff && (
-              <button type="button" className="btn btn--paper btn--block" onClick={() => { setMode("scan"); setError(null); }}>
+              <button
+                type="button"
+                className="btn btn--paper btn--block"
+                onClick={() => {
+                  setMode("scan");
+                  setError(null);
+                }}
+              >
                 <Icon name="camera" size={18} /> Scan instead
               </button>
             )}
@@ -178,12 +205,28 @@ export function QrScanner({ title, hint, codeLength, typeLabel = "Type code inst
         ) : (
           <motion.div key="scan" className="qr-scanner__scan" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className={`qr-scanner__frame ${busy ? "is-busy" : ""}`} aria-hidden="true">
-              <span /><span /><span /><span />
+              <span />
+              <span />
+              <span />
+              <span />
             </div>
             <div className="qr-scanner__card card">
-              <p className="qr-scanner__hint" aria-live="polite">{live === "pending" ? "Starting the camera…" : hint}</p>
-              {error && <p className="qr-scanner__error" role="alert">{error}</p>}
-              <button type="button" className="btn btn--paper btn--block" onClick={() => { setMode("typed"); setError(null); }}>
+              <p className="qr-scanner__hint" aria-live="polite">
+                {live === "pending" ? "Starting the camera…" : hint}
+              </p>
+              {error && (
+                <p className="qr-scanner__error" role="alert">
+                  {error}
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn--paper btn--block"
+                onClick={() => {
+                  setMode("typed");
+                  setError(null);
+                }}
+              >
                 {typeLabel}
               </button>
             </div>

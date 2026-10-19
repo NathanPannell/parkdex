@@ -1,4 +1,5 @@
 """Release gates that prevent incomplete or cross-environment account deployments."""
+
 import importlib.util
 import argparse
 import contextlib
@@ -57,8 +58,10 @@ class AccountReleaseGates(unittest.TestCase):
 
     def runtime(self):
         return {
-            "SESSION_SECRET": "o" * 48, "AUTH_SESSION_SECRET": "a" * 48,
-            "KIP_PHOTO_SERVICE_TOKEN": "p" * 48, "KIP_RETENTION_SECRET": "r" * 48,
+            "SESSION_SECRET": "o" * 48,
+            "AUTH_SESSION_SECRET": "a" * 48,
+            "KIP_PHOTO_SERVICE_TOKEN": "p" * 48,
+            "KIP_RETENTION_SECRET": "r" * 48,
             "KIP_PHOTO_SERVICE_URL": "https://parkdex-kip-photos-staging.owned.workers.dev",
             "GOOGLE_WEB_CLIENT_ID": "123456-kip.apps.googleusercontent.com",
             "EMAIL_FROM": "Kip <kip@example.test>",
@@ -66,8 +69,10 @@ class AccountReleaseGates(unittest.TestCase):
 
     def test_release_checks_run_in_order_and_report_each_check(self):
         commands, started, passed = [], [], []
-        with patch.object(delivery, "npm_args", return_value=["npm"]), \
-             patch.object(delivery, "run", side_effect=lambda args, **_kwargs: commands.append(args) or ""):
+        with (
+            patch.object(delivery, "npm_args", return_value=["npm"]),
+            patch.object(delivery, "run", side_effect=lambda args, **_kwargs: commands.append(args) or ""),
+        ):
             delivery.release_checks(self.root, accounts=False, starting=started.append, passed=passed.append)
         self.assertEqual(started, ["install", "typecheck", "tests", "build"])
         self.assertEqual(passed, ["install", "typecheck", "tests", "build", "delivery-tests"])
@@ -81,26 +86,37 @@ class AccountReleaseGates(unittest.TestCase):
         self.account_files()
         for name in self.config["independentMigrationPaths"]:
             self.touch(name)
-        self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
-            "app_config_001_init.sql", "park_proposals_001_init.sql", "park_drafts_001_init.sql", "app_config_002_global_rules.sql", "park_drafts_002_proposals.sql",
-            "game_001_init.sql",
-            "park_proposals_002_moderation.sql",
-            "osm_parks_001_init.sql",
-            "founders_001_init.sql",
-            "feedback_002_archive.sql",
-            "app_config_003_ota_publishes.sql",
-            "operator_analytics_001_indexes.sql",
-            "founders_002_reviews.sql",
-            "founders_003_park_removed.sql",
-            "game_002_points.sql",
-            "social_001_friends.sql",
-            "osm_parks_002_sources.sql",
-            "game_003_crews.sql",
-            "game_004_badges.sql",
-            "game_005_dex.sql",
-            "founders_004_boundary_boxes.sql",
-        ])
+        self.assertEqual(
+            [p.name for p in delivery.migration_paths(self.config, self.root)],
+            [
+                "feedback_001_init.sql",
+                "accounts_001_init.sql",
+                "progress_001_init.sql",
+                "interactions_001_init.sql",
+                "interactions_002_db_events.sql",
+                "app_config_001_init.sql",
+                "park_proposals_001_init.sql",
+                "park_drafts_001_init.sql",
+                "app_config_002_global_rules.sql",
+                "park_drafts_002_proposals.sql",
+                "game_001_init.sql",
+                "park_proposals_002_moderation.sql",
+                "osm_parks_001_init.sql",
+                "founders_001_init.sql",
+                "feedback_002_archive.sql",
+                "app_config_003_ota_publishes.sql",
+                "operator_analytics_001_indexes.sql",
+                "founders_002_reviews.sql",
+                "founders_003_park_removed.sql",
+                "game_002_points.sql",
+                "social_001_friends.sql",
+                "osm_parks_002_sources.sql",
+                "game_003_crews.sql",
+                "game_004_badges.sql",
+                "game_005_dex.sql",
+                "founders_004_boundary_boxes.sql",
+            ],
+        )
 
     def test_account_code_without_any_migration_fails_closed(self):
         self.touch("worker/accounts/auth.ts")
@@ -118,9 +134,16 @@ class AccountReleaseGates(unittest.TestCase):
 
     def test_complete_migrations_keep_foreign_key_order(self):
         self.account_files()
-        self.assertEqual([p.name for p in delivery.migration_paths(self.config, self.root)], [
-            "feedback_001_init.sql", "accounts_001_init.sql", "progress_001_init.sql", "interactions_001_init.sql", "interactions_002_db_events.sql",
-        ])
+        self.assertEqual(
+            [p.name for p in delivery.migration_paths(self.config, self.root)],
+            [
+                "feedback_001_init.sql",
+                "accounts_001_init.sql",
+                "progress_001_init.sql",
+                "interactions_001_init.sql",
+                "interactions_002_db_events.sql",
+            ],
+        )
 
     def test_content_sync_markers_are_all_or_none_and_append_only_allowlisted_migrations(self):
         self.assertFalse(delivery.content_sync_present(self.config, self.root))
@@ -130,15 +153,18 @@ class AccountReleaseGates(unittest.TestCase):
             delivery.migration_paths(self.config, self.root)
 
         self.content_files()
-        self.assertEqual([p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)], [
-            "database/migrations/feedback_001_init.sql",
-            "database/001_cloud_content.sql",
-            "database/migrations/content_001_sync.sql",
-            "database/migrations/content_002_authoring.sql",
-            "database/migrations/content_003_park_maps_link.sql",
-            "database/migrations/content_004_catalogue_release.sql",
-            "database/migrations/content_005_park_visibility.sql",
-        ])
+        self.assertEqual(
+            [p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)],
+            [
+                "database/migrations/feedback_001_init.sql",
+                "database/001_cloud_content.sql",
+                "database/migrations/content_001_sync.sql",
+                "database/migrations/content_002_authoring.sql",
+                "database/migrations/content_003_park_maps_link.sql",
+                "database/migrations/content_004_catalogue_release.sql",
+                "database/migrations/content_005_park_visibility.sql",
+            ],
+        )
         self.assertFalse(delivery.accounts_present(self.config, self.root))
 
     def test_tooling_checkout_ignores_existing_publisher_test_without_feature_markers(self):
@@ -172,19 +198,22 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertFalse(delivery.accounts_present(self.config, self.root))
         self.account_files()
         self.assertTrue(delivery.accounts_present(self.config, self.root))
-        self.assertEqual([p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)], [
-            "database/migrations/feedback_001_init.sql",
-            "database/001_cloud_content.sql",
-            "database/migrations/accounts_001_init.sql",
-            "database/migrations/progress_001_init.sql",
-            "database/migrations/interactions_001_init.sql",
-            "database/migrations/interactions_002_db_events.sql",
-            "database/migrations/content_001_sync.sql",
-            "database/migrations/content_002_authoring.sql",
-            "database/migrations/content_003_park_maps_link.sql",
-            "database/migrations/content_004_catalogue_release.sql",
-            "database/migrations/content_005_park_visibility.sql",
-        ])
+        self.assertEqual(
+            [p.relative_to(self.root).as_posix() for p in delivery.migration_paths(self.config, self.root)],
+            [
+                "database/migrations/feedback_001_init.sql",
+                "database/001_cloud_content.sql",
+                "database/migrations/accounts_001_init.sql",
+                "database/migrations/progress_001_init.sql",
+                "database/migrations/interactions_001_init.sql",
+                "database/migrations/interactions_002_db_events.sql",
+                "database/migrations/content_001_sync.sql",
+                "database/migrations/content_002_authoring.sql",
+                "database/migrations/content_003_park_maps_link.sql",
+                "database/migrations/content_004_catalogue_release.sql",
+                "database/migrations/content_005_park_visibility.sql",
+            ],
+        )
 
     def test_public_bootstrap_uses_only_the_migration_database_url_and_selected_environment(self):
         self.content_files()
@@ -208,6 +237,7 @@ class AccountReleaseGates(unittest.TestCase):
         steps = []
         qa_targets = []
         commands = []
+
         def qa_run(args, **_kwargs):
             commands.append(args)
             if any("FROM pg_catalog.pg_database" in arg for arg in args):
@@ -215,15 +245,26 @@ class AccountReleaseGates(unittest.TestCase):
             if any("FROM information_schema.tables" in arg for arg in args):
                 return "0"
             return ""
-        with patch.object(delivery, "candidate_sql_env", return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"}), \
-             patch.object(delivery, "candidate_psql_args", return_value=["psql"]), \
-             patch.object(delivery, "run", side_effect=qa_run), \
-             patch.object(delivery, "migration_paths", return_value=[self.root / "feedback.sql", self.root / "content.sql"]), \
-             patch.object(delivery, "run_candidate_sql_file", side_effect=lambda path, env, **kwargs: (
-                 steps.append((path.name, kwargs.get("transactional", True))),
-                 qa_targets.append(dict(env)) if path == qa_path else None,
-             )), \
-             patch.object(delivery, "bootstrap_content", side_effect=lambda _config, _root, url, environment: steps.append(("bootstrap", environment, url))):
+
+        with (
+            patch.object(
+                delivery,
+                "candidate_sql_env",
+                return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"},
+            ),
+            patch.object(delivery, "candidate_psql_args", return_value=["psql"]),
+            patch.object(delivery, "run", side_effect=qa_run),
+            patch.object(delivery, "migration_paths", return_value=[self.root / "feedback.sql", self.root / "content.sql"]),
+            patch.object(
+                delivery,
+                "run_candidate_sql_file",
+                side_effect=lambda path, env, **kwargs: (
+                    steps.append((path.name, kwargs.get("transactional", True))),
+                    qa_targets.append(dict(env)) if path == qa_path else None,
+                ),
+            ),
+            patch.object(delivery, "bootstrap_content", side_effect=lambda _config, _root, url, environment: steps.append(("bootstrap", environment, url))),
+        ):
             delivery.run_content_sync_sql_qa(self.config, self.root)
         self.assertEqual(steps[:2], [("feedback.sql", True), ("content.sql", True)])
         self.assertEqual(steps[2][:2], ("bootstrap", "preview"))
@@ -246,8 +287,11 @@ class AccountReleaseGates(unittest.TestCase):
     def test_content_sql_qa_runner_passes_loopback_endpoint_and_owned_database_to_psql(self):
         database_name = "kip_qa_content_sync_" + "a" * 32
         env = {
-            "PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": database_name,
-            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "55437",
+            "PGDATABASE": database_name,
+            "PGUSER": "kip_qa",
+            "PGPASSWORD": "qa-only",
         }
         with patch.object(delivery, "psql_executable", return_value="psql"), patch.object(delivery, "run") as run:
             delivery.run_candidate_sql_file(self.root / "qa-content-sync.sql", env, cwd=self.root, transactional=False)
@@ -259,9 +303,15 @@ class AccountReleaseGates(unittest.TestCase):
     def test_content_sql_qa_refuses_a_preexisting_owned_name_without_dropping_it(self):
         self.content_files()
         self.touch(self.config["contentSync"]["qaSqlPath"])
-        with patch.object(delivery, "candidate_sql_env", return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"}), \
-             patch.object(delivery, "candidate_psql_args", return_value=["psql"]), \
-             patch.object(delivery, "run", return_value="occupied") as run:
+        with (
+            patch.object(
+                delivery,
+                "candidate_sql_env",
+                return_value={"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only"},
+            ),
+            patch.object(delivery, "candidate_psql_args", return_value=["psql"]),
+            patch.object(delivery, "run", return_value="occupied") as run,
+        ):
             with self.assertRaises(delivery.DeliveryError):
                 delivery.run_content_sync_sql_qa(self.config, self.root)
         self.assertEqual(run.call_count, 1)
@@ -270,18 +320,25 @@ class AccountReleaseGates(unittest.TestCase):
     def test_legacy_import_pg_qa_uses_its_own_empty_database_and_drops_it(self):
         self.content_files()
         commands = []
+
         def qa_run(args, **kwargs):
             commands.append((args, kwargs))
             if any("FROM information_schema.tables" in arg for arg in args):
                 return "0"
             return ""
+
         local_env = {
-            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
-            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "55438",
+            "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa",
+            "PGPASSWORD": "qa-only",
         }
-        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
-             patch.object(delivery, "psql_executable", return_value="psql"), \
-             patch.object(delivery, "run", side_effect=qa_run):
+        with (
+            patch.object(delivery, "candidate_sql_env", return_value=local_env),
+            patch.object(delivery, "psql_executable", return_value="psql"),
+            patch.object(delivery, "run", side_effect=qa_run),
+        ):
             delivery.run_legacy_import_postgres_qa(self.config, self.root)
         create = next(args for args, _ in commands if args[-1].startswith("CREATE DATABASE"))
         database_name = create[-1].split('"')[1]
@@ -297,12 +354,17 @@ class AccountReleaseGates(unittest.TestCase):
     def test_legacy_import_pg_qa_does_not_drop_a_preexisting_name(self):
         self.content_files()
         local_env = {
-            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
-            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "55438",
+            "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa",
+            "PGPASSWORD": "qa-only",
         }
-        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
-             patch.object(delivery, "psql_executable", return_value="psql"), \
-             patch.object(delivery, "run", return_value="1") as run:
+        with (
+            patch.object(delivery, "candidate_sql_env", return_value=local_env),
+            patch.object(delivery, "psql_executable", return_value="psql"),
+            patch.object(delivery, "run", return_value="1") as run,
+        ):
             with self.assertRaises(delivery.DeliveryError):
                 delivery.run_legacy_import_postgres_qa(self.config, self.root)
         self.assertEqual(run.call_count, 1)
@@ -311,6 +373,7 @@ class AccountReleaseGates(unittest.TestCase):
     def test_legacy_import_pg_qa_drops_its_database_when_regression_fails(self):
         self.content_files()
         commands = []
+
         def qa_run(args, **_kwargs):
             commands.append(args)
             if any("PostgreSQLImportTests" == item for item in args):
@@ -318,13 +381,19 @@ class AccountReleaseGates(unittest.TestCase):
             if any("FROM information_schema.tables" in item for item in args):
                 return "0"
             return ""
+
         local_env = {
-            "PGHOST": "127.0.0.1", "PGPORT": "55438", "PGDATABASE": "kip_qa_candidate",
-            "PGUSER": "kip_qa", "PGPASSWORD": "qa-only",
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "55438",
+            "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa",
+            "PGPASSWORD": "qa-only",
         }
-        with patch.object(delivery, "candidate_sql_env", return_value=local_env), \
-             patch.object(delivery, "psql_executable", return_value="psql"), \
-             patch.object(delivery, "run", side_effect=qa_run):
+        with (
+            patch.object(delivery, "candidate_sql_env", return_value=local_env),
+            patch.object(delivery, "psql_executable", return_value="psql"),
+            patch.object(delivery, "run", side_effect=qa_run),
+        ):
             with self.assertRaisesRegex(delivery.DeliveryError, "regression failed"):
                 delivery.run_legacy_import_postgres_qa(self.config, self.root)
         created_name = next(args[-1].split('"')[1] for args in commands if args[-1].startswith("CREATE DATABASE"))
@@ -334,7 +403,11 @@ class AccountReleaseGates(unittest.TestCase):
         self.account_files()
         bundle = self.runtime()
         delivery.require_account_runtime(self.config, bundle, self.root)
-        for origin in ("https://kip-pr-12.owned.workers.dev", "https://parkdex-kip-photos-staging.owned.workers.dev:444", "https://parkdex-kip-photos-staging.evil.test"):
+        for origin in (
+            "https://kip-pr-12.owned.workers.dev",
+            "https://parkdex-kip-photos-staging.owned.workers.dev:444",
+            "https://parkdex-kip-photos-staging.evil.test",
+        ):
             with self.subTest(origin=origin), self.assertRaises(delivery.DeliveryError):
                 delivery.require_account_runtime(self.config, {**bundle, "KIP_PHOTO_SERVICE_URL": origin}, self.root)
         bundle.pop("GOOGLE_WEB_CLIENT_ID")
@@ -363,35 +436,47 @@ class AccountReleaseGates(unittest.TestCase):
             "manifestSha256": hashlib.sha256(manifest_bytes).hexdigest(),
             "minimumReaderVersion": 1,
         }
-        with patch.object(delivery, "ROOT", self.root), \
-             patch.object(delivery, "http_json", return_value=(200, pointer)), \
-             patch.object(delivery, "http_bytes", return_value=(200, manifest_bytes)):
+        with (
+            patch.object(delivery, "ROOT", self.root),
+            patch.object(delivery, "http_json", return_value=(200, pointer)),
+            patch.object(delivery, "http_bytes", return_value=(200, manifest_bytes)),
+        ):
             delivery.verify_main_content_channel(self.config)
 
-        with patch.object(delivery, "ROOT", self.root), \
-             patch.object(delivery, "http_json", return_value=(200, {**pointer, "releaseId": None})), \
-             self.assertRaises(delivery.DeliveryError):
+        with (
+            patch.object(delivery, "ROOT", self.root),
+            patch.object(delivery, "http_json", return_value=(200, {**pointer, "releaseId": None})),
+            self.assertRaises(delivery.DeliveryError),
+        ):
             delivery.verify_main_content_channel(self.config)
 
-        with patch.object(delivery, "ROOT", self.root), \
-             patch.object(delivery, "http_json", return_value=(200, pointer)), \
-             patch.object(delivery, "http_bytes", return_value=(200, b"{}")), \
-             self.assertRaisesRegex(delivery.DeliveryError, "hash"):
+        with (
+            patch.object(delivery, "ROOT", self.root),
+            patch.object(delivery, "http_json", return_value=(200, pointer)),
+            patch.object(delivery, "http_bytes", return_value=(200, b"{}")),
+            self.assertRaisesRegex(delivery.DeliveryError, "hash"),
+        ):
             delivery.verify_main_content_channel(self.config)
 
         wrong_baseline = json.dumps({"version": "b" * 64}, separators=(",", ":")).encode()
         pinned_path.write_bytes(wrong_baseline)
-        with patch.object(delivery, "ROOT", self.root), \
-             patch.object(delivery, "http_json", return_value=(200, pointer)), \
-             self.assertRaisesRegex(delivery.DeliveryError, "baseline"):
+        with (
+            patch.object(delivery, "ROOT", self.root),
+            patch.object(delivery, "http_json", return_value=(200, pointer)),
+            self.assertRaisesRegex(delivery.DeliveryError, "baseline"),
+        ):
             delivery.verify_main_content_channel(self.config)
 
     def test_production_database_urls_must_match_neon_main_read_write_endpoint(self):
-        endpoints = {"endpoints": [{
-            "branch_id": self.config["neonProductionBranchId"],
-            "type": "read_write",
-            "host": "ep-main.us-west-2.aws.neon.tech",
-        }]}
+        endpoints = {
+            "endpoints": [
+                {
+                    "branch_id": self.config["neonProductionBranchId"],
+                    "type": "read_write",
+                    "host": "ep-main.us-west-2.aws.neon.tech",
+                }
+            ]
+        }
         main_url = "postgresql://kip:secret@ep-main-pooler.us-west-2.aws.neon.tech/parkdex_kip"
         staging_url = "postgresql://kip:secret@ep-staging.us-west-2.aws.neon.tech/parkdex_kip"
         with patch.dict(os.environ, {}, clear=True), patch.object(delivery, "neon_request", return_value=endpoints) as neon:
@@ -401,11 +486,15 @@ class AccountReleaseGates(unittest.TestCase):
                 delivery.verify_production_database_urls(self.config, main_url, staging_url)
 
     def test_staging_database_urls_must_match_the_new_staging_child_branch(self):
-        endpoints = {"endpoints": [{
-            "branch_id": self.config["neonStagingBranchId"],
-            "type": "read_write",
-            "host": "ep-shiny-cherry-akobwdis.c-3.us-west-2.aws.neon.tech",
-        }]}
+        endpoints = {
+            "endpoints": [
+                {
+                    "branch_id": self.config["neonStagingBranchId"],
+                    "type": "read_write",
+                    "host": "ep-shiny-cherry-akobwdis.c-3.us-west-2.aws.neon.tech",
+                }
+            ]
+        }
         staging_url = "postgresql://kip:secret@ep-shiny-cherry-akobwdis-pooler.c-3.us-west-2.aws.neon.tech/parkdex_kip"
         main_url = "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip"
         with patch.dict(os.environ, {}, clear=True), patch.object(delivery, "neon_request", return_value=endpoints) as neon:
@@ -418,19 +507,21 @@ class AccountReleaseGates(unittest.TestCase):
         self.content_files()
         args = argparse.Namespace(sha="a" * 40, apply=True)
         bundle = {"DATABASE_URL": "postgresql://kip:secret@ep-main.us-west-2.aws.neon.tech/parkdex_kip"}
-        with patch.object(delivery, "ROOT", self.root), \
-             patch.object(delivery, "load_config", return_value=self.config), \
-             patch.object(delivery, "verify_git_sha"), \
-             patch.object(delivery, "verify_main_content_channel"), \
-             patch.object(delivery, "staging_api_state", return_value=(True, True)), \
-             patch.object(delivery, "migration_paths", return_value=[self.root / "migration.sql"]), \
-             patch.object(delivery, "content_sync_present", return_value=True), \
-             patch.object(delivery, "read_runtime_bundle", return_value=bundle), \
-             patch.object(delivery, "verify_runtime_bundle"), \
-             patch.object(delivery, "verify_production_runtime_branch"), \
-             patch.object(delivery, "require_account_runtime"), \
-             patch.object(delivery, "run_migration"), \
-             patch.object(delivery, "bootstrap_content") as bootstrap:
+        with (
+            patch.object(delivery, "ROOT", self.root),
+            patch.object(delivery, "load_config", return_value=self.config),
+            patch.object(delivery, "verify_git_sha"),
+            patch.object(delivery, "verify_main_content_channel"),
+            patch.object(delivery, "staging_api_state", return_value=(True, True)),
+            patch.object(delivery, "migration_paths", return_value=[self.root / "migration.sql"]),
+            patch.object(delivery, "content_sync_present", return_value=True),
+            patch.object(delivery, "read_runtime_bundle", return_value=bundle),
+            patch.object(delivery, "verify_runtime_bundle"),
+            patch.object(delivery, "verify_production_runtime_branch"),
+            patch.object(delivery, "require_account_runtime"),
+            patch.object(delivery, "run_migration"),
+            patch.object(delivery, "bootstrap_content") as bootstrap,
+        ):
             delivery.migration_release(args, "production")
         bootstrap.assert_not_called()
 
@@ -444,7 +535,11 @@ class AccountReleaseGates(unittest.TestCase):
             "OPERATOR_PASSWORD_HASH": "ab" * 16 + ":" + "cd" * 32,
         } | self.runtime()
         native = "654321-android.apps.googleusercontent.com"
-        with patch.dict(os.environ, {"KIP_STAGING_RUNTIME_JSON": json.dumps(bundle), "KIP_STAGING_EXTRA_RUNTIME_JSON": json.dumps({"GOOGLE_NATIVE_CLIENT_ID": native})}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"KIP_STAGING_RUNTIME_JSON": json.dumps(bundle), "KIP_STAGING_EXTRA_RUNTIME_JSON": json.dumps({"GOOGLE_NATIVE_CLIENT_ID": native})},
+            clear=True,
+        ):
             merged = delivery.read_runtime_bundle(self.config, environment="staging")
         self.assertEqual(merged["GOOGLE_NATIVE_CLIENT_ID"], native)
         runtime = delivery.staging_runtime_env(self.config, merged, "a" * 40, api_present=True)
@@ -474,8 +569,10 @@ class AccountReleaseGates(unittest.TestCase):
         }
         with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle)}, clear=True):
             self.assertEqual(delivery.read_runtime_bundle(self.config, environment="production"), bundle)
-        with patch.dict(os.environ, {"KIP_STAGING_RUNTIME_JSON": "{}"}, clear=True), \
-             self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_RUNTIME_JSON"):
+        with (
+            patch.dict(os.environ, {"KIP_STAGING_RUNTIME_JSON": "{}"}, clear=True),
+            self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_RUNTIME_JSON"),
+        ):
             delivery.read_runtime_bundle(self.config, environment="production")
 
         extra = {"OPENROUTER_API_KEY": "or-secret", "POSTHOG_PROJECT_KEY": "phc_public"}
@@ -484,8 +581,12 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertEqual(merged, bundle | extra)
         self.assertEqual(delivery.production_runtime_env(self.config, merged, "a" * 40, api_present=True)["OPENROUTER_API_KEY"], "or-secret")
         for invalid in ({"DATABASE_URL": "postgresql://other"}, {"UNDOCUMENTED_KEY": "x"}, {"OPENROUTER_API_KEY": ""}):
-            with patch.dict(os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(invalid)}, clear=True), \
-                 self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_EXTRA_RUNTIME_JSON"):
+            with (
+                patch.dict(
+                    os.environ, {"KIP_PRODUCTION_RUNTIME_JSON": json.dumps(bundle), "KIP_PRODUCTION_EXTRA_RUNTIME_JSON": json.dumps(invalid)}, clear=True
+                ),
+                self.assertRaisesRegex(delivery.DeliveryError, "KIP_PRODUCTION_EXTRA_RUNTIME_JSON"),
+            ):
                 delivery.read_runtime_bundle(self.config, environment="production")
 
         self.account_files()
@@ -514,23 +615,26 @@ class AccountReleaseGates(unittest.TestCase):
             delivery.set_release_file(self.root, sha, "preview")
         parser = delivery.build_parser()
         with contextlib.redirect_stderr(io.StringIO()):
-            for argv in (["write-release", "--environment", "preview", "--sha", sha], ["preview", "--pr", "1"],
-                         ["teardown", "--pr", "1"], ["provision-staging-photos", "--from-preview-pr", "1"]):
+            for argv in (
+                ["write-release", "--environment", "preview", "--sha", sha],
+                ["preview", "--pr", "1"],
+                ["teardown", "--pr", "1"],
+                ["provision-staging-photos", "--from-preview-pr", "1"],
+            ):
                 with self.subTest(argv=argv), self.assertRaises(SystemExit):
                     parser.parse_args(argv)
 
     def test_exact_release_sha_is_bound_to_the_correct_push_branch(self):
         sha = "a" * 40
+
         def git_result(*args):
             return "" if args and args[0] == "status" else sha
 
-        with patch.object(delivery, "git", side_effect=git_result), \
-             patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main"}, clear=True):
+        with patch.object(delivery, "git", side_effect=git_result), patch.dict(os.environ, {"GITHUB_REF": "refs/heads/main"}, clear=True):
             delivery.verify_git_sha(sha, production_only=True)
             with self.assertRaisesRegex(delivery.DeliveryError, "staging branch"):
                 delivery.verify_git_sha(sha, staging_only=True)
-        with patch.object(delivery, "git", side_effect=git_result), \
-             patch.dict(os.environ, {"GITHUB_REF": "refs/heads/staging"}, clear=True):
+        with patch.object(delivery, "git", side_effect=git_result), patch.dict(os.environ, {"GITHUB_REF": "refs/heads/staging"}, clear=True):
             with self.assertRaisesRegex(delivery.DeliveryError, "main branch"):
                 delivery.verify_git_sha(sha, production_only=True)
 
@@ -542,6 +646,7 @@ class AccountReleaseGates(unittest.TestCase):
             "target": None,
             "meta": {"githubCommitSha": sha, "kipEnvironment": "staging"},
         }
+
         def response(url):
             if url == self.config["stagingUrl"] + "/release.json":
                 return (404, None)
@@ -549,8 +654,10 @@ class AccountReleaseGates(unittest.TestCase):
                 return (200, {"sha": sha, "environment": "staging"})
             self.fail(f"unexpected release URL: {url}")
 
-        with patch.object(delivery, "list_vercel_deployments", return_value=[deployment]) as inventory, \
-             patch.object(delivery, "http_json", side_effect=response):
+        with (
+            patch.object(delivery, "list_vercel_deployments", return_value=[deployment]) as inventory,
+            patch.object(delivery, "http_json", side_effect=response),
+        ):
             delivery.ensure_previous_release_resolved(self.config, "prj_test", "staging")
         self.assertNotIn("target", inventory.call_args.kwargs)
 
@@ -562,6 +669,7 @@ class AccountReleaseGates(unittest.TestCase):
             "target": None,
             "meta": {"githubCommitSha": sha, "kipEnvironment": "staging"},
         }
+
         def response(url):
             if url == self.config["stagingUrl"] + "/release.json":
                 return (404, None)
@@ -569,9 +677,11 @@ class AccountReleaseGates(unittest.TestCase):
                 return (200, {"sha": sha, "environment": "staging"})
             self.fail(f"unexpected release URL: {url}")
 
-        with patch.object(delivery, "list_vercel_deployments", return_value=[deployment]), \
-             patch.object(delivery, "http_json", side_effect=response), \
-             self.assertRaisesRegex(delivery.DeliveryError, "stable URL verification"):
+        with (
+            patch.object(delivery, "list_vercel_deployments", return_value=[deployment]),
+            patch.object(delivery, "http_json", side_effect=response),
+            self.assertRaisesRegex(delivery.DeliveryError, "stable URL verification"),
+        ):
             delivery.ensure_previous_release_resolved(self.config, "prj_test", "staging")
 
     def test_migration_is_atomic_and_stops_on_sql_error(self):
@@ -583,7 +693,14 @@ class AccountReleaseGates(unittest.TestCase):
         self.assertNotIn("secret", " ".join(args))
 
     def test_candidate_sql_credentials_are_local_only_and_provider_secrets_are_removed(self):
-        values = {"PGHOST": "127.0.0.1", "PGPORT": "55437", "PGDATABASE": "kip_qa_candidate", "PGUSER": "kip_qa", "PGPASSWORD": "qa-only", "NEON_API_KEY": "persistent-secret"}
+        values = {
+            "PGHOST": "127.0.0.1",
+            "PGPORT": "55437",
+            "PGDATABASE": "kip_qa_candidate",
+            "PGUSER": "kip_qa",
+            "PGPASSWORD": "qa-only",
+            "NEON_API_KEY": "persistent-secret",
+        }
         with patch.dict(os.environ, values, clear=True):
             env = delivery.candidate_sql_env()
             self.assertNotIn("NEON_API_KEY", env)
@@ -592,6 +709,7 @@ class AccountReleaseGates(unittest.TestCase):
         for overrides in ({"PGHOST": "ep-staging.neon.tech"}, {"PGDATABASE": "parkdex_kip"}, {"PGPORT": "65536"}):
             with patch.dict(os.environ, {**values, **overrides}, clear=True), self.assertRaises(delivery.DeliveryError):
                 delivery.candidate_sql_env()
+
 
 class ReleaseUrlPropagation(unittest.TestCase):
     config = {"releasePath": "/release.json", "healthPath": "/api/health"}
@@ -615,8 +733,14 @@ class ReleaseUrlPropagation(unittest.TestCase):
 
         with patch.object(delivery, "http_json", side_effect=respond):
             delivery.verify_release_url(
-                self.config, self.url, self.sha, "staging", api_present=api_present,
-                timeout=timeout, sleep=sleep, clock=lambda: now[0],
+                self.config,
+                self.url,
+                self.sha,
+                "staging",
+                api_present=api_present,
+                timeout=timeout,
+                sleep=sleep,
+                clock=lambda: now[0],
             )
         return sleeps
 
@@ -630,12 +754,16 @@ class ReleaseUrlPropagation(unittest.TestCase):
         self.assertEqual(self.verify([self.release(self.sha), self.health(self.sha)]), [])
 
     def test_waits_for_a_stale_alias_to_serve_the_new_release(self):
-        sleeps = self.verify([
-            self.release(self.old),
-            (404, None),
-            self.release(self.sha), self.health(self.old),
-            self.release(self.sha), self.health(self.sha),
-        ])
+        sleeps = self.verify(
+            [
+                self.release(self.old),
+                (404, None),
+                self.release(self.sha),
+                self.health(self.old),
+                self.release(self.sha),
+                self.health(self.sha),
+            ]
+        )
         self.assertEqual(sleeps, [delivery.RELEASE_VERIFY_INTERVAL_SECONDS] * 3)
 
     def test_retries_when_the_host_is_briefly_unreachable(self):
@@ -674,8 +802,7 @@ class MigrationLockRetry(unittest.TestCase):
                 raise delivery.DeliveryError(f"database migration x.sql failed with exit code 3: {outcome}")
             return ""
 
-        with patch.object(delivery, "run", side_effect=fake_run), \
-             patch.object(delivery, "psql_executable", return_value="psql"):
+        with patch.object(delivery, "run", side_effect=fake_run), patch.object(delivery, "psql_executable", return_value="psql"):
             delivery.run_migration(self.url, delivery.ROOT / "x.sql", sleep=lambda seconds: None)
         return calls
 
@@ -715,8 +842,7 @@ class ScriptedUrlopen:
                 raise outcome
             return FakeResponse(outcome)
 
-        with patch.object(delivery.urllib.request, "urlopen", side_effect=fake_urlopen), \
-             contextlib.redirect_stderr(io.StringIO()):
+        with patch.object(delivery.urllib.request, "urlopen", side_effect=fake_urlopen), contextlib.redirect_stderr(io.StringIO()):
             yield
 
 
@@ -725,9 +851,15 @@ class ProviderGetRetry(ScriptedUrlopen, unittest.TestCase):
 
     def call(self, outcomes, *, method="GET", not_found_ok=False):
         with self.scripted(outcomes):
-            return delivery.api_json("https://api.example.test", "/x", token="t", method=method,
-                                     body={} if method != "GET" else None,
-                                     not_found_ok=not_found_ok, sleep=self.sleeps.append)
+            return delivery.api_json(
+                "https://api.example.test",
+                "/x",
+                token="t",
+                method=method,
+                body={} if method != "GET" else None,
+                not_found_ok=not_found_ok,
+                sleep=self.sleeps.append,
+            )
 
     def test_get_succeeds_after_a_transient_network_error(self):
         result = self.call([urllib.error.URLError("reset"), b'{"ok": true}'])
@@ -774,8 +906,9 @@ class R2ObjectGetRetry(ScriptedUrlopen, unittest.TestCase):
 
     def call(self, outcomes, *, method="GET"):
         with patch.dict(os.environ, {"CLOUDFLARE_API_TOKEN": "cf-test-token"}), self.scripted(outcomes):
-            return self.photos._r2_object(delivery, self.config, "bucket", "marker.json", method=method,
-                                          body=b"{}" if method == "PUT" else None, sleep=self.sleeps.append)
+            return self.photos._r2_object(
+                delivery, self.config, "bucket", "marker.json", method=method, body=b"{}" if method == "PUT" else None, sleep=self.sleeps.append
+            )
 
     def test_get_succeeds_after_a_transient_network_error(self):
         self.assertEqual(self.call([urllib.error.URLError("reset"), b"{}"]), (200, b"{}"))
@@ -808,17 +941,19 @@ class FailureDetail(unittest.TestCase):
     def test_long_output_keeps_the_first_error_the_end_and_the_last_progress(self):
         secret = "pg-password-qa-only-value"
         delivery.register_secret(secret)
-        stderr = "\n".join([
-            "node:events:486",
-            "      throw er; // Unhandled 'error' event",
-            "      ^",
-            "",
-            f"error: terminating connection due to administrator command postgres://kip_qa:{secret}@127.0.0.1/db",
-            "    at Parser.parseErrorMessage (node_modules/pg-protocol/dist/parser.js:285:98)",
-            *[f"    field_{index}: {'x' * 60}," for index in range(200)],
-            "    _poolUseCount: 44,",
-            "}",
-        ])
+        stderr = "\n".join(
+            [
+                "node:events:486",
+                "      throw er; // Unhandled 'error' event",
+                "      ^",
+                "",
+                f"error: terminating connection due to administrator command postgres://kip_qa:{secret}@127.0.0.1/db",
+                "    at Parser.parseErrorMessage (node_modules/pg-protocol/dist/parser.js:285:98)",
+                *[f"    field_{index}: {'x' * 60}," for index in range(200)],
+                "    _poolUseCount: 44,",
+                "}",
+            ]
+        )
         stdout = "deleting the founder account removes the founder and photo: PASS\nqa-osm-parks: PASS\nlast step: PASS"
         with patch.object(delivery.subprocess, "run", return_value=delivery.subprocess.CompletedProcess([], 1, stdout, stderr)):
             with self.assertRaises(delivery.DeliveryError) as raised:

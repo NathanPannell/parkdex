@@ -14,7 +14,10 @@ import type { OriginalPhoto } from "../lib/photoEncode";
 export function usePhotoUrl(blob: Blob | null): string | null {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!blob) { setUrl(null); return; }
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
     const next = URL.createObjectURL(blob);
     setUrl(next);
     return () => URL.revokeObjectURL(next);
@@ -60,10 +63,13 @@ export function AddDexPhoto({ park, open, onClose, onSaved }: { park: Park; open
             onClose={onClose}
             onUse={(captured) => {
               onClose();
-              void save(park, captured).then(() => {
-                toast("Photo added to your Dex", "moss");
-                onSaved?.();
-              }, () => toast("Your photo couldn't be saved. Try again.", "kip"));
+              void save(park, captured).then(
+                () => {
+                  toast("Photo added to your Dex", "moss");
+                  onSaved?.();
+                },
+                () => toast("Your photo couldn't be saved. Try again.", "kip"),
+              );
             }}
           />
         )}
@@ -85,13 +91,21 @@ function useOriginal(blob: Blob | null): OriginalPhoto | null {
       if (live) setPhoto({ blob, dataUrl: url, width: image.naturalWidth, height: image.naturalHeight, bytes: blob.size });
     };
     image.src = url;
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [blob, url]);
   return photo;
 }
 
 /** Re-crops a saved photo: the same 3:4 cropper, starting from its current crop. */
-export function RecropPhoto({ blob, crop, caption, onCancel, onSave }: {
+export function RecropPhoto({
+  blob,
+  crop,
+  caption,
+  onCancel,
+  onSave,
+}: {
   blob: Blob | null;
   crop: PhotoCrop | null;
   caption: string;
@@ -105,7 +119,16 @@ export function RecropPhoto({ blob, crop, caption, onCancel, onSave }: {
       <AnimatePresence>
         {blob && photo && (
           <div className="screen camera found-camera dex-recrop" key="recrop">
-            <PhotoCropper photo={photo} initialCrop={crop} caption={caption} busy={false} error={null} onRetake={onCancel} retakeLabel="Cancel" onUse={onSave} />
+            <PhotoCropper
+              photo={photo}
+              initialCrop={crop}
+              caption={caption}
+              busy={false}
+              error={null}
+              onRetake={onCancel}
+              retakeLabel="Cancel"
+              onUse={onSave}
+            />
           </div>
         )}
       </AnimatePresence>

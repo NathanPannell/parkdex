@@ -10,9 +10,23 @@ import { analyticsEnvironment } from "./reviews.ts";
 const ORIGIN = "https://operator.example.test";
 const env: DashboardEnv = { DATABASE_URL: "postgres://unused", DASHBOARD_ENVIRONMENT: "production" };
 const AT = "2026-10-10T18:00:00.000Z";
-const ring = (x: number, y: number): [number, number][] => [[x, y], [x + 0.004, y], [x + 0.004, y + 0.004], [x, y + 0.004], [x, y]];
+const ring = (x: number, y: number): [number, number][] => [
+  [x, y],
+  [x + 0.004, y],
+  [x + 0.004, y + 0.004],
+  [x, y + 0.004],
+  [x, y],
+];
 const outline = (x: number, y: number) => ({ type: "MultiPolygon" as const, coordinates: [[ring(x, y)]] });
-const MEADOW: OsmFeature = { type: "way", id: 4242, name: "Review Meadow", kind: "leisure=park", tags: { leisure: "park", name: "Review Meadow" }, geometry: outline(-123.4, 48.45), areaM2: 90_000 };
+const MEADOW: OsmFeature = {
+  type: "way",
+  id: 4242,
+  name: "Review Meadow",
+  kind: "leisure=park",
+  tags: { leisure: "park", name: "Review Meadow" },
+  geometry: outline(-123.4, 48.45),
+  areaM2: 90_000,
+};
 const IDS = {
   meadow: "11111111-1111-4111-8111-111111111111",
   meadowRival: "22222222-2222-4222-8222-222222222222",
@@ -23,23 +37,91 @@ const IDS = {
 function setup() {
   const { live, manager, reviews, dependencies } = memoryParks();
   live.parks.set("beacon-hill", {
-    id: "beacon-hill", name: "Beacon Hill Park", short: "Beacon Hill", category: "municipal", region: "Capital", lat: 48.412, lng: -123.36,
-    biome: "forest", shape: "circle", rarity: "common", scene: null, seed: 7, blurb: "", geometry: outline(-123.362, 48.41),
+    id: "beacon-hill",
+    name: "Beacon Hill Park",
+    short: "Beacon Hill",
+    category: "municipal",
+    region: "Capital",
+    lat: 48.412,
+    lng: -123.36,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    scene: null,
+    seed: 7,
+    blurb: "",
+    geometry: outline(-123.362, 48.41),
   });
   live.parks.set("cattle-point", { ...live.parks.get("beacon-hill")!, id: "cattle-point", name: "Cattle Point", geometry: outline(-123.3, 48.43) });
-  manager.founders.set("cattle-point", { handle: "tidepool_t", foundedAt: "2026-10-09T10:00:00.000Z", source: "existing", photo: demoPhoto(0, "plain"), width: 1280, height: 840 });
+  manager.founders.set("cattle-point", {
+    handle: "tidepool_t",
+    foundedAt: "2026-10-09T10:00:00.000Z",
+    source: "existing",
+    photo: demoPhoto(0, "plain"),
+    width: 1280,
+    height: 840,
+  });
   const base: Omit<MemoryReview, "id" | "accountId" | "handle" | "parkId" | "parkName" | "feature" | "createdAt"> = {
-    status: "pending", outcome: "reject", flags: ["people"], position: { lat: 48.452, lng: -123.398, accuracyM: 9 }, photo: demoPhoto(1, "people"),
-    width: 1280, height: 840, moderation: demoModeration({ people: 0.91 }), checkedAt: "2026-10-10T09:58:00.000Z",
-    decidedAt: null, reasonCode: null, reason: null, foundedParkId: null, seenAt: null,
+    status: "pending",
+    outcome: "reject",
+    flags: ["people"],
+    position: { lat: 48.452, lng: -123.398, accuracyM: 9 },
+    photo: demoPhoto(1, "people"),
+    width: 1280,
+    height: 840,
+    moderation: demoModeration({ people: 0.91 }),
+    checkedAt: "2026-10-10T09:58:00.000Z",
+    decidedAt: null,
+    reasonCode: null,
+    reason: null,
+    foundedParkId: null,
+    seenAt: null,
   };
   reviews.requests.push(
-    { ...base, id: IDS.meadowRival, accountId: "b", handle: "rival", parkId: "osm-way-4242", parkName: "Review Meadow", feature: MEADOW, createdAt: "2026-10-10T11:00:00.000Z" },
-    { ...base, id: IDS.meadow, accountId: "a", handle: "trail_tia", parkId: "osm-way-4242", parkName: "Review Meadow", feature: MEADOW, createdAt: "2026-10-10T10:00:00.000Z" },
-    { ...base, id: IDS.beacon, accountId: "c", handle: "fern_gully", parkId: "beacon-hill", parkName: "Beacon Hill Park", feature: null, outcome: "unsure", flags: [], createdAt: "2026-10-10T12:00:00.000Z",
+    {
+      ...base,
+      id: IDS.meadowRival,
+      accountId: "b",
+      handle: "rival",
+      parkId: "osm-way-4242",
+      parkName: "Review Meadow",
+      feature: MEADOW,
+      createdAt: "2026-10-10T11:00:00.000Z",
+    },
+    {
+      ...base,
+      id: IDS.meadow,
+      accountId: "a",
+      handle: "trail_tia",
+      parkId: "osm-way-4242",
+      parkName: "Review Meadow",
+      feature: MEADOW,
+      createdAt: "2026-10-10T10:00:00.000Z",
+    },
+    {
+      ...base,
+      id: IDS.beacon,
+      accountId: "c",
+      handle: "fern_gully",
+      parkId: "beacon-hill",
+      parkName: "Beacon Hill Park",
+      feature: null,
+      outcome: "unsure",
+      flags: [],
+      createdAt: "2026-10-10T12:00:00.000Z",
       // An unsure check stored before the verdict question was dropped.
-      moderation: demoModeration({ verdict: 0.62 }) },
-    { ...base, id: IDS.founded, accountId: "d", handle: "owl_eyes", parkId: "cattle-point", parkName: "Cattle Point", feature: null, createdAt: "2026-10-10T13:00:00.000Z" },
+      moderation: demoModeration({ verdict: 0.62 }),
+    },
+    {
+      ...base,
+      id: IDS.founded,
+      accountId: "d",
+      handle: "owl_eyes",
+      parkId: "cattle-point",
+      parkName: "Cattle Point",
+      feature: null,
+      createdAt: "2026-10-10T13:00:00.000Z",
+    },
   );
   const api = createDashboardApi({ ...dependencies, now: () => Date.parse(AT) });
   const call = (path: string, init: { method?: string; body?: unknown; origin?: string } = {}) => {
@@ -52,16 +134,34 @@ function setup() {
   return { live, manager, reviews, call };
 }
 
-const json = async <T = Record<string, any>>(response: Response) => await response.json() as T;
+const json = async <T = Record<string, any>>(response: Response) => (await response.json()) as T;
 
 test("the queue lists requests oldest first, filters by status and counts each status", async () => {
   const { call, reviews } = setup();
   const pending = await json(await call("/api/parks/review"));
   assert.equal(pending.available, true);
-  assert.deepEqual(pending.requests.map((row: { id: string }) => row.id), [IDS.meadow, IDS.meadowRival, IDS.beacon, IDS.founded]);
+  assert.deepEqual(
+    pending.requests.map((row: { id: string }) => row.id),
+    [IDS.meadow, IDS.meadowRival, IDS.beacon, IDS.founded],
+  );
   assert.deepEqual(pending.counts, { pending: 4, approved: 0, rejected: 0, superseded: 0 });
   assert.deepEqual(Object.keys(pending.requests[0]).sort(), [
-    "checkedAt", "createdAt", "decidedAt", "flags", "foundedParkId", "handle", "hasPhoto", "id", "osm", "outcome", "parkId", "parkName", "photoSha256", "reason", "reasonCode", "status",
+    "checkedAt",
+    "createdAt",
+    "decidedAt",
+    "flags",
+    "foundedParkId",
+    "handle",
+    "hasPhoto",
+    "id",
+    "osm",
+    "outcome",
+    "parkId",
+    "parkName",
+    "photoSha256",
+    "reason",
+    "reasonCode",
+    "status",
   ]);
   assert.deepEqual((await json(await call("/api/parks/review?status=approved"))).requests, []);
   assert.equal((await json(await call("/api/parks/review?status=all"))).requests.length, 4);
@@ -69,7 +169,11 @@ test("the queue lists requests oldest first, filters by status and counts each s
   assert.deepEqual(await json(await call("/api/parks/review/count")), { available: true, pending: 4 });
 
   reviews.available = false;
-  assert.deepEqual(await json(await call("/api/parks/review")), { available: false, counts: { pending: 0, approved: 0, rejected: 0, superseded: 0 }, requests: [] });
+  assert.deepEqual(await json(await call("/api/parks/review")), {
+    available: false,
+    counts: { pending: 0, approved: 0, rejected: 0, superseded: 0 },
+    requests: [],
+  });
   assert.deepEqual(await json(await call("/api/parks/review/count")), { available: false, pending: 0 });
 });
 
@@ -104,12 +208,18 @@ test("approving publishes an OpenStreetMap target, makes the player founder with
   assert.deepEqual(await json(response), { ok: true, parkId: "osm-way-4242", parkName: "Review Meadow", source: "osm_new" });
   assert.ok(live.parks.has("osm-way-4242"));
   const founder = manager.founders.get("osm-way-4242")!;
-  assert.deepEqual([founder.handle, founder.foundedAt, founder.photo.sha256], ["trail_tia", AT, reviews.requests.find((row) => row.id === IDS.meadow)!.photo!.sha256]);
+  assert.deepEqual(
+    [founder.handle, founder.foundedAt, founder.photo.sha256],
+    ["trail_tia", AT, reviews.requests.find((row) => row.id === IDS.meadow)!.photo!.sha256],
+  );
   assert.equal(manager.visits.length, 0, "no visit and no flag");
   const all = await json(await call("/api/parks/review?status=all"));
   const status = Object.fromEntries(all.requests.map((row: { id: string; status: string }) => [row.id, row.status]));
   assert.deepEqual(status, { [IDS.meadow]: "approved", [IDS.meadowRival]: "superseded", [IDS.beacon]: "pending", [IDS.founded]: "pending" });
-  assert.deepEqual(reviews.events.map((event) => event.type), ["founding_review_decided", "park_founded"]);
+  assert.deepEqual(
+    reviews.events.map((event) => event.type),
+    ["founding_review_decided", "park_founded"],
+  );
 
   const twice = await call(`/api/parks/review/${IDS.meadow}/approve`, { method: "POST" });
   assert.equal(twice.status, 409);
@@ -121,23 +231,40 @@ test("approving a park someone founded first closes the request as superseded", 
   const { call } = setup();
   const response = await call(`/api/parks/review/${IDS.founded}/approve`, { method: "POST" });
   assert.equal(response.status, 409);
-  assert.deepEqual((await json(response)).error, { code: "already_founded", message: "Cattle Point was founded first by @tidepool_t. The request is closed as superseded." });
+  assert.deepEqual((await json(response)).error, {
+    code: "already_founded",
+    message: "Cattle Point was founded first by @tidepool_t. The request is closed as superseded.",
+  });
   assert.equal((await json(await call(`/api/parks/review/${IDS.founded}`))).request.status, "superseded");
 });
 
 test("rejecting takes a preset or the operator's own words, and decisions must come from the dashboard", async () => {
   const { call } = setup();
-  assert.equal((await call(`/api/parks/review/${IDS.beacon}/reject`, { method: "POST", body: { reasonCode: "people" }, origin: "https://evil.example" })).status, 403);
+  assert.equal(
+    (await call(`/api/parks/review/${IDS.beacon}/reject`, { method: "POST", body: { reasonCode: "people" }, origin: "https://evil.example" })).status,
+    403,
+  );
   assert.equal((await call(`/api/parks/review/${IDS.beacon}/approve`, { method: "POST", origin: "https://evil.example" })).status, 403);
   assert.equal((await call(`/api/parks/review/${IDS.beacon}/reject`)).status, 405);
-  for (const body of [{}, { reasonCode: "boring" }, { reasonCode: "other" }, { reasonCode: "other", reason: "   " }, { reasonCode: "people", reason: "x".repeat(301) },
-    { reasonCode: "people", reason: "bad\u0007" }, { reasonCode: "people", extra: 1 }, { reasonCode: "people", reason: 5 }]) {
+  for (const body of [
+    {},
+    { reasonCode: "boring" },
+    { reasonCode: "other" },
+    { reasonCode: "other", reason: "   " },
+    { reasonCode: "people", reason: "x".repeat(301) },
+    { reasonCode: "people", reason: "bad\u0007" },
+    { reasonCode: "people", extra: 1 },
+    { reasonCode: "people", reason: 5 },
+  ]) {
     const response = await call(`/api/parks/review/${IDS.beacon}/reject`, { method: "POST", body });
     assert.equal(response.status, 400, JSON.stringify(body));
   }
   const preset = await call(`/api/parks/review/${IDS.beacon}/reject`, { method: "POST", body: { reasonCode: "lighting" } });
   assert.deepEqual(await json(preset), { ok: true, reasonCode: "lighting", reason: REVIEW_REASONS.lighting });
-  const typed = await call(`/api/parks/review/${IDS.meadow}/reject`, { method: "POST", body: { reasonCode: "other", reason: "  The   photo shows a parking lot.  " } });
+  const typed = await call(`/api/parks/review/${IDS.meadow}/reject`, {
+    method: "POST",
+    body: { reasonCode: "other", reason: "  The   photo shows a parking lot.  " },
+  });
   assert.deepEqual(await json(typed), { ok: true, reasonCode: "other", reason: "The photo shows a parking lot." });
   const { request } = await json(await call(`/api/parks/review/${IDS.meadow}`));
   assert.deepEqual([request.status, request.reasonCode, request.reason, request.decidedAt], ["rejected", "other", "The photo shows a parking lot.", AT]);

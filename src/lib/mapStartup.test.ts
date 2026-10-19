@@ -12,7 +12,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("bundled overview prewarm", () => {
   it("shares a pending archive read and retries after a failed preload", async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockRejectedValueOnce(new Error("temporary local read failure"))
       .mockResolvedValueOnce({
         ok: true,
@@ -32,5 +33,4 @@ describe("bundled overview prewarm", () => {
     await prewarmBundledOverview();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
-
 });

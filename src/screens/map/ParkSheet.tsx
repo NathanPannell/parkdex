@@ -71,7 +71,24 @@ export function parkLocationUrl(park: Park) {
   return park.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${park.lat},${park.lng}`;
 }
 
-export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLabel, signedIn, insideForFounding, canFound, onFound, onClose, onGo, onCheckIn, onFeedback, entryPoint }: Props) {
+export function ParkSheet({
+  park,
+  user,
+  claim,
+  inside,
+  holder,
+  flagDays,
+  visitLabel,
+  signedIn,
+  insideForFounding,
+  canFound,
+  onFound,
+  onClose,
+  onGo,
+  onCheckIn,
+  onFeedback,
+  entryPoint,
+}: Props) {
   const content = useContent();
   const game = useGame();
   const summary = useParkSummary(park.id, game.accountId);
@@ -80,17 +97,19 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const showCover = !!cover && !coverFailed;
   const [viewingCover, setViewingCover] = useState(false);
   // Tapping the cover opens it full screen (FullscreenViewer, mounted at the end of the sheet).
-  const coverOpener = showCover ? {
-    role: "button",
-    tabIndex: 0,
-    "aria-label": `Show the photo of ${park.name} full screen`,
-    onClick: () => setViewingCover(true),
-    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      setViewingCover(true);
-    },
-  } : {};
+  const coverOpener = showCover
+    ? {
+        role: "button",
+        tabIndex: 0,
+        "aria-label": `Show the photo of ${park.name} full screen`,
+        onClick: () => setViewingCover(true),
+        onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          setViewingCover(true);
+        },
+      }
+    : {};
   // "Add another photo" for parks you have visited (#174), from a claim here or visits on the server.
   const visited = !!claim || (summary.summary?.visits.mine ?? 0) > 0 || !!game.me?.visitedToday?.includes(park.id);
   const [adding, setAdding] = useState(false);
@@ -126,22 +145,41 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const rarity = RARITY[park.rarity];
   const openDirections = () => {
-    if (content && !accessUnknown) void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(() => {});
+    if (content && !accessUnknown)
+      void recordDirectionsOpened({ parkId: park.id, entryPoint, provider: "google_maps", travelMode: "driving", contentReleaseId: content.releaseId }).catch(
+        () => {},
+      );
   };
   // Every park gets the same primary button, the in-app trip. Maps is the secondary action:
   // driving directions when a road route is known, otherwise the park's location.
   const mapsButton = accessUnknown ? (
-    <a className="btn btn--paper btn--icon" href={parkLocationUrl(park)} target="_blank" rel="noreferrer" aria-label="Open the park in Google Maps" onClick={openDirections}>
+    <a
+      className="btn btn--paper btn--icon"
+      href={parkLocationUrl(park)}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Open the park in Google Maps"
+      onClick={openDirections}
+    >
       <Icon name="pin" />
     </a>
   ) : (
-    <a className="btn btn--paper btn--icon" href={directionsUrl(park)} target="_blank" rel="noreferrer" aria-label="Directions in Google Maps" onClick={openDirections}>
+    <a
+      className="btn btn--paper btn--icon"
+      href={directionsUrl(park)}
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Directions in Google Maps"
+      onClick={openDirections}
+    >
       <Icon name="car" />
     </a>
   );
-  const badge = claim
-    ? <EarnedBadge park={park} claim={claim} size={160} animated state="earned" />
-    : <Badge park={park} size={160} animated state="preview" />;
+  const badge = claim ? (
+    <EarnedBadge park={park} claim={claim} size={160} animated state="earned" />
+  ) : (
+    <Badge park={park} size={160} animated state="preview" />
+  );
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 600) onClose();
@@ -178,7 +216,12 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
         >
           {showCover ? (
             // The founder's approved photo replaces the badge as the park's face.
-            <motion.div className="park-sheet__cover" initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}>
+            <motion.div
+              className="park-sheet__cover"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}
+            >
               <img src={cover} alt={`${park.name}, photographed by its founder`} onError={() => setCoverFailed(true)} />
             </motion.div>
           ) : (
@@ -241,12 +284,15 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
                 </motion.span>
               )}
             </div>
-            {flag && phase.kind !== "none" && (
-              <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />
-            )}
+            {flag && phase.kind !== "none" && <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />}
           </motion.section>
 
-          <motion.section variants={item} className={`park-summary park-facts${stats.pending ? " is-pending" : ""}`} aria-label="Park stats" aria-busy={stats.pending}>
+          <motion.section
+            variants={item}
+            className={`park-summary park-facts${stats.pending ? " is-pending" : ""}`}
+            aria-label="Park stats"
+            aria-busy={stats.pending}
+          >
             <ul className="park-facts__chips">
               <li>
                 <Icon name="pin" size={16} /> {inside ? "You're here" : `${formatDistance(straightKm)} away`}
@@ -280,7 +326,9 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
 
           {founder.kind === "pending" && (
             <motion.div variants={item} className="founder-review" role="status">
-              <span className="founder-review__icon"><Icon name="image" size={18} /></span>
+              <span className="founder-review__icon">
+                <Icon name="image" size={18} />
+              </span>
               <span className="founder-review__text">
                 <strong>{founder.text}</strong>
                 <em>We'll let you know when it's checked.</em>
@@ -296,7 +344,9 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
               disabled={founder.kind !== "found"}
               aria-label={founder.kind === "found" ? `Become the founder of ${park.name}, plus ${founder.points} points` : founder.text}
             >
-              <span className="founder-cta__icon"><Icon name="camera" size={22} /></span>
+              <span className="founder-cta__icon">
+                <Icon name="camera" size={22} />
+              </span>
               <span className="founder-cta__text">
                 <strong>Become the founder</strong>
                 <em>{founder.kind === "found" ? "Take its first photo. It becomes the park's cover." : founder.text}</em>
@@ -314,7 +364,13 @@ export function ParkSheet({ park, user, claim, inside, holder, flagDays, visitLa
               {crewList && <CrewList members={crewList.members} flagSince={crewList.flagSince} myHandle={myHandle} />}
               {SHOW_BADGE_ART && <p className="park-sheet__blurb">{park.blurb}</p>}
               {visited && (
-                <button className="btn btn--paper btn--sm btn--block park-sheet__photo" onClick={() => { startPhotoCapture(); setAdding(true); }}>
+                <button
+                  className="btn btn--paper btn--sm btn--block park-sheet__photo"
+                  onClick={() => {
+                    startPhotoCapture();
+                    setAdding(true);
+                  }}
+                >
                   <Icon name="camera" size={18} /> Add another photo
                 </button>
               )}
@@ -378,11 +434,15 @@ function flagStatus(holder: ParkHolder, days: number, protectedNow = false): { t
   const flown = days === 1 ? "1 day" : `${days} days`;
   switch (holder.kind) {
     case "mine":
-      if (holder.member) return { title: `@${holder.flag.handle}'s crew`, detail: `You hold it together. ${days < 1 ? "Planted today" : `Flying for ${flown}`}` };
+      if (holder.member)
+        return { title: `@${holder.flag.handle}'s crew`, detail: `You hold it together. ${days < 1 ? "Planted today" : `Flying for ${flown}`}` };
       return { title: "Your flag", detail: days < 1 ? "Planted today" : `Flying for ${flown}` };
     case "other":
       // During someone else's protected hour the flag can't be taken yet (#171).
-      return { title: `@${holder.flag.handle}`, detail: `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${protectedNow ? "Protected for now." : `${takeLabel(days)}.`}` };
+      return {
+        title: `@${holder.flag.handle}`,
+        detail: `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${protectedNow ? "Protected for now." : `${takeLabel(days)}.`}`,
+      };
     case "empty":
       return { title: "No flag yet", detail: "Get inside the boundary to plant yours." };
     case "unknown":

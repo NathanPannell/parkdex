@@ -4,6 +4,7 @@ This module is called by scripts/kip-delivery.py. It keeps Cloudflare management
 credentials local to explicit provider operations and never writes them to a
 journal or runtime bundle. Only the persistent staging and production resources are managed.
 """
+
 from __future__ import annotations
 
 import json
@@ -46,8 +47,14 @@ def _account_id(delivery, config: dict) -> str:
 def _settings(delivery, config: dict) -> dict:
     settings = config.get("privatePhotos", {})
     required = (
-        "sourcePath", "stagingWorkerName", "stagingBucketName", "productionWorkerName",
-        "productionBucketName", "wranglerVersion", "compatibilityDate", "retentionCron",
+        "sourcePath",
+        "stagingWorkerName",
+        "stagingBucketName",
+        "productionWorkerName",
+        "productionBucketName",
+        "wranglerVersion",
+        "compatibilityDate",
+        "retentionCron",
     )
     if any(not isinstance(settings.get(key), str) or not settings[key] for key in required):
         _error(delivery, "Private-photo deployment settings are incomplete.")
@@ -100,8 +107,7 @@ def _api(delivery, config: dict, path: str, *, method="GET", body=None, query=No
     return response
 
 
-def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, body: bytes | None = None,
-               sleep=time.sleep):
+def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, body: bytes | None = None, sleep=time.sleep):
     account = _account_id(delivery, config)
     token, _ = _api_token(delivery)
     path = f"/accounts/{account}/r2/buckets/{urllib.parse.quote(bucket, safe='')}/objects/{urllib.parse.quote(key, safe='/')}"
@@ -113,7 +119,10 @@ def _r2_object(delivery, config: dict, bucket: str, key: str, *, method: str, bo
     try:
         # Shared with api_json so marker reads retry transient failures and writes never do.
         status, payload = delivery.urlopen_read(
-            request, timeout=60, limit=16_385 if method == "GET" else 2_000_000, sleep=sleep,
+            request,
+            timeout=60,
+            limit=16_385 if method == "GET" else 2_000_000,
+            sleep=sleep,
         )
     except urllib.error.HTTPError as exc:
         if exc.code == 404 and method == "GET":
@@ -349,10 +358,7 @@ def _check_retired_worker_settings(delivery, settings: dict, identity: dict) -> 
 
 
 def _worker_owned_namespaces(delivery, config: dict, worker_name: str) -> list[dict]:
-    return [
-        item for item in _list_namespaces(delivery, config)
-        if item.get("script") == worker_name and item.get("class") == "AccountPhotos"
-    ]
+    return [item for item in _list_namespaces(delivery, config) if item.get("script") == worker_name and item.get("class") == "AccountPhotos"]
 
 
 def _verify_namespace(delivery, config: dict, worker_name: str, binding_info: dict | None = None) -> dict:
@@ -414,11 +420,17 @@ def _ensure_bucket(delivery, config: dict, identity: dict, journal: Path | None,
             else:
                 _error(delivery, "A same-named R2 bucket exists without this release's exact ownership marker; preserving it for manual inspection.")
     else:
-        _set_step(delivery, journal, state, "bucketCreate", {
-            "status": "intent",
-            "name": bucket,
-            "owner": expected_marker,
-        })
+        _set_step(
+            delivery,
+            journal,
+            state,
+            "bucketCreate",
+            {
+                "status": "intent",
+                "name": bucket,
+                "owner": expected_marker,
+            },
+        )
         response = _api(
             delivery,
             config,
@@ -527,8 +539,18 @@ def _worker_config(config: dict, identity: dict, release_sha: str, *, enable_ret
     return result
 
 
-def _write_worker_project(delivery, config: dict, source_path: Path, worker_name: str, bucket_name: str, release_sha: str,
-                          identity: dict, directory: Path, *, enable_retention: bool = True) -> Path:
+def _write_worker_project(
+    delivery,
+    config: dict,
+    source_path: Path,
+    worker_name: str,
+    bucket_name: str,
+    release_sha: str,
+    identity: dict,
+    directory: Path,
+    *,
+    enable_retention: bool = True,
+) -> Path:
     _settings(delivery, config)
     shutil.copyfile(source_path, directory / "private-photos.mjs")
     worker_config = _worker_config(config, identity, release_sha, enable_retention=enable_retention)
@@ -566,8 +588,18 @@ def _wrangler(
     delivery.run(command, cwd=cwd, env=env, input_text=secret, label="Cloudflare Wrangler")
 
 
-def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, release_sha: str,
-                   secrets: dict[str, str], journal: Path | None, state: dict, *, enable_retention: bool = True) -> dict:
+def _deploy_worker(
+    delivery,
+    config: dict,
+    source_path: Path,
+    identity: dict,
+    release_sha: str,
+    secrets: dict[str, str],
+    journal: Path | None,
+    state: dict,
+    *,
+    enable_retention: bool = True,
+) -> dict:
     for key, value in secrets.items():
         if not isinstance(value, str) or len(value) < 32:
             _error(delivery, f"{key} must be configured with at least 32 random characters.")
@@ -587,37 +619,99 @@ def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, re
     directory = Path(temp.name)
     try:
         config_path = _write_worker_project(
-            delivery, config, source_path, identity["workerName"], identity["bucketName"],
-            release_sha, identity, directory, enable_retention=enable_retention,
+            delivery,
+            config,
+            source_path,
+            identity["workerName"],
+            identity["bucketName"],
+            release_sha,
+            identity,
+            directory,
+            enable_retention=enable_retention,
         )
         message = f"Parkdex Kip {identity['environment']} {identity['resourceId']} {release_sha}"
-        _set_step(delivery, journal, state, "workerDeploy", {
-            "status": "intent", "name": identity["workerName"], "bucketName": identity["bucketName"],
-            "environment": identity["environment"], "resourceId": identity["resourceId"], "releaseSha": release_sha,
-        })
-        _wrangler(delivery, config, [
-            "deploy", "--config", str(config_path), "--tag", release_sha, "--message", message,
-        ], cwd=directory)
-        _set_step(delivery, journal, state, "workerDeploy", {
-            "status": "deployed", "name": identity["workerName"], "bucketName": identity["bucketName"],
-            "environment": identity["environment"], "resourceId": identity["resourceId"], "releaseSha": release_sha,
-        })
+        _set_step(
+            delivery,
+            journal,
+            state,
+            "workerDeploy",
+            {
+                "status": "intent",
+                "name": identity["workerName"],
+                "bucketName": identity["bucketName"],
+                "environment": identity["environment"],
+                "resourceId": identity["resourceId"],
+                "releaseSha": release_sha,
+            },
+        )
+        _wrangler(
+            delivery,
+            config,
+            [
+                "deploy",
+                "--config",
+                str(config_path),
+                "--tag",
+                release_sha,
+                "--message",
+                message,
+            ],
+            cwd=directory,
+        )
+        _set_step(
+            delivery,
+            journal,
+            state,
+            "workerDeploy",
+            {
+                "status": "deployed",
+                "name": identity["workerName"],
+                "bucketName": identity["bucketName"],
+                "environment": identity["environment"],
+                "resourceId": identity["resourceId"],
+                "releaseSha": release_sha,
+            },
+        )
         namespace = _verify_namespace(delivery, config, identity["workerName"])
-        state.setdefault("resources", {}).update({
-            "photoWorkerName": identity["workerName"],
-            "photoBucketName": identity["bucketName"],
-            "photoDoNamespaceId": namespace["id"],
-        })
-        _set_step(delivery, journal, state, "workerDeploy", {
-            "status": "deployed", "name": identity["workerName"], "bucketName": identity["bucketName"],
-            "environment": identity["environment"], "resourceId": identity["resourceId"],
-            "releaseSha": release_sha, "doNamespaceId": namespace["id"],
-        })
+        state.setdefault("resources", {}).update(
+            {
+                "photoWorkerName": identity["workerName"],
+                "photoBucketName": identity["bucketName"],
+                "photoDoNamespaceId": namespace["id"],
+            }
+        )
+        _set_step(
+            delivery,
+            journal,
+            state,
+            "workerDeploy",
+            {
+                "status": "deployed",
+                "name": identity["workerName"],
+                "bucketName": identity["bucketName"],
+                "environment": identity["environment"],
+                "resourceId": identity["resourceId"],
+                "releaseSha": release_sha,
+                "doNamespaceId": namespace["id"],
+            },
+        )
         for name, secret_value in secrets.items():
             _set_step(delivery, journal, state, f"secret-{name}", {"status": "intent", "name": identity["workerName"]})
-            _wrangler(delivery, config, [
-                "secret", "put", name, "--name", identity["workerName"], "--config", str(config_path),
-            ], cwd=directory, secret=secret_value + "\n")
+            _wrangler(
+                delivery,
+                config,
+                [
+                    "secret",
+                    "put",
+                    name,
+                    "--name",
+                    identity["workerName"],
+                    "--config",
+                    str(config_path),
+                ],
+                cwd=directory,
+                secret=secret_value + "\n",
+            )
             _set_step(delivery, journal, state, f"secret-{name}", {"status": "stored", "name": identity["workerName"]})
         settings = _worker_settings(delivery, config, identity["workerName"])
         if settings is None:
@@ -627,13 +721,15 @@ def _deploy_worker(delivery, config: dict, source_path: Path, identity: dict, re
         if verified_namespace["id"] != namespace["id"]:
             _error(delivery, "Private-photo Worker Durable Object namespace changed during deployment.")
         url = _worker_url(delivery, config, identity["workerName"])
-        state.setdefault("resources", {}).update({
-            "photoWorkerName": identity["workerName"],
-            "photoBucketName": identity["bucketName"],
-            "photoServiceUrl": url,
-            "photoReleaseSha": release_sha,
-            "photoDoNamespaceId": namespace["id"],
-        })
+        state.setdefault("resources", {}).update(
+            {
+                "photoWorkerName": identity["workerName"],
+                "photoBucketName": identity["bucketName"],
+                "photoServiceUrl": url,
+                "photoReleaseSha": release_sha,
+                "photoDoNamespaceId": namespace["id"],
+            }
+        )
         if journal:
             _save(delivery, journal, state)
         return {
@@ -780,19 +876,28 @@ def provision_environment(
     _save(delivery, journal, state)
     _ensure_bucket(delivery, config, identity, journal, state)
     deployment = _deploy_worker(
-        delivery, config, source, identity, release_sha, secrets, journal, state,
+        delivery,
+        config,
+        source,
+        identity,
+        release_sha,
+        secrets,
+        journal,
+        state,
         enable_retention=False,
     )
     health = _health(deployment["photoServiceUrl"])
     if health.get("status") != "ok" or health.get("releaseSha") != release_sha:
         _error(delivery, f"Private-photo {environment} provisioning health did not report its exact source SHA.")
-    state.setdefault("resources", {}).update({
-        "workerName": identity["workerName"],
-        "bucketName": identity["bucketName"],
-        "photoServiceUrl": deployment["photoServiceUrl"],
-        "doNamespaceId": deployment["doNamespaceId"],
-        "releaseSha": release_sha,
-    })
+    state.setdefault("resources", {}).update(
+        {
+            "workerName": identity["workerName"],
+            "bucketName": identity["bucketName"],
+            "photoServiceUrl": deployment["photoServiceUrl"],
+            "doNamespaceId": deployment["doNamespaceId"],
+            "releaseSha": release_sha,
+        }
+    )
     state["status"] = "provisioned"
     _save(delivery, journal, state)
     print(f"photo-service-url={deployment['photoServiceUrl']}")
@@ -826,11 +931,15 @@ def dispatch_environment(delivery, config: dict, root: Path, sha: str, bundle: d
     # A persistent dispatch is never a bootstrap path. It must use a previously owned bucket.
     secrets = _runtime_photo_secrets(delivery, bundle, environment=environment)
     deployment = _deploy_worker(delivery, config, source, identity, sha, secrets, journal, state)
-    state.setdefault("resources", {}).update({
-        "workerName": identity["workerName"], "bucketName": identity["bucketName"],
-        "photoServiceUrl": deployment["photoServiceUrl"], "doNamespaceId": deployment["doNamespaceId"],
-        "releaseSha": sha,
-    })
+    state.setdefault("resources", {}).update(
+        {
+            "workerName": identity["workerName"],
+            "bucketName": identity["bucketName"],
+            "photoServiceUrl": deployment["photoServiceUrl"],
+            "doNamespaceId": deployment["doNamespaceId"],
+            "releaseSha": sha,
+        }
+    )
     state["status"] = "dispatched"
     _save(delivery, journal, state)
     return {"worker": identity["workerName"], "bucket": identity["bucketName"], "sha": sha, "url": deployment["photoServiceUrl"]}

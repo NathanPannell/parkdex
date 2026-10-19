@@ -45,10 +45,7 @@ export interface PhotoMetadata {
   createdAt: string;
 }
 
-export type PhotoView =
-  | { status: "missing" }
-  | { status: "pending" }
-  | { status: "ready"; sha256: string; sizeBytes: number; contentType: PhotoContentType };
+export type PhotoView = { status: "missing" } | { status: "pending" } | { status: "ready"; sha256: string; sizeBytes: number; contentType: PhotoContentType };
 
 /** A 3:4 crop normalised 0–1 to the upright photo (src/lib/photoCrop.ts). */
 export interface PhotoCrop {

@@ -26,8 +26,19 @@ PINNED_MANIFEST_SHA256 = "d84ecf3f969cc00c351f85401625024b8f526a2d82ba7344f9980d
 HEX_SHA256 = re.compile(r"^[a-f0-9]{64}$")
 COMMIT_SHA = re.compile(r"^[a-f0-9]{40,64}$")
 PARK_FIELDS = (
-    "id", "name", "short", "category", "region", "lat", "lng", "biome",
-    "shape", "rarity", "scene", "seed", "blurb",
+    "id",
+    "name",
+    "short",
+    "category",
+    "region",
+    "lat",
+    "lng",
+    "biome",
+    "shape",
+    "rarity",
+    "scene",
+    "seed",
+    "blurb",
 )
 SOURCE_PATHS = {
     "data/parks.json": ("src/data/parks.json", "application/json"),
@@ -290,14 +301,16 @@ def load_baseline(root: Path = ROOT) -> Baseline:
 
     object_rows = [dict(entry) for entry in files_by_path.values()]
     manifest_key = f"releases/{PINNED_VERSION}/manifest.json"
-    object_rows.append({
-        "path": "manifest.json",
-        "key": manifest_key,
-        "url": f"{CDN_ORIGIN}/{quote(manifest_key, safe='/')}",
-        "sha256": manifest_sha256,
-        "byte_size": len(manifest_bytes),
-        "content_type": "application/json",
-    })
+    object_rows.append(
+        {
+            "path": "manifest.json",
+            "key": manifest_key,
+            "url": f"{CDN_ORIGIN}/{quote(manifest_key, safe='/')}",
+            "sha256": manifest_sha256,
+            "byte_size": len(manifest_bytes),
+            "content_type": "application/json",
+        }
+    )
     object_rows.sort(key=lambda item: item["path"])
     return Baseline(
         manifest=manifest,
@@ -384,9 +397,7 @@ def _database_url() -> str:
 
 def _read_receipt(conn: Any) -> tuple[Any, ...] | None:
     with conn.cursor() as cursor:
-        cursor.execute(
-            "SELECT manifest_version, manifest_url, manifest_sha256 FROM public.content_bootstrap_receipt WHERE singleton = true"
-        )
+        cursor.execute("SELECT manifest_version, manifest_url, manifest_sha256 FROM public.content_bootstrap_receipt WHERE singleton = true")
         return cursor.fetchone()
 
 
@@ -418,16 +429,18 @@ def _check_existing_seed_rows(cursor: Any, baseline: Baseline) -> None:
 
     expected_objects = {row["path"]: row for row in baseline.object_rows}
     expected_object_keys = {row["key"] for row in baseline.object_rows}
-    cursor.execute(
-        "SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects"
-    )
+    cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects")
     for logical_path, object_key, url, sha256, byte_size, content_type in cursor.fetchall():
         expected = expected_objects.get(logical_path)
         if expected is not None:
             actual = (logical_path, object_key, url, sha256, byte_size, content_type)
             wanted = (
-                expected["path"], expected["key"], expected["url"], expected["sha256"],
-                expected["byte_size"], expected["content_type"],
+                expected["path"],
+                expected["key"],
+                expected["url"],
+                expected["sha256"],
+                expected["byte_size"],
+                expected["content_type"],
             )
             if actual != wanted:
                 raise BootstrapError(f"existing object descriptor differs from the pinned baseline: {logical_path}")
@@ -455,10 +468,7 @@ def _check_existing_seed_rows(cursor: Any, baseline: Baseline) -> None:
         if _json_value(feature, "stored boundary feature") != expected_boundaries[park_id]:
             raise BootstrapError(f"existing boundary differs from the pinned baseline: {park_id}")
 
-    expected_hubs = {
-        position: (hub["name"], hub["lng"], hub["lat"])
-        for position, hub in enumerate(baseline.drive["hubs"])
-    }
+    expected_hubs = {position: (hub["name"], hub["lng"], hub["lat"]) for position, hub in enumerate(baseline.drive["hubs"])}
     cursor.execute("SELECT position, name, lng, lat FROM public.drive_hubs")
     for position, name, lng, lat in cursor.fetchall():
         if position not in expected_hubs or (name, lng, lat) != expected_hubs[position]:
@@ -491,7 +501,9 @@ def _check_existing_seed_rows(cursor: Any, baseline: Baseline) -> None:
     cursor.execute("SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true")
     existing_map = cursor.fetchone()
     if existing_map is not None and tuple(existing_map) != (
-        map_report["version"], map_report["manifestUrl"], map_report["manifestSha256"],
+        map_report["version"],
+        map_report["manifestUrl"],
+        map_report["manifestSha256"],
     ):
         raise BootstrapError("existing map pointer differs from the verified public manifest")
 
@@ -501,9 +513,7 @@ def seed_once(conn: Any, baseline: Baseline, jsonb_factory: Any, environment: st
     with conn.transaction():
         with conn.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", (BOOTSTRAP_LOCK_KEY,))
-            cursor.execute(
-                "SELECT manifest_version, manifest_url, manifest_sha256 FROM public.content_bootstrap_receipt WHERE singleton = true"
-            )
+            cursor.execute("SELECT manifest_version, manifest_url, manifest_sha256 FROM public.content_bootstrap_receipt WHERE singleton = true")
             existing_receipt = cursor.fetchone()
             if existing_receipt is not None:
                 _require_matching_receipt(existing_receipt, baseline)

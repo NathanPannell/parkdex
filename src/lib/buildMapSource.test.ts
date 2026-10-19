@@ -32,8 +32,7 @@ describe("BuildMapSource", () => {
 
   it("reads downloaded squares only when offline", async () => {
     const fetcher = rangeFetch();
-    const readLocal = vi.fn(async (index: number, offset: number, length: number) =>
-      bytes(range(index * 10 + offset, index * 10 + offset + length)));
+    const readLocal = vi.fn(async (index: number, offset: number, length: number) => bytes(range(index * 10 + offset, index * 10 + offset + length)));
     const source = new BuildMapSource({ key: "k", archive, isConnected: () => false, readLocal, fetch: fetcher as unknown as typeof fetch });
 
     const result = await source.getBytes(21, 3);
@@ -44,7 +43,9 @@ describe("BuildMapSource", () => {
   });
 
   it("falls back to a downloaded square when the network request fails", async () => {
-    const fetcher = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    const fetcher = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
     const readLocal = vi.fn(async () => bytes([1, 2]));
     const source = new BuildMapSource({ key: "k", archive, isConnected: () => true, readLocal, fetch: fetcher as unknown as typeof fetch });
 

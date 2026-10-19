@@ -3,16 +3,11 @@ import { coverImageUrl, fetchParkSummary, FOUNDER_POINTS, type ParkSummary } fro
 
 /** A park's founder and visit counts as the park sheet sees them. */
 export type SummaryState =
-  | { status: "loading"; summary: ParkSummary | null }
-  | { status: "ready"; summary: ParkSummary }
-  | { status: "error"; summary: ParkSummary | null };
+  { status: "loading"; summary: ParkSummary | null } | { status: "ready"; summary: ParkSummary } | { status: "error"; summary: ParkSummary | null };
 
 /** What the sheet offers for founding: nothing, the button, or a hint to go there first. */
 export type FounderCta =
-  | { kind: "hidden" }
-  | { kind: "found"; points: number }
-  | { kind: "hint"; text: string; points: number }
-  | { kind: "pending"; text: string };
+  { kind: "hidden" } | { kind: "found"; points: number } | { kind: "hint"; text: string; points: number } | { kind: "pending"; text: string };
 
 export const FOUNDER_HINT = "Visit the park to become its founder";
 export const REVIEW_PENDING_TEXT = "Your photo is waiting for review";

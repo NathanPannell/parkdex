@@ -26,7 +26,9 @@ export function CrewPanel({ phase, flag, crew, now, onShowCode }: Props) {
   if (phase.kind === "closed") {
     return (
       <div className="crew-panel is-closed" aria-label="Crew" role="group">
-        <p className="crew-panel__closed"><Icon name="lock" size={14} /> Crew window closed · crew of {size}</p>
+        <p className="crew-panel__closed">
+          <Icon name="lock" size={14} /> Crew window closed · crew of {size}
+        </p>
       </div>
     );
   }

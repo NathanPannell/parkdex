@@ -1,4 +1,5 @@
 """Provider-free tests for the owned private-photo lifecycle adapter."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -111,11 +112,16 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         self.delivery.ROOT = self.root
         self.source = self.root / "cloudflare" / "private-photos.mjs"
         self.source.parent.mkdir(parents=True)
-        self.source.write_text("\n".join([
-            "export class AccountPhotos {}",
-            "export function createPhotoWorker() {}",
-            "PHOTO_SERVICE_TOKEN ACCOUNT_PHOTOS PHOTOS PHOTO_MAX_BYTES KIP_RETENTION_SECRET RETENTION_URL",
-        ]), encoding="utf-8")
+        self.source.write_text(
+            "\n".join(
+                [
+                    "export class AccountPhotos {}",
+                    "export function createPhotoWorker() {}",
+                    "PHOTO_SERVICE_TOKEN ACCOUNT_PHOTOS PHOTOS PHOTO_MAX_BYTES KIP_RETENTION_SECRET RETENTION_URL",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
     def tearDown(self):
         self.temp.cleanup()
@@ -187,10 +193,14 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         with patch.object(photos, "_api", return_value={"success": True, "result": {"enabled": True}}):
             with self.assertRaisesRegex(DeliveryError, "public r2.dev access"):
                 photos._require_private_bucket(self.delivery, self.cfg, BUCKET)
-        with patch.object(photos, "_api", side_effect=[
-            {"success": True, "result": {"enabled": False}},
-            {"success": True, "result": {"domains": [{"domain": "photos.example.test", "enabled": False}]}},
-        ]):
+        with patch.object(
+            photos,
+            "_api",
+            side_effect=[
+                {"success": True, "result": {"enabled": False}},
+                {"success": True, "result": {"domains": [{"domain": "photos.example.test", "enabled": False}]}},
+            ],
+        ):
             with self.assertRaisesRegex(DeliveryError, "custom-domain association"):
                 photos._require_private_bucket(self.delivery, self.cfg, BUCKET)
 
@@ -235,7 +245,7 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
             )
         args, kwargs = self.delivery.last_run
         self.assertIn("wrangler@4.132.0", " ".join(args))
-        self.assertNotIn("--yes", args[args.index("--") + 1:])
+        self.assertNotIn("--yes", args[args.index("--") + 1 :])
         self.assertNotIn("CLOUDFLARE_API_TOKEN", kwargs["env"])
         self.assertNotIn(token, json.dumps(kwargs["env"]))
         self.assertNotIn(token, self.delivery.registered)
@@ -272,12 +282,19 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
                 "doNamespaceId": "ns-staging",
             }
 
-        with patch.object(photos, "validate_candidate") as validate, \
-             patch.object(photos, "_ensure_bucket"), \
-             patch.object(photos, "_deploy_worker", side_effect=deploy), \
-             patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": OTHER_SHA}):
+        with (
+            patch.object(photos, "validate_candidate") as validate,
+            patch.object(photos, "_ensure_bucket"),
+            patch.object(photos, "_deploy_worker", side_effect=deploy),
+            patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": OTHER_SHA}),
+        ):
             result = photos.provision_staging(
-                self.delivery, self.cfg, journal, apply=True, candidate_root=candidate, release_sha=OTHER_SHA,
+                self.delivery,
+                self.cfg,
+                journal,
+                apply=True,
+                candidate_root=candidate,
+                release_sha=OTHER_SHA,
             )
         self.assertEqual(validate.call_args.args[2], candidate)
         self.assertEqual(deploy_args[0][0], worker_source)
@@ -291,10 +308,12 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         state["intent"]["cloudflarePhotos"] = {
             "bucketCreate": {"status": "created", "name": BUCKET, "owner": marker},
         }
-        with patch.object(photos, "_bucket_names", return_value={BUCKET}), \
-             patch.object(photos, "_owner_marker", return_value=None), \
-             patch.object(photos, "_require_private_bucket"), \
-             patch.object(photos, "_put_owner_marker") as put:
+        with (
+            patch.object(photos, "_bucket_names", return_value={BUCKET}),
+            patch.object(photos, "_owner_marker", return_value=None),
+            patch.object(photos, "_require_private_bucket"),
+            patch.object(photos, "_put_owner_marker") as put,
+        ):
             photos._ensure_bucket(self.delivery, self.cfg, identity, None, state)
         put.assert_called_once_with(self.delivery, self.cfg, BUCKET, marker)
         self.assertEqual(state["intent"]["cloudflarePhotos"]["bucketMarker"]["status"], "stored")
@@ -302,9 +321,11 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
     def test_markerless_unjournaled_bucket_is_preserved(self):
         state = staging_state()
         identity = photos._staging_identity(self.cfg)
-        with patch.object(photos, "_bucket_names", return_value={BUCKET}), \
-             patch.object(photos, "_owner_marker", return_value=None), \
-             patch.object(photos, "_put_owner_marker") as put:
+        with (
+            patch.object(photos, "_bucket_names", return_value={BUCKET}),
+            patch.object(photos, "_owner_marker", return_value=None),
+            patch.object(photos, "_put_owner_marker") as put,
+        ):
             with self.assertRaisesRegex(DeliveryError, "without this release's exact ownership marker"):
                 photos._ensure_bucket(self.delivery, self.cfg, identity, None, state)
         put.assert_not_called()
@@ -322,13 +343,15 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
                 self.assertEqual(state["resources"]["photoDoNamespaceId"], "ns-created-first")
                 self.assertTrue(journal.exists())
 
-        with patch.object(photos, "_wrangler", side_effect=wrangler), \
-             patch.object(photos, "_verify_namespace", return_value={"id": "ns-created-first", "use_sqlite": True}), \
-             patch.object(photos, "_worker_settings", side_effect=[None, settings]), \
-             patch.object(photos, "_list_workers", return_value=[]), \
-             patch.object(photos, "_check_worker_settings", return_value={"namespaceId": "ns-created-first"}), \
-             patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"), \
-             patch.object(photos, "_health", side_effect=AssertionError("deployment must defer health checks")):
+        with (
+            patch.object(photos, "_wrangler", side_effect=wrangler),
+            patch.object(photos, "_verify_namespace", return_value={"id": "ns-created-first", "use_sqlite": True}),
+            patch.object(photos, "_worker_settings", side_effect=[None, settings]),
+            patch.object(photos, "_list_workers", return_value=[]),
+            patch.object(photos, "_check_worker_settings", return_value={"namespaceId": "ns-created-first"}),
+            patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"),
+            patch.object(photos, "_health", side_effect=AssertionError("deployment must defer health checks")),
+        ):
             result = photos._deploy_worker(
                 self.delivery,
                 self.cfg,
@@ -349,8 +372,10 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
         identity = photos._staging_identity(self.cfg)
         bindings = worker_bindings(identity, SHA)
         next(binding for binding in bindings if binding["name"] == "KIP_RESOURCE_ID")["text"] = "foreign-release"
-        with patch.object(photos, "_worker_settings", return_value={"bindings": bindings}), \
-             patch.object(photos, "_wrangler", side_effect=AssertionError("foreign worker must not be overwritten")):
+        with (
+            patch.object(photos, "_worker_settings", return_value={"bindings": bindings}),
+            patch.object(photos, "_wrangler", side_effect=AssertionError("foreign worker must not be overwritten")),
+        ):
             with self.assertRaisesRegex(DeliveryError, "ownership metadata mismatch for KIP_RESOURCE_ID"):
                 photos._deploy_worker(
                     self.delivery,
@@ -365,21 +390,25 @@ class PrivatePhotoAdapterTests(unittest.TestCase):
 
     def test_staging_health_gate_rejects_different_merged_sha(self):
         identity = photos._staging_identity(self.cfg)
-        with patch.object(photos, "_check_bucket_owned", return_value=True), \
-             patch.object(photos, "_worker_settings", return_value={"bindings": worker_bindings(identity, OTHER_SHA)}), \
-             patch.object(photos, "_verify_namespace", return_value={"id": "ns-test", "use_sqlite": True}), \
-             patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"), \
-             patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": OTHER_SHA}):
+        with (
+            patch.object(photos, "_check_bucket_owned", return_value=True),
+            patch.object(photos, "_worker_settings", return_value={"bindings": worker_bindings(identity, OTHER_SHA)}),
+            patch.object(photos, "_verify_namespace", return_value={"id": "ns-test", "use_sqlite": True}),
+            patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"),
+            patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": OTHER_SHA}),
+        ):
             with self.assertRaisesRegex(DeliveryError, "ownership metadata mismatch for KIP_RELEASE_SHA"):
                 photos._verify_staging_resources(self.delivery, self.cfg, SHA)
 
     def test_production_health_gate_uses_only_production_bucket_worker_and_sha(self):
         identity = photos._production_identity(self.cfg)
-        with patch.object(photos, "_check_bucket_owned", return_value=True), \
-             patch.object(photos, "_worker_settings", return_value={"bindings": worker_bindings(identity, SHA)}), \
-             patch.object(photos, "_verify_namespace", return_value={"id": "ns-prod", "use_sqlite": True}), \
-             patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"), \
-             patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": SHA}):
+        with (
+            patch.object(photos, "_check_bucket_owned", return_value=True),
+            patch.object(photos, "_worker_settings", return_value={"bindings": worker_bindings(identity, SHA)}),
+            patch.object(photos, "_verify_namespace", return_value={"id": "ns-prod", "use_sqlite": True}),
+            patch.object(photos, "_worker_url", return_value="https://owned.workers.dev"),
+            patch.object(photos, "_health", return_value={"status": "ok", "releaseSha": SHA}),
+        ):
             verified = photos._verify_production_resources(self.delivery, self.cfg, SHA)
         self.assertEqual(verified["identity"]["workerName"], "parkdex-kip-photos-production")
         self.assertEqual(verified["identity"]["bucketName"], "parkdex-kip-photos-production")

@@ -30,7 +30,8 @@ function pointOnSegment(point: LngLat, a: LngLat, b: LngLat) {
     (point[0] > a[0] + POINT_ON_SEGMENT_EPSILON && point[0] > b[0] + POINT_ON_SEGMENT_EPSILON) ||
     (point[1] < a[1] - POINT_ON_SEGMENT_EPSILON && point[1] < b[1] - POINT_ON_SEGMENT_EPSILON) ||
     (point[1] > a[1] + POINT_ON_SEGMENT_EPSILON && point[1] > b[1] + POINT_ON_SEGMENT_EPSILON)
-  ) return false;
+  )
+    return false;
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const lengthSquared = dx * dx + dy * dy;
@@ -128,10 +129,7 @@ function nudgedInteriorPoint(from: LngLat, polygon: LngLat[][], projections: Edg
   for (const edge of projections) {
     for (const metres of ARRIVAL_NUDGE_METRES) {
       for (const side of [-1, 1]) {
-        const candidate: LngLat = [
-          edge.point[0] + (edge.normalX * metres * side) / kx,
-          edge.point[1] + (edge.normalY * metres * side) / ky,
-        ];
+        const candidate: LngLat = [edge.point[0] + (edge.normalX * metres * side) / kx, edge.point[1] + (edge.normalY * metres * side) / ky];
         const distance = distanceKm(candidate, from);
         if (Number.isFinite(distance)) candidates.push({ point: candidate, distance, order });
         order++;
@@ -145,23 +143,29 @@ function nudgedInteriorPoint(from: LngLat, polygon: LngLat[][], projections: Edg
 function fallbackInteriorPoint(from: LngLat, polygon: LngLat[][]): LngLat | null {
   const outer = polygon[0];
   if (!outer?.length) return null;
-  let minLng = Infinity, maxLng = -Infinity, minLat = Infinity, maxLat = -Infinity;
-  let sumLng = 0, sumLat = 0, count = 0;
+  let minLng = Infinity,
+    maxLng = -Infinity,
+    minLat = Infinity,
+    maxLat = -Infinity;
+  let sumLng = 0,
+    sumLat = 0,
+    count = 0;
   for (const point of outer) {
     if (!isLngLat(point)) continue;
-    minLng = Math.min(minLng, point[0]); maxLng = Math.max(maxLng, point[0]);
-    minLat = Math.min(minLat, point[1]); maxLat = Math.max(maxLat, point[1]);
-    sumLng += point[0]; sumLat += point[1]; count++;
+    minLng = Math.min(minLng, point[0]);
+    maxLng = Math.max(maxLng, point[0]);
+    minLat = Math.min(minLat, point[1]);
+    maxLat = Math.max(maxLat, point[1]);
+    sumLng += point[0];
+    sumLat += point[1];
+    count++;
   }
   if (!count) return null;
   const points: LngLat[] = [[sumLng / count, sumLat / count]];
   const gridSize = 32;
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
-      points.push([
-        minLng + ((x + 0.5) / gridSize) * (maxLng - minLng),
-        minLat + ((y + 0.5) / gridSize) * (maxLat - minLat),
-      ]);
+      points.push([minLng + ((x + 0.5) / gridSize) * (maxLng - minLng), minLat + ((y + 0.5) / gridSize) * (maxLat - minLat)]);
     }
   }
   const candidates = points
@@ -187,20 +191,27 @@ export function arrivalPoint(boundary: Boundary, from: LngLat): LngLat {
   const nearest = candidates[0];
   if (!nearest) throw new Error("Boundary must contain a polygon with a valid outer ring");
   if (strictlyInPolygon(from, nearest.polygon)) return [from[0], from[1]];
-  const point = nudgedInteriorPoint(from, nearest.polygon, nearest.projections)
-    ?? fallbackInteriorPoint(from, nearest.polygon);
+  const point = nudgedInteriorPoint(from, nearest.polygon, nearest.projections) ?? fallbackInteriorPoint(from, nearest.polygon);
   if (!point) throw new Error("Unable to find an interior point for boundary polygon");
   return point;
 }
 
 export function ringBounds(boundary: Boundary): [LngLat, LngLat] {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
   for (const poly of boundary.coordinates)
     for (const [x, y] of poly[0]) {
-      minX = Math.min(minX, x); minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
     }
-  return [[minX, minY], [maxX, maxY]];
+  return [
+    [minX, minY],
+    [maxX, maxY],
+  ];
 }
 
 // A gently curved path between two points, used for the route preview and the demo walk.

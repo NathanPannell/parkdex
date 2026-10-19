@@ -66,15 +66,15 @@ def build(archive: Path, chunk_bytes: int, glyph_source: Path, output: Path, fol
     layout = {"size": size, "chunkBytes": chunk_bytes, "count": count}
     layout_bytes = json.dumps(layout, separators=(",", ":")).encode("utf-8")
 
-    chunks = [data[index * chunk_bytes:(index + 1) * chunk_bytes] for index in range(count)]
+    chunks = [data[index * chunk_bytes : (index + 1) * chunk_bytes] for index in range(count)]
     entries: list[tuple[str, bytes, str]] = [(f"map/{folder}/manifest.json", layout_bytes, "application/json")]
     entries += [(f"map/{folder}/{index:03d}.bin", chunk, "application/octet-stream") for index, chunk in enumerate(chunks)]
     fonts = font_descriptors(glyph_source)
 
     # The version covers paths, hashes and sizes only, so it can be computed before keys exist.
-    version_files = [
-        {"path": path, "sha256": hashlib.sha256(blob).hexdigest(), "byte_size": len(blob)} for path, blob, _ in entries
-    ] + [{"path": item["path"], "sha256": item["sha256"], "byte_size": item["byte_size"]} for item in fonts]
+    version_files = [{"path": path, "sha256": hashlib.sha256(blob).hexdigest(), "byte_size": len(blob)} for path, blob, _ in entries] + [
+        {"path": item["path"], "sha256": item["sha256"], "byte_size": item["byte_size"]} for item in fonts
+    ]
     version_files.sort(key=lambda item: item["path"])
     version = hashlib.sha256(canonical_json({"mapManifest": layout, "files": version_files})).hexdigest()
 

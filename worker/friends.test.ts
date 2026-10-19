@@ -25,10 +25,18 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 
 function session(transport: "native" | "web"): StoredSession {
   return {
-    id: ACCOUNT, email: "player@example.test", emailVerified: true, displayName: "Player", providers: ["email"],
-    sessionId: "22222222-2222-4222-8222-222222222222", tokenHash: hash(transport === "native" ? bearer : cookieToken),
-    csrfHash: transport === "web" ? hash(csrfToken) : null, transport,
-    expiresAt: "2099-01-01T00:00:00Z", absoluteExpiresAt: "2099-02-01T00:00:00Z", reauthenticatedAt: null,
+    id: ACCOUNT,
+    email: "player@example.test",
+    emailVerified: true,
+    displayName: "Player",
+    providers: ["email"],
+    sessionId: "22222222-2222-4222-8222-222222222222",
+    tokenHash: hash(transport === "native" ? bearer : cookieToken),
+    csrfHash: transport === "web" ? hash(csrfToken) : null,
+    transport,
+    expiresAt: "2099-01-01T00:00:00Z",
+    absoluteExpiresAt: "2099-02-01T00:00:00Z",
+    reauthenticatedAt: null,
   };
 }
 
@@ -53,8 +61,12 @@ class MemoryFriendsStore implements FriendsStore {
   weekCalls: string[] = [];
   removed = true;
 
-  async friendCode() { return this.code; }
-  async resetFriendCode() { return this.code === null ? null : "WXYZ6789"; }
+  async friendCode() {
+    return this.code;
+  }
+  async resetFriendCode() {
+    return this.code === null ? null : "WXYZ6789";
+  }
   async addFriend(accountId: string, code: string, limit: number) {
     this.addCalls.push({ accountId, code, limit });
     return this.addResult;
@@ -88,12 +100,17 @@ function setup() {
 }
 
 async function code(response: Response): Promise<string> {
-  return (await response.json() as { code: string }).code;
+  return ((await response.json()) as { code: string }).code;
 }
 
 test("every friends route needs an account", async () => {
   const { call, store } = setup();
-  for (const [method, path, body] of [["GET", "/api/friends"], ["POST", "/api/friends", { code: "ABCD2345" }], ["DELETE", "/api/friends/bee"], ["POST", "/api/friends/code"]] as const) {
+  for (const [method, path, body] of [
+    ["GET", "/api/friends"],
+    ["POST", "/api/friends", { code: "ABCD2345" }],
+    ["DELETE", "/api/friends/bee"],
+    ["POST", "/api/friends/code"],
+  ] as const) {
     const response = await call(method, path, body, "none");
     assert.equal(response.status, 401, `${method} ${path}`);
     assert.equal(await code(response), "authentication_required");
@@ -144,12 +161,21 @@ test("adding a friend normalizes the code and passes the friend limit", async ()
   store.addResult = { status: "already_friends", friend: { handle: "bee", flagSeed: "fedcba9876543210" } };
   const replay = await call("POST", "/api/friends", { code: "ABCD2345" });
   assert.equal(replay.status, 200, "a resent offline add is not an error");
-  assert.equal((await replay.json() as { status: string }).status, "already_friends");
+  assert.equal(((await replay.json()) as { status: string }).status, "already_friends");
 });
 
 test("friend code bodies are strictly validated before the store is touched", async () => {
   const { call, store } = setup();
-  for (const body of [{}, { code: 12345678 }, { code: "ABCD2345", extra: true }, { code: "ABC" }, { code: "ABCD234O" }, { code: "ABCD2341" }, { code: "x".repeat(65) }, ["ABCD2345"]]) {
+  for (const body of [
+    {},
+    { code: 12345678 },
+    { code: "ABCD2345", extra: true },
+    { code: "ABC" },
+    { code: "ABCD234O" },
+    { code: "ABCD2341" },
+    { code: "x".repeat(65) },
+    ["ABCD2345"],
+  ]) {
     const response = await call("POST", "/api/friends", body);
     assert.equal(response.status, 400, JSON.stringify(body));
   }
@@ -202,8 +228,10 @@ test("routing rejects wrong methods and unknown friends paths", async () => {
 });
 
 test("stored add results are parsed strictly", () => {
-  assert.deepEqual(addResultFromJson('{"status":"added","friend":{"handle":"bee","flagSeed":"fedcba9876543210"}}'),
-    { status: "added", friend: { handle: "bee", flagSeed: "fedcba9876543210" } });
+  assert.deepEqual(addResultFromJson('{"status":"added","friend":{"handle":"bee","flagSeed":"fedcba9876543210"}}'), {
+    status: "added",
+    friend: { handle: "bee", flagSeed: "fedcba9876543210" },
+  });
   assert.deepEqual(addResultFromJson({ status: "code_not_found" }), { status: "code_not_found" });
   assert.throws(() => addResultFromJson({ status: "maybe" }));
 });

@@ -32,9 +32,15 @@ function memoryStorage() {
 }
 
 const throwingStorage = {
-  getItem: () => { throw new Error("SecurityError"); },
-  setItem: () => { throw new Error("QuotaExceededError"); },
-  removeItem: () => { throw new Error("SecurityError"); },
+  getItem: () => {
+    throw new Error("SecurityError");
+  },
+  setItem: () => {
+    throw new Error("QuotaExceededError");
+  },
+  removeItem: () => {
+    throw new Error("SecurityError");
+  },
 };
 
 /** Show the waiting tip, as the host does, and return its token. */
@@ -61,7 +67,12 @@ describe("Kip's Tips", () => {
       expect(tip.pages.length).toBeLessThanOrEqual(2);
       for (const page of tip.pages) {
         expect(page.title).toMatch(/^[A-Z]/);
-        expect(page.title.split(" ").slice(1).some((word) => /^[A-Z][a-z]/.test(word) && word !== "Dex")).toBe(false);
+        expect(
+          page.title
+            .split(" ")
+            .slice(1)
+            .some((word) => /^[A-Z][a-z]/.test(word) && word !== "Dex"),
+        ).toBe(false);
         expect(page.body.length).toBeLessThanOrEqual(140);
       }
     }
@@ -93,7 +104,12 @@ describe("Kip's Tips", () => {
   });
 
   it("works when localStorage itself cannot be reached", () => {
-    Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new Error("blocked"); } });
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new Error("blocked");
+      },
+    });
     try {
       expect(requestKipTip("points")).toBe(true);
       closeKipTip(showCurrent(), "skip", 0);

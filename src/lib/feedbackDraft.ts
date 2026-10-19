@@ -95,7 +95,7 @@ export async function loadFeedbackScreenshot(generation: string): Promise<SavedF
 }
 
 export async function saveFeedbackScreenshot(screenshot: SavedFeedbackScreenshot): Promise<void> {
-  await updateState((state) => ({ screenshot, attempt: undefined }));
+  await updateState(() => ({ screenshot, attempt: undefined }));
 }
 
 export async function clearFeedbackScreenshot(generation: string): Promise<void> {
@@ -297,14 +297,7 @@ function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number): P
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
-function drawOrientedImage(
-  context: CanvasRenderingContext2D,
-  bitmap: ImageBitmap,
-  width: number,
-  height: number,
-  scale: number,
-  orientation: number,
-) {
+function drawOrientedImage(context: CanvasRenderingContext2D, bitmap: ImageBitmap, width: number, height: number, scale: number, orientation: number) {
   const w = width * scale;
   const h = height * scale;
   switch (orientation) {

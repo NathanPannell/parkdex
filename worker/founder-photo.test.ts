@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  createPhotoChecker, decidePhoto, DEFAULT_FLAG_THRESHOLDS, FLAG_MESSAGES, PHOTO_FLAGS, PHOTO_MODERATION_TIMEOUT_MS, PHOTO_QUESTIONS, photoState,
-  type PhotoAnswers, type PhotoFlag,
+  createPhotoChecker,
+  decidePhoto,
+  DEFAULT_FLAG_THRESHOLDS,
+  FLAG_MESSAGES,
+  PHOTO_FLAGS,
+  PHOTO_MODERATION_TIMEOUT_MS,
+  PHOTO_QUESTIONS,
+  photoState,
+  type PhotoAnswers,
+  type PhotoFlag,
 } from "./founderPhoto.ts";
 
 const no = { choice: "no", probabilities: { yes: 0.02, no: 0.98 } };
@@ -24,7 +32,10 @@ test("the production flag thresholds are the ones chosen in the photo lab", () =
 test("a photo with no flag above its threshold is approved; there is no unsure", () => {
   assert.deepEqual(decidePhoto(answers()), { outcome: "approve", flags: [] });
   // Fairly likely flags that stay at or below their thresholds still approve.
-  assert.deepEqual(decidePhoto(answers({ people: 0.8, lighting: 0.79, not_park: 0.95, inappropriate: 0.9, not_photo: 0.6, personal_info: 0.5 })), { outcome: "approve", flags: [] });
+  assert.deepEqual(decidePhoto(answers({ people: 0.8, lighting: 0.79, not_park: 0.95, inappropriate: 0.9, not_photo: 0.6, personal_info: 0.5 })), {
+    outcome: "approve",
+    flags: [],
+  });
 });
 
 test("each flag above its threshold rejects the photo and names itself, most likely first", () => {
@@ -33,8 +44,10 @@ test("each flag above its threshold rejects the photo and names itself, most lik
     assert.deepEqual(decidePhoto(answers({ [flag]: limit + 0.01 })), { outcome: "reject", flags: [flag] }, flag);
     assert.deepEqual(decidePhoto(answers({ [flag]: limit })), { outcome: "approve", flags: [] }, `${flag} exactly at its threshold does not count`);
   }
-  assert.deepEqual(decidePhoto(answers({ lighting: 0.85, not_park: 0.99, personal_info: 0.98 })),
-    { outcome: "reject", flags: ["not_park", "personal_info", "lighting"] });
+  assert.deepEqual(decidePhoto(answers({ lighting: 0.85, not_park: 0.99, personal_info: 0.98 })), {
+    outcome: "reject",
+    flags: ["not_park", "personal_info", "lighting"],
+  });
 });
 
 test("decisions over a grid of probabilities follow the rule exactly", () => {
@@ -77,7 +90,12 @@ test("the checker sends one Decisions call with the image as a base64 data URL a
   const fetcher = async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(url), body: JSON.parse(String(init?.body)) as Record<string, unknown>, headers: new Headers(init?.headers) });
     const reply = answers();
-    return new Response(JSON.stringify({ model: reply.model, answers: Object.fromEntries(Object.entries(reply.answers).map(([name, answer]) => [name, { type: "choice", ...answer }])) }));
+    return new Response(
+      JSON.stringify({
+        model: reply.model,
+        answers: Object.fromEntries(Object.entries(reply.answers).map(([name, answer]) => [name, { type: "choice", ...answer }])),
+      }),
+    );
   };
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
   const checker = createPhotoChecker({ OPENROUTER_API_KEY: "test-key-not-real" }, fetcher);
@@ -97,15 +115,31 @@ test("the checker sends one Decisions call with the image as a base64 data URL a
 test("no key, an error, a malformed answer or a slow model gives no answer", async () => {
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
   const input = { jpeg, parkName: "Paterson Park", parkKind: "leisure=park" };
-  assert.equal(await createPhotoChecker({}, async () => { throw new Error("must not be called"); })(input), null);
+  assert.equal(
+    await createPhotoChecker({}, async () => {
+      throw new Error("must not be called");
+    })(input),
+    null,
+  );
   assert.equal(await createPhotoChecker({ OPENROUTER_API_KEY: "k" }, async () => new Response("busy", { status: 503 }))(input), null);
-  assert.equal(await createPhotoChecker({ OPENROUTER_API_KEY: "k" }, async () => new Response(JSON.stringify({ answers: { verdict: { type: "choice", choice: "approve" } } })))(input), null);
+  assert.equal(
+    await createPhotoChecker(
+      { OPENROUTER_API_KEY: "k" },
+      async () => new Response(JSON.stringify({ answers: { verdict: { type: "choice", choice: "approve" } } })),
+    )(input),
+    null,
+  );
   // Five flags answered and one missing is no answer, never an approval.
   const partial = Object.fromEntries(PHOTO_FLAGS.slice(1).map((flag) => [flag, { type: "choice", ...no }]));
   assert.equal(await createPhotoChecker({ OPENROUTER_API_KEY: "k" }, async () => new Response(JSON.stringify({ model: "m", answers: partial })))(input), null);
-  const slow = createPhotoChecker({ OPENROUTER_API_KEY: "k" }, (_url, init) => new Promise((_resolve, reject) => {
-    init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
-  }), 20);
+  const slow = createPhotoChecker(
+    { OPENROUTER_API_KEY: "k" },
+    (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
+    20,
+  );
   assert.equal(await slow(input), null);
   assert.equal(PHOTO_MODERATION_TIMEOUT_MS, 8_000);
 });

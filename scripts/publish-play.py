@@ -86,10 +86,7 @@ def describe_track(track: dict) -> str:
     releases = track.get("releases") or []
     if not releases:
         return "no releases"
-    return "; ".join(
-        f"{release.get('name', '?')} [{release.get('status', '?')}] codes {','.join(release.get('versionCodes', []))}"
-        for release in releases
-    )
+    return "; ".join(f"{release.get('name', '?')} [{release.get('status', '?')}] codes {','.join(release.get('versionCodes', []))}" for release in releases)
 
 
 def session(key_path: Path):
@@ -121,8 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--status", default="completed", choices=("completed", "draft"))
     parser.add_argument("--apply", action="store_true", help="upload and commit; without it nothing changes")
     parser.add_argument("--allow-production", action="store_true")
-    parser.add_argument("--changes-not-sent-for-review", action="store_true",
-                        help="commit without sending changes for review, when Play asks for it")
+    parser.add_argument("--changes-not-sent-for-review", action="store_true", help="commit without sending changes for review, when Play asks for it")
     args = parser.parse_args(argv)
 
     try:
@@ -146,16 +142,22 @@ def main(argv: list[str] | None = None) -> int:
             expected = provenance.get("versionCode")
             if expected is not None and int(expected) <= highest:
                 raise PublishError(f"Version code {expected} is not above the highest uploaded, {highest}.")
-            print(f"bundle {args.aab.name}: version {expected or '?'} ({provenance.get('versionName') or '?'}), "
-                  f"source {str(provenance.get('sourceSha') or '?')[:12]}; highest uploaded {highest}")
+            print(
+                f"bundle {args.aab.name}: version {expected or '?'} ({provenance.get('versionName') or '?'}), "
+                f"source {str(provenance.get('sourceSha') or '?')[:12]}; highest uploaded {highest}"
+            )
             if not args.apply:
                 print("dry run: nothing uploaded. Pass --apply to upload and release.")
                 return 0
 
             with args.aab.open("rb") as body:
                 uploaded = call(
-                    http, "POST", f"{UPLOAD_API}/{PACKAGE_NAME}/edits/{edit['id']}/bundles?uploadType=media",
-                    data=body, headers={"Content-Type": "application/octet-stream"}, timeout=900,
+                    http,
+                    "POST",
+                    f"{UPLOAD_API}/{PACKAGE_NAME}/edits/{edit['id']}/bundles?uploadType=media",
+                    data=body,
+                    headers={"Content-Type": "application/octet-stream"},
+                    timeout=900,
                 )
             version_code = int(uploaded["versionCode"])
             if expected is not None and version_code != int(expected):

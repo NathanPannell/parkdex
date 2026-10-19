@@ -6,11 +6,25 @@ import type { AccountCursor, EventCursor, EventFilter, EventRow } from "./types.
 export const DB_EVENT_TYPES = ["db_read", "db_write"] as const;
 /** Every event type kip_analytics.events accepts (interactions_002 and founders_001 to founders_003 checks). */
 export const EVENT_TYPES = [
-  "flag_planted", "flag_taken", "flag_held", "visit_already_today", "flag_fell",
-  "leaderboard_viewed", "takeover_message_seen", "handle_set",
-  "park_founded", "founder_photo_checked", "founding_review_requested", "founding_review_decided", "park_removed",
-  "crew_joined", "crew_code_shown", "visit_logged_protected",
-  "park_viewed", "directions_opened", "park_claimed",
+  "flag_planted",
+  "flag_taken",
+  "flag_held",
+  "visit_already_today",
+  "flag_fell",
+  "leaderboard_viewed",
+  "takeover_message_seen",
+  "handle_set",
+  "park_founded",
+  "founder_photo_checked",
+  "founding_review_requested",
+  "founding_review_decided",
+  "park_removed",
+  "crew_joined",
+  "crew_code_shown",
+  "visit_logged_protected",
+  "park_viewed",
+  "directions_opened",
+  "park_claimed",
   ...DB_EVENT_TYPES,
 ] as const;
 
@@ -58,15 +72,16 @@ export interface ParsedEventQuery {
  * times over.
  */
 export function parseEventQuery(url: URL, now: Date): ParsedEventQuery {
-  const requested = (single(url, "type") ?? "").split(",").map((type) => type.trim()).filter(Boolean);
+  const requested = (single(url, "type") ?? "")
+    .split(",")
+    .map((type) => type.trim())
+    .filter(Boolean);
   for (const type of requested) {
     if (!(EVENT_TYPES as readonly string[]).includes(type)) throw new HttpError(400, "invalid_query", `Unknown event type ${type}.`);
   }
   const includeDb = single(url, "db") === "1";
   // Types the operator picked by name are always shown; the toggle only widens "all types".
-  const types = requested.length
-    ? [...new Set(requested)]
-    : EVENT_TYPES.filter((type) => includeDb || !(DB_EVENT_TYPES as readonly string[]).includes(type));
+  const types = requested.length ? [...new Set(requested)] : EVENT_TYPES.filter((type) => includeDb || !(DB_EVENT_TYPES as readonly string[]).includes(type));
 
   const oldest = now.getTime() - RETENTION_DAYS * DAY_MS;
   const to = Math.min(instant(single(url, "to"), "To") ?? now.getTime() + 60_000, now.getTime() + 60_000);
@@ -107,7 +122,7 @@ function encode(value: unknown): string {
 function decode(value: string): Record<string, unknown> {
   if (value.length > 256 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("invalid cursor");
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  const parsed = JSON.parse(atob(base64 + "=".repeat((4 - base64.length % 4) % 4))) as unknown;
+  const parsed = JSON.parse(atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4))) as unknown;
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("invalid cursor");
   return parsed as Record<string, unknown>;
 }
@@ -119,7 +134,8 @@ export function encodeEventCursor(row: { receivedAt: string; id: string }): stri
 export function decodeEventCursor(value: string): EventCursor {
   try {
     const parsed = decode(value);
-    if (typeof parsed.t !== "string" || !Number.isFinite(Date.parse(parsed.t)) || typeof parsed.id !== "string" || !UUID.test(parsed.id)) throw new Error("invalid cursor");
+    if (typeof parsed.t !== "string" || !Number.isFinite(Date.parse(parsed.t)) || typeof parsed.id !== "string" || !UUID.test(parsed.id))
+      throw new Error("invalid cursor");
     return { receivedAt: new Date(parsed.t).toISOString(), id: parsed.id.toLowerCase() };
   } catch {
     throw new HttpError(400, "invalid_cursor", "Invalid events cursor.");
@@ -133,7 +149,8 @@ export function encodeAccountCursor(row: { createdAt: string; id: string }): str
 export function decodeAccountCursor(value: string): AccountCursor {
   try {
     const parsed = decode(value);
-    if (typeof parsed.c !== "string" || !Number.isFinite(Date.parse(parsed.c)) || typeof parsed.id !== "string" || !UUID.test(parsed.id)) throw new Error("invalid cursor");
+    if (typeof parsed.c !== "string" || !Number.isFinite(Date.parse(parsed.c)) || typeof parsed.id !== "string" || !UUID.test(parsed.id))
+      throw new Error("invalid cursor");
     return { createdAt: new Date(parsed.c).toISOString(), id: parsed.id.toLowerCase() };
   } catch {
     throw new HttpError(400, "invalid_cursor", "Invalid accounts cursor.");
@@ -141,8 +158,23 @@ export function decodeAccountCursor(value: string): AccountCursor {
 }
 
 export const CSV_COLUMNS = [
-  "event_id", "event_type", "occurred_at", "received_at", "route", "account_id", "handle", "installation_id", "app_version",
-  "bundle_id", "environment", "operation", "tables", "duration_ms", "result", "park_id", "properties",
+  "event_id",
+  "event_type",
+  "occurred_at",
+  "received_at",
+  "route",
+  "account_id",
+  "handle",
+  "installation_id",
+  "app_version",
+  "bundle_id",
+  "environment",
+  "operation",
+  "tables",
+  "duration_ms",
+  "result",
+  "park_id",
+  "properties",
 ] as const;
 
 function csvCell(value: unknown): string {
@@ -154,10 +186,29 @@ function csvCell(value: unknown): string {
 }
 
 export function csvRow(row: EventRow): string {
-  return [
-    row.id, row.type, row.occurredAt, row.receivedAt, row.route, row.accountId, row.handle, row.installationId, row.appVersion,
-    row.bundleId, row.environment, row.operation, row.tables, row.durationMs, row.result, row.parkId, row.properties,
-  ].map(csvCell).join(",") + "\r\n";
+  return (
+    [
+      row.id,
+      row.type,
+      row.occurredAt,
+      row.receivedAt,
+      row.route,
+      row.accountId,
+      row.handle,
+      row.installationId,
+      row.appVersion,
+      row.bundleId,
+      row.environment,
+      row.operation,
+      row.tables,
+      row.durationMs,
+      row.result,
+      row.parkId,
+      row.properties,
+    ]
+      .map(csvCell)
+      .join(",") + "\r\n"
+  );
 }
 
 export function csvHeader(): string {

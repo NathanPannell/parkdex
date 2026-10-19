@@ -9,9 +9,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const SCENE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PARK_ID = /^[a-z0-9][a-z0-9-]*$/;
 const SCENE_ASSET_ID = /^art\/badges\/scenes\/[a-z0-9]+(?:-[a-z0-9]+)*\.webp$/;
-const PARK_FIELDS = [
-  "id", "name", "short", "category", "region", "lat", "lng", "biome", "shape", "rarity", "scene", "seed", "blurb",
-] as const;
+const PARK_FIELDS = ["id", "name", "short", "category", "region", "lat", "lng", "biome", "shape", "rarity", "scene", "seed", "blurb"] as const;
 const CATEGORIES = new Set(["national", "provincial", "regional", "municipal", "community"]);
 const BIOMES = new Set(["coast", "forest", "mountain", "lake", "waterfall", "river", "cave", "marsh", "heritage"]);
 const SHAPES = new Set(["circle", "hex", "shield", "arch", "seal"]);
@@ -25,7 +23,8 @@ export const CATALOGUE_READER = 3;
 export const CONTENT_CATALOGUE_SCHEMA = "parkdex.content-catalogue/v1" as const;
 const ACCESS_FIELDS = ["googleMapsUrl", "trailheadLat", "trailheadLng"] as const;
 // Matches content_parks_google_maps_url_check in content_003_park_maps_link.sql.
-export const GOOGLE_MAPS_URL = /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
+export const GOOGLE_MAPS_URL =
+  /^https:\/\/(?:(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?\/maps(?:[/?#]\S*)?|maps\.google\.[a-z]{2,3}(?:\.[a-z]{2})?(?:[/?#]\S*)?|maps\.app\.goo\.gl\/\S+|goo\.gl\/maps\/\S+)$/;
 
 type JsonRecord = Record<string, unknown>;
 type RequestLike = {
@@ -39,21 +38,41 @@ type ResponseLike = {
   end(body?: string): void;
 };
 type Park = {
-  id: string; name: string; short: string; category: string; region: string;
-  lat: number; lng: number; biome: string; shape: string; rarity: string;
-  scene: string | null; seed: number; blurb: string;
+  id: string;
+  name: string;
+  short: string;
+  category: string;
+  region: string;
+  lat: number;
+  lng: number;
+  biome: string;
+  shape: string;
+  rarity: string;
+  scene: string | null;
+  seed: number;
+  blurb: string;
   googleMapsUrl?: string | null;
   trailheadLat?: number | null;
   trailheadLng?: number | null;
 };
 type ContentFile = {
-  path: string; key: string; url: string; sha256: string; byte_size: number; content_type: string;
+  path: string;
+  key: string;
+  url: string;
+  sha256: string;
+  byte_size: number;
+  content_type: string;
 };
 type DriveEntry = { drive: ([number, number] | null)[]; walkM: number };
 type MapPointer = { version: string; manifestUrl: string; manifestSha256: string };
 export type CataloguePointer = {
-  version: string; revision: number; minimumReader: number;
-  indexUrl: string; indexSha256: string; indexBytes: number; parkCount: number;
+  version: string;
+  revision: number;
+  minimumReader: number;
+  indexUrl: string;
+  indexSha256: string;
+  indexBytes: number;
+  parkCount: number;
 };
 export type SyncRepository = {
   /** Parks whose reader floor is above `reader` are left out, with their boundaries and drive rows. */
@@ -75,7 +94,11 @@ type NodeHandler = (request: RequestLike, response: ResponseLike) => Promise<voi
 declare const process: { env: Record<string, string | undefined> };
 
 class HttpError extends Error {
-  constructor(readonly status: number, message: string, readonly body?: JsonRecord) {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly body?: JsonRecord,
+  ) {
     super(message);
   }
 }
@@ -166,14 +189,24 @@ function validatePark(value: unknown, reader: number): Park {
   if (googleMapsUrl !== null && (typeof googleMapsUrl !== "string" || googleMapsUrl.length > 2048 || !GOOGLE_MAPS_URL.test(googleMapsUrl))) {
     throw new Error(`park ${id} has an invalid Google Maps link`);
   }
-  const trailheadLat = park.trailheadLat === null || park.trailheadLat === undefined ? null : finiteNumber(park.trailheadLat, `park ${id} trailhead latitude`, -90, 90);
-  const trailheadLng = park.trailheadLng === null || park.trailheadLng === undefined ? null : finiteNumber(park.trailheadLng, `park ${id} trailhead longitude`, -180, 180);
+  const trailheadLat =
+    park.trailheadLat === null || park.trailheadLat === undefined ? null : finiteNumber(park.trailheadLat, `park ${id} trailhead latitude`, -90, 90);
+  const trailheadLng =
+    park.trailheadLng === null || park.trailheadLng === undefined ? null : finiteNumber(park.trailheadLng, `park ${id} trailhead longitude`, -180, 180);
   if ((trailheadLat === null) !== (trailheadLng === null)) throw new Error(`park ${id} trailhead needs both coordinates`);
   const checked: Park = {
-    id, name, short, category, region: park.region as string,
+    id,
+    name,
+    short,
+    category,
+    region: park.region as string,
     lat: finiteNumber(park.lat, `park ${id} latitude`, -90, 90),
     lng: finiteNumber(park.lng, `park ${id} longitude`, -180, 180),
-    biome, shape, rarity, scene, seed: safeInteger(park.seed, `park ${id} seed`, -Number.MAX_SAFE_INTEGER),
+    biome,
+    shape,
+    rarity,
+    scene,
+    seed: safeInteger(park.seed, `park ${id} seed`, -Number.MAX_SAFE_INTEGER),
     blurb: park.blurb,
   };
   if (reader >= MAPS_LINK_READER) Object.assign(checked, { googleMapsUrl, trailheadLat, trailheadLng });
@@ -196,16 +229,16 @@ function validateBoundary(value: unknown, expectedId?: string): JsonRecord {
   if (geometry.type !== "MultiPolygon" || !Array.isArray(geometry.coordinates) || geometry.coordinates.length === 0) {
     throw new Error(`boundary ${id} must have non-empty MultiPolygon coordinates`);
   }
-  geometry.coordinates.forEach((polygonValue, polygonIndex) => {
+  geometry.coordinates.forEach((polygonValue) => {
     if (!Array.isArray(polygonValue) || polygonValue.length === 0) throw new Error(`boundary ${id} polygon is empty`);
-    polygonValue.forEach((ringValue, ringIndex) => {
+    polygonValue.forEach((ringValue) => {
       if (!Array.isArray(ringValue) || ringValue.length < 4) throw new Error(`boundary ${id} ring is too short`);
       const first = ringValue[0];
       const last = ringValue[ringValue.length - 1];
       if (!Array.isArray(first) || !Array.isArray(last) || first.length !== 2 || last.length !== 2 || first[0] !== last[0] || first[1] !== last[1]) {
         throw new Error(`boundary ${id} ring is not closed`);
       }
-      ringValue.forEach((point, pointIndex) => {
+      ringValue.forEach((point) => {
         if (!Array.isArray(point) || point.length !== 2) throw new Error(`boundary ${id} coordinate is invalid`);
         finiteNumber(point[0], `boundary ${id} longitude`, -180, 180);
         finiteNumber(point[1], `boundary ${id} latitude`, -90, 90);
@@ -223,8 +256,10 @@ function validateDriveEntry(value: unknown, label: string, hubCount?: number): D
   const drive = entry.drive.map((route, index): [number, number] | null => {
     if (route === null) return null;
     if (!Array.isArray(route) || route.length !== 2) throw new Error(`${label}.drive[${index}] is invalid`);
-    return [finiteNumber(route[0], `${label}.drive[${index}] distance`, 0, Number.MAX_SAFE_INTEGER),
-      finiteNumber(route[1], `${label}.drive[${index}] minutes`, 0, Number.MAX_SAFE_INTEGER)];
+    return [
+      finiteNumber(route[0], `${label}.drive[${index}] distance`, 0, Number.MAX_SAFE_INTEGER),
+      finiteNumber(route[1], `${label}.drive[${index}] minutes`, 0, Number.MAX_SAFE_INTEGER),
+    ];
   });
   return { drive, walkM: finiteNumber(entry.walkM, `${label}.walkM`, 0, Number.MAX_SAFE_INTEGER) };
 }
@@ -234,15 +269,16 @@ function validateHubs(value: unknown): { name: string; lng: number; lat: number 
   return value.map((rawHub, index) => {
     const hub = record(rawHub, `drive.hubs[${index}]`);
     exactKeys(hub, ["name", "lng", "lat"], `drive.hubs[${index}]`);
-    return { name: text(hub.name, `drive.hubs[${index}].name`),
+    return {
+      name: text(hub.name, `drive.hubs[${index}].name`),
       lng: finiteNumber(hub.lng, `drive.hubs[${index}].lng`, -180, 180),
-      lat: finiteNumber(hub.lat, `drive.hubs[${index}].lat`, -90, 90) };
+      lat: finiteNumber(hub.lat, `drive.hubs[${index}].lat`, -90, 90),
+    };
   });
 }
 
 function safeKey(key: string): boolean {
-  return key.length > 0 && !key.startsWith("/") && !key.includes("\\")
-    && key.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
+  return key.length > 0 && !key.startsWith("/") && !key.includes("\\") && key.split("/").every((part) => part.length > 0 && part !== "." && part !== "..");
 }
 
 function validateContentFile(value: unknown, expectedPath?: string): ContentFile {
@@ -259,7 +295,12 @@ function validateContentFile(value: unknown, expectedPath?: string): ContentFile
   const byte_size = safeInteger(file.byte_size, "content file byte_size", 1);
   if (byte_size > MAX_RESPONSE_BYTES) throw new Error("content file exceeds the supported scene asset size");
   const content_type = text(file.content_type, "content file content_type");
-  if (!path.startsWith("art/badges/scenes/") || !SCENE_SLUG.test(path.slice("art/badges/scenes/".length).replace(/\.webp$/, "")) || !path.endsWith(".webp") || content_type !== "image/webp") {
+  if (
+    !path.startsWith("art/badges/scenes/") ||
+    !SCENE_SLUG.test(path.slice("art/badges/scenes/".length).replace(/\.webp$/, "")) ||
+    !path.endsWith(".webp") ||
+    content_type !== "image/webp"
+  ) {
     throw new Error("content file is not a badge scene WebP");
   }
   return { path, key, url: file.url, sha256: file.sha256, byte_size, content_type };
@@ -313,7 +354,8 @@ function validateSnapshot(value: unknown, reader: number): JsonRecord {
   if (new Set(assetPaths).size !== assetPaths.length) throw new Error("content snapshot has duplicate asset paths");
   const activeScenes = new Set<string>();
   for (const park of parks) if (park.scene) activeScenes.add(`art/badges/scenes/${park.scene}.webp`);
-  if (activeScenes.size !== assets.length || assets.some((file) => !activeScenes.has(file.path))) throw new Error("active scene assets do not match live parks");
+  if (activeScenes.size !== assets.length || assets.some((file) => !activeScenes.has(file.path)))
+    throw new Error("active scene assets do not match live parks");
   for (const path of activeScenes) if (!assetPaths.includes(path)) throw new Error(`missing badge descriptor ${path}`);
 
   return {
@@ -380,7 +422,8 @@ function validateChanges(value: unknown, reader: number): JsonRecord {
     const batch = record(rawBatch, "content change batch");
     exactKeys(batch, ["revision", "changes"], "content change batch");
     const revision = safeInteger(batch.revision, "batch revision", 1);
-    if (revision !== prior + 1 || revision > headRevision || !Array.isArray(batch.changes) || batch.changes.length === 0) throw new Error("content change batch is invalid or noncontiguous");
+    if (revision !== prior + 1 || revision > headRevision || !Array.isArray(batch.changes) || batch.changes.length === 0)
+      throw new Error("content change batch is invalid or noncontiguous");
     prior = revision;
     const changes = batch.changes.map((change) => validateChange(change, reader));
     const keys = changes.map((change) => `${change.entity}\0${change.id}`);
@@ -390,7 +433,7 @@ function validateChanges(value: unknown, reader: number): JsonRecord {
   if (headRevision > fromRevision && batches.length === 0) throw new Error("content change batches are missing above the cursor");
   const expectedThrough = batches.length ? batches[batches.length - 1].revision : headRevision;
   if (throughRevision !== expectedThrough) throw new Error("throughRevision does not match the final batch");
-  if (response.hasMore !== (throughRevision < headRevision)) throw new Error("hasMore does not match the remaining revision range");
+  if (response.hasMore !== throughRevision < headRevision) throw new Error("hasMore does not match the remaining revision range");
   return { schema: CONTENT_SYNC_SCHEMA, fromRevision, throughRevision, headRevision, hasMore: response.hasMore, batches };
 }
 
@@ -404,36 +447,39 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
   const sql = database(databaseUrl);
   return {
     async snapshot(reader = 1) {
-      const results = await sql.transaction([
-        sql`SELECT revision FROM public.content_clock WHERE singleton = true`,
-        sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb,
+      const results = await sql.transaction(
+        [
+          sql`SELECT revision FROM public.content_clock WHERE singleton = true`,
+          sql`SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb,
                    google_maps_url AS "googleMapsUrl", trailhead_lat AS "trailheadLat", trailhead_lng AS "trailheadLng"
               FROM public.parks AS park
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
                AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = park.id)
              ORDER BY id`,
-        sql`SELECT park_id, feature FROM public.boundaries AS boundary
+          sql`SELECT park_id, feature FROM public.boundaries AS boundary
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = boundary.park_id AND floor.minimum_reader > ${reader})
                AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = boundary.park_id)
              ORDER BY park_id`,
-        sql`SELECT position, name, lng, lat FROM public.drive_hubs ORDER BY position`,
-        sql`SELECT park_id, walk_m FROM public.park_drive_settings AS setting
+          sql`SELECT position, name, lng, lat FROM public.drive_hubs ORDER BY position`,
+          sql`SELECT park_id, walk_m FROM public.park_drive_settings AS setting
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = setting.park_id AND floor.minimum_reader > ${reader})
                AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = setting.park_id)
              ORDER BY park_id`,
-        sql`SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive AS route
+          sql`SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive AS route
              WHERE NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = route.park_id AND floor.minimum_reader > ${reader})
                AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = route.park_id)
              ORDER BY park_id, hub_position`,
-        sql`SELECT DISTINCT asset.logical_path AS path, asset.object_key AS key, asset.url, asset.sha256, asset.byte_size, asset.content_type
+          sql`SELECT DISTINCT asset.logical_path AS path, asset.object_key AS key, asset.url, asset.sha256, asset.byte_size, asset.content_type
               FROM public.parks AS park
               JOIN public.r2_objects AS asset ON asset.logical_path = 'art/badges/scenes/' || park.scene || '.webp'
              WHERE park.scene IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM public.content_park_reader_floor AS floor WHERE floor.park_id = park.id AND floor.minimum_reader > ${reader})
                AND NOT EXISTS (SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = park.id)
              ORDER BY asset.logical_path`,
-        sql`SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true`,
-      ], { isolationLevel: "RepeatableRead", readOnly: true });
+          sql`SELECT version, manifest_url, manifest_sha256 FROM public.content_map WHERE singleton = true`,
+        ],
+        { isolationLevel: "RepeatableRead", readOnly: true },
+      );
       const [clockRows, parkRows, boundaryRows, hubRows, settingsRows, routeRows, assetRows, mapRows] = results as unknown as Record<string, unknown>[][];
       const clock = clockRows[0];
       if (!clock) throw new Error("content clock is not initialized");
@@ -447,9 +493,7 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
         const parkId = String(row.park_id);
         const hubPosition = numericDatabaseValue(row.hub_position, "route hub position");
         const entry = routes.get(parkId) ?? new Map<number, [number, number] | null>();
-        entry.set(hubPosition, row.distance_km === null || row.duration_min === null
-          ? null
-          : [Number(row.distance_km), Number(row.duration_min)]);
+        entry.set(hubPosition, row.distance_km === null || row.duration_min === null ? null : [Number(row.distance_km), Number(row.duration_min)]);
         routes.set(parkId, entry);
       }
       const driveParks: Record<string, DriveEntry> = {};
@@ -467,8 +511,12 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
         throw new Error("park, boundary, and drive row sets do not match");
       }
       const assets = assetRows.map((row) => ({
-        path: row.path, key: row.key, url: row.url, sha256: row.sha256,
-        byte_size: numericDatabaseValue(row.byte_size, "asset byte_size"), content_type: row.content_type,
+        path: row.path,
+        key: row.key,
+        url: row.url,
+        sha256: row.sha256,
+        byte_size: numericDatabaseValue(row.byte_size, "asset byte_size"),
+        content_type: row.content_type,
       }));
       const mapRow = mapRows[0];
       return {
@@ -482,7 +530,7 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
       };
     },
     async changes(after, limit, reader = 1) {
-      const rows = await sql.query(
+      const rows = (await sql.query(
         `WITH state AS MATERIALIZED (
            SELECT revision, retention_floor, public.content_hubs_json() AS hubs FROM public.content_clock WHERE singleton = true
          ), selected AS MATERIALIZED (
@@ -513,7 +561,7 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
                   SELECT 1 FROM public.content_park_hidden AS hidden WHERE hidden.park_id = change.entity_id))
           ORDER BY selected.revision, change.entity, change.entity_id`,
         [after, limit, reader],
-      ) as Record<string, unknown>[];
+      )) as Record<string, unknown>[];
       if (!rows.length) throw new Error("content clock is not initialized");
       const headRevision = numericDatabaseValue(rows[0].head_revision, "head revision");
       const retentionFloor = numericDatabaseValue(rows[0].retention_floor, "retention floor");
@@ -546,15 +594,18 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
          WHERE clock.singleton = true`;
       const row = rows[0] as Record<string, unknown> | undefined;
       if (!row) throw new Error("content clock is not initialized");
-      const pointer = row.version === null || row.version === undefined ? null : {
-        version: row.version,
-        revision: numericDatabaseValue(row.revision, "catalogue revision"),
-        minimumReader: numericDatabaseValue(row.minimum_reader, "catalogue minimum reader"),
-        indexUrl: row.index_url,
-        indexSha256: row.index_sha256,
-        indexBytes: numericDatabaseValue(row.index_bytes, "catalogue index bytes"),
-        parkCount: numericDatabaseValue(row.park_count, "catalogue park count"),
-      };
+      const pointer =
+        row.version === null || row.version === undefined
+          ? null
+          : {
+              version: row.version,
+              revision: numericDatabaseValue(row.revision, "catalogue revision"),
+              minimumReader: numericDatabaseValue(row.minimum_reader, "catalogue minimum reader"),
+              indexUrl: row.index_url,
+              indexSha256: row.index_sha256,
+              indexBytes: numericDatabaseValue(row.index_bytes, "catalogue index bytes"),
+              parkCount: numericDatabaseValue(row.park_count, "catalogue park count"),
+            };
       return { pointer, headRevision: row.head_revision, retentionFloor: row.retention_floor };
     },
     async scene(releaseId, scene) {
@@ -567,8 +618,12 @@ function createNeonRepository(databaseUrl: string): SyncRepository {
       if (!rows.length) return null;
       const row = rows[0] as Record<string, unknown>;
       return {
-        path: row.path, key: row.key, url: row.url, sha256: row.sha256,
-        byte_size: numericDatabaseValue(row.byte_size, "scene asset byte_size"), content_type: row.content_type,
+        path: row.path,
+        key: row.key,
+        url: row.url,
+        sha256: row.sha256,
+        byte_size: numericDatabaseValue(row.byte_size, "scene asset byte_size"),
+        content_type: row.content_type,
       };
     },
   };
@@ -655,14 +710,18 @@ async function repositoryFor(options: HandlerOptions): Promise<SyncRepository> {
 /** Run a content handler inside a request analytics context, as the main API router does. */
 function instrumented(options: HandlerOptions, path: string, handler: NodeHandler): NodeHandler {
   const env = options.env ?? process.env;
-  return (request, response) => withRequestAnalytics({
-    method: request.method,
-    path,
-    header: (name) => header(request, name) ?? null,
-    env,
-    sink: () => options.analytics ? options.analytics() : createAnalyticsSink(env),
-    waitUntil: options.waitUntil,
-  }, () => handler(request, response));
+  return (request, response) =>
+    withRequestAnalytics(
+      {
+        method: request.method,
+        path,
+        header: (name) => header(request, name) ?? null,
+        env,
+        sink: () => (options.analytics ? options.analytics() : createAnalyticsSink(env)),
+        waitUntil: options.waitUntil,
+      },
+      () => handler(request, response),
+    );
 }
 
 function createHandler(options: HandlerOptions, operation: "snapshot" | "changes") {
@@ -724,7 +783,11 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
       if (!Array.isArray(rawResult.batches) || typeof rawResult.hasMore !== "boolean") throw new Error("content changes query result is malformed");
       let batches = rawResult.batches.map((rawBatch) => {
         const batch = record(rawBatch, "content batch");
-        const changes = Array.isArray(batch.changes) ? batch.changes.map((change) => validateChange(change, reader)) : (() => { throw new Error("batch changes must be an array"); })();
+        const changes = Array.isArray(batch.changes)
+          ? batch.changes.map((change) => validateChange(change, reader))
+          : (() => {
+              throw new Error("batch changes must be an array");
+            })();
         return {
           revision: safeInteger(batch.revision, "batch revision", 1),
           // Readers reject empty batches, so a batch with only parks this reader may not see
@@ -733,20 +796,32 @@ function createHandler(options: HandlerOptions, operation: "snapshot" | "changes
         };
       });
       let hasMore = rawResult.hasMore;
-      let body = validateChanges({
-        schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
-        throughRevision: batches.length ? batches[batches.length - 1].revision : headRevision,
-        headRevision, hasMore, batches,
-      }, reader);
+      let body = validateChanges(
+        {
+          schema: CONTENT_SYNC_SCHEMA,
+          fromRevision: after,
+          throughRevision: batches.length ? batches[batches.length - 1].revision : headRevision,
+          headRevision,
+          hasMore,
+          batches,
+        },
+        reader,
+      );
       while (new TextEncoder().encode(JSON.stringify(body)).byteLength > MAX_RESPONSE_BYTES) {
         if (batches.length <= 1) throw new HttpError(413, "one committed content batch exceeds supported response size; take a fresh snapshot");
         batches = batches.slice(0, -1);
         hasMore = true;
-        body = validateChanges({
-          schema: CONTENT_SYNC_SCHEMA, fromRevision: after,
-          throughRevision: batches[batches.length - 1].revision,
-          headRevision, hasMore, batches,
-        }, reader);
+        body = validateChanges(
+          {
+            schema: CONTENT_SYNC_SCHEMA,
+            fromRevision: after,
+            throughRevision: batches[batches.length - 1].revision,
+            headRevision,
+            hasMore,
+            batches,
+          },
+          reader,
+        );
       }
       sendJson(response, 200, body, method === "HEAD");
     } catch (error) {

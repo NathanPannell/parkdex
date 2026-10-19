@@ -20,24 +20,42 @@ class MapOnlyManifestTests(unittest.TestCase):
         self.source = Path(self.temp.name) / "source.json"
         self.version = "a" * 64
         self.file = {
-            "path": "map/island/manifest.json", "key": f"releases/{self.version}/map/island/manifest.json",
+            "path": "map/island/manifest.json",
+            "key": f"releases/{self.version}/map/island/manifest.json",
             "url": f"https://kip-assets.parkdex.app/releases/{self.version}/map/island/manifest.json",
-            "sha256": "b" * 64, "byte_size": 25, "content_type": "application/json",
+            "sha256": "b" * 64,
+            "byte_size": 25,
+            "content_type": "application/json",
         }
         self.glyph = {
-            "path": "map/fonts/basic/0-255.pbf", "key": f"releases/{self.version}/map/fonts/basic/0-255.pbf",
+            "path": "map/fonts/basic/0-255.pbf",
+            "key": f"releases/{self.version}/map/fonts/basic/0-255.pbf",
             "url": f"https://kip-assets.parkdex.app/releases/{self.version}/map/fonts/basic/0-255.pbf",
-            "sha256": "c" * 64, "byte_size": 31, "content_type": "application/x-protobuf",
+            "sha256": "c" * 64,
+            "byte_size": 31,
+            "content_type": "application/x-protobuf",
         }
-        self.source.write_text(json.dumps({
-            "version": self.version,
-            "mapManifest": {"size": 4, "chunkBytes": 4, "count": 1},
-            "files": [self.file, self.glyph, {
-                "path": "map/island/000.bin", "key": f"releases/{self.version}/map/island/000.bin",
-                "url": f"https://kip-assets.parkdex.app/releases/{self.version}/map/island/000.bin",
-                "sha256": "d" * 64, "byte_size": 4, "content_type": "application/octet-stream",
-            }],
-        }), encoding="utf-8")
+        self.source.write_text(
+            json.dumps(
+                {
+                    "version": self.version,
+                    "mapManifest": {"size": 4, "chunkBytes": 4, "count": 1},
+                    "files": [
+                        self.file,
+                        self.glyph,
+                        {
+                            "path": "map/island/000.bin",
+                            "key": f"releases/{self.version}/map/island/000.bin",
+                            "url": f"https://kip-assets.parkdex.app/releases/{self.version}/map/island/000.bin",
+                            "sha256": "d" * 64,
+                            "byte_size": 4,
+                            "content_type": "application/octet-stream",
+                        },
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temp.cleanup()

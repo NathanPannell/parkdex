@@ -15,7 +15,10 @@ const { values } = parseArgs({
   },
 });
 
-const ids = values.only?.split(",").map((id) => id.trim()).filter(Boolean);
+const ids = values.only
+  ?.split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
 const run = await classify({
   ids,
   basedOn: values["based-on"] ?? null,
@@ -25,9 +28,12 @@ const run = await classify({
 });
 process.stdout.write("\n");
 const { summary } = summarize(loadManifest(), run, productionSettings());
-const spent = run.spend.keyUsageBeforeUsd !== null && run.spend.keyUsageAfterUsd !== null
-  ? ` (key usage moved by $${(run.spend.keyUsageAfterUsd - run.spend.keyUsageBeforeUsd).toFixed(4)})`
-  : "";
+const spent =
+  run.spend.keyUsageBeforeUsd !== null && run.spend.keyUsageAfterUsd !== null
+    ? ` (key usage moved by $${(run.spend.keyUsageAfterUsd - run.spend.keyUsageBeforeUsd).toFixed(4)})`
+    : "";
 console.log(`Saved ${run.id} in ${labDir()}`);
 console.log(`Model ${run.model}. Reported cost $${run.spend.reportedCostUsd.toFixed(4)}${spent}.`);
-console.log(`At production thresholds: ${summary.correct}/${summary.scored} agree, ${summary.falseApprovals.length} false approvals, ${summary.falseRejections.length} false rejections, ${summary.errors} errors.`);
+console.log(
+  `At production thresholds: ${summary.correct}/${summary.scored} agree, ${summary.falseApprovals.length} false approvals, ${summary.falseRejections.length} false rejections, ${summary.errors} errors.`,
+);

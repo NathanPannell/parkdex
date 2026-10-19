@@ -27,16 +27,23 @@ export function sceneSvg(park: Park) {
 <path d="M0 560 L600 540 L600 800 L0 800Z" fill="${p.water}" opacity=".85"/>
 <path d="M0 640 Q160 590 320 650 T600 630 L600 800 L0 800Z" fill="${p.near}"/>
 ${Array.from({ length: 7 }, (_, i) => {
-    const x = 30 + i * 90 + ((park.seed * (i + 3)) % 40);
-    const h = 120 + ((park.seed * (i + 7)) % 90);
-    return `<path d="M${x} ${700 - h} l${h * 0.28} ${h * 0.55} h-${h * 0.12} l${h * 0.2} ${h * 0.45} h-${h * 0.72} l${h * 0.2} -${h * 0.45} h-${h * 0.12}Z" fill="#14231C" opacity=".9"/>`;
-  }).join("")}
+  const x = 30 + i * 90 + ((park.seed * (i + 3)) % 40);
+  const h = 120 + ((park.seed * (i + 7)) % 90);
+  return `<path d="M${x} ${700 - h} l${h * 0.28} ${h * 0.55} h-${h * 0.12} l${h * 0.2} ${h * 0.45} h-${h * 0.72} l${h * 0.2} -${h * 0.45} h-${h * 0.12}Z" fill="#14231C" opacity=".9"/>`;
+}).join("")}
 </svg>`;
 }
 
 function dimensionsAreSafe(width: number, height: number): boolean {
-  return Number.isSafeInteger(width) && Number.isSafeInteger(height) && width > 0 && height > 0 &&
-    width <= MAX_INPUT_DIMENSION && height <= MAX_INPUT_DIMENSION && width * height <= MAX_INPUT_PIXELS;
+  return (
+    Number.isSafeInteger(width) &&
+    Number.isSafeInteger(height) &&
+    width > 0 &&
+    height > 0 &&
+    width <= MAX_INPUT_DIMENSION &&
+    height <= MAX_INPUT_DIMENSION &&
+    width * height <= MAX_INPUT_PIXELS
+  );
 }
 
 function bigEndian32(bytes: Uint8Array, offset: number): number {
@@ -121,8 +128,9 @@ function loadImage(blob: Blob): Promise<LoadedImage> {
   const url = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
     let image: HTMLImageElement;
-    try { image = new Image(); }
-    catch {
+    try {
+      image = new Image();
+    } catch {
       URL.revokeObjectURL(url);
       reject(new Error("The saved photo could not be decoded."));
       return;
@@ -153,17 +161,24 @@ function loadImage(blob: Blob): Promise<LoadedImage> {
       })();
     };
     image.onerror = () => finish(new Error("The saved photo could not be decoded."));
-    try { image.src = url; }
-    catch { finish(new Error("The saved photo could not be decoded.")); }
+    try {
+      image.src = url;
+    } catch {
+      finish(new Error("The saved photo could not be decoded."));
+    }
   });
 }
 
 function canvasJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) reject(new Error("The saved photo could not be encoded."));
-      else resolve(blob);
-    }, JPEG_TYPE, quality);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) reject(new Error("The saved photo could not be encoded."));
+        else resolve(blob);
+      },
+      JPEG_TYPE,
+      quality,
+    );
   });
 }
 
@@ -185,8 +200,12 @@ async function encodeJpeg(image: CanvasImageSource, sourceWidth: number, sourceH
       context.drawImage(image, 0, 0, width, height);
       const result = await canvasJpeg(canvas, quality);
       if (result.type.toLowerCase() === JPEG_TYPE && result.size > 0 && result.size <= MAX_BACKUP_PHOTO_BYTES) return result;
-    } catch { return null; }
-    finally { canvas.width = 0; canvas.height = 0; }
+    } catch {
+      return null;
+    } finally {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
     scale *= 0.78;
     quality = Math.max(0.56, quality - 0.07);
   }
@@ -222,7 +241,9 @@ export async function createPhotoBackupRendition(original: Blob, parkSnapshot: P
     try {
       expected = new TextEncoder().encode(sceneSvg(parkSnapshot));
       actual = new Uint8Array(await original.arrayBuffer());
-    } catch { return null; }
+    } catch {
+      return null;
+    }
     if (!sameBytes(actual, expected)) return null;
     try {
       const safeSvg = sceneSvg(parkSnapshot).replace("<svg ", '<svg width="600" height="800" ');
@@ -231,16 +252,23 @@ export async function createPhotoBackupRendition(original: Blob, parkSnapshot: P
       try {
         const image = loaded.image;
         if (!dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
-        return rendition(await encodeJpeg(image, image.naturalWidth, image.naturalHeight, 960) ?? new Blob());
-      } finally { loaded.release(); }
-    } catch { return null; }
+        return rendition((await encodeJpeg(image, image.naturalWidth, image.naturalHeight, 960)) ?? new Blob());
+      } finally {
+        loaded.release();
+      }
+    } catch {
+      return null;
+    }
   }
 
   if (contentType !== "image/jpeg" && contentType !== "image/png" && contentType !== "image/webp") return null;
   if (original.size <= MAX_BACKUP_PHOTO_BYTES) return null;
   let bytes: Uint8Array;
-  try { bytes = new Uint8Array(await original.arrayBuffer()); }
-  catch { return null; }
+  try {
+    bytes = new Uint8Array(await original.arrayBuffer());
+  } catch {
+    return null;
+  }
   if (!isSupportedRasterHeader(bytes, contentType)) return null;
   const dimensions = rasterDimensions(bytes, contentType);
   if (!dimensions || !dimensionsAreSafe(dimensions.width, dimensions.height)) return null;
@@ -253,6 +281,10 @@ export async function createPhotoBackupRendition(original: Blob, parkSnapshot: P
       if ((!sameDimensions && !exifOrientedDimensions) || !dimensionsAreSafe(image.naturalWidth, image.naturalHeight)) return null;
       const converted = await encodeJpeg(image, image.naturalWidth, image.naturalHeight, MAX_OUTPUT_DIMENSION);
       return converted ? rendition(converted) : null;
-    } finally { loaded.release(); }
-  } catch { return null; }
+    } finally {
+      loaded.release();
+    }
+  } catch {
+    return null;
+  }
 }

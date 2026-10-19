@@ -4,12 +4,28 @@ import { decoderIgnoredOrientation, jpegOrientation, orientationTransform, uprig
 /** A minimal JPEG header: SOI, an EXIF APP1 with one orientation entry, then SOS. */
 function jpegWithOrientation(orientation: number, littleEndian: boolean): Uint8Array {
   const u16 = (value: number) => (littleEndian ? [value & 0xff, value >> 8] : [value >> 8, value & 0xff]);
-  const u32 = (value: number) => (littleEndian ? [value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, value >>> 24] : [value >>> 24, (value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff]);
+  const u32 = (value: number) =>
+    littleEndian
+      ? [value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, value >>> 24]
+      : [value >>> 24, (value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
   const tiff = [
-    ...(littleEndian ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8),
+    ...(littleEndian ? [0x49, 0x49] : [0x4d, 0x4d]),
+    ...u16(42),
+    ...u32(8),
     ...u16(2),
-    ...u16(0x010f), ...u16(2), ...u32(4), 0x41, 0x42, 0x43, 0x00, // Make: "ABC"
-    ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0,
+    ...u16(0x010f),
+    ...u16(2),
+    ...u32(4),
+    0x41,
+    0x42,
+    0x43,
+    0x00, // Make: "ABC"
+    ...u16(0x0112),
+    ...u16(3),
+    ...u32(1),
+    ...u16(orientation),
+    0,
+    0,
     ...u32(0),
   ];
   const body = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
@@ -51,7 +67,12 @@ describe("turning a photo upright", () => {
     for (const orientation of [1, 2, 3, 4, 5, 6, 7, 8] as Orientation[]) {
       const size = uprightSize(width, height, orientation);
       const matrix = orientationTransform(orientation, width, height);
-      for (const [x, y] of [[0, 0], [width, 0], [0, height], [width, height]]) {
+      for (const [x, y] of [
+        [0, 0],
+        [width, 0],
+        [0, height],
+        [width, height],
+      ]) {
         const [ux, uy] = apply(matrix, x, y);
         expect(ux).toBeGreaterThanOrEqual(0);
         expect(uy).toBeGreaterThanOrEqual(0);

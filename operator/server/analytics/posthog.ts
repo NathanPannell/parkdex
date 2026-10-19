@@ -49,7 +49,8 @@ export function posthogStatus(env: PostHogEnv): PostHogStatus {
   if (env.POSTHOG_PROJECT_ID?.trim() && !/^\d{1,12}$/.test(env.POSTHOG_PROJECT_ID.trim())) problem = "POSTHOG_PROJECT_ID must be the numeric project ID.";
   try {
     const url = new URL(host);
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) problem = "POSTHOG_APP_HOST must be an https origin such as https://us.posthog.com.";
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== ""))
+      problem = "POSTHOG_APP_HOST must be an https origin such as https://us.posthog.com.";
   } catch {
     problem = "POSTHOG_APP_HOST must be an https origin such as https://us.posthog.com.";
   }
@@ -77,7 +78,7 @@ export interface QueryResult {
 }
 
 export const TEMPLATES = ["events_per_day", "top_events", "taps", "screens", "person_events", "recent_events"] as const;
-export type TemplateName = typeof TEMPLATES[number];
+export type TemplateName = (typeof TEMPLATES)[number];
 
 export interface TemplateParams {
   days: number;
@@ -137,7 +138,8 @@ GROUP BY screen ORDER BY views DESC LIMIT 200`,
     case "recent_events": {
       const filters = [scope];
       if (name === "person_events") {
-        if (!params.distinctId || !DISTINCT_ID.test(params.distinctId)) throw new HttpError(400, "invalid_query", "Enter the person's account ID or installation ID.");
+        if (!params.distinctId || !DISTINCT_ID.test(params.distinctId))
+          throw new HttpError(400, "invalid_query", "Enter the person's account ID or installation ID.");
         values.distinctId = params.distinctId;
         filters.push("distinct_id = {distinctId}");
       }
@@ -176,10 +178,14 @@ export function guardCustomQuery(text: unknown, limit: unknown): HogQL {
   if (typeof text !== "string" || !text.trim()) throw new HttpError(400, "invalid_query", "Write a SELECT query.");
   if (text.length > 8000) throw new HttpError(400, "invalid_query", "Keep the query under 8,000 characters.");
   const rows = limit === undefined || limit === null ? CUSTOM_DEFAULT_LIMIT : Number(limit);
-  if (!Number.isInteger(rows) || rows < 1 || rows > CUSTOM_MAX_LIMIT) throw new HttpError(400, "invalid_query", `Limit must be 1 to ${CUSTOM_MAX_LIMIT.toLocaleString("en-US")}.`);
+  if (!Number.isInteger(rows) || rows < 1 || rows > CUSTOM_MAX_LIMIT)
+    throw new HttpError(400, "invalid_query", `Limit must be 1 to ${CUSTOM_MAX_LIMIT.toLocaleString("en-US")}.`);
   const query = text.trim().replace(/;\s*$/, "");
   // Keywords inside string literals are fine, so check the query with its strings blanked out.
-  const bare = query.replace(/'(?:[^'\\]|\\.|'')*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/`[^`]*`/g, "``");
+  const bare = query
+    .replace(/'(?:[^'\\]|\\.|'')*'/g, "''")
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/`[^`]*`/g, "``");
   if (/--|\/\*|#/.test(bare)) throw new HttpError(400, "invalid_query", "Remove comments from the query.");
   if (bare.includes(";")) throw new HttpError(400, "invalid_query", "Send one query at a time.");
   if (!/^\s*(select|with)\b/i.test(bare)) throw new HttpError(400, "invalid_query", "Only SELECT queries can run here.");
@@ -245,7 +251,10 @@ export async function runHogQL(config: PostHogConfig, hogql: HogQL, options: Run
       response = await (options.fetch ?? fetch)(`${config.host}/api/projects/${encodeURIComponent(config.projectId)}/query/`, {
         method: "POST",
         headers: { authorization: `Bearer ${config.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query: hogql.query, ...(hogql.values ? { values: hogql.values } : {}) }, name: "parkdex-operator" }),
+        body: JSON.stringify({
+          query: { kind: "HogQLQuery", query: hogql.query, ...(hogql.values ? { values: hogql.values } : {}) },
+          name: "parkdex-operator",
+        }),
         // The Edge runtime refuses redirect "error"; a redirect is treated as no answer instead.
         redirect: "manual",
         signal: options.signal,
@@ -258,7 +267,11 @@ export async function runHogQL(config: PostHogConfig, hogql: HogQL, options: Run
     }
     const text = await response.text();
     let body: unknown = null;
-    try { body = JSON.parse(text); } catch { /* PostHog error pages are not always JSON. */ }
+    try {
+      body = JSON.parse(text);
+    } catch {
+      /* PostHog error pages are not always JSON. */
+    }
     if (response.status === 429) {
       const retryAfter = Number(response.headers.get("retry-after"));
       const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
@@ -273,7 +286,7 @@ export async function runHogQL(config: PostHogConfig, hogql: HogQL, options: Run
     if (!response.ok || typeof body !== "object" || body === null) throw new HttpError(502, "posthog_error", "PostHog could not run that query right now.");
     const record = body as Record<string, unknown>;
     const columns = Array.isArray(record.columns) ? record.columns.map(String) : [];
-    const all = Array.isArray(record.results) ? record.results.filter(Array.isArray) as unknown[][] : [];
+    const all = Array.isArray(record.results) ? (record.results.filter(Array.isArray) as unknown[][]) : [];
     const maxRows = Math.min(options.maxRows ?? MAX_ROWS, MAX_ROWS);
     const rows = all.slice(0, maxRows);
     let nextCursor: string | null = null;

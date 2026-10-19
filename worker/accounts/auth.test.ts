@@ -100,8 +100,13 @@ class MemoryAuthStore implements AccountAuthStore {
 
   addGoogleOnlyAccount(email: string, subject: string): AccountCredentials {
     const account: AccountCredentials = {
-      id: randomUUID(), email, emailVerified: true, displayName: null,
-      providers: ["google"], passwordHash: null, deletionState: "active",
+      id: randomUUID(),
+      email,
+      emailVerified: true,
+      displayName: null,
+      providers: ["google"],
+      passwordHash: null,
+      deletionState: "active",
     };
     this.accounts.set(account.id, account);
     this.googleSubjects.set(subject, account.id);
@@ -168,11 +173,18 @@ class MemoryAuthStore implements AccountAuthStore {
   async hasValidActionToken(tokenHash: string, purpose: "verification" | "password_reset", now: string): Promise<boolean> {
     const token = this.actionTokens.get(tokenHash);
     const account = token ? this.accounts.get(token.accountId) : null;
-    return Boolean(token && token.purpose === purpose && !token.usedAt && Date.parse(token.expiresAt) > Date.parse(now) && account?.deletionState === "active" && (purpose !== "password_reset" || account.passwordHash));
+    return Boolean(
+      token &&
+      token.purpose === purpose &&
+      !token.usedAt &&
+      Date.parse(token.expiresAt) > Date.parse(now) &&
+      account?.deletionState === "active" &&
+      (purpose !== "password_reset" || account.passwordHash),
+    );
   }
 
   async consumeVerificationToken(tokenHash: string, now: string): Promise<boolean> {
-    if (!await this.hasValidActionToken(tokenHash, "verification", now)) return false;
+    if (!(await this.hasValidActionToken(tokenHash, "verification", now))) return false;
     const token = this.actionTokens.get(tokenHash)!;
     token.usedAt = now;
     const account = this.accounts.get(token.accountId)!;
@@ -181,7 +193,7 @@ class MemoryAuthStore implements AccountAuthStore {
   }
 
   async consumePasswordResetToken(tokenHash: string, passwordHash: string, now: string): Promise<boolean> {
-    if (!await this.hasValidActionToken(tokenHash, "password_reset", now)) return false;
+    if (!(await this.hasValidActionToken(tokenHash, "password_reset", now))) return false;
     const token = this.actionTokens.get(tokenHash)!;
     token.usedAt = now;
     const account = this.accounts.get(token.accountId)!;
@@ -244,11 +256,27 @@ class MemoryAuthStore implements AccountAuthStore {
     return true;
   }
 
-  async completeGoogleLink(input: { subject: string; email: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<GoogleLinkResult> {
+  async completeGoogleLink(input: {
+    subject: string;
+    email: string;
+    accountId: string;
+    sessionId: string;
+    tokenHash: string;
+    now: string;
+  }): Promise<GoogleLinkResult> {
     const session = this.sessions.get(input.sessionId);
     const account = this.accounts.get(input.accountId);
-    if (!session || !account || session.tokenHash !== input.tokenHash || session.id !== input.accountId || account.deletionState !== "active" || this.revokedSessions.has(input.sessionId) ||
-        !session.reauthenticatedAt || Date.parse(session.reauthenticatedAt) < Date.parse(input.now) - 5 * 60 * 1000) return "retry";
+    if (
+      !session ||
+      !account ||
+      session.tokenHash !== input.tokenHash ||
+      session.id !== input.accountId ||
+      account.deletionState !== "active" ||
+      this.revokedSessions.has(input.sessionId) ||
+      !session.reauthenticatedAt ||
+      Date.parse(session.reauthenticatedAt) < Date.parse(input.now) - 5 * 60 * 1000
+    )
+      return "retry";
     const subjectOwner = this.googleSubjects.get(input.subject);
     if (subjectOwner) return subjectOwner === input.accountId ? "ok" : "subject_conflict";
     const emailOwner = await this.findAccountByEmail(input.email);
@@ -268,8 +296,15 @@ class MemoryAuthStore implements AccountAuthStore {
   async beginDeletion(accountId: string, sessionId: string, tokenHash: string, receiptId: string, now: string): Promise<string | null> {
     const account = this.accounts.get(accountId);
     const current = this.sessions.get(sessionId);
-    if (!account || !current || account.deletionState !== "active" || current.tokenHash !== tokenHash || !current.reauthenticatedAt ||
-        Date.parse(current.reauthenticatedAt) < Date.parse(now) - 5 * 60 * 1000) return null;
+    if (
+      !account ||
+      !current ||
+      account.deletionState !== "active" ||
+      current.tokenHash !== tokenHash ||
+      !current.reauthenticatedAt ||
+      Date.parse(current.reauthenticatedAt) < Date.parse(now) - 5 * 60 * 1000
+    )
+      return null;
     account.deletionState = "deleting";
     for (const session of this.sessions.values()) if (session.id === accountId) this.revokedSessions.add(session.sessionId);
     this.receipts.set(receiptId, { receiptId, accountId, status: "pending" });
@@ -346,22 +381,30 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
       if (!claims) throw new Error("unknown test token");
       return claims;
     },
-    sendEmail: async (message) => { emails.push(message); },
-    waitUntil: (promise) => { void promise; },
+    sendEmail: async (message) => {
+      emails.push(message);
+    },
+    waitUntil: (promise) => {
+      void promise;
+    },
   };
   return { store, env, dependencies, emails, googleTokens, googleAudiences };
 }
 
-function request(path: string, body?: unknown, options: {
-  method?: string;
-  origin?: string | null;
-  cookie?: string;
-  csrf?: string;
-  authorization?: string;
-  accountId?: string;
-  ip?: string;
-  native?: boolean;
-} = {}): Request {
+function request(
+  path: string,
+  body?: unknown,
+  options: {
+    method?: string;
+    origin?: string | null;
+    cookie?: string;
+    csrf?: string;
+    authorization?: string;
+    accountId?: string;
+    ip?: string;
+    native?: boolean;
+  } = {},
+): Request {
   const headers = new Headers();
   if (body !== undefined) headers.set("content-type", "application/json");
   if (options.origin !== null) headers.set("origin", options.origin ?? API_ORIGIN);
@@ -385,7 +428,7 @@ async function call(r: TestRig, path: string, body?: unknown, options: Parameter
 }
 
 async function responseJson(response: Response): Promise<Record<string, any>> {
-  return await response.json() as Record<string, any>;
+  return (await response.json()) as Record<string, any>;
 }
 
 async function seedPasswordAccount(r: TestRig, email = "person@example.test", password = "correct horse battery") {
@@ -447,7 +490,9 @@ test("registration uses Argon2id with the required work factor and web CSRF cook
   r.dependencies.hashPassword = undefined;
   r.dependencies.verifyPassword = undefined;
   const response = await call(r, "/api/auth/register", {
-    email: " Person@Example.Test ", password: "a long enough password", displayName: "  Kip User  ",
+    email: " Person@Example.Test ",
+    password: "a long enough password",
+    displayName: "  Kip User  ",
   });
   assert.equal(response.status, 201);
   const data = await responseJson(response);
@@ -460,7 +505,12 @@ test("registration uses Argon2id with the required work factor and web CSRF cook
   const account = [...r.store.accounts.values()][0];
   const encodedHash = account.passwordHash ?? "";
   assert.match(encodedHash, /^\$argon2id\$v=19\$/u);
-  const params = Object.fromEntries(encodedHash.split("$")[3].split(",").map((part) => part.split("=")));
+  const params = Object.fromEntries(
+    encodedHash
+      .split("$")[3]
+      .split(",")
+      .map((part) => part.split("=")),
+  );
   assert.deepEqual(params, { m: "19456", p: "1", t: "2" });
   const login = await call(r, "/api/auth/login", { email: "person@example.test", password: "a long enough password" });
   assert.equal(login.status, 200);
@@ -485,7 +535,12 @@ test("login failures do not disclose whether an email exists and are rate limite
 
   const sprayRig = rig({ EMAIL_MODE: "disabled" });
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const response = await call(sprayRig, "/api/auth/login", { email: `spray${attempt}@example.test`, password: "wrong password here" }, { ip: "203.0.113.50" });
+    const response = await call(
+      sprayRig,
+      "/api/auth/login",
+      { email: `spray${attempt}@example.test`, password: "wrong password here" },
+      { ip: "203.0.113.50" },
+    );
     assert.equal(response.status, 401);
   }
   const sprayed = await call(sprayRig, "/api/auth/login", { email: "spray-final@example.test", password: "wrong password here" }, { ip: "203.0.113.50" });
@@ -500,20 +555,32 @@ test("web writes require matching CSRF token and trusted origin, and logout revo
   const noCsrf = await call(r, "/api/auth/logout", undefined, { method: "POST", cookie: `kip_account_session=${session}`, accountId });
   assert.equal(noCsrf.status, 403);
   const badOrigin = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", origin: "https://evil.example", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId,
+    method: "POST",
+    origin: "https://evil.example",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId,
   });
   assert.equal(badOrigin.status, 403);
   const changedAccount = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf,
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
   });
   assert.equal(changedAccount.status, 409);
   const mismatchedAccount = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId: randomUUID(),
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId: randomUUID(),
   });
   assert.equal(mismatchedAccount.status, 409);
   assert.equal((await call(r, "/api/auth/me", undefined, { cookie: `kip_account_session=${session}` })).status, 200);
   const loggedOut = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId,
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId,
   });
   assert.equal(loggedOut.status, 204);
   const me = await call(r, "/api/auth/me", undefined, { cookie: `kip_account_session=${session}` });
@@ -559,7 +626,9 @@ test("verification and reset Resend requests configure redirect rejection", asyn
   const requests: Array<{ url: string; redirect: string | undefined; payload: Record<string, any> }> = [];
   const deliveries: Promise<unknown>[] = [];
   r.dependencies.sendEmail = undefined;
-  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.dependencies.waitUntil = (promise) => {
+    deliveries.push(promise);
+  };
   r.dependencies.fetch = async (input, init) => {
     requests.push({
       url: String(input),
@@ -614,23 +683,33 @@ test("password reset responses are identical for password, Google-only and unkno
     await call(r, "/api/auth/password-reset/request", { email: "google@example.test" }),
     await call(r, "/api/auth/password-reset/request", { email: "nobody@example.test" }),
   ];
-  const shapes = await Promise.all(responses.map(async (response) => {
-    const headers: string[][] = [];
-    response.headers.forEach((value, name) => { headers.push([name, value]); });
-    return { status: response.status, headers, body: await response.text() };
-  }));
+  const shapes = await Promise.all(
+    responses.map(async (response) => {
+      const headers: string[][] = [];
+      response.headers.forEach((value, name) => {
+        headers.push([name, value]);
+      });
+      return { status: response.status, headers, body: await response.text() };
+    }),
+  );
   assert.equal(shapes[0].status, 202);
   assert.equal(shapes[0].body, JSON.stringify({ accepted: true }));
   assert.deepEqual(shapes[1], shapes[0]);
   assert.deepEqual(shapes[2], shapes[0]);
 
-  assert.deepEqual(r.emails.map((message) => [message.to, message.subject]), [
-    ["password@example.test", "Reset your Parkdex password"],
-    ["google@example.test", "How to sign in to Parkdex"],
-  ]);
+  assert.deepEqual(
+    r.emails.map((message) => [message.to, message.subject]),
+    [
+      ["password@example.test", "Reset your Parkdex password"],
+      ["google@example.test", "How to sign in to Parkdex"],
+    ],
+  );
   assert.match(r.emails[0].text, /#resetToken=[A-Za-z0-9_-]{43}/u);
   const resetTokens = [...r.store.actionTokens.values()].filter((token) => token.purpose === "password_reset");
-  assert.deepEqual(resetTokens.map((token) => token.accountId), [seeded.account!.id]);
+  assert.deepEqual(
+    resetTokens.map((token) => token.accountId),
+    [seeded.account!.id],
+  );
 });
 
 test("password reset sends nothing to a deleting Google-only account", async () => {
@@ -646,13 +725,20 @@ test("password reset sends nothing to a deleting Google-only account", async () 
 test("a failed Google sign-in directions email records its own delivery failure", async () => {
   const r = rig();
   const deliveries: Promise<unknown>[] = [];
-  r.dependencies.sendEmail = async () => { throw new Error("provider down"); };
-  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.dependencies.sendEmail = async () => {
+    throw new Error("provider down");
+  };
+  r.dependencies.waitUntil = (promise) => {
+    deliveries.push(promise);
+  };
   r.store.addGoogleOnlyAccount("google-fail@example.test", "google-fail-subject");
   const response = await call(r, "/api/auth/password-reset/request", { email: "google-fail@example.test" });
   assert.equal(response.status, 202);
   await Promise.all(deliveries);
-  assert.deepEqual(r.store.events.filter((event) => event.outcome === "delivery_failed").map((event) => event.eventType), ["password_reset_google_email"]);
+  assert.deepEqual(
+    r.store.events.filter((event) => event.outcome === "delivery_failed").map((event) => event.eventType),
+    ["password_reset_google_email"],
+  );
 });
 
 test("Google nonce is single use and changed Google email does not change the Kip account email", async () => {
@@ -664,8 +750,14 @@ test("Google nonce is single use and changed Google email does not change the Ki
   const { nonce } = await responseJson(challengeResponse);
   const token = "valid-google-token";
   r.googleTokens.set(token, {
-    sub: "subject-1", email: "google@example.test", email_verified: true, iss: "https://accounts.google.com",
-    aud: GOOGLE_CLIENT_ID, exp: Math.floor(NOW / 1000) + 3_000, iat: Math.floor(NOW / 1000), nonce,
+    sub: "subject-1",
+    email: "google@example.test",
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   const first = await call(r, "/api/auth/google", { idToken: token, nonce });
   assert.equal(first.status, 200);
@@ -698,9 +790,14 @@ test("Google sign-in does not auto-link by email, and a linked subject cannot mo
   const { nonce } = await responseJson(challengeResponse);
   const token = "already-linked-token";
   r.googleTokens.set(token, {
-    sub: "already-linked", email: "google-owner@example.test", email_verified: true,
-    iss: "https://accounts.google.com", aud: GOOGLE_CLIENT_ID, exp: Math.floor(NOW / 1000) + 3_000,
-    iat: Math.floor(NOW / 1000), nonce,
+    sub: "already-linked",
+    email: "google-owner@example.test",
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   const link = await call(r, "/api/auth/google/native", { idToken: token, nonce }, bearerOptions(target.bearer, target.account!.id));
   assert.equal(link.status, 409);
@@ -764,8 +861,12 @@ async function googleSignInVia(
   const { nonce } = await responseJson(challengeResponse);
   const token = `google-test-${randomUUID()}`;
   r.googleTokens.set(token, {
-    ...claims, email_verified: true, iss: "https://accounts.google.com",
-    exp: Math.floor(NOW / 1000) + 3_000, iat: Math.floor(NOW / 1000), nonce,
+    ...claims,
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   return call(r, route, { idToken: token, nonce }, options);
 }

@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFeedbackWorker } from "./index.ts";
-import { APP_BUNDLE_ORIGIN, appBundleOrigin, bundleUrlFor, pointerUrlFor, validatePointer, type AppBundleChannel, type AppBundlePointer } from "./appUpdates.ts";
+import {
+  APP_BUNDLE_ORIGIN,
+  appBundleOrigin,
+  bundleUrlFor,
+  pointerUrlFor,
+  validatePointer,
+  type AppBundleChannel,
+  type AppBundlePointer,
+} from "./appUpdates.ts";
 
 const API_ORIGIN = "https://api.example.test";
 const STAGING_SHA = "a".repeat(64);
@@ -68,7 +76,7 @@ async function post(fake: ReturnType<typeof cdn>, body: unknown, init: { method?
     body: init.method === "GET" ? undefined : typeof body === "string" ? body : JSON.stringify(body),
   });
   const response = await worker.fetch(request, {});
-  return { status: response.status, body: await response.json() as Record<string, unknown>, headers: response.headers };
+  return { status: response.status, body: (await response.json()) as Record<string, unknown>, headers: response.headers };
 }
 
 test("offers the channel's bundle to a build inside its native range", async () => {
@@ -190,7 +198,7 @@ test("validates every pointer field", () => {
 test("a pointer written by the publish script passes the endpoint's checks", async () => {
   // A plain string keeps the type checker from resolving the untyped script module.
   const scriptPath = "../scripts/publish-app-bundle.mjs";
-  const publisher = await import(scriptPath) as { makeBundlePointer(input: Record<string, unknown>): unknown };
+  const publisher = (await import(scriptPath)) as { makeBundlePointer(input: Record<string, unknown>): unknown };
   for (const channel of ["staging", "production"] as const) {
     const written = publisher.makeBundlePointer({
       channel,

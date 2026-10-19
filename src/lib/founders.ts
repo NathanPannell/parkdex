@@ -38,13 +38,20 @@ export type FoundRequest = { attemptId: string; position: { lat: number; lng: nu
 
 export type PhotoFlag = { code: string; message: string };
 export type FoundResult =
-  | { outcome: "founded"; park: { id: string; name: string }; coverUrl: string | null; visit: VisitResult | null; founderPoints: number; newBadges?: BadgeUnlock[] }
   | {
-    outcome: "rejected" | "unsure";
-    flags: PhotoFlag[];
-    /** Until when a manual review can use this attempt; null when the photo is not kept or the server has no reviews. */
-    reviewableUntil: string | null;
-  };
+      outcome: "founded";
+      park: { id: string; name: string };
+      coverUrl: string | null;
+      visit: VisitResult | null;
+      founderPoints: number;
+      newBadges?: BadgeUnlock[];
+    }
+  | {
+      outcome: "rejected" | "unsure";
+      flags: PhotoFlag[];
+      /** Until when a manual review can use this attempt; null when the photo is not kept or the server has no reviews. */
+      reviewableUntil: string | null;
+    };
 
 export type ParkSummary = {
   parkId: string;
@@ -74,7 +81,12 @@ export type FounderErrorCode =
   | "unavailable";
 
 export class FounderError extends Error {
-  constructor(readonly code: FounderErrorCode, readonly status: number, message: string, readonly founder: string | null = null) {
+  constructor(
+    readonly code: FounderErrorCode,
+    readonly status: number,
+    message: string,
+    readonly founder: string | null = null,
+  ) {
     super(message);
     this.name = "FounderError";
   }
@@ -144,7 +156,7 @@ const SUMMARY_TIMEOUT_MS = 10_000;
 const REVIEW_TIMEOUT_MS = 15_000;
 
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function text(value: unknown): string | null {
@@ -224,8 +236,11 @@ export function parseFoundResult(body: unknown): FoundResult {
   // The visit has the shape of POST /api/game/visits, with or without its `visit` wrapper.
   const rawVisit = record(row.visit);
   if (rawVisit) {
-    try { visit = parseVisit(record(rawVisit.visit) ? rawVisit : { visit: rawVisit }); }
-    catch { visit = null; }
+    try {
+      visit = parseVisit(record(rawVisit.visit) ? rawVisit : { visit: rawVisit });
+    } catch {
+      visit = null;
+    }
   }
   return {
     outcome: "founded",
@@ -260,14 +275,22 @@ export function parseSummary(body: unknown, parkId: string): ParkSummary {
 /** The plain reason shown for a photo flag the server did not explain. */
 export function flagMessage(code: string): string {
   switch (code) {
-    case "people": return "We spotted people. Take one without anyone in it.";
-    case "lighting": return "It's too dark or blurry. Find better light and hold still.";
-    case "not_park": return "We can't see the park. Point the camera at the park itself.";
-    case "inappropriate": return "This photo can't be used. Take a different one.";
-    case "not_photo": return "That looks like a screen or a picture with text. Take a photo of the park.";
-    case "personal_info": return "We can see licence plates, house numbers or documents. Take one without them.";
-    case "unsure": return "We couldn't tell. Try another angle.";
-    default: return "This photo didn't pass the check. Try another one.";
+    case "people":
+      return "We spotted people. Take one without anyone in it.";
+    case "lighting":
+      return "It's too dark or blurry. Find better light and hold still.";
+    case "not_park":
+      return "We can't see the park. Point the camera at the park itself.";
+    case "inappropriate":
+      return "This photo can't be used. Take a different one.";
+    case "not_photo":
+      return "That looks like a screen or a picture with text. Take a photo of the park.";
+    case "personal_info":
+      return "We can see licence plates, house numbers or documents. Take one without them.";
+    case "unsure":
+      return "We couldn't tell. Try another angle.";
+    default:
+      return "This photo didn't pass the check. Try another one.";
   }
 }
 
@@ -342,7 +365,8 @@ export function founderCapture(label: string, now = new Date()): { place: string
   };
 }
 
-export type FoundStepKind = "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "review_sent" | "founded";
+export type FoundStepKind =
+  "locating" | "scanning" | "results" | "problem" | "camera" | "checking" | "rejected" | "retry" | "taken" | "review_sent" | "founded";
 
 /**
  * Where back (the Android button or Escape) goes from each founding step. The photo review
@@ -367,26 +391,33 @@ export function foundBackAction(step: FoundStepKind, sendingReview = false): "cl
 // ------------------------------------------------------------------ manual review
 
 /** Asking for a manual review from the rejected or unsure screen. */
-export type ReviewState =
-  | { kind: "idle" }
-  | { kind: "sending" }
-  | { kind: "failed"; message: string; canRetry: boolean };
+export type ReviewState = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; message: string; canRetry: boolean };
 
 /** Why a review request failed, and whether pressing the button again could help. */
 export function reviewProblem(error: unknown): { message: string; canRetry: boolean } {
   if (!(error instanceof FounderError)) return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
   switch (error.code) {
-    case "offline": return { message: "You need a connection to ask for a review.", canRetry: true };
-    case "unavailable": return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
-    case "already_founded": return { message: error.founder ? `@${error.founder} became the founder first.` : "Someone else became the founder first.", canRetry: false };
-    case "review_pending": return { message: MESSAGES.review_pending, canRetry: false };
+    case "offline":
+      return { message: "You need a connection to ask for a review.", canRetry: true };
+    case "unavailable":
+      return { message: "Couldn't send it. Try again in a moment.", canRetry: true };
+    case "already_founded":
+      return { message: error.founder ? `@${error.founder} became the founder first.` : "Someone else became the founder first.", canRetry: false };
+    case "review_pending":
+      return { message: MESSAGES.review_pending, canRetry: false };
     case "review_rate_limited":
-    case "rate_limited": return { message: MESSAGES.review_rate_limited, canRetry: false };
-    case "review_unavailable": return { message: MESSAGES.review_unavailable, canRetry: false };
-    case "park_not_found": return { message: MESSAGES.park_not_found, canRetry: false };
-    case "unauthenticated": return { message: "Sign in again to ask for a review.", canRetry: false };
-    case "handle_required": return { message: "Pick a handle before you ask for a review.", canRetry: false };
-    default: return { message: "This photo can't be sent for review. Retake it to try again.", canRetry: false };
+    case "rate_limited":
+      return { message: MESSAGES.review_rate_limited, canRetry: false };
+    case "review_unavailable":
+      return { message: MESSAGES.review_unavailable, canRetry: false };
+    case "park_not_found":
+      return { message: MESSAGES.park_not_found, canRetry: false };
+    case "unauthenticated":
+      return { message: "Sign in again to ask for a review.", canRetry: false };
+    case "handle_required":
+      return { message: "Pick a handle before you ask for a review.", canRetry: false };
+    default:
+      return { message: "This photo can't be sent for review. Retake it to try again.", canRetry: false };
   }
 }
 
@@ -409,22 +440,35 @@ type Sender = (path: string, init: RequestInit) => Promise<Response>;
 
 async function errorFrom(response: Response): Promise<FounderError> {
   let body: Record<string, unknown> = {};
-  try { body = record(await response.json()) ?? {}; } catch { /* Empty or non-JSON answer. */ }
+  try {
+    body = record(await response.json()) ?? {};
+  } catch {
+    /* Empty or non-JSON answer. */
+  }
   const nested = record(body.error);
   const raw = [body.code, nested?.code, body.error].find((value) => typeof value === "string") as string | undefined;
   const status = response.status;
-  const code: FounderErrorCode = (raw && Object.hasOwn(CODE_ALIASES, raw) ? CODE_ALIASES[raw] : undefined)
-    ?? (status === 401 || status === 403 ? "unauthenticated"
-      : status === 429 ? "rate_limited"
-        : status === 404 ? "park_not_found"
-          : status >= 500 ? "unavailable"
-            : status === 409 || status === 413 || status === 422 ? "refused"
+  const code: FounderErrorCode =
+    (raw && Object.hasOwn(CODE_ALIASES, raw) ? CODE_ALIASES[raw] : undefined) ??
+    (status === 401 || status === 403
+      ? "unauthenticated"
+      : status === 429
+        ? "rate_limited"
+        : status === 404
+          ? "park_not_found"
+          : status >= 500
+            ? "unavailable"
+            : status === 409 || status === 413 || status === 422
+              ? "refused"
               : "invalid_request");
   // The server writes player-facing messages for refusals; keep ours for sign-in and outages.
   const serverMessage = text(body.message) ?? text(nested?.message);
   // A taken park names its founder in the message ("...: @robin.") when no field carries it.
-  const founder = handleOf(body.founder) ?? handleOf(nested?.founder) ?? text(body.founderHandle)
-    ?? (code === "already_founded" ? serverMessage?.match(/@([a-z0-9_]{3,20})/)?.[1] ?? null : null);
+  const founder =
+    handleOf(body.founder) ??
+    handleOf(nested?.founder) ??
+    text(body.founderHandle) ??
+    (code === "already_founded" ? (serverMessage?.match(/@([a-z0-9_]{3,20})/)?.[1] ?? null) : null);
   const useServer = serverMessage && serverMessage.length <= 200 && status >= 400 && status < 500 && code !== "unauthenticated" && code !== "invalid_request";
   return new FounderError(code, status, useServer ? serverMessage : MESSAGES[code], founder);
 }
@@ -446,7 +490,10 @@ async function send(sender: Sender, path: string, init: RequestInit, timeoutMs: 
 }
 
 const anyone: Sender = (path, init) => fetchAccountApi(path, init);
-const asAccount = (accountId: string): Sender => (path, init) => fetchAuthenticated(path, init, accountId);
+const asAccount =
+  (accountId: string): Sender =>
+  (path, init) =>
+    fetchAuthenticated(path, init, accountId);
 
 /** `GET /api/osm/parks`: only the park outlines that contain this position. */
 export async function scanParks(fix: Pick<DeviceFix, "point" | "accuracy">, signal?: AbortSignal): Promise<ContainingPark[]> {
@@ -465,15 +512,20 @@ export async function scanParks(fix: Pick<DeviceFix, "point" | "accuracy">, sign
  * or unsure photo is an answer, not an error; outages and refusals throw a FounderError.
  */
 export async function foundPark(accountId: string, request: FoundRequest): Promise<FoundResult> {
-  const response = await send(asAccount(accountId), "/api/parks/found", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  }, FOUND_TIMEOUT_MS);
+  const response = await send(
+    asAccount(accountId),
+    "/api/parks/found",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    },
+    FOUND_TIMEOUT_MS,
+  );
   if (response.ok) return parseFoundResult(await response.json().catch(() => null));
   // Some refusals still carry a photo verdict; read it before treating the reply as an error.
   const copy = response.clone();
-  const body = await copy.json().catch(() => null) as Record<string, unknown> | null;
+  const body = (await copy.json().catch(() => null)) as Record<string, unknown> | null;
   if (body && (body.outcome === "rejected" || body.outcome === "unsure")) return parseFoundResult(body);
   throw await errorFrom(response);
 }
@@ -497,26 +549,36 @@ const REVIEW_STATUSES = new Set<ReviewStatus>(["pending", "approved", "rejected"
  * same attempt again answers with the same request and its current status.
  */
 export async function requestFoundingReview(accountId: string, attemptId: string): Promise<{ status: ReviewStatus; requestId: string }> {
-  const response = await send(asAccount(accountId), "/api/parks/found/review", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ attemptId }),
-  }, REVIEW_TIMEOUT_MS);
+  const response = await send(
+    asAccount(accountId),
+    "/api/parks/found/review",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attemptId }),
+    },
+    REVIEW_TIMEOUT_MS,
+  );
   if (!response.ok) throw await errorFrom(response);
   const body = record(await response.json().catch(() => null));
   const requestId = text(body?.requestId);
   if (!requestId) throw new FounderError("unavailable", response.status, "Parkdex sent an answer this version cannot read.");
-  const status = REVIEW_STATUSES.has(body?.status as ReviewStatus) ? body?.status as ReviewStatus : "pending";
+  const status = REVIEW_STATUSES.has(body?.status as ReviewStatus) ? (body?.status as ReviewStatus) : "pending";
   return { status, requestId };
 }
 
 /** `POST /api/parks/found/review/seen`: these review decisions were shown to the player. */
 export async function markFoundingReviewsSeen(accountId: string, requestIds: readonly string[]): Promise<void> {
   if (!requestIds.length) return;
-  const response = await send(asAccount(accountId), "/api/parks/found/review/seen", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ requestIds }),
-  }, SUMMARY_TIMEOUT_MS);
+  const response = await send(
+    asAccount(accountId),
+    "/api/parks/found/review/seen",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestIds }),
+    },
+    SUMMARY_TIMEOUT_MS,
+  );
   if (!response.ok) throw await errorFrom(response);
 }

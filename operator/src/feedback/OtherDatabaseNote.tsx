@@ -10,7 +10,9 @@ export function OtherDatabaseNote({ onSwitch }: { onSwitch(target: string): void
 
   useEffect(() => {
     const controller = new AbortController();
-    api<Counts>("/api/feedback/other-database", { signal: controller.signal }).then(setCounts).catch(() => setCounts(null));
+    api<Counts>("/api/feedback/other-database", { signal: controller.signal })
+      .then(setCounts)
+      .catch(() => setCounts(null));
     return () => controller.abort();
   }, []);
 
@@ -21,8 +23,13 @@ export function OtherDatabaseNote({ onSwitch }: { onSwitch(target: string): void
   return (
     <div className={`other-db other-db--${counts.environment}`} role="status">
       <Icon name="layers" size={16} />
-      <span><strong>{name}</strong> has {total} {total === 1 ? "feedback report" : "feedback reports"}{fresh ? `, ${fresh} new` : ""}.</span>
-      <button type="button" className="text-button" onClick={() => onSwitch(counts.environment)}>Switch to {name.toLowerCase()}</button>
+      <span>
+        <strong>{name}</strong> has {total} {total === 1 ? "feedback report" : "feedback reports"}
+        {fresh ? `, ${fresh} new` : ""}.
+      </span>
+      <button type="button" className="text-button" onClick={() => onSwitch(counts.environment)}>
+        Switch to {name.toLowerCase()}
+      </button>
     </div>
   );
 }

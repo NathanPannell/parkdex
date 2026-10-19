@@ -86,9 +86,7 @@ export interface PhotoAnswers {
   answers: Record<string, { choice: string; probabilities: Record<string, number> }>;
 }
 
-export type PhotoDecision =
-  | { outcome: "approve"; flags: [] }
-  | { outcome: "reject"; flags: PhotoFlag[] };
+export type PhotoDecision = { outcome: "approve"; flags: [] } | { outcome: "reject"; flags: PhotoFlag[] };
 
 function probability(answer: PhotoAnswers["answers"][string] | undefined, label: string): number {
   if (!answer) return 0;
@@ -104,8 +102,7 @@ function probability(answer: PhotoAnswers["answers"][string] | undefined, label:
  * when a flag is missing, so a partial answer is "unavailable", never an approval.
  */
 export function decidePhoto(result: PhotoAnswers, flagThresholds: Partial<FlagThresholds> = DEFAULT_FLAG_THRESHOLDS): PhotoDecision {
-  const flags = PHOTO_FLAGS
-    .map((flag) => ({ flag, p: probability(result.answers[flag], "yes") }))
+  const flags = PHOTO_FLAGS.map((flag) => ({ flag, p: probability(result.answers[flag], "yes") }))
     .filter((item) => item.p > (flagThresholds[item.flag] ?? DEFAULT_FLAG_THRESHOLDS[item.flag]))
     .sort((a, b) => b.p - a.p)
     .map((item) => item.flag);

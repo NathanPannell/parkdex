@@ -5,7 +5,15 @@ import { feedbackRetentionCutoff, purgeArchivedFeedbackFromDatabase, type Feedba
 import type { FeedbackStore, MailIntent, ResendPayload } from "./store.js";
 import { sendEmail } from "./feedbackDelivery.js";
 import { handleInteractionRequest, handleRetentionRequest, retentionAuthorized, type InteractionDependencies, type InteractionEnv } from "./interactions.js";
-import { handleAuthRequest, requireAccount, requireAccountMutation, resumeAccountDeletion, purgeAuthRetention, type AuthDependencies, type AuthEnvironment } from "./accounts/auth.js";
+import {
+  handleAuthRequest,
+  requireAccount,
+  requireAccountMutation,
+  resumeAccountDeletion,
+  purgeAuthRetention,
+  type AuthDependencies,
+  type AuthEnvironment,
+} from "./accounts/auth.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonOsmSearchLimiter, handleParkProposalRequest } from "./parkProposals.js";
@@ -22,14 +30,7 @@ import { createPhotoChecker, type PhotoChecker } from "./founderPhoto.js";
 import { appBundleOrigin, handleAppUpdateRequest } from "./appUpdates.js";
 import { createAnalyticsSink, posthogConfig, withRequestAnalytics, type AnalyticsSink } from "./analyticsSink.js";
 import { emitEvent, REQUEST_CONTEXT_HEADERS } from "./requestContext.js";
-import {
-  HttpError,
-  readJsonBody,
-  validateFeedbackBody,
-  type EmailAudience,
-  type FeedbackEmailReport,
-  type ValidatedFeedback,
-} from "./validation.js";
+import { HttpError, readJsonBody, validateFeedbackBody, type EmailAudience, type FeedbackEmailReport, type ValidatedFeedback } from "./validation.js";
 
 export interface WorkerEnvironment extends InteractionEnv, AuthEnvironment, ProgressEnv, GameEnv {
   DATABASE_URL?: string;
@@ -101,11 +102,18 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response
 
 function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) {
-    const retryAfter = error.status === 429 ? error.code === "rate_limited" ? "3600" : "900" : undefined;
+    const retryAfter = error.status === 429 ? (error.code === "rate_limited" ? "3600" : "900") : undefined;
     const headers = retryAfter ? { "retry-after": retryAfter } : undefined;
     return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
-  return json({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+  return json(
+    {
+      error: { code: "service_unavailable", message: "Service temporarily unavailable." },
+      code: "service_unavailable",
+      message: "Service temporarily unavailable.",
+    },
+    503,
+  );
 }
 
 /** Game outcomes become analytics events on the request that caused them. */
@@ -133,7 +141,9 @@ function requestNow(dependencies: WorkerDependencies): number {
 }
 
 function sha256Hex(bytes: Uint8Array): Promise<string> {
-  return crypto.subtle.digest("SHA-256", new Uint8Array(bytes).buffer).then((digest) => Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join(""));
+  return crypto.subtle
+    .digest("SHA-256", new Uint8Array(bytes).buffer)
+    .then((digest) => Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join(""));
 }
 
 async function payloadHash(feedback: ValidatedFeedback): Promise<string> {
@@ -191,28 +201,25 @@ function fallbackEmail(report: FeedbackEmailReport, audience: EmailAudience): { 
   const receipt = audience === "receipt";
   return {
     subject: receipt ? "Parkdex got your note" : `Parkdex feedback: ${report.kind}`,
-    html: receipt ? "<p>Your feedback has been saved. Thank you for helping improve Parkdex.</p>" : `<p>${escapeHtml(report.message).replace(/\n/g, "<br>")}</p>`,
+    html: receipt
+      ? "<p>Your feedback has been saved. Thank you for helping improve Parkdex.</p>"
+      : `<p>${escapeHtml(report.message).replace(/\n/g, "<br>")}</p>`,
     text: receipt ? "Your feedback has been saved. Thank you for helping improve Parkdex." : report.message,
   };
 }
 
-function buildMailIntent(
-  audience: EmailAudience,
-  report: FeedbackEmailReport,
-  env: WorkerEnvironment,
-  request: Request,
-): MailIntent {
+function buildMailIntent(audience: EmailAudience, report: FeedbackEmailReport, env: WorkerEnvironment, request: Request): MailIntent {
   const from = env.EMAIL_FROM?.trim() ?? "";
-  const recipient = audience === "operator" ? env.OPERATOR_EMAIL?.trim() ?? "" : report.email ?? "";
-  const replyTo = audience === "operator"
-    ? (report.contact ? validEmail(report.email ?? undefined) : validEmail(env.EMAIL_REPLY_TO))
-    : validEmail(env.EMAIL_REPLY_TO);
+  const recipient = audience === "operator" ? (env.OPERATOR_EMAIL?.trim() ?? "") : (report.email ?? "");
+  const replyTo =
+    audience === "operator" ? (report.contact ? validEmail(report.email ?? undefined) : validEmail(env.EMAIL_REPLY_TO)) : validEmail(env.EMAIL_REPLY_TO);
   let rendered: { subject: string; html: string; text: string };
   let renderError: string | null = null;
   try {
-    rendered = audience === "operator"
-      ? renderOperatorEmail(report, { appUrl: appUrl(env, request), reviewUrl: dashboardUrl(env) })
-      : renderReceiptEmail(report, { appUrl: appUrl(env, request) });
+    rendered =
+      audience === "operator"
+        ? renderOperatorEmail(report, { appUrl: appUrl(env, request), reviewUrl: dashboardUrl(env) })
+        : renderReceiptEmail(report, { appUrl: appUrl(env, request) });
   } catch {
     rendered = fallbackEmail(report, audience);
     renderError = "Email template could not be rendered.";
@@ -225,18 +232,24 @@ function buildMailIntent(
     text: rendered.text,
   };
   if (replyTo) payload.reply_to = replyTo;
-  const missing = renderError ?? (!recipient
-    ? audience === "operator" ? "Operator email recipient is not configured." : "Receipt recipient is not available."
-    : !from ? "Email sender is not configured."
-      : !env.RESEND_API_KEY ? "Email provider is not configured."
-        : null);
+  const missing =
+    renderError ??
+    (!recipient
+      ? audience === "operator"
+        ? "Operator email recipient is not configured."
+        : "Receipt recipient is not available."
+      : !from
+        ? "Email sender is not configured."
+        : !env.RESEND_API_KEY
+          ? "Email provider is not configured."
+          : null);
   return {
     audience,
     recipient,
     payload,
     idempotencyKey: `feedback-${report.id}-${audience}-v1`,
     initialStatus: env.EMAIL_MODE === "disabled" ? "pending" : renderError || missing ? "failed" : "pending",
-    initialError: env.EMAIL_MODE === "disabled" ? null : renderError ?? missing,
+    initialError: env.EMAIL_MODE === "disabled" ? null : (renderError ?? missing),
   };
 }
 
@@ -281,22 +294,37 @@ async function submitFeedback(request: Request, env: WorkerEnvironment, dependen
   if (result.status === "rate_limited") throw new HttpError(429, "rate_limited", "Please wait before sending more feedback.");
   if (result.status === "duplicate") return json({ id: result.report.id, notification: notificationFromReport(result.report) }, 200);
 
-  await Promise.all(result.report.emails.map(async (mail) => {
-    if (mail.status === "pending") {
-      try { await sendEmail(store, env, dependencies, result.report.id, mail.audience, false, true); } catch {
-        // Report durability is independent of email delivery.
+  await Promise.all(
+    result.report.emails.map(async (mail) => {
+      if (mail.status === "pending") {
+        try {
+          await sendEmail(store, env, dependencies, result.report.id, mail.audience, false, true);
+        } catch {
+          // Report durability is independent of email delivery.
+        }
       }
-    }
-  }));
+    }),
+  );
   let current = result.report;
-  try { current = await store.getReport(result.report.id) ?? current; } catch { /* Preserve the states returned with the committed report. */ }
+  try {
+    current = (await store.getReport(result.report.id)) ?? current;
+  } catch {
+    /* Preserve the states returned with the committed report. */
+  }
   return json({ id: current.id, notification: notificationFromReport(current) }, 201);
 }
 
 function notificationFromReport(report: { emails: Array<{ audience: EmailAudience; status: string }> }): { operator?: string; receipt?: string } {
   const result: { operator?: string; receipt?: string } = {};
   for (const delivery of report.emails) {
-    if (delivery.status === "pending" || delivery.status === "sending" || delivery.status === "sent" || delivery.status === "failed" || delivery.status === "ambiguous" || delivery.status === "disabled") {
+    if (
+      delivery.status === "pending" ||
+      delivery.status === "sending" ||
+      delivery.status === "sent" ||
+      delivery.status === "failed" ||
+      delivery.status === "ambiguous" ||
+      delivery.status === "disabled"
+    ) {
       result[delivery.audience] = delivery.status;
     }
   }
@@ -318,18 +346,22 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const retentionResponse = await handleRetentionRequest(request, env, dependencies.interactions);
   if (retentionResponse) {
     if (!retentionResponse.ok) return retentionResponse;
-    const interactionResult = await retentionResponse.json() as { deleted: number; remainingExpired: number };
+    const interactionResult = (await retentionResponse.json()) as { deleted: number; remainingExpired: number };
     const authResult = await purgeAuthRetention(env, dependencies.auth);
     // Archived feedback rides on the same daily run. Its backlog is reported on its own, because
     // the photo Worker's cron measures progress by the interaction and auth deletions only.
     const feedbackCutoff = feedbackRetentionCutoff(requestNow(dependencies));
     const feedbackResult = dependencies.purgeArchivedFeedback
       ? await dependencies.purgeArchivedFeedback(env, feedbackCutoff)
-      : env.DATABASE_URL ? await purgeArchivedFeedbackFromDatabase(env.DATABASE_URL, feedbackCutoff) : { deleted: 0, remainingExpired: 0 };
+      : env.DATABASE_URL
+        ? await purgeArchivedFeedbackFromDatabase(env.DATABASE_URL, feedbackCutoff)
+        : { deleted: 0, remainingExpired: 0 };
     // Founding photos kept for a manual review (#153): unrequested ones after a day, decided ones after 90 days.
     const foundingResult = dependencies.purgeFoundingPhotos
       ? await dependencies.purgeFoundingPhotos(env, requestNow(dependencies))
-      : env.DATABASE_URL ? await purgeFoundingPhotosFromDatabase(env.DATABASE_URL, requestNow(dependencies)) : { deleted: 0, remainingExpired: 0 };
+      : env.DATABASE_URL
+        ? await purgeFoundingPhotosFromDatabase(env.DATABASE_URL, requestNow(dependencies))
+        : { deleted: 0, remainingExpired: 0 };
     return json({
       ...interactionResult,
       authDeleted: authResult.deleted,
@@ -343,29 +375,40 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const authDependencies: AuthDependencies = {
     ...dependencies.auth,
     waitUntil: dependencies.auth?.waitUntil ?? context.waitUntil,
-    deleteAccountData: dependencies.auth?.deleteAccountData ?? ((input) => deleteAccountData(input, env, {
-      createStore: dependencies.progress?.createStore,
-      fetch: dependencies.progress?.fetch,
-    })),
+    deleteAccountData:
+      dependencies.auth?.deleteAccountData ??
+      ((input) =>
+        deleteAccountData(input, env, {
+          createStore: dependencies.progress?.createStore,
+          fetch: dependencies.progress?.fetch,
+        })),
   };
   const authResponse = await handleAuthRequest(request, env, authDependencies);
   if (authResponse) return authResponse;
   if (path === "/api/claims" || path.startsWith("/api/claims/")) {
-    const auth = request.method === "GET"
-      ? await requireAccount(request, env, authDependencies)
-      : await requireAccountMutation(request, env, authDependencies);
+    const auth = request.method === "GET" ? await requireAccount(request, env, authDependencies) : await requireAccountMutation(request, env, authDependencies);
     const progressResponse = await handleProgressRequest(request, env, auth, dependencies.progress);
     if (progressResponse) return progressResponse;
   }
-  const gameResponse = await handleGameRequest(request, env, {
-    account: () => requireAccount(request, env, authDependencies),
-    mutation: () => requireAccountMutation(request, env, authDependencies),
-  }, { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, publicOrigin: appUrl(env, request), ...dependencies.game });
+  const gameResponse = await handleGameRequest(
+    request,
+    env,
+    {
+      account: () => requireAccount(request, env, authDependencies),
+      mutation: () => requireAccountMutation(request, env, authDependencies),
+    },
+    { fetch: dependencies.fetch, now: dependencies.now, onEvent: recordGameEvent, publicOrigin: appUrl(env, request), ...dependencies.game },
+  );
   if (gameResponse) return gameResponse;
-  const friendsResponse = await handleFriendsRequest(request, env, {
-    account: () => requireAccount(request, env, authDependencies),
-    mutation: () => requireAccountMutation(request, env, authDependencies),
-  }, { now: dependencies.now, ...dependencies.friends });
+  const friendsResponse = await handleFriendsRequest(
+    request,
+    env,
+    {
+      account: () => requireAccount(request, env, authDependencies),
+      mutation: () => requireAccountMutation(request, env, authDependencies),
+    },
+    { now: dependencies.now, ...dependencies.friends },
+  );
   if (friendsResponse) return friendsResponse;
   const reviewStore = () => {
     if (dependencies.createProposalReviewStore) return dependencies.createProposalReviewStore(env);
@@ -380,9 +423,12 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const foundersResponse = await handleFoundersRequest(request, {
     store: foundersStore,
     osm: () => dependencies.osmClient!,
-    photoChecker: () => dependencies.photoChecker === undefined
-      ? (env.OPENROUTER_API_KEY?.trim() ? createPhotoChecker(env, dependencies.fetch) : null)
-      : dependencies.photoChecker,
+    photoChecker: () =>
+      dependencies.photoChecker === undefined
+        ? env.OPENROUTER_API_KEY?.trim()
+          ? createPhotoChecker(env, dependencies.fetch)
+          : null
+        : dependencies.photoChecker,
     mutation: () => requireAccountMutation(request, env, authDependencies),
     optionalAccount: async () => {
       try {
@@ -437,20 +483,23 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       return createNeonOsmSearchLimiter(env.DATABASE_URL)(subject);
     },
     osm: () => dependencies.osmClient!,
-    catalogue: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (lat, lng) =>
-      reviewStore().nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
-    founders: !dependencies.createFoundersStore && !env.DATABASE_URL ? undefined : async (parkIds) => {
-      const store = foundersStore();
-      const [founders, hidden] = await Promise.all([store.founders(parkIds), store.hidden(parkIds)]);
-      return { founders, hidden };
-    },
+    catalogue: !dependencies.createProposalReviewStore && !env.DATABASE_URL ? undefined : (lat, lng) => reviewStore().nearbyParks(lat, lng, CATALOGUE_MATCH_KM),
+    founders:
+      !dependencies.createFoundersStore && !env.DATABASE_URL
+        ? undefined
+        : async (parkIds) => {
+            const store = foundersStore();
+            const [founders, hidden] = await Promise.all([store.founders(parkIds), store.hidden(parkIds)]);
+            return { founders, hidden };
+          },
   });
   if (osmResponse) return osmResponse;
   const proposalResponse = await handleParkProposalRequest(request);
   if (proposalResponse) return proposalResponse;
   if (path === "/api/feedback" && request.method === "POST") return submitFeedback(request, env, dependencies);
 
-  if (path === "/api" || path.startsWith("/api/")) return json({ error: { code: "not_found", message: "API route not found." }, code: "not_found", message: "API route not found." }, 404);
+  if (path === "/api" || path.startsWith("/api/"))
+    return json({ error: { code: "not_found", message: "API route not found." }, code: "not_found", message: "API route not found." }, 404);
   return json({ error: { code: "not_found", message: "API route not found." } }, 404);
 }
 
@@ -460,7 +509,11 @@ async function route(request: Request, env: WorkerEnvironment, context: WorkerEx
     return routeApi(request, env, dependencies, context);
   }
   if (env.ASSETS) {
-    try { return await env.ASSETS.fetch(request); } catch { return new Response("Not found", { status: 404 }); }
+    try {
+      return await env.ASSETS.fetch(request);
+    } catch {
+      return new Response("Not found", { status: 404 });
+    }
   }
   return new Response("Not found", { status: 404 });
 }
@@ -472,7 +525,10 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
   headers.set("access-control-allow-origin", origin);
   headers.set("access-control-allow-credentials", "true");
   headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  headers.set("access-control-allow-headers", `Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256, ${REQUEST_CONTEXT_HEADERS.join(", ")}`);
+  headers.set(
+    "access-control-allow-headers",
+    `Content-Type, Authorization, X-CSRF-Token, X-Kip-Auth-Transport, X-Kip-Account-ID, X-Content-SHA256, ${REQUEST_CONTEXT_HEADERS.join(", ")}`,
+  );
   headers.set("access-control-max-age", "600");
   headers.append("vary", "Origin");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -481,26 +537,35 @@ function withCors(request: Request, env: WorkerEnvironment, response: Response):
 export function createFeedbackWorker(dependencies: WorkerDependencies = {}) {
   // One client per instance so its short cache and concurrency cap span requests.
   let osm = dependencies.osmClient ?? null;
-  const table = (env: WorkerEnvironment) => dependencies.osmParkTable
-    ? dependencies.osmParkTable(env)
-    : env.DATABASE_URL ? createSqlOsmParkTable(databaseSqlRunner(env.DATABASE_URL)) : null;
-  const withOsm = (env: WorkerEnvironment): WorkerDependencies =>
-    ({ ...dependencies, osmClient: osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined, { table: table(env) }) });
+  const table = (env: WorkerEnvironment) =>
+    dependencies.osmParkTable ? dependencies.osmParkTable(env) : env.DATABASE_URL ? createSqlOsmParkTable(databaseSqlRunner(env.DATABASE_URL)) : null;
+  const withOsm = (env: WorkerEnvironment): WorkerDependencies => ({
+    ...dependencies,
+    osmClient: (osm ??= createOsmClient(env, dependencies.fetch as typeof fetch | undefined, { table: table(env) })),
+  });
   return {
     async fetch(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext = {}): Promise<Response> {
-      return withRequestAnalytics({
-        method: request.method,
-        path: new URL(request.url).pathname,
-        header: (name) => request.headers.get(name),
-        env: env as Record<string, string | undefined>,
-        sink: () => dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env),
-        waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
-      }, () => handleWorkerRequest(request, env, context, withOsm(env)));
+      return withRequestAnalytics(
+        {
+          method: request.method,
+          path: new URL(request.url).pathname,
+          header: (name) => request.headers.get(name),
+          env: env as Record<string, string | undefined>,
+          sink: () => (dependencies.analytics ? dependencies.analytics(env) : createAnalyticsSink(env)),
+          waitUntil: context.waitUntil ? (promise) => context.waitUntil?.(promise) : undefined,
+        },
+        () => handleWorkerRequest(request, env, context, withOsm(env)),
+      );
     },
   };
 }
 
-async function handleWorkerRequest(request: Request, env: WorkerEnvironment, context: WorkerExecutionContext, dependencies: WorkerDependencies): Promise<Response> {
+async function handleWorkerRequest(
+  request: Request,
+  env: WorkerEnvironment,
+  context: WorkerExecutionContext,
+  dependencies: WorkerDependencies,
+): Promise<Response> {
   try {
     if (request.headers.has("origin") && !requestOriginAllowed(request, env)) {
       return json({ error: { code: "forbidden", message: "Origin is not allowed." }, code: "forbidden", message: "Origin is not allowed." }, 403);

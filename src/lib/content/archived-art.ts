@@ -1,10 +1,4 @@
-import {
-  CONTENT_CDN_ORIGIN,
-  type ArchivedScene,
-  type ContentChannel,
-  type ContentFile,
-  type ContentStore,
-} from "./contracts";
+import { CONTENT_CDN_ORIGIN, type ArchivedScene, type ContentChannel, type ContentFile, type ContentStore } from "./contracts";
 import { ContentValidationError, assertFileBytes, parseContentManifest, parseJsonBytes, sha256Hex } from "./manifest";
 
 const RELEASE_ID = /^[a-f0-9]{64}$/;
@@ -135,13 +129,7 @@ async function readBounded(response: Response, maximum: number, label: string): 
   return bytes.buffer;
 }
 
-async function requestBytes(
-  url: string,
-  kind: "manifest" | "scene",
-  maximum: number,
-  fetcher: typeof fetch,
-  signal?: AbortSignal,
-) {
+async function requestBytes(url: string, kind: "manifest" | "scene", maximum: number, fetcher: typeof fetch, signal?: AbortSignal) {
   const response = await fetcher(url, {
     method: "GET",
     headers: { Accept: kind === "manifest" ? "application/json" : "image/webp" },
@@ -157,7 +145,7 @@ async function requestBytes(
 function inventoryBytes(files: ContentFile[]): ArrayBuffer {
   const inventory = files
     .map(({ path, byte_size, sha256 }) => ({ byte_size, path, sha256 }))
-    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   // parseContentManifest restricts logical paths and hashes to ASCII, so this compact
   // representation matches Python json.dumps(sort_keys=True, separators=(",", ":")).
   const encoded = new TextEncoder().encode(JSON.stringify(inventory));

@@ -50,8 +50,16 @@ function parseOrigin(value: string, allowLoopbackHttp = false): string {
 
   const secure = url.protocol === "https:";
   const localDevelopment = allowLoopbackHttp && url.protocol === "http:" && isLoopback(url.hostname);
-  if ((!secure && !localDevelopment) || url.origin === "null" || hasUrlCredentials(url) || hasRawUrlCredentials(value) || url.search || url.hash ||
-      !["", "/"].includes(url.pathname) || (secure && url.port && url.port !== "443")) {
+  if (
+    (!secure && !localDevelopment) ||
+    url.origin === "null" ||
+    hasUrlCredentials(url) ||
+    hasRawUrlCredentials(value) ||
+    url.search ||
+    url.hash ||
+    !["", "/"].includes(url.pathname) ||
+    (secure && url.port && url.port !== "443")
+  ) {
     throw new Error("The Parkdex API destination must be an approved HTTPS origin.");
   }
   return url.origin;
@@ -71,10 +79,7 @@ function defaultNativeOrigin(environment: ParkdexApiEnvironment): string {
 }
 
 /** Resolve the destination for requests containing personal, account, or diagnostic data. */
-export function resolveUserDataApiOrigin(
-  configuredValue: string | undefined,
-  options: UserDataDestinationOptions,
-): string {
+export function resolveUserDataApiOrigin(configuredValue: string | undefined, options: UserDataDestinationOptions): string {
   const configured = (configuredValue ?? "").trim();
 
   if (options.native) {
@@ -120,21 +125,15 @@ export function isSecureUserDataApiOrigin(value: string): boolean {
   }
 }
 
-export function assertUserDataApiBuildConfiguration(
-  environment: Record<string, string | undefined>,
-  options: { mode: string; vercelUrl?: string },
-): void {
+export function assertUserDataApiBuildConfiguration(environment: Record<string, string | undefined>, options: { mode: string; vercelUrl?: string }): void {
   const appEnvironment = nativeEnvironment(environment.VITE_CONTENT_ENV);
   const configuredKeys = ["VITE_APP_URL", "VITE_ACCOUNT_API_URL", "VITE_FEEDBACK_API_URL"] as const;
   const deployedVercelUrl = options.vercelUrl?.trim();
   const deployedVercelOrigin = deployedVercelUrl
     ? parseOrigin(/^https:\/\//i.test(deployedVercelUrl) ? deployedVercelUrl : `https://${deployedVercelUrl}`)
     : null;
-  const configuredPreviewOrigin = environment.VITE_PREVIEW_API_ORIGIN?.trim()
-    ? parseOrigin(environment.VITE_PREVIEW_API_ORIGIN)
-    : null;
-  const allowedEnvironmentOrigins = appEnvironment === "main" ? PRODUCTION_ORIGINS
-    : appEnvironment === "staging" ? STAGING_ORIGINS : null;
+  const configuredPreviewOrigin = environment.VITE_PREVIEW_API_ORIGIN?.trim() ? parseOrigin(environment.VITE_PREVIEW_API_ORIGIN) : null;
+  const allowedEnvironmentOrigins = appEnvironment === "main" ? PRODUCTION_ORIGINS : appEnvironment === "staging" ? STAGING_ORIGINS : null;
 
   if (appEnvironment === "preview" && (!deployedVercelOrigin || configuredPreviewOrigin !== deployedVercelOrigin)) {
     throw new Error("Preview builds require VITE_PREVIEW_API_ORIGIN to match the exact Vercel deployment URL.");
