@@ -80,7 +80,7 @@ Private repositories on the free plan have about 2,000 Actions minutes a month. 
 
 | Workflow | Trigger | Approx. minutes |
 | --- | --- | --- |
-| `pr-checks.yml` | Every push to a PR into `staging` or `main`, drafts included. Six parallel jobs; a newer push cancels the older run. | 25 per push |
+| `pr-checks.yml` | Every push to a PR into `staging` or `main`, drafts included (marking a PR ready does not rerun it). Six parallel jobs of 1 to 3 minutes; a newer push cancels the older run. | 13 per push |
 | `deploy-staging.yml` | Push to `staging`. Runs checks and migrations, then queues Vercel and the photo Worker. | 4 |
 | `deploy-production.yml` | Push to `main`. Same as staging, against Neon `main`. | 4 |
 
