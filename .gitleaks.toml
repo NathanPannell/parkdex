@@ -1,0 +1,12 @@
+# Secret scan settings for CI (`gitleaks git` over the whole history and `gitleaks dir`).
+# The default rules apply. Each allowlist entry is one known non-secret value, matched exactly.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Browser storage key names, not credentials"
+regexes = ['''^parkdex-(badges|kip-tips)-seen-v[0-9]+$''']
+
+[[allowlists]]
+description = "Fake PostHog project key in src/lib/productAnalytics.test.ts"
+regexes = ['''^phc_otherKey1234567890$''']

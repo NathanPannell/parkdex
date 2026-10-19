@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.server.json",
+  "include": ["*.ts", "../playwright.config.ts"],
+  // The API server imports the worker, so the server project (tsconfig.server.json) checks it.
+  "exclude": ["api-server.ts"]
+}
