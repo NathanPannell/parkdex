@@ -23,14 +23,23 @@ describe("content areas", () => {
       expect(isPointInsideContentBounds(point)).toBe(true);
     }
     // Toronto, Edmonton, Fredericton, Seattle and Anchorage.
-    for (const point of [[-79.38, 43.65], [-113.49, 53.55], [-66.64, 45.96], [-122.33, 47.61], [-149.9, 61.22]] as MapPoint[]) {
+    for (const point of [
+      [-79.38, 43.65],
+      [-113.49, 53.55],
+      [-66.64, 45.96],
+      [-122.33, 47.61],
+      [-149.9, 61.22],
+    ] as MapPoint[]) {
       expect(isPointInsideContentBounds(point)).toBe(false);
     }
     expect(isPointInsideContentBounds([Number.NaN, 48.4])).toBe(false);
   });
 
   it("checks points against any list of boxes, edges included", () => {
-    const boxes = [[0, 0, 1, 1], [10, 10, 11, 11]] as const;
+    const boxes = [
+      [0, 0, 1, 1],
+      [10, 10, 11, 11],
+    ] as const;
     expect(isPointInsideContentBounds([1, 1], boxes)).toBe(true);
     expect(isPointInsideContentBounds([10.5, 10.5], boxes)).toBe(true);
     expect(isPointInsideContentBounds([5, 5], boxes)).toBe(false);

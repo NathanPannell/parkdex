@@ -33,7 +33,13 @@ const ids = { ada: randomUUID(), ben: randomUUID() };
 
 async function inventory(): Promise<string[]> {
   const config = JSON.parse(await readFile(new URL("deployment.json", ROOT), "utf8"));
-  return [config.migrationPath, ...config.contentSync.supportingMigrationPaths, ...config.optionalMigrationPaths, ...config.contentSync.migrationPaths, ...config.independentMigrationPaths];
+  return [
+    config.migrationPath,
+    ...config.contentSync.supportingMigrationPaths,
+    ...config.optionalMigrationPaths,
+    ...config.contentSync.migrationPaths,
+    ...config.independentMigrationPaths,
+  ];
 }
 
 async function account(id: string, email: string, createdAt: string, handle: string) {
@@ -83,7 +89,14 @@ test("the overview loads without founder tiles and says why", { skip: !DSN }, as
   const api = createDashboardApi({ analyticsStore: () => store });
   const response = await api(new Request(`${ORIGIN}/api/analytics/overview?days=30`), { DATABASE_URL: DSN });
   assert.equal(response.status, 200);
-  const { overview } = await response.json() as { overview: Record<string, unknown> & { accounts: { total: number }; visits: { planted: { current: number }; took: { current: number } }; series: { foundings: unknown; took: number[] }; players: { week: { current: number } } } };
+  const { overview } = (await response.json()) as {
+    overview: Record<string, unknown> & {
+      accounts: { total: number };
+      visits: { planted: { current: number }; took: { current: number } };
+      series: { foundings: unknown; took: number[] };
+      players: { week: { current: number } };
+    };
+  };
   assert.equal(overview.accounts.total, 2);
   assert.deepEqual([overview.visits.planted.current, overview.visits.took.current], [1, 1]);
   assert.equal(overview.players.week.current, 1);
@@ -91,7 +104,10 @@ test("the overview loads without founder tiles and says why", { skip: !DSN }, as
   assert.equal(overview.photoChecks, null);
   assert.deepEqual(overview.rejectionFlags, []);
   assert.equal(overview.series.foundings, null);
-  assert.equal(overview.series.took.reduce((sum, value) => sum + value, 0), 1);
+  assert.equal(
+    overview.series.took.reduce((sum, value) => sum + value, 0),
+    1,
+  );
   assert.deepEqual(overview.unavailable, ["founders not deployed"]);
 });
 
@@ -99,7 +115,7 @@ test("accounts and events load, with scores from game_001 and no founded count",
   const api = createDashboardApi({ analyticsStore: () => store });
   const list = await api(new Request(`${ORIGIN}/api/analytics/accounts`), { DATABASE_URL: DSN });
   assert.equal(list.status, 200);
-  const { accounts, unavailable } = await list.json() as { accounts: AccountRow[]; unavailable: string[] };
+  const { accounts, unavailable } = (await list.json()) as { accounts: AccountRow[]; unavailable: string[] };
   assert.deepEqual(unavailable, ["founders not deployed"]);
   const scores = (await pool.query("SELECT account_id::text, score, parks_held FROM kip_game.player_scores($1)", [now.toISOString()])).rows;
   for (const score of scores) {
@@ -111,8 +127,11 @@ test("accounts and events load, with scores from game_001 and no founded count",
   assert.equal(((await detail.json()) as { account: { founded: unknown } }).account.founded, null);
   const events = await api(new Request(`${ORIGIN}/api/analytics/events?from=${encodeURIComponent(ago(30 * DAY))}`), { DATABASE_URL: DSN });
   assert.equal(events.status, 200);
-  const page = await events.json() as { events: { type: string }[]; unavailable: string[] };
-  assert.deepEqual(page.events.map((event) => event.type), ["flag_taken"]);
+  const page = (await events.json()) as { events: { type: string }[]; unavailable: string[] };
+  assert.deepEqual(
+    page.events.map((event) => event.type),
+    ["flag_taken"],
+  );
   assert.deepEqual(page.unavailable, ["founders not deployed"]);
 });
 

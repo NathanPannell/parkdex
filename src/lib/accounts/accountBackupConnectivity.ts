@@ -1,8 +1,4 @@
-import {
-  getContentConnectivity,
-  subscribeContentConnectivity,
-  type ContentConnectivity,
-} from "../content/transport";
+import { getContentConnectivity, subscribeContentConnectivity, type ContentConnectivity } from "../content/transport";
 
 export type AccountBackupConnectivity = { connected: boolean; allowed: boolean };
 
@@ -16,17 +12,13 @@ export function mapAccountBackupConnectivity(connectivity: ContentConnectivity):
 }
 
 /** Read account-backup availability, optionally mapping an already-read connectivity value. */
-export async function getAccountBackupConnectivity(
-  knownConnectivity?: ContentConnectivity,
-): Promise<AccountBackupConnectivity> {
-  const connectivity = knownConnectivity ?? await getContentConnectivity();
+export async function getAccountBackupConnectivity(knownConnectivity?: ContentConnectivity): Promise<AccountBackupConnectivity> {
+  const connectivity = knownConnectivity ?? (await getContentConnectivity());
   return mapAccountBackupConnectivity(connectivity);
 }
 
 /** Subscribe to account-backup availability using the shared connected-network rule. */
-export function subscribeAccountBackupConnectivity(
-  listener: (connectivity: AccountBackupConnectivity) => void,
-): () => void {
+export function subscribeAccountBackupConnectivity(listener: (connectivity: AccountBackupConnectivity) => void): () => void {
   return subscribeContentConnectivity((connectivity) => {
     listener(mapAccountBackupConnectivity(connectivity));
   });

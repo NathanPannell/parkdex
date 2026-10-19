@@ -41,11 +41,7 @@ export function Tilt({ children, max = 18, idle = true, style }: { children: Rea
       }}
       style={{ perspective: 700, touchAction: "pan-y", ...style }}
     >
-      <motion.div
-        style={{ rotateX, rotateY, transformStyle: "preserve-3d", ["--hx" as string]: hx, ["--hy" as string]: hy }}
-      >
-        {children}
-      </motion.div>
+      <motion.div style={{ rotateX, rotateY, transformStyle: "preserve-3d", ["--hx" as string]: hx, ["--hy" as string]: hy }}>{children}</motion.div>
     </motion.div>
   );
 }
@@ -55,9 +51,7 @@ export function RollingNumber({ value, className }: { value: number; className?:
   const digits = value.toLocaleString("en-CA").split("");
   return (
     <span className={`roll ${className ?? ""}`} aria-label={String(value)}>
-      {digits.map((d, i) =>
-        /\d/.test(d) ? <Digit key={digits.length - i} d={Number(d)} /> : <span key={`s${digits.length - i}`}>{d}</span>,
-      )}
+      {digits.map((d, i) => (/\d/.test(d) ? <Digit key={digits.length - i} d={Number(d)} /> : <span key={`s${digits.length - i}`}>{d}</span>))}
     </span>
   );
 }

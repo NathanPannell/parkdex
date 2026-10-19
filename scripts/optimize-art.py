@@ -3,6 +3,7 @@
 Only the WebP output ships in the app; art-source/ keeps the full-size originals.
 Usage: python scripts/optimize-art.py
 """
+
 from pathlib import Path
 
 from PIL import Image

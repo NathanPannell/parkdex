@@ -98,10 +98,7 @@ describe("WebContentStore", () => {
   it("uses a transactional compare-and-swap for the active release", async () => {
     await Promise.all([store.putRelease(release("release-a")), store.putRelease(release("release-b"))]);
 
-    const attempts = await Promise.allSettled([
-      store.activateRelease("release-a", null),
-      store.activateRelease("release-b", null),
-    ]);
+    const attempts = await Promise.allSettled([store.activateRelease("release-a", null), store.activateRelease("release-b", null)]);
 
     expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
     expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
@@ -118,7 +115,10 @@ describe("WebContentStore", () => {
         const db = request.result;
         const tx = db.transaction("syncCursors", "readwrite");
         tx.objectStore("syncCursors").put({ environment: "staging", revision: 12, source: "legacy-source" });
-        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
         tx.onerror = () => reject(tx.error);
       };
       request.onerror = () => reject(request.error);
@@ -296,7 +296,12 @@ describe("WebContentStore", () => {
     const chunkHash = await hash(chunkBytes);
     const glyphHash = await hash(glyphBytes);
     const file = (path: string, sha256: string, byte_size: number, content_type: string) => ({
-      path, key: `releases/map/${path}`, url: `https://kip-assets.parkdex.app/releases/map/${path}`, sha256, byte_size, content_type,
+      path,
+      key: `releases/map/${path}`,
+      url: `https://kip-assets.parkdex.app/releases/map/${path}`,
+      sha256,
+      byte_size,
+      content_type,
     });
     await store.putFile(chunkHash, chunkBytes);
     await store.putFile(glyphHash, glyphBytes);
@@ -329,19 +334,50 @@ describe("WebContentStore", () => {
     const artHash = await hash(artBytes);
     const keptHash = await hash(keptBytes);
     const art = (scene: string, sha256: string, byte_size: number) => ({
-      path: `art/badges/scenes/${scene}.webp`, key: `releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`,
-      url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`, sha256, byte_size, content_type: "image/webp",
+      path: `art/badges/scenes/${scene}.webp`,
+      key: `releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`,
+      url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/art/badges/scenes/${scene}.webp`,
+      sha256,
+      byte_size,
+      content_type: "image/webp",
     });
     await store.putFile(artHash, artBytes);
     await store.putFile(keptHash, keptBytes);
     const farPark = { ...park("far-park", "Far"), scene: "far" };
-    await store.replaceSyncState("staging", null, {
-      ...emptyState(3),
-      parks: [farPark],
-      boundaries: { type: "FeatureCollection", features: [{ type: "Feature", properties: { id: "far-park", biome: "coast" }, geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] } }] },
-      drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } },
-      assets: [art("far", artHash, artBytes.byteLength)],
-    }, "test-source", null);
+    await store.replaceSyncState(
+      "staging",
+      null,
+      {
+        ...emptyState(3),
+        parks: [farPark],
+        boundaries: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: { id: "far-park", biome: "coast" },
+              geometry: {
+                type: "MultiPolygon",
+                coordinates: [
+                  [
+                    [
+                      [0, 0],
+                      [1, 0],
+                      [1, 1],
+                      [0, 0],
+                    ],
+                  ],
+                ],
+              },
+            },
+          ],
+        },
+        drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } },
+        assets: [art("far", artHash, artBytes.byteLength)],
+      },
+      "test-source",
+      null,
+    );
     await store.retainParks([{ park: { ...park("earned", "Earned"), scene: "earned" }, sceneFile: art("earned", keptHash, keptBytes.byteLength) }]);
 
     await expect(store.deleteFile(artHash)).rejects.toThrow(/active or retained content/);
@@ -354,13 +390,31 @@ describe("WebContentStore", () => {
     const catalogue = {
       version: "a".repeat(64),
       revision: 2,
-      chunks: [{ path: "catalogue/boundaries/000.json", url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/catalogue/boundaries/000.json`, sha256: "b".repeat(64), byte_size: 10, parkIds: ["far-park"], bbox: null }],
+      chunks: [
+        {
+          path: "catalogue/boundaries/000.json",
+          url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/catalogue/boundaries/000.json`,
+          sha256: "b".repeat(64),
+          byte_size: 10,
+          parkIds: ["far-park"],
+          bbox: null,
+        },
+      ],
       loaded: [],
       pinned: [],
     };
-    await store.replaceSyncState("staging", null, {
-      ...emptyState(3), parks: [park("far-park", "Far")], drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } }, catalogue,
-    }, "test-source", null);
+    await store.replaceSyncState(
+      "staging",
+      null,
+      {
+        ...emptyState(3),
+        parks: [park("far-park", "Far")],
+        drive: { hubs: emptyState(3).drive.hubs, parks: { "far-park": { drive: [null], walkM: 0 } } },
+        catalogue,
+      },
+      "test-source",
+      null,
+    );
     await store.close();
     store = new WebContentStore();
     const stored = await store.getSyncState("staging");

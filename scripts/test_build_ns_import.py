@@ -217,10 +217,11 @@ class NovaScotiaRuleTests(unittest.TestCase):
         self.assertEqual(builder.short_for("Kejimkujik National Park and National Historic Site"), "Kejimkujik")
         self.assertEqual(builder.short_for("Sable Island National Park Reserve"), "Sable Island")
         self.assertEqual(builder.short_for("Rissers Beach Provincial Park"), "Rissers Beach")
-        self.assertEqual(builder.blurb_for("provincial", "Rissers Beach Provincial Park", "South Shore"),
-                         "A provincial park on Nova Scotia's South Shore.")
-        self.assertEqual(builder.blurb_for("national", "Sable Island National Park Reserve", "Halifax Metro"),
-                         "A national park reserve in the Halifax Metro region of Nova Scotia.")
+        self.assertEqual(builder.blurb_for("provincial", "Rissers Beach Provincial Park", "South Shore"), "A provincial park on Nova Scotia's South Shore.")
+        self.assertEqual(
+            builder.blurb_for("national", "Sable Island National Park Reserve", "Halifax Metro"),
+            "A national park reserve in the Halifax Metro region of Nova Scotia.",
+        )
         self.assertEqual(builder.slugify("McNabs & Lawlor Island Provincial Park"), "mcnabs-and-lawlor-island-provincial-park")
         self.assertEqual(builder.slugify("St. Anns Provincial Park"), "st-anns-provincial-park")
 
@@ -240,12 +241,23 @@ class NovaScotiaRuleTests(unittest.TestCase):
         self.assertEqual(valid, [[outer, inner]])
 
     def test_touching_features_of_one_park_are_joined_and_separate_ones_kept(self):
-        left = {"sourceFeatureId": "a", "objectId": 1, "officialHectares": None,
-                "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]]}}
-        right = {"sourceFeatureId": "b", "objectId": 2, "officialHectares": None,
-                 "geometry": {"type": "Polygon", "coordinates": [[[0.01, 0], [0.02, 0], [0.02, 0.01], [0.01, 0.01], [0.01, 0]]]}}
-        apart = {**right, "sourceFeatureId": "c",
-                 "geometry": {"type": "Polygon", "coordinates": [[[0.05, 0], [0.06, 0], [0.06, 0.01], [0.05, 0.01], [0.05, 0]]]}}
+        left = {
+            "sourceFeatureId": "a",
+            "objectId": 1,
+            "officialHectares": None,
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0.01, 0], [0.01, 0.01], [0, 0.01], [0, 0]]]},
+        }
+        right = {
+            "sourceFeatureId": "b",
+            "objectId": 2,
+            "officialHectares": None,
+            "geometry": {"type": "Polygon", "coordinates": [[[0.01, 0], [0.02, 0], [0.02, 0.01], [0.01, 0.01], [0.01, 0]]]},
+        }
+        apart = {
+            **right,
+            "sourceFeatureId": "c",
+            "geometry": {"type": "Polygon", "coordinates": [[[0.05, 0], [0.06, 0], [0.06, 0.01], [0.05, 0.01], [0.05, 0]]]},
+        }
         joined, report = builder.assemble("provincial-test", [left, right])
         self.assertEqual(report["evidence"]["assembly"], "source-feature-union")
         self.assertEqual(bc.counts(joined)["polygons"], 1)
@@ -255,8 +267,10 @@ class NovaScotiaRuleTests(unittest.TestCase):
         self.assertGreaterEqual(report["evidence"]["coverage"]["sourceAreaKept"], builder.MIN_AREA_KEPT)
 
     def test_finder_rows_parse_to_points(self):
-        html = ('<tr locationTarget="SableIslandNationalParkReserve" data-geometry="POINT (-59.91591 43.92788)" data-type="wkt">\n'
-                '    <td>1</td>\n    <td>Sable Island National Park Reserve</td>')
+        html = (
+            '<tr locationTarget="SableIslandNationalParkReserve" data-geometry="POINT (-59.91591 43.92788)" data-type="wkt">\n'
+            "    <td>1</td>\n    <td>Sable Island National Park Reserve</td>"
+        )
         self.assertEqual(builder.parse_finder(html), {"Sable Island National Park Reserve": [-59.91591, 43.92788]})
 
 
@@ -270,8 +284,7 @@ class NovaScotiaRebuildTests(unittest.TestCase):
             for name in COMMITTED:
                 with self.subTest(name=name):
                     self.assertEqual((bundle / name).read_bytes(), (BUNDLE / name).read_bytes())
-            self.assertEqual(gzip.decompress((bundle / builder.BOUNDARIES_FILE).read_bytes()),
-                             gzip.decompress((BUNDLE / builder.BOUNDARIES_FILE).read_bytes()))
+            self.assertEqual(gzip.decompress((bundle / builder.BOUNDARIES_FILE).read_bytes()), gzip.decompress((BUNDLE / builder.BOUNDARIES_FILE).read_bytes()))
 
 
 if __name__ == "__main__":

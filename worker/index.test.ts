@@ -13,7 +13,7 @@ import type {
   SaveFeedbackArgs,
   SaveFeedbackResult,
 } from "./store.ts";
-import type { EmailAudience, EmailStatus, FeedbackContext, FeedbackStatus } from "./validation.ts";
+import type { EmailAudience, FeedbackStatus } from "./validation.ts";
 
 const API_ORIGIN = "https://api.example.test";
 const SECRET = "test-session-secret-which-is-long-enough";
@@ -41,15 +41,26 @@ class MemoryStore implements FeedbackStore {
   private readonly now: () => number;
   failNextFinishAudience: EmailAudience | null = null;
 
-  constructor(now: () => number) { this.now = now; }
+  constructor(now: () => number) {
+    this.now = now;
+  }
 
   private async withSubmissionLock<T>(submissionId: string, work: () => Promise<T>): Promise<T> {
     const previous = this.locks.get(submissionId) ?? Promise.resolve();
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    this.locks.set(submissionId, previous.then(() => gate));
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.locks.set(
+      submissionId,
+      previous.then(() => gate),
+    );
     await previous;
-    try { return await work(); } finally { release(); }
+    try {
+      return await work();
+    } finally {
+      release();
+    }
   }
 
   async findBySubmissionId(submissionId: string) {
@@ -99,27 +110,39 @@ class MemoryStore implements FeedbackStore {
       this.reports.set(record.id, record);
       this.payloadHashes.set(record.id, args.payloadHash);
       this.submissionIds.set(feedback.submissionId, record.id);
-      if (feedback.screenshot) this.attachments.set(record.id, {
-        contentType: feedback.screenshot.contentType,
-        size: feedback.screenshot.bytes.byteLength,
-        base64: feedback.screenshot.base64,
-      });
-      this.deliveries.set(record.id, new Map(args.mails.map((mail) => [mail.audience, {
-        audience: mail.audience,
-        status: mail.initialStatus,
-        attempts: 0,
-        lastAttemptAt: null,
-        sentAt: null,
-        providerMessageId: null,
-        lastError: mail.initialError,
-        canRetry: mail.initialStatus === "pending" || mail.initialStatus === "failed",
-        requiresConfirmation: false,
-        recipient: mail.recipient,
-        payload: structuredClone(mail.payload),
-        idempotencyKey: mail.idempotencyKey,
-        leaseToken: null,
-        leaseUntil: null,
-      }] as const)));
+      if (feedback.screenshot)
+        this.attachments.set(record.id, {
+          contentType: feedback.screenshot.contentType,
+          size: feedback.screenshot.bytes.byteLength,
+          base64: feedback.screenshot.base64,
+        });
+      this.deliveries.set(
+        record.id,
+        new Map(
+          args.mails.map(
+            (mail) =>
+              [
+                mail.audience,
+                {
+                  audience: mail.audience,
+                  status: mail.initialStatus,
+                  attempts: 0,
+                  lastAttemptAt: null,
+                  sentAt: null,
+                  providerMessageId: null,
+                  lastError: mail.initialError,
+                  canRetry: mail.initialStatus === "pending" || mail.initialStatus === "failed",
+                  requiresConfirmation: false,
+                  recipient: mail.recipient,
+                  payload: structuredClone(mail.payload),
+                  idempotencyKey: mail.idempotencyKey,
+                  leaseToken: null,
+                  leaseUntil: null,
+                },
+              ] as const,
+          ),
+        ),
+      );
       return { status: "saved", report: structuredClone(record) };
     });
   }
@@ -143,14 +166,17 @@ class MemoryStore implements FeedbackStore {
       sentAt: delivery.sentAt,
       providerMessageId: delivery.providerMessageId,
       lastError: delivery.lastError,
-      canRetry: delivery.status === "pending" || delivery.status === "failed" ||
+      canRetry:
+        delivery.status === "pending" ||
+        delivery.status === "failed" ||
         ((delivery.status === "ambiguous" || delivery.status === "sending") && leaseExpiredOrRecent(leaseExpired, age)),
       requiresConfirmation: (delivery.status === "ambiguous" || delivery.status === "sending") && leaseExpired && age >= 24 * 60 * 60 * 1000,
     };
   }
 
   async listReports(limit: number, status: FeedbackStatus | null, cursor: FeedbackCursor | null): Promise<OperatorFeedbackRecord[]> {
-    const all = [...this.reports.values()].filter((report) => status === null || report.status === status)
+    const all = [...this.reports.values()]
+      .filter((report) => status === null || report.status === status)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
       .filter((report) => !cursor || report.createdAt < cursor.createdAt || (report.createdAt === cursor.createdAt && report.id < cursor.id));
     const reports = await Promise.all(all.slice(0, limit).map((report) => this.getReport(report.id)));
@@ -219,7 +245,14 @@ class MemoryStore implements FeedbackStore {
     }
   }
 
-  async finishEmail(id: string, audience: EmailAudience, leaseToken: string, state: "sent" | "failed" | "ambiguous", error: string | null, providerMessageId: string | null = null): Promise<void> {
+  async finishEmail(
+    id: string,
+    audience: EmailAudience,
+    leaseToken: string,
+    state: "sent" | "failed" | "ambiguous",
+    error: string | null,
+    providerMessageId: string | null = null,
+  ): Promise<void> {
     const delivery = this.deliveries.get(id)?.get(audience);
     if (this.failNextFinishAudience === audience) {
       this.failNextFinishAudience = null;
@@ -276,7 +309,11 @@ function requestBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeRequest(path = "/api/feedback", body?: unknown, options: { method?: string; origin?: string | null; cookie?: string; ip?: string; raw?: string } = {}) {
+function makeRequest(
+  path = "/api/feedback",
+  body?: unknown,
+  options: { method?: string; origin?: string | null; cookie?: string; ip?: string; raw?: string } = {},
+) {
   const headers = new Headers({ "cf-connecting-ip": options.ip ?? "203.0.113.7" });
   if (options.origin !== null) headers.set("origin", options.origin ?? API_ORIGIN);
   if (options.cookie) headers.set("cookie", options.cookie);
@@ -321,15 +358,19 @@ test("valid feedback commits a screenshot and sends independent operator and rec
         key: new Headers(init?.headers).get("idempotency-key")!,
         redirect: init?.redirect,
       });
-      return new Response("{\"id\":\"email-1\"}", { status: 200 });
+      return new Response('{"id":"email-1"}', { status: 200 });
     },
   });
   const env = testEnvironment();
-  const response = await requestFeedback(worker, env, requestBody({
-    email: "person@example.test",
-    contact: false,
-    screenshot: "data:image/png;base64,iVBORw0KGgo=",
-  }));
+  const response = await requestFeedback(
+    worker,
+    env,
+    requestBody({
+      email: "person@example.test",
+      contact: false,
+      screenshot: "data:image/png;base64,iVBORw0KGgo=",
+    }),
+  );
   const body = await responseBody(response);
   assert.equal(response.status, 201);
   assert.equal(body.id, REPORT_ID.replace("38a41a12-ec77-4ac1-9d68-c14165d397ac", "00000000-0000-4000-8000-000000000100"));
@@ -353,7 +394,12 @@ test("valid feedback commits a screenshot and sends independent operator and rec
 
 test("invalid feedback and image magic are rejected before creating a store", async () => {
   let storeCreations = 0;
-  const worker = createFeedbackWorker({ createStore: () => { storeCreations += 1; return new MemoryStore(Date.now); } });
+  const worker = createFeedbackWorker({
+    createStore: () => {
+      storeCreations += 1;
+      return new MemoryStore(Date.now);
+    },
+  });
   const env = testEnvironment();
   const invalidEmail = await requestFeedback(worker, env, requestBody({ email: "bad", contact: true }));
   assert.equal(invalidEmail.status, 400);
@@ -367,11 +413,16 @@ test("invalid feedback and image magic are rejected before creating a store", as
 
 test("a persistence failure returns a sanitized error and never calls the email provider", async () => {
   const store = new MemoryStore(Date.now);
-  store.saveFeedback = async () => { throw new Error("private database connection detail"); };
+  store.saveFeedback = async () => {
+    throw new Error("private database connection detail");
+  };
   let providerCalls = 0;
   const worker = createFeedbackWorker({
     createStore: () => store,
-    fetch: async () => { providerCalls += 1; return new Response(null, { status: 200 }); },
+    fetch: async () => {
+      providerCalls += 1;
+      return new Response(null, { status: 200 });
+    },
   });
   const response = await requestFeedback(worker, testEnvironment(), requestBody());
   const body = await responseBody(response);
@@ -389,7 +440,10 @@ test("same submission ID is idempotent under concurrency and mismatched reuse re
     createStore: () => store,
     now: () => now,
     uuid: newUuidFactory(),
-    fetch: async () => { sends += 1; return new Response(null, { status: 200 }); },
+    fetch: async () => {
+      sends += 1;
+      return new Response(null, { status: 200 });
+    },
   });
   const env = testEnvironment();
   const body = requestBody({ email: "person@example.test" });
@@ -439,7 +493,14 @@ test("email failure for either audience does not undo the report and known sent 
 test("disabled preview stores per-audience states and does not call the email provider", async () => {
   const store = new MemoryStore(Date.now);
   let sends = 0;
-  const worker = createFeedbackWorker({ createStore: () => store, uuid: newUuidFactory(), fetch: async () => { sends += 1; return new Response(); } });
+  const worker = createFeedbackWorker({
+    createStore: () => store,
+    uuid: newUuidFactory(),
+    fetch: async () => {
+      sends += 1;
+      return new Response();
+    },
+  });
   const env = testEnvironment({ EMAIL_MODE: "disabled", RESEND_API_KEY: undefined, EMAIL_FROM: undefined, OPERATOR_EMAIL: undefined });
   const response = await requestFeedback(worker, env, requestBody({ email: "person@example.test" }));
   const body = await responseBody(response);
@@ -476,9 +537,13 @@ test("simultaneous manual email retries claim each recipient once", async () => 
   const store = new MemoryStore(() => now);
   let phase: "first" | "retry" = "first";
   let retryStarted!: () => void;
-  const retryStartedPromise = new Promise<void>((resolve) => { retryStarted = resolve; });
+  const retryStartedPromise = new Promise<void>((resolve) => {
+    retryStarted = resolve;
+  });
   let releaseRetry!: () => void;
-  const retryGate = new Promise<void>((resolve) => { releaseRetry = resolve; });
+  const retryGate = new Promise<void>((resolve) => {
+    releaseRetry = resolve;
+  });
   let retries = 0;
   let firstFetch = 0;
   const keys: string[] = [];
@@ -510,8 +575,14 @@ test("simultaneous manual email retries claim each recipient once", async () => 
   const secondRetry = retryRequest();
   releaseRetry();
   const [first, second] = await Promise.all([firstRetry, secondRetry]);
-  assert.deepEqual(first.map((result) => result.status), ["sent", "sent"]);
-  assert.deepEqual(second.map((result) => result.status), ["skipped", "skipped"]);
+  assert.deepEqual(
+    first.map((result) => result.status),
+    ["sent", "sent"],
+  );
+  assert.deepEqual(
+    second.map((result) => result.status),
+    ["skipped", "skipped"],
+  );
   assert.equal(retries, 2, "only the first request claimed operator and receipt delivery");
   assert.equal(store.getDelivery(id, "operator")?.status, "sent");
   assert.equal(store.getDelivery(id, "receipt")?.status, "sent");

@@ -150,7 +150,8 @@ export function formatFlagAge(ageMs: number): string {
 /** The same age in words, for screen readers: "35 minutes", "3 hours", "2 days". */
 export function describeFlagAge(ageMs: number): string {
   const age = Number.isFinite(ageMs) ? Math.max(0, ageMs) : 0;
-  const [count, unit] = age < HOUR_MS ? [Math.floor(age / MINUTE_MS), "minute"] : age < DAY_MS ? [Math.floor(age / HOUR_MS), "hour"] : [Math.floor(age / DAY_MS), "day"];
+  const [count, unit] =
+    age < HOUR_MS ? [Math.floor(age / MINUTE_MS), "minute"] : age < DAY_MS ? [Math.floor(age / HOUR_MS), "hour"] : [Math.floor(age / DAY_MS), "day"];
   return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }
 
@@ -187,8 +188,10 @@ function emblemShape(emblem: FlagEmblem, x: number, y: number, r: number, color:
     case "diamond":
       return `<polygon points="${n(x)},${n(y - r)} ${n(x + r * 0.75)},${n(y)} ${n(x)},${n(y + r)} ${n(x - r * 0.75)},${n(y)}" fill="${color}"/>`;
     case "leaf":
-      return `<path d="M${n(x)} ${n(y - r)}Q${n(x + r)} ${n(y)} ${n(x)} ${n(y + r)}Q${n(x - r)} ${n(y)} ${n(x)} ${n(y - r)}Z" fill="${color}"/>`
-        + `<path d="M${n(x)} ${n(y - r * 0.55)}V${n(y + r * 0.85)}" stroke="${background}" stroke-width="${n(Math.max(0.8, r * 0.14))}" stroke-linecap="round"/>`;
+      return (
+        `<path d="M${n(x)} ${n(y - r)}Q${n(x + r)} ${n(y)} ${n(x)} ${n(y + r)}Q${n(x - r)} ${n(y)} ${n(x)} ${n(y - r)}Z" fill="${color}"/>` +
+        `<path d="M${n(x)} ${n(y - r * 0.55)}V${n(y + r * 0.85)}" stroke="${background}" stroke-width="${n(Math.max(0.8, r * 0.14))}" stroke-linecap="round"/>`
+      );
     case "star": {
       const points: string[] = [];
       for (let corner = 0; corner < 10; corner += 1) {
@@ -245,9 +248,7 @@ export function flagBody(seed: string, options: FlagSvgOptions = {}): string {
   const outline = flagOutline(weather);
   const cloth = `${layoutShapes(spec, field, accent)}${emblem}`;
   const clipId = `${(options.idPrefix ?? "flag").replace(/[^A-Za-z0-9_-]/g, "")}-clip`;
-  const clipped = weather === 0
-    ? cloth
-    : `<clipPath id="${clipId}"><polygon points="${outline}"/></clipPath><g clip-path="url(#${clipId})">${cloth}</g>`;
+  const clipped = weather === 0 ? cloth : `<clipPath id="${clipId}"><polygon points="${outline}"/></clipPath><g clip-path="url(#${clipId})">${cloth}</g>`;
   return `${clipped}<polygon points="${outline}" fill="none" stroke="${OUTLINE}" stroke-width="1.6" stroke-linejoin="round"/>`;
 }
 
@@ -274,25 +275,31 @@ export function flagPinSvg(seed: string | null, options: FlagSvgOptions & { labe
   const height = PIN_HEIGHT * scale;
   const shadow = `<ellipse cx="${PIN_POLE_X}" cy="53.5" rx="7" ry="2.5" fill="#14231C" fill-opacity="0.22"/>`;
   if (!seed) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}`
-      + `<rect x="6.75" y="5" width="2.5" height="49" rx="1.25" fill="#7D8A82"/>`
-      + `<rect x="10" y="6" width="30" height="20" rx="1.5" fill="#FFF8EC" fill-opacity="0.7" stroke="#5B6B62" stroke-width="1.5" stroke-dasharray="3.5 2.5"/>`
-      + `<circle cx="${PIN_POLE_X}" cy="4.5" r="2.6" fill="#FFF8EC" stroke="#5B6B62" stroke-width="1.3"/></svg>`;
+    return (
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}` +
+      `<rect x="6.75" y="5" width="2.5" height="49" rx="1.25" fill="#7D8A82"/>` +
+      `<rect x="10" y="6" width="30" height="20" rx="1.5" fill="#FFF8EC" fill-opacity="0.7" stroke="#5B6B62" stroke-width="1.5" stroke-dasharray="3.5 2.5"/>` +
+      `<circle cx="${PIN_POLE_X}" cy="4.5" r="2.6" fill="#FFF8EC" stroke="#5B6B62" stroke-width="1.3"/></svg>`
+    );
   }
   const label = options.label ? escapeText(options.label.slice(0, 6)) : "";
   const tagWidth = 8 + label.length * 6.4;
   const tag = label
-    ? `<rect x="10.5" y="33" width="${n(tagWidth)}" height="13" rx="6.5" fill="#14231C"/>`
-      + `<text x="${n(10.5 + tagWidth / 2)}" y="42.6" font-family="system-ui, sans-serif" font-size="10" font-weight="800" fill="#FFF8EC" text-anchor="middle">${label}</text>`
+    ? `<rect x="10.5" y="33" width="${n(tagWidth)}" height="13" rx="6.5" fill="#14231C"/>` +
+      `<text x="${n(10.5 + tagWidth / 2)}" y="42.6" font-family="system-ui, sans-serif" font-size="10" font-weight="800" fill="#FFF8EC" text-anchor="middle">${label}</text>`
     : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}`
-    + `<rect x="6.5" y="4" width="3" height="50" rx="1.5" fill="#14231C"/>`
-    + `<g transform="translate(9.5 5.5) scale(0.62)">${flagBody(seed, options)}</g>`
-    + `${tag}<circle cx="${PIN_POLE_X}" cy="4" r="3" fill="#FFC93C" stroke="#14231C" stroke-width="1.3"/></svg>`;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}" width="${n(width)}" height="${n(height)}">${shadow}` +
+    `<rect x="6.5" y="4" width="3" height="50" rx="1.5" fill="#14231C"/>` +
+    `<g transform="translate(9.5 5.5) scale(0.62)">${flagBody(seed, options)}</g>` +
+    `${tag}<circle cx="${PIN_POLE_X}" cy="4" r="3" fill="#FFC93C" stroke="#14231C" stroke-width="1.3"/></svg>`
+  );
 }
 
 /** The outline shown before a player has a flag: a dashed, empty cloth. */
 export function blankFlagSvg(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${FLAG_WIDTH + 2} ${FLAG_HEIGHT + 2}" width="${FLAG_WIDTH + 2}" height="${FLAG_HEIGHT + 2}">`
-    + `<rect width="${FLAG_WIDTH}" height="${FLAG_HEIGHT}" fill="#FFF8EC" fill-opacity="0.6" stroke="${OUTLINE}" stroke-width="1.6" stroke-dasharray="4 3"/></svg>`;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 ${FLAG_WIDTH + 2} ${FLAG_HEIGHT + 2}" width="${FLAG_WIDTH + 2}" height="${FLAG_HEIGHT + 2}">` +
+    `<rect width="${FLAG_WIDTH}" height="${FLAG_HEIGHT}" fill="#FFF8EC" fill-opacity="0.6" stroke="${OUTLINE}" stroke-width="1.6" stroke-dasharray="4 3"/></svg>`
+  );
 }

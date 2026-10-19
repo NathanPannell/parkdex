@@ -5,7 +5,14 @@ import { Card, Icon, Kip, PageHeader } from "../ui";
  * A page that says what is coming. Sections replace it with the real page; delete this file
  * once nothing imports it.
  */
-export function Placeholder({ eyebrow, title, lede, items, issue = 135, children }: {
+export function Placeholder({
+  eyebrow,
+  title,
+  lede,
+  items,
+  issue = 135,
+  children,
+}: {
   eyebrow: string;
   title: string;
   lede: ReactNode;
@@ -21,9 +28,15 @@ export function Placeholder({ eyebrow, title, lede, items, issue = 135, children
         <div className="coming__body">
           <Kip pose="map" size={88} className="coming__kip" />
           <div>
-            <p className="coming__label"><Icon name="clock" size={15} /> Coming next</p>
+            <p className="coming__label">
+              <Icon name="clock" size={15} /> Coming next
+            </p>
             <ul className="coming__list">
-              {items.map((item) => <li key={item}><Icon name="check" size={15} /> {item}</li>)}
+              {items.map((item) => (
+                <li key={item}>
+                  <Icon name="check" size={15} /> {item}
+                </li>
+              ))}
             </ul>
             <p className="muted coming__issue">Tracked in issue #{issue}.</p>
           </div>

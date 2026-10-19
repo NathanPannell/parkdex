@@ -8,8 +8,18 @@ import type { PhotoAnswers, PhotoChecker } from "./founderPhoto.ts";
 import { DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS } from "./founderPhoto.ts";
 import { CHECKS_PER_HOUR, FOUNDED_PER_DAY, founderVisitId, REVIEW_KEEP_MS, REVIEWS_PER_DAY } from "./founders.ts";
 import type {
-  CatalogueParkRecord, CheckRecord, FoundedRecord, FounderInfo, FoundersStore, FoundExistingInput, FoundOsmInput, FoundResult, KeptAttempt, ParkSummaryRecord,
-  RequestReviewResult, ReviewStatus,
+  CatalogueParkRecord,
+  CheckRecord,
+  FoundedRecord,
+  FounderInfo,
+  FoundersStore,
+  FoundExistingInput,
+  FoundOsmInput,
+  FoundResult,
+  KeptAttempt,
+  ParkSummaryRecord,
+  RequestReviewResult,
+  ReviewStatus,
 } from "./founders-store.ts";
 import type { MultiPolygon, OsmClient, OsmFeature, Position } from "./osmParks.ts";
 import { pointInMultiPolygon } from "./osmParks.ts";
@@ -32,9 +42,18 @@ const env: WorkerEnvironment = {
 
 function session(id: string, token: string): StoredSession {
   return {
-    id, email: `${id}@example.test`, emailVerified: true, displayName: "Player", providers: ["email"],
-    sessionId: randomUUID(), tokenHash: hash(token), csrfHash: null, transport: "native",
-    expiresAt: "2099-01-01T00:00:00Z", absoluteExpiresAt: "2099-02-01T00:00:00Z", reauthenticatedAt: null,
+    id,
+    email: `${id}@example.test`,
+    emailVerified: true,
+    displayName: "Player",
+    providers: ["email"],
+    sessionId: randomUUID(),
+    tokenHash: hash(token),
+    csrfHash: null,
+    transport: "native",
+    expiresAt: "2099-01-01T00:00:00Z",
+    absoluteExpiresAt: "2099-02-01T00:00:00Z",
+    reauthenticatedAt: null,
   };
 }
 const authStore = {
@@ -45,11 +64,22 @@ const authStore = {
   },
 } as unknown as AccountAuthStore;
 
-const box = (west: number, south: number, east: number, north: number): Position[] =>
-  [[west, south], [east, south], [east, north], [west, north], [west, south]];
+const box = (west: number, south: number, east: number, north: number): Position[] => [
+  [west, south],
+  [east, south],
+  [east, north],
+  [west, north],
+  [west, south],
+];
 const PATERSON_OUTLINE: MultiPolygon = { type: "MultiPolygon", coordinates: [[box(-123.062, 49.088, -123.058, 49.0902)]] };
 const PATERSON: OsmFeature = {
-  type: "way", id: 23938892, name: "Paterson Park", kind: "leisure=park", tags: { name: "Paterson Park", leisure: "park" }, geometry: PATERSON_OUTLINE, areaM2: 71_000,
+  type: "way",
+  id: 23938892,
+  name: "Paterson Park",
+  kind: "leisure=park",
+  tags: { name: "Paterson Park", leisure: "park" },
+  geometry: PATERSON_OUTLINE,
+  areaM2: 71_000,
 };
 const UNNAMED: OsmFeature = { ...PATERSON, id: 5, name: null, tags: { leisure: "garden" }, kind: "leisure=garden" };
 const BEACON = "municipal-beacon-hill-park";
@@ -62,19 +92,37 @@ const PHOTO = { mime: "image/jpeg", base64: Buffer.from(EXIF_GPS_JPEG).toString(
 function flagged(flags: Partial<Record<(typeof PHOTO_FLAGS)[number], number>> = {}): PhotoAnswers {
   return {
     model: "openai/gpt-6-luna-decisions",
-    answers: Object.fromEntries(PHOTO_FLAGS.map((flag) => {
-      const p = flags[flag] ?? 0.01;
-      return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
-    })),
+    answers: Object.fromEntries(
+      PHOTO_FLAGS.map((flag) => {
+        const p = flags[flag] ?? 0.01;
+        return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
+      }),
+    ),
   };
 }
 
 class MemoryFoundersStore implements FoundersStore {
   catalogue = new Map<string, CatalogueParkRecord>([[BEACON, { id: BEACON, name: "Beacon Hill Park", category: "municipal", boundary: BEACON_OUTLINE }]]);
   hiddenIds = new Set<string>();
-  handles = new Map<string, string>([[ACCOUNT, "sam"], [OTHER, "bee"]]);
-  founded = new Map<string, { accountId: string; attemptId: string; sha256: string; bytes: Uint8Array; foundedAt: string; parkName: string; visit: FoundedRecord["visit"] }>();
-  checks: Array<{ accountId: string; attemptId: string; parkId: string; osm: { type: string; id: number } | null; outcome: CheckRecord["outcome"]; flags: string[]; photoSha256: string; at: string; moderation: unknown }> = [];
+  handles = new Map<string, string>([
+    [ACCOUNT, "sam"],
+    [OTHER, "bee"],
+  ]);
+  founded = new Map<
+    string,
+    { accountId: string; attemptId: string; sha256: string; bytes: Uint8Array; foundedAt: string; parkName: string; visit: FoundedRecord["visit"] }
+  >();
+  checks: Array<{
+    accountId: string;
+    attemptId: string;
+    parkId: string;
+    osm: { type: string; id: number } | null;
+    outcome: CheckRecord["outcome"];
+    flags: string[];
+    photoSha256: string;
+    at: string;
+    moderation: unknown;
+  }> = [];
   /** Photos of rejected checks (and older unsure ones), kept for a review, by attempt. */
   kept = new Map<string, { accountId: string; at: string; keep: KeptAttempt }>();
   requests: Array<{ id: string; accountId: string; attemptId: string; parkId: string; status: ReviewStatus; createdAt: string; seenAt: string | null }> = [];
@@ -87,7 +135,9 @@ class MemoryFoundersStore implements FoundersStore {
   async catalogueParks(parkIds: string[]) {
     return new Map(parkIds.filter((id) => this.catalogue.has(id)).map((id) => [id, this.catalogue.get(id)!]));
   }
-  async hidden(parkIds: string[]) { return new Set(parkIds.filter((id) => this.hiddenIds.has(id))); }
+  async hidden(parkIds: string[]) {
+    return new Set(parkIds.filter((id) => this.hiddenIds.has(id)));
+  }
   async founders(parkIds: string[]) {
     const result = new Map<string, FounderInfo>();
     for (const id of parkIds) {
@@ -96,9 +146,12 @@ class MemoryFoundersStore implements FoundersStore {
     }
     return result;
   }
-  async hasHandle(accountId: string) { return this.handles.has(accountId); }
+  async hasHandle(accountId: string) {
+    return this.handles.has(accountId);
+  }
   async usage(accountId: string, now: string) {
-    const hour = Date.parse(now) - 3_600_000, day = Date.parse(now) - 86_400_000;
+    const hour = Date.parse(now) - 3_600_000,
+      day = Date.parse(now) - 86_400_000;
     return {
       checksLastHour: this.checks.filter((check) => check.accountId === accountId && Date.parse(check.at) > hour).length,
       foundedLastDay: [...this.founded.values()].filter((row) => row.accountId === accountId && Date.parse(row.foundedAt) > day).length,
@@ -110,11 +163,23 @@ class MemoryFoundersStore implements FoundersStore {
     const kept = this.kept.get(attemptId);
     return {
       founded: entry ? { parkId: entry[0], parkName: entry[1].parkName, photoSha256: entry[1].sha256, founderPoints: 24, visit: entry[1].visit } : null,
-      check: check ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256, keptAt: kept?.accountId === accountId ? kept.at : null } : null,
+      check: check
+        ? { outcome: check.outcome, flags: check.flags, photoSha256: check.photoSha256, keptAt: kept?.accountId === accountId ? kept.at : null }
+        : null,
     };
   }
   async recordCheck(input: Parameters<FoundersStore["recordCheck"]>[0]) {
-    this.checks.push({ accountId: input.accountId, attemptId: input.attemptId, parkId: input.parkId, osm: input.osm, outcome: input.outcome, flags: input.flags, photoSha256: input.photoSha256, at: input.at, moderation: input.moderation });
+    this.checks.push({
+      accountId: input.accountId,
+      attemptId: input.attemptId,
+      parkId: input.parkId,
+      osm: input.osm,
+      outcome: input.outcome,
+      flags: input.flags,
+      photoSha256: input.photoSha256,
+      at: input.at,
+      moderation: input.moderation,
+    });
     if (input.keep) this.kept.set(input.attemptId, { accountId: input.accountId, at: input.at, keep: input.keep });
   }
   private found(parkId: string, parkName: string, input: FoundOsmInput | FoundExistingInput): FoundResult {
@@ -122,15 +187,27 @@ class MemoryFoundersStore implements FoundersStore {
     if (this.founded.has(parkId)) return { status: "already_founded" };
     const planted = !this.visits.some((visit) => visit.parkId === parkId);
     const visit = {
-      visitId: input.visitId, parkId, outcome: planted ? "planted" as const : "took" as const,
-      pointsEarned: planted ? 6 : 4, pointsBreakdown: { base: planted ? 6 : 4, days: 0 },
-      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" }, flagSince: input.at, visitedAt: input.at, fell: false, protected: null,
+      visitId: input.visitId,
+      parkId,
+      outcome: planted ? ("planted" as const) : ("took" as const),
+      pointsEarned: planted ? 6 : 4,
+      pointsBreakdown: { base: planted ? 6 : 4, days: 0 },
+      previousHolder: planted ? null : { handle: "bee", flagSeed: "fedcba9876543210" },
+      flagSince: input.at,
+      visitedAt: input.at,
+      fell: false,
+      protected: null,
     };
     this.visits.push({ accountId: input.accountId, parkId, at: input.at });
     for (const request of this.requests) if (request.parkId === parkId && request.status === "pending") request.status = "superseded";
     this.founded.set(parkId, {
-      accountId: input.accountId, attemptId: input.attemptId, sha256: input.photo.sha256, bytes: new Uint8Array(Buffer.from(input.photo.base64, "base64")),
-      foundedAt: input.at, parkName, visit,
+      accountId: input.accountId,
+      attemptId: input.attemptId,
+      sha256: input.photo.sha256,
+      bytes: new Uint8Array(Buffer.from(input.photo.base64, "base64")),
+      foundedAt: input.at,
+      parkName,
+      visit,
     });
     return { status: "founded", record: { parkId, parkName, photoSha256: input.photo.sha256, founderPoints: 24, visit } };
   }
@@ -138,7 +215,8 @@ class MemoryFoundersStore implements FoundersStore {
     this.osmFoundings.push(input);
     if (this.catalogue.has(input.park.id)) return { status: "park_exists" as const };
     const result = this.found(input.park.id, input.park.name, input);
-    if (result.status === "founded") this.catalogue.set(input.park.id, { id: input.park.id, name: input.park.name, category: input.park.category, boundary: input.park.geometry });
+    if (result.status === "founded")
+      this.catalogue.set(input.park.id, { id: input.park.id, name: input.park.name, category: input.park.category, boundary: input.park.geometry });
     return result;
   }
   async foundExisting(input: FoundExistingInput) {
@@ -155,14 +233,21 @@ class MemoryFoundersStore implements FoundersStore {
     if (!this.catalogue.has(parkId)) return null;
     const visits = this.visits.filter((visit) => visit.parkId === parkId);
     const founder = (await this.founders([parkId])).get(parkId) ?? null;
-    return { founder, total: visits.length + 2, last30Days: visits.length + 1, mine: accountId ? visits.filter((visit) => visit.accountId === accountId).length : null };
+    return {
+      founder,
+      total: visits.length + 2,
+      last30Days: visits.length + 1,
+      mine: accountId ? visits.filter((visit) => visit.accountId === accountId).length : null,
+    };
   }
   async reviewAttempt(accountId: string, attemptId: string) {
     const request = this.requests.find((row) => row.accountId === accountId && row.attemptId === attemptId);
     const check = this.checks.filter((row) => row.accountId === accountId && row.attemptId === attemptId).at(-1);
     return {
       request: request ? { id: request.id, status: request.status } : null,
-      check: check ? { outcome: check.outcome, flags: check.flags, parkId: check.parkId, osm: check.osm, kept: this.kept.get(attemptId)?.accountId === accountId } : null,
+      check: check
+        ? { outcome: check.outcome, flags: check.flags, parkId: check.parkId, osm: check.osm, kept: this.kept.get(attemptId)?.accountId === accountId }
+        : null,
     };
   }
   async requestReview(input: Parameters<FoundersStore["requestReview"]>[0]): Promise<RequestReviewResult> {
@@ -172,7 +257,15 @@ class MemoryFoundersStore implements FoundersStore {
     if (this.founded.has(input.parkId)) return "already_founded";
     if (this.requests.some((row) => row.accountId === input.accountId && row.parkId === input.parkId && row.status === "pending")) return "pending";
     if (this.requests.filter((row) => row.accountId === input.accountId && day(row.createdAt) === day(input.at)).length >= input.perDay) return "limited";
-    this.requests.push({ id: input.id, accountId: input.accountId, attemptId: input.attemptId, parkId: input.parkId, status: "pending", createdAt: input.at, seenAt: null });
+    this.requests.push({
+      id: input.id,
+      accountId: input.accountId,
+      attemptId: input.attemptId,
+      parkId: input.parkId,
+      status: "pending",
+      createdAt: input.at,
+      seenAt: null,
+    });
     this.kept.delete(input.attemptId);
     return "created";
   }
@@ -181,17 +274,29 @@ class MemoryFoundersStore implements FoundersStore {
     for (const row of changed) row.seenAt = at;
     return changed.map((row) => row.id).sort();
   }
-  runner(): never { throw new Error("not used"); }
+  runner(): never {
+    throw new Error("not used");
+  }
 }
 
 function osmClient(features: OsmFeature[]): OsmClient {
   return {
-    async search() { return []; },
-    async feature(ref) { return features.find((feature) => feature.type === ref.type && feature.id === ref.id) ?? null; },
+    async search() {
+      return [];
+    },
+    async feature(ref) {
+      return features.find((feature) => feature.type === ref.type && feature.id === ref.id) ?? null;
+    },
   };
 }
 
-function setup(options: { answers?: PhotoAnswers | null | "unconfigured"; features?: OsmFeature[]; catalogueNearby?: { id: string; name: string; lat: number; lng: number; boundary: MultiPolygon | null }[] } = {}) {
+function setup(
+  options: {
+    answers?: PhotoAnswers | null | "unconfigured";
+    features?: OsmFeature[];
+    catalogueNearby?: { id: string; name: string; lat: number; lng: number; boundary: MultiPolygon | null }[];
+  } = {},
+) {
   const store = new MemoryFoundersStore();
   const written: RequestContext[] = [];
   const pending: Promise<unknown>[] = [];
@@ -204,11 +309,16 @@ function setup(options: { answers?: PhotoAnswers | null | "unconfigured"; featur
   const worker = createFeedbackWorker({
     auth: { createStore: () => authStore },
     createFoundersStore: () => store,
-    createProposalReviewStore: () => ({ nearbyParks: async () => (options.catalogueNearby ?? []).map((park) => ({ ...park, region: "South Coast" })) }) as never,
+    createProposalReviewStore: () =>
+      ({ nearbyParks: async () => (options.catalogueNearby ?? []).map((park) => ({ ...park, region: "South Coast" })) }) as never,
     osmClient: osmClient(options.features ?? [PATERSON, UNNAMED]),
     photoChecker: answers === "unconfigured" ? null : checker,
     now: () => NOW,
-    analytics: () => ({ async write(context) { written.push(context); } }),
+    analytics: () => ({
+      async write(context) {
+        written.push(context);
+      },
+    }),
   });
   const call = async (method: string, path: string, body?: unknown, auth: "bearer" | "other" | "none" = "bearer", headers: Record<string, string> = {}) => {
     const requestHeaders = new Headers({ origin, ...headers });
@@ -217,18 +327,30 @@ function setup(options: { answers?: PhotoAnswers | null | "unconfigured"; featur
       requestHeaders.set("authorization", `Bearer ${auth === "bearer" ? bearer : otherBearer}`);
       requestHeaders.set("x-kip-account-id", auth === "bearer" ? ACCOUNT : OTHER);
     }
-    const response = await worker.fetch(new Request(origin + path, { method, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body) }), env,
-      { waitUntil: (promise) => { pending.push(promise); } });
+    const response = await worker.fetch(
+      new Request(origin + path, { method, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body) }),
+      env,
+      {
+        waitUntil: (promise) => {
+          pending.push(promise);
+        },
+      },
+    );
     await Promise.all(pending.splice(0));
     return response;
   };
   const found = (overrides: Record<string, unknown> = {}, auth: "bearer" | "other" | "none" = "bearer") =>
-    call("POST", "/api/parks/found", { attemptId: randomUUID(), position: INSIDE, target: { osm: { type: "way", id: PATERSON.id } }, photo: PHOTO, ...overrides }, auth);
+    call(
+      "POST",
+      "/api/parks/found",
+      { attemptId: randomUUID(), position: INSIDE, target: { osm: { type: "way", id: PATERSON.id } }, photo: PHOTO, ...overrides },
+      auth,
+    );
   return { store, written, photoCalls, call, found };
 }
 
 async function body(response: Response): Promise<Record<string, any>> {
-  return await response.json() as Record<string, any>;
+  return (await response.json()) as Record<string, any>;
 }
 
 test("founding an OpenStreetMap park publishes it, stores the photo without metadata, records the visit and pays the bonus", async () => {
@@ -241,7 +363,16 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.deepEqual(result.park, { id: "osm-way-23938892", name: "Paterson Park" });
   assert.match(result.coverUrl, new RegExp(`^${origin}/api/parks/osm-way-23938892/cover/[0-9a-f]{64}\\.jpg$`));
   assert.equal(result.founderPoints, 24);
-  assert.deepEqual(Object.keys(result.visit).sort(), ["flagSince", "outcome", "parkId", "pointsBreakdown", "pointsEarned", "previousHolder", "protected", "visitId"]);
+  assert.deepEqual(Object.keys(result.visit).sort(), [
+    "flagSince",
+    "outcome",
+    "parkId",
+    "pointsBreakdown",
+    "pointsEarned",
+    "previousHolder",
+    "protected",
+    "visitId",
+  ]);
   assert.equal(result.visit.outcome, "planted");
   assert.equal(result.visit.visitId, await founderVisitId(attemptId));
 
@@ -264,16 +395,27 @@ test("founding an OpenStreetMap park publishes it, stores the photo without meta
   assert.deepEqual(founding.proposal.moderation.flagThresholds, DEFAULT_FLAG_THRESHOLDS);
   assert.equal("threshold" in founding.proposal.moderation, false, "there is no overall approve threshold");
   assert.deepEqual(store.checks[0].moderation, {
-    version: 2, checkedAt: new Date(NOW).toISOString(), model: "openai/gpt-6-luna-decisions", flagThresholds: DEFAULT_FLAG_THRESHOLDS, answers: flagged().answers, flags: [],
+    version: 2,
+    checkedAt: new Date(NOW).toISOString(),
+    model: "openai/gpt-6-luna-decisions",
+    flagThresholds: DEFAULT_FLAG_THRESHOLDS,
+    answers: flagged().answers,
+    flags: [],
   });
   assert.ok(!JSON.stringify(founding.proposal.moderation).includes(String(INSIDE.lat)), "the audit record never holds the position");
-  assert.deepEqual(store.checks.map((check) => [check.outcome, check.parkId]), [["approve", "osm-way-23938892"]]);
+  assert.deepEqual(
+    store.checks.map((check) => [check.outcome, check.parkId]),
+    [["approve", "osm-way-23938892"]],
+  );
 
-  assert.deepEqual(written[0].events.map((event) => [event.type, event.parkId, event.properties]), [
-    ["founder_photo_checked", "osm-way-23938892", { outcome: "approve", flags: "", source: "osm_new" }],
-    ["park_founded", "osm-way-23938892", { source: "osm_new" }],
-    ["flag_planted", "osm-way-23938892", { points_earned: 6 }],
-  ]);
+  assert.deepEqual(
+    written[0].events.map((event) => [event.type, event.parkId, event.properties]),
+    [
+      ["founder_photo_checked", "osm-way-23938892", { outcome: "approve", flags: "", source: "osm_new" }],
+      ["park_founded", "osm-way-23938892", { source: "osm_new" }],
+      ["flag_planted", "osm-way-23938892", { points_earned: 6 }],
+    ],
+  );
   assert.equal(written[0].route, "POST /api/parks/found");
 });
 
@@ -329,13 +471,25 @@ test("a second founder of the same park gets 409 already_founded, also when they
   assert.equal((await found()).status, 200);
   const second = await found({}, "other");
   assert.equal(second.status, 409);
-  assert.deepEqual(await body(second), { error: { code: "already_founded", message: "This park already has a founder: @sam." }, code: "already_founded", message: "This park already has a founder: @sam." });
+  assert.deepEqual(await body(second), {
+    error: { code: "already_founded", message: "This park already has a founder: @sam." },
+    code: "already_founded",
+    message: "This park already has a founder: @sam.",
+  });
 
   // A race: the other player's founding commits between this request's checks and its transaction.
   const race = setup();
   race.store.beforeFound = () => {
     race.store.beforeFound = undefined;
-    race.store.founded.set("osm-way-23938892", { accountId: OTHER, attemptId: randomUUID(), sha256: "f".repeat(64), bytes: new Uint8Array(), foundedAt: new Date(NOW).toISOString(), parkName: "Paterson Park", visit: null });
+    race.store.founded.set("osm-way-23938892", {
+      accountId: OTHER,
+      attemptId: randomUUID(),
+      sha256: "f".repeat(64),
+      bytes: new Uint8Array(),
+      foundedAt: new Date(NOW).toISOString(),
+      parkName: "Paterson Park",
+      visit: null,
+    });
   };
   const raced = await race.found();
   assert.equal(raced.status, 409);
@@ -395,8 +549,14 @@ test("a rejected photo names each flag above its threshold in plain words; an ol
     reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString(),
   });
   assert.equal(rejected.store.founded.size, 0);
-  assert.deepEqual(rejected.store.checks.map((check) => [check.outcome, check.flags]), [["reject", ["people", "lighting"]]]);
-  assert.deepEqual(rejected.written[0].events.map((event) => [event.type, event.properties]), [["founder_photo_checked", { outcome: "reject", flags: "people,lighting", source: "osm_new" }]]);
+  assert.deepEqual(
+    rejected.store.checks.map((check) => [check.outcome, check.flags]),
+    [["reject", ["people", "lighting"]]],
+  );
+  assert.deepEqual(
+    rejected.written[0].events.map((event) => [event.type, event.properties]),
+    [["founder_photo_checked", { outcome: "reject", flags: "people,lighting", source: "osm_new" }]],
+  );
 
   // Fairly likely flags at or below their thresholds approve; nothing is unsure any more.
   const likely = setup({ answers: flagged({ people: 0.8, lighting: 0.7, not_park: 0.95, not_photo: 0.9, personal_info: 0.6 }) });
@@ -407,7 +567,12 @@ test("a rejected photo names each flag above its threshold in plain words; an ol
   const olderAttempt = randomUUID();
   await older.found({ attemptId: olderAttempt });
   Object.assign(older.store.checks[0], { outcome: "unsure", flags: [] });
-  assert.deepEqual(await body(await older.found({ attemptId: olderAttempt })), { outcome: "unsure", flags: [], message: "We couldn't tell. Try another angle.", reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString() });
+  assert.deepEqual(await body(await older.found({ attemptId: olderAttempt })), {
+    outcome: "unsure",
+    flags: [],
+    message: "We couldn't tell. Try another angle.",
+    reviewableUntil: new Date(NOW + REVIEW_KEEP_MS).toISOString(),
+  });
   assert.equal(older.photoCalls.length, 1);
 
   // A retry of a rejected attempt answers the same without a second check.
@@ -426,9 +591,13 @@ test("an unreachable or unconfigured model is a retryable 503 and the attempt ca
     assert.equal(response.status, 503);
     assert.deepEqual(await body(response), {
       error: { code: "photo_check_unavailable", message: "We couldn't check your photo. Try again in a moment." },
-      code: "photo_check_unavailable", message: "We couldn't check your photo. Try again in a moment.",
+      code: "photo_check_unavailable",
+      message: "We couldn't check your photo. Try again in a moment.",
     });
-    assert.deepEqual(store.checks.map((check) => check.outcome), ["unavailable"]);
+    assert.deepEqual(
+      store.checks.map((check) => check.outcome),
+      ["unavailable"],
+    );
     assert.equal(store.founded.size, 0);
   }
 });
@@ -479,7 +648,15 @@ test("rate limits: 20 photo checks an hour and 5 foundings a day", async () => {
 
   const daily = setup();
   for (let index = 0; index < FOUNDED_PER_DAY; index += 1) {
-    daily.store.founded.set(`community-qa-${index}`, { accountId: ACCOUNT, attemptId: randomUUID(), sha256: "a".repeat(64), bytes: new Uint8Array(), foundedAt: new Date(NOW - 3_600_000).toISOString(), parkName: "QA", visit: null });
+    daily.store.founded.set(`community-qa-${index}`, {
+      accountId: ACCOUNT,
+      attemptId: randomUUID(),
+      sha256: "a".repeat(64),
+      bytes: new Uint8Array(),
+      foundedAt: new Date(NOW - 3_600_000).toISOString(),
+      parkName: "QA",
+      visit: null,
+    });
   }
   assert.equal((await daily.found()).status, 429);
 });
@@ -576,10 +753,16 @@ test("asking for a review reuses the stored attempt, answers pending, and the sa
   const result = await body(response);
   assert.deepEqual(Object.keys(result).sort(), ["requestId", "status"]);
   assert.equal(result.status, "pending");
-  assert.deepEqual(store.requests.map((row) => [row.id, row.attemptId, row.parkId, row.status]), [[result.requestId, attemptId, "osm-way-23938892", "pending"]]);
+  assert.deepEqual(
+    store.requests.map((row) => [row.id, row.attemptId, row.parkId, row.status]),
+    [[result.requestId, attemptId, "osm-way-23938892", "pending"]],
+  );
   assert.equal(store.kept.size, 0, "the request holds the photo now");
   const event = written.find((context) => context.route === "POST /api/parks/found/review")!.events;
-  assert.deepEqual(event.map((item) => [item.type, item.parkId, item.properties]), [["founding_review_requested", "osm-way-23938892", { outcome: "reject", source: "osm_new" }]]);
+  assert.deepEqual(
+    event.map((item) => [item.type, item.parkId, item.properties]),
+    [["founding_review_requested", "osm-way-23938892", { outcome: "reject", source: "osm_new" }]],
+  );
 
   const again = await call("POST", "/api/parks/found/review", { attemptId });
   assert.deepEqual(await body(again), { status: "pending", requestId: result.requestId });
@@ -672,10 +855,22 @@ test("a review is refused for a founded or hidden park and a second pending requ
   assert.equal((await body(hiddenResponse)).code, "park_not_found");
   store.hiddenIds.delete(BEACON);
 
-  store.founded.set(BEACON, { accountId: OTHER, attemptId: randomUUID(), sha256: "f".repeat(64), bytes: new Uint8Array(), foundedAt: new Date(NOW).toISOString(), parkName: "Beacon Hill Park", visit: null });
+  store.founded.set(BEACON, {
+    accountId: OTHER,
+    attemptId: randomUUID(),
+    sha256: "f".repeat(64),
+    bytes: new Uint8Array(),
+    foundedAt: new Date(NOW).toISOString(),
+    parkName: "Beacon Hill Park",
+    visit: null,
+  });
   const founded = await review(hidden);
   assert.equal(founded.status, 409);
-  assert.deepEqual(await body(founded), { error: { code: "already_founded", message: "This park already has a founder: @bee." }, code: "already_founded", message: "This park already has a founder: @bee." });
+  assert.deepEqual(await body(founded), {
+    error: { code: "already_founded", message: "This park already has a founder: @bee." },
+    code: "already_founded",
+    message: "This park already has a founder: @bee.",
+  });
 });
 
 test("an instant founding closes pending reviews of that park as superseded", async () => {
@@ -687,8 +882,13 @@ test("an instant founding closes pending reviews of that park as superseded", as
   rejected.store.founded.clear();
   const store = rejected.store;
   const result = await store.foundExisting({
-    accountId: OTHER, attemptId: randomUUID(), visitId: randomUUID(), parkId: BEACON, at: new Date(NOW).toISOString(),
-    photo: { sha256: "a".repeat(64), base64: "", width: 1, height: 1 }, moderation: {},
+    accountId: OTHER,
+    attemptId: randomUUID(),
+    visitId: randomUUID(),
+    parkId: BEACON,
+    at: new Date(NOW).toISOString(),
+    photo: { sha256: "a".repeat(64), base64: "", width: 1, height: 1 },
+    moderation: {},
   });
   assert.equal(result.status, "founded");
   assert.equal(store.requests[0].status, "superseded");
@@ -696,7 +896,9 @@ test("an instant founding closes pending reviews of that park as superseded", as
 
 test("decisions are marked seen with a strict body; pending and other players' requests are left alone", async () => {
   const { store, call } = setup();
-  const mine = randomUUID(), pending = randomUUID(), theirs = randomUUID();
+  const mine = randomUUID(),
+    pending = randomUUID(),
+    theirs = randomUUID();
   store.requests.push(
     { id: mine, accountId: ACCOUNT, attemptId: randomUUID(), parkId: BEACON, status: "approved", createdAt: new Date(NOW).toISOString(), seenAt: null },
     { id: pending, accountId: ACCOUNT, attemptId: randomUUID(), parkId: "osm-way-1", status: "pending", createdAt: new Date(NOW).toISOString(), seenAt: null },
@@ -708,6 +910,9 @@ test("decisions are marked seen with a strict body; pending and other players' r
   const response = await seen([mine.toUpperCase(), pending, theirs]);
   assert.equal(response.status, 200);
   assert.deepEqual(await body(response), { seen: [mine] });
-  assert.deepEqual(store.requests.map((row) => row.seenAt), [new Date(NOW).toISOString(), null, null]);
+  assert.deepEqual(
+    store.requests.map((row) => row.seenAt),
+    [new Date(NOW).toISOString(), null, null],
+  );
   assert.deepEqual(await body(await seen([mine])), { seen: [] }, "seen once");
 });

@@ -24,13 +24,25 @@ export function BadgeShelfView({ items, patches, flagSeed, seen, onOpen, childre
     <section className="account-card card badge-shelf" aria-labelledby="badge-shelf-title">
       <header className="badge-shelf__head">
         <div className="badge-shelf__title">
-          <span className="eyebrow" id="badge-shelf-title">Badges</span>
-          <strong>{earned} of {items.length} earned</strong>
+          <span className="eyebrow" id="badge-shelf-title">
+            Badges
+          </span>
+          <strong>
+            {earned} of {items.length} earned
+          </strong>
           <span className="badge-shelf__help">Swipe for more</span>
         </div>
         <div className="badge-shelf__flag">
-          <Flag seed={flagSeed} size={60} patches={patches} className="is-waving" label={`Your flag with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}`} />
-          <span>{patches.length} of {MAX_PATCHES} sewn on</span>
+          <Flag
+            seed={flagSeed}
+            size={60}
+            patches={patches}
+            className="is-waving"
+            label={`Your flag with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}`}
+          />
+          <span>
+            {patches.length} of {MAX_PATCHES} sewn on
+          </span>
         </div>
       </header>
       <ul className="badge-shelf__grid">
@@ -46,11 +58,19 @@ export function BadgeShelfView({ items, patches, flagSeed, seen, onOpen, childre
               >
                 <span className="badge-shelf__art">
                   <AchievementBadge badge={item} size={64} locked={!item.unlocked} />
-                  {sewn && <span className="badge-shelf__sewn" aria-hidden="true"><Icon name="flag" size={12} stroke={2.6} /></span>}
-                  {fresh && <span className="badge-shelf__new" aria-hidden="true">New</span>}
+                  {sewn && (
+                    <span className="badge-shelf__sewn" aria-hidden="true">
+                      <Icon name="flag" size={12} stroke={2.6} />
+                    </span>
+                  )}
+                  {fresh && (
+                    <span className="badge-shelf__new" aria-hidden="true">
+                      New
+                    </span>
+                  )}
                 </span>
                 <span className="badge-shelf__name">{item.name}</span>
-                <span className="badge-shelf__hint">{item.unlocked ? RARITY[item.rarity].label : progressLabel(item) ?? item.hint}</span>
+                <span className="badge-shelf__hint">{item.unlocked ? RARITY[item.rarity].label : (progressLabel(item) ?? item.hint)}</span>
               </button>
             </li>
           );

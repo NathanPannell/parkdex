@@ -42,7 +42,16 @@ const DIM = 0.72;
 
 type Failure = { message: string; action: "retry" | "sign-in" | "handle" | "none" };
 // A crew join refused for one of these reasons will be refused again, so it offers no retry (#171).
-const FINAL_JOIN_ERRORS = new Set<GameErrorCode>(["invalid_code", "code_not_found", "code_expired", "crew_full", "already_today", "park_not_found", "account_deleting", "visit_id_reused"]);
+const FINAL_JOIN_ERRORS = new Set<GameErrorCode>([
+  "invalid_code",
+  "code_not_found",
+  "code_expired",
+  "crew_full",
+  "already_today",
+  "park_not_found",
+  "account_deleting",
+  "visit_id_reused",
+]);
 // Where the pennant waits low on the leader's pole before it is hoisted (#171).
 const PENNANT_LOW = 112;
 // The scene's own size; it scales down to fit the space the result text leaves it.
@@ -171,7 +180,11 @@ export function Plant() {
   const standing = holder.kind === "other" || holder.kind === "mine" ? holder.flag : null;
   const title = ticket
     ? `Join ${standing ? `@${standing.handle}'s` : "the"} crew`
-    : holder.kind === "other" ? `Take it from @${holder.flag.handle}` : holder.kind === "mine" ? "Visit your flag" : "Plant your flag";
+    : holder.kind === "other"
+      ? `Take it from @${holder.flag.handle}`
+      : holder.kind === "mine"
+        ? "Visit your flag"
+        : "Plant your flag";
   // The part of the title that cannot wrap: the @handle, with its 's when joining a crew.
   const titleHandle = ticket ? (standing ? `${standing.handle}'s` : null) : holder.kind === "other" ? holder.flag.handle : null;
   const verb = ticket ? "join" : holder.kind === "other" ? "take it" : holder.kind === "mine" ? "visit" : "plant";
@@ -186,11 +199,14 @@ export function Plant() {
   useEffect(() => reportPlantPhase(phase), [phase]);
   const endJoin = useRef(crewUi.endJoin);
   endJoin.current = crewUi.endJoin;
-  useEffect(() => () => {
-    reportPlantPhase(null);
-    anim.current?.stop();
-    if (ticket) endJoin.current();
-  }, [ticket]);
+  useEffect(
+    () => () => {
+      reportPlantPhase(null);
+      anim.current?.stop();
+      if (ticket) endJoin.current();
+    },
+    [ticket],
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -440,9 +456,17 @@ export function Plant() {
     ? { title: "Already in this crew", detail: `You hold ${parkName} with this crew already.` }
     : result?.outcome === "joined" && joinedCrew
       ? { ...visitHeadline(result, parkName), title: `You joined @${joinedCrew.leader.handle}'s crew` }
-      : result ? visitHeadline(result, parkName) : null;
+      : result
+        ? visitHeadline(result, parkName)
+        : null;
   // The stamp names the crew's leader or the player the flag was taken from.
-  const headlineHandle = alreadyMember ? null : result?.outcome === "joined" && joinedCrew ? `${joinedCrew.leader.handle}'s` : result?.outcome === "took" ? result.previousHolder?.handle : null;
+  const headlineHandle = alreadyMember
+    ? null
+    : result?.outcome === "joined" && joinedCrew
+      ? `${joinedCrew.leader.handle}'s`
+      : result?.outcome === "took"
+        ? result.previousHolder?.handle
+        : null;
   // Friends (#64): after joining, offer the crew members who aren't friends yet.
   const friendsBoard = friends.enabled ? friends.board : null;
   const refreshFriends = useRef(friends.refresh);
@@ -450,9 +474,8 @@ export function Plant() {
   useEffect(() => {
     if (joinedCrew && friends.enabled && !friends.board) void refreshFriends.current();
   }, [joinedCrew, friends.enabled, friends.board]);
-  const offers = joinedCrew && friendsBoard
-    ? friendOffers(joinedCrew, me?.handle, new Set(friendsBoard.players.map((player) => player.handle))).slice(0, 3)
-    : [];
+  const offers =
+    joinedCrew && friendsBoard ? friendOffers(joinedCrew, me?.handle, new Set(friendsBoard.players.map((player) => player.handle))).slice(0, 3) : [];
   // Badges this visit unlocked (#175), shown only with the `badges` flag on.
   const badgesOn = useFeatureFlag("badges");
   const unlockShown = badgesOn && (result?.newBadges ?? []).some((unlock) => badgeById(unlock.id));
@@ -462,7 +485,10 @@ export function Plant() {
 
   return (
     <motion.div className="screen claim plant" exit={{ opacity: 0, transition: { duration: 0.3 } }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <motion.div className="claim__glow" style={{ opacity: won && phase === "done" ? 1 : 0.45, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }} />
+      <motion.div
+        className="claim__glow"
+        style={{ opacity: won && phase === "done" ? 1 : 0.45, background: "radial-gradient(circle, #ffc93c 0%, transparent 62%)" }}
+      />
       <motion.div className="plant-vignette" style={{ opacity: dim }} aria-hidden="true" />
 
       <AnimatePresence>
@@ -489,8 +515,15 @@ export function Plant() {
               <h1 style={handleFit(titleHandle)}>{title}</h1>
             </motion.div>
           ) : (
-            <motion.div key="b" initial={{ scale: 2.4, rotate: -16, opacity: 0 }} animate={{ scale: 1, rotate: -3, opacity: 1 }} transition={{ type: "spring", stiffness: 520, damping: 15 }}>
-              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`} style={handleFit(headlineHandle)}>{headline.title}</span>
+            <motion.div
+              key="b"
+              initial={{ scale: 2.4, rotate: -16, opacity: 0 }}
+              animate={{ scale: 1, rotate: -3, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 520, damping: 15 }}
+            >
+              <span className={`claim__stamp plant__stamp ${won ? "" : "plant__stamp--quiet"}`} style={handleFit(headlineHandle)}>
+                {headline.title}
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -532,7 +565,12 @@ export function Plant() {
               </div>
             )}
             {rival && !ticket && (
-              <motion.div className="plant-flag plant-flag--rival" style={{ x: rivalX, y: rivalY, rotate: rivalRotate }} aria-label={`Flag of @${rival.handle}`} role="img">
+              <motion.div
+                className="plant-flag plant-flag--rival"
+                style={{ x: rivalX, y: rivalY, rotate: rivalRotate }}
+                aria-label={`Flag of @${rival.handle}`}
+                role="img"
+              >
                 <span className="plant-flag__pole" />
                 <span className="plant-flag__cloth plant-flag__cloth--wave">
                   <Flag seed={rival.flagSeed} size={124} days={rivalDays} />
@@ -551,7 +589,13 @@ export function Plant() {
               <ellipse cx="130" cy="82" rx="122" ry="8" fill="rgba(0,0,0,.35)" />
               <path d="M8 80 C 40 30, 90 14, 130 14 C 170 14, 220 30, 252 80 Z" fill="#6B4423" />
               <path d="M30 62 C 60 30, 100 22, 130 22 C 160 22, 200 30, 230 62 C 190 50, 70 50, 30 62 Z" fill="#8B5A2B" />
-              <path d="M120 16 l4 -10 l3 10 M136 17 l5 -9 l1 10 M96 22 l2 -8 l4 8 M160 22 l4 -8 l2 9" stroke="#7A9A3A" strokeWidth="3" strokeLinecap="round" fill="none" />
+              <path
+                d="M120 16 l4 -10 l3 10 M136 17 l5 -9 l1 10 M96 22 l2 -8 l4 8 M160 22 l4 -8 l2 9"
+                stroke="#7A9A3A"
+                strokeWidth="3"
+                strokeLinecap="round"
+                fill="none"
+              />
               <path d="M60 70 q6 -3 12 0 M180 66 q6 -3 12 0 M120 54 q5 -3 10 0" stroke="#5A3A1E" strokeWidth="3" strokeLinecap="round" fill="none" />
             </motion.svg>
             <div className="plant-dirt" aria-hidden="true">
@@ -570,7 +614,12 @@ export function Plant() {
                   className="plant-dirt__clod"
                   style={{ width: clod.size, height: clod.size, background: clod.color }}
                   initial={{ x: 0, y: 0, opacity: 1, rotate: 0 }}
-                  animate={{ x: [0, clod.x * 0.7, clod.x, clod.x * 1.06, clod.x * 1.08], y: [0, clod.peak, clod.land, clod.hop, clod.land], rotate: clod.rotate, opacity: [1, 1, 1, 1, 0] }}
+                  animate={{
+                    x: [0, clod.x * 0.7, clod.x, clod.x * 1.06, clod.x * 1.08],
+                    y: [0, clod.peak, clod.land, clod.hop, clod.land],
+                    rotate: clod.rotate,
+                    opacity: [1, 1, 1, 1, 0],
+                  }}
                   transition={{
                     default: { duration: 1.05, delay: clod.delay, times: [0, 0.38, 0.72, 0.86, 1], ease: "easeOut" },
                     opacity: { duration: 2.6, delay: clod.delay, times: [0, 0.4, 0.6, 0.8, 1] },
@@ -589,7 +638,12 @@ export function Plant() {
                   transition={{ type: "spring", stiffness: 520, damping: 14 }}
                   aria-live="polite"
                 >
-                  <motion.strong key={score.value} initial={{ scale: 1.35 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 700, damping: 18 }}>
+                  <motion.strong
+                    key={score.value}
+                    initial={{ scale: 1.35 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 700, damping: 18 }}
+                  >
                     +{score.value}
                   </motion.strong>
                   <span>{score.target === 1 ? "point" : "points"}</span>
@@ -598,7 +652,13 @@ export function Plant() {
             </AnimatePresence>
             <AnimatePresence>
               {cheering && (
-                <motion.div key="kip" className="plant-kip" initial={{ y: 160, rotate: 20 }} animate={{ y: 0, rotate: 0 }} transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}>
+                <motion.div
+                  key="kip"
+                  className="plant-kip"
+                  initial={{ y: 160, rotate: 20 }}
+                  animate={{ y: 0, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 13, delay: 0.15 }}
+                >
                   <motion.div animate={reduce ? undefined : { y: [0, -14, 0], rotate: [0, -6, 6, 0] }} transition={{ duration: 0.7, repeat: 2, delay: 0.5 }}>
                     <Kip pose={won ? "celebrate" : "cheer"} size={92} flip />
                   </motion.div>
@@ -610,18 +670,32 @@ export function Plant() {
 
         <AnimatePresence>
           {impact && !reduce && impact.power >= 1 && (
-            <motion.div key={`flash-${impact.key}`} className="claim__flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }} />
+            <motion.div
+              key={`flash-${impact.key}`}
+              className="claim__flash"
+              initial={{ opacity: 0.9 }}
+              animate={{ opacity: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+            />
           )}
         </AnimatePresence>
-
       </div>
 
       <div className="claim__foot">
         <AnimatePresence mode="wait">
           {phase === "done" && (result || alreadyMember) && headline ? (
-            <motion.div key="done" className="claim__done" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}>
+            <motion.div
+              key="done"
+              className="claim__done"
+              initial="hidden"
+              animate="show"
+              variants={{ show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
+            >
               {/* One headline above, the points in the scene, then one sentence and at most two buttons. */}
-              <motion.p className="plant__detail" variants={pop}>{headline.detail}</motion.p>
+              <motion.p className="plant__detail" variants={pop}>
+                {headline.detail}
+              </motion.p>
               {result && <span className="plant__cheer">{plantCheer(result)}</span>}
               {(joinedCrew || unlockShown) && (
                 <motion.div variants={pop} className="plant__extras">
@@ -641,7 +715,14 @@ export function Plant() {
               )}
               <motion.div variants={pop} className="claim__row">
                 {park && (
-                  <button className="btn btn--sm btn--sun" onClick={() => { sfx.pop(); startPhotoCapture(); setAdding(true); }}>
+                  <button
+                    className="btn btn--sm btn--sun"
+                    onClick={() => {
+                      sfx.pop();
+                      startPhotoCapture();
+                      setAdding(true);
+                    }}
+                  >
                     <Icon name="camera" size={18} /> Add a photo
                   </button>
                 )}
@@ -653,21 +734,34 @@ export function Plant() {
           ) : phase === "playing" ? (
             <motion.div key="playing" className="hold" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
           ) : (
-            <motion.div key="hold" className="hold" initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0, scale: 0.8 }} transition={{ type: "spring", delay: 0.2 }}>
+            <motion.div
+              key="hold"
+              className="hold"
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.8 }}
+              transition={{ type: "spring", delay: 0.2 }}
+            >
               {phase === "failed" && failure ? (
                 <div className="claim-save-error plant__error" role="alert">
                   <p>{failure.message}</p>
                   <div className="claim__row">
                     {failure.action === "sign-in" ? (
-                      <button className="btn btn--sm btn--sun" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in</button>
+                      <button className="btn btn--sm btn--sun" onClick={() => dispatch({ type: "go", screen: "account" })}>
+                        Sign in
+                      </button>
                     ) : failure.action === "none" ? null : failure.action === "handle" ? (
-                      <button className="btn btn--sm btn--sun" onClick={() => game.openHandleSheet({ onDone: () => void send() })}>Pick a handle</button>
+                      <button className="btn btn--sm btn--sun" onClick={() => game.openHandleSheet({ onDone: () => void send() })}>
+                        Pick a handle
+                      </button>
                     ) : (
                       <button className="btn btn--sm btn--sun" onClick={retry}>
                         <Icon name="refresh" size={18} /> Try again
                       </button>
                     )}
-                    <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>Back to map</button>
+                    <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>
+                      Back to map
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -685,7 +779,18 @@ export function Plant() {
                   >
                     <svg viewBox="0 0 100 100" className="hold__ring">
                       <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,248,236,.18)" strokeWidth="7" />
-                      <motion.circle cx="50" cy="50" r="46" fill="none" stroke="#FFC93C" strokeWidth="7" strokeLinecap="round" strokeDasharray="289" style={{ strokeDashoffset: ring }} transform="rotate(-90 50 50)" />
+                      <motion.circle
+                        cx="50"
+                        cy="50"
+                        r="46"
+                        fill="none"
+                        stroke="#FFC93C"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                        strokeDasharray="289"
+                        style={{ strokeDashoffset: ring }}
+                        transform="rotate(-90 50 50)"
+                      />
                     </svg>
                     <span className="hold__core">
                       <Icon name="flag" size={30} stroke={2.6} />

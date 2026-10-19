@@ -11,7 +11,9 @@ export function Drawer({ open, onClose, label, children }: { open: boolean; onCl
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     panel.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close.current(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close.current();
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);

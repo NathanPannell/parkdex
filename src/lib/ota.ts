@@ -104,7 +104,9 @@ export async function startOverTheAirUpdates(plugin?: Updater | null): Promise<v
       if (!failedVersions().includes(event.bundle.version)) write(PENDING_KEY, event.bundle.id);
     });
     let backgroundedAt: number | null = null;
-    await App.addListener("pause", () => { backgroundedAt = Date.now(); });
+    await App.addListener("pause", () => {
+      backgroundedAt = Date.now();
+    });
     await App.addListener("resume", () => {
       const away = backgroundedAt === null ? 0 : Date.now() - backgroundedAt;
       backgroundedAt = null;
@@ -120,7 +122,9 @@ export async function startOverTheAirUpdates(plugin?: Updater | null): Promise<v
  * cannot render is rolled back, and a good one is never rolled back by the 15 s timeout.
  */
 export function notifyOverTheAirReady(): void {
-  void loadUpdater().then((loaded) => loaded?.plugin.notifyAppReady()).catch(() => undefined);
+  void loadUpdater()
+    .then((loaded) => loaded?.plugin.notifyAppReady())
+    .catch(() => undefined);
 }
 
 /** True when this page runs a downloaded bundle rather than the one inside the APK. */

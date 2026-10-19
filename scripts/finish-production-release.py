@@ -1,4 +1,5 @@
 """Finish an authorized production dispatch using the existing verified alias helpers."""
+
 import importlib.util
 import os
 from pathlib import Path
@@ -17,9 +18,11 @@ project_id = delivery.release_project_id(config, "production")
 deadline = time.time() + 600
 while time.time() < deadline:
     deployments = delivery.list_vercel_deployments(config, project_id, int((time.time() - 3600) * 1000), target="production")
-    matches = [item for item in deployments
-               if delivery.deployment_meta(item).get("githubCommitSha") == sha
-               and delivery.deployment_meta(item).get("kipEnvironment") == "production"]
+    matches = [
+        item
+        for item in deployments
+        if delivery.deployment_meta(item).get("githubCommitSha") == sha and delivery.deployment_meta(item).get("kipEnvironment") == "production"
+    ]
     if len(matches) > 1:
         raise delivery.DeliveryError("Multiple deployments match the release; manual recovery required.")
     if matches:

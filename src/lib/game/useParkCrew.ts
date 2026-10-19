@@ -62,10 +62,13 @@ export function useScreenWakeLock(active: boolean): void {
     let live = true;
     let lock: WakeLockSentinelLike | null = null;
     const request = () => {
-      wakeLock.request("screen").then((sentinel) => {
-        if (live) lock = sentinel;
-        else void sentinel.release().catch(() => undefined);
-      }).catch(() => undefined);
+      wakeLock
+        .request("screen")
+        .then((sentinel) => {
+          if (live) lock = sentinel;
+          else void sentinel.release().catch(() => undefined);
+        })
+        .catch(() => undefined);
     };
     // The lock drops when the page is hidden; take it again on return.
     const onVisible = () => {

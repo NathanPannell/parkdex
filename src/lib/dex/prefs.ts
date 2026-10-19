@@ -29,7 +29,9 @@ export function readOnlyMine(store: StorageLike | null = storage()): boolean {
 export function writeOnlyMine(value: boolean, store: StorageLike | null = storage()): void {
   try {
     store?.setItem(ONLY_MINE_KEY, value ? "true" : "false");
-  } catch { /* The choice lasts for this session only. */ }
+  } catch {
+    /* The choice lasts for this session only. */
+  }
 }
 
 export function readCollapsed(store: StorageLike | null = storage()): Set<string> {
@@ -44,7 +46,9 @@ export function readCollapsed(store: StorageLike | null = storage()): Set<string
 export function writeCollapsed(value: ReadonlySet<string>, store: StorageLike | null = storage()): void {
   try {
     store?.setItem(COLLAPSED_KEY, JSON.stringify([...value].slice(0, 500)));
-  } catch { /* The choice lasts for this session only. */ }
+  } catch {
+    /* The choice lasts for this session only. */
+  }
 }
 
 export type DexSegment = "collection" | "flags";

@@ -16,8 +16,16 @@ export function Commands({ lines, label = "Commands" }: { lines: string[]; label
   }
   return (
     <div className="commands">
-      <pre aria-label={label}><code>{lines.join("\n")}</code></pre>
-      <button type="button" className="icon-button icon-button--small commands__copy" onClick={() => void copy()} aria-label={`Copy ${label.toLowerCase()}`} title="Copy">
+      <pre aria-label={label}>
+        <code>{lines.join("\n")}</code>
+      </pre>
+      <button
+        type="button"
+        className="icon-button icon-button--small commands__copy"
+        onClick={() => void copy()}
+        aria-label={`Copy ${label.toLowerCase()}`}
+        title="Copy"
+      >
         <Icon name={copied ? "check" : "download"} size={15} />
       </button>
     </div>
@@ -29,7 +37,17 @@ export function Hash({ value, length = 10 }: { value: string | null | undefined;
   const toast = useToast();
   if (!value) return <span className="muted">—</span>;
   return (
-    <button type="button" className="hash" title={`${value} (click to copy)`} onClick={() => { void navigator.clipboard?.writeText(value).then(() => toast.show("Copied")).catch(() => undefined); }}>
+    <button
+      type="button"
+      className="hash"
+      title={`${value} (click to copy)`}
+      onClick={() => {
+        void navigator.clipboard
+          ?.writeText(value)
+          .then(() => toast.show("Copied"))
+          .catch(() => undefined);
+      }}
+    >
       {value.slice(0, length)}
     </button>
   );

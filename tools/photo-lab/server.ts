@@ -78,16 +78,29 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
 }
 
 function startJob(ids: string[] | undefined, basedOn: string | null, label: string | undefined): Job {
-  const started: Job = { running: true, done: 0, total: ids?.length ?? loadManifest().photos.length, failed: 0, runId: null, error: null, startedAt: new Date().toISOString() };
+  const started: Job = {
+    running: true,
+    done: 0,
+    total: ids?.length ?? loadManifest().photos.length,
+    failed: 0,
+    runId: null,
+    error: null,
+    startedAt: new Date().toISOString(),
+  };
   job = started;
   classify({
-    ids, basedOn, label,
+    ids,
+    basedOn,
+    label,
     onProgress: ({ done, total, failed }) => Object.assign(started, { done, total, failed }),
-  }).then((run) => {
-    Object.assign(started, { running: false, runId: run.id });
-  }, (error: unknown) => {
-    Object.assign(started, { running: false, error: error instanceof Error ? error.message : "The run failed." });
-  });
+  }).then(
+    (run) => {
+      Object.assign(started, { running: false, runId: run.id });
+    },
+    (error: unknown) => {
+      Object.assign(started, { running: false, error: error instanceof Error ? error.message : "The run failed." });
+    },
+  );
   return started;
 }
 
@@ -104,7 +117,8 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
     if (route === "/api/runs") return json(response, 200, listRuns());
     const runMatch = /^\/api\/runs\/([^/]+)$/.exec(route);
     if (runMatch) {
-      if (!RUN_ID.test(runMatch[1]) || !existsSync(path.join(labDir(), "results", `${runMatch[1]}.json`))) return json(response, 404, { error: "Unknown run." });
+      if (!RUN_ID.test(runMatch[1]) || !existsSync(path.join(labDir(), "results", `${runMatch[1]}.json`)))
+        return json(response, 404, { error: "Unknown run." });
       return json(response, 200, readRun(runMatch[1]));
     }
     const imageMatch = /^\/images\/([a-z0-9-]+)\.jpg$/.exec(route);
@@ -120,7 +134,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
   if (request.method === "POST" && route === "/api/rerun") {
     if (!sameOrigin(request)) return json(response, 403, { error: "Cross-origin requests are refused." });
     if (job?.running) return json(response, 409, { error: "A run is already in progress.", job });
-    const body = await readBody(request) as { ids?: unknown; basedOn?: unknown; label?: unknown };
+    const body = (await readBody(request)) as { ids?: unknown; basedOn?: unknown; label?: unknown };
     const ids = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === "string") : undefined;
     const basedOn = typeof body.basedOn === "string" && RUN_ID.test(body.basedOn) ? body.basedOn : null;
     if (ids?.length && !basedOn) return json(response, 400, { error: "Rerunning some photos needs a run to carry the others over from." });

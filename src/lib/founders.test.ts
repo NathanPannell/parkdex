@@ -9,13 +9,46 @@ vi.mock("./accounts/authClient", () => ({
 }));
 
 const {
-  FounderError, checkFlags, foundBackAction, founderCapture, coverImageUrl, defaultPark, fetchParkSummary, foundPark, isFreshFix, parkLabel, parseContainingPark, scanParks, targetFor,
-  REVIEW_LABEL, markFoundingReviewsSeen, requestFoundingReview, reviewButton, reviewProblem, founderLine, flagMessage, MESSAGES, REVIEW_HINT,
+  FounderError,
+  checkFlags,
+  foundBackAction,
+  founderCapture,
+  coverImageUrl,
+  defaultPark,
+  fetchParkSummary,
+  foundPark,
+  isFreshFix,
+  parkLabel,
+  parseContainingPark,
+  scanParks,
+  targetFor,
+  REVIEW_LABEL,
+  markFoundingReviewsSeen,
+  requestFoundingReview,
+  reviewButton,
+  reviewProblem,
+  founderLine,
+  flagMessage,
+  MESSAGES,
+  REVIEW_HINT,
 } = await import("./founders");
 type ContainingPark = import("./founders").ContainingPark;
 
 const ACCOUNT = "ae172e85-a8ab-4e1d-a032-901100000001";
-const square = { type: "MultiPolygon", coordinates: [[[[-123.06, 49.08], [-123.05, 49.08], [-123.05, 49.09], [-123.06, 49.09], [-123.06, 49.08]]]] };
+const square = {
+  type: "MultiPolygon",
+  coordinates: [
+    [
+      [
+        [-123.06, 49.08],
+        [-123.05, 49.08],
+        [-123.05, 49.09],
+        [-123.06, 49.09],
+        [-123.06, 49.08],
+      ],
+    ],
+  ],
+};
 
 function reply(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -58,14 +91,26 @@ describe("scanParks", () => {
   });
 
   it("reads founders and covers on catalogue matches and drops malformed outlines", async () => {
-    fetchAccountApi.mockResolvedValueOnce(reply(200, {
-      parks: [
-        { type: "way", id: 1, name: "Paterson Park", kind: "leisure=park", areaM2: 52000, geometry: square, inCatalogue: { parkId: "paterson", name: "Paterson Park" }, founder: { handle: "robin" }, hasCover: true },
-        { type: "relation", id: 2, name: null, kind: "leisure=garden", areaM2: 300, geometry: square, inCatalogue: null, founder: null },
-        { type: "node", id: 3, geometry: square },
-        { type: "way", id: 4, geometry: { type: "Polygon", coordinates: [] } },
-      ],
-    }));
+    fetchAccountApi.mockResolvedValueOnce(
+      reply(200, {
+        parks: [
+          {
+            type: "way",
+            id: 1,
+            name: "Paterson Park",
+            kind: "leisure=park",
+            areaM2: 52000,
+            geometry: square,
+            inCatalogue: { parkId: "paterson", name: "Paterson Park" },
+            founder: { handle: "robin" },
+            hasCover: true,
+          },
+          { type: "relation", id: 2, name: null, kind: "leisure=garden", areaM2: 300, geometry: square, inCatalogue: null, founder: null },
+          { type: "node", id: 3, geometry: square },
+          { type: "way", id: 4, geometry: { type: "Polygon", coordinates: [] } },
+        ],
+      }),
+    );
     const parks = await scanParks({ point: [-123.0601, 49.089], accuracy: 10 });
     expect(parks).toHaveLength(2);
     expect(parks[0]).toMatchObject({ id: 1, founder: { handle: "robin" }, hasCover: true, inCatalogue: { parkId: "paterson" } });
@@ -79,7 +124,10 @@ describe("scanParks", () => {
 
   it("explains a refused scan with the server's message", async () => {
     fetchAccountApi.mockResolvedValueOnce(reply(422, { code: "location_imprecise", message: "Your location is not precise enough" }));
-    await expect(scanParks({ point: [0, 0], accuracy: 150 })).rejects.toMatchObject({ code: "location_imprecise", message: "Your location is not precise enough" });
+    await expect(scanParks({ point: [0, 0], accuracy: 150 })).rejects.toMatchObject({
+      code: "location_imprecise",
+      message: "Your location is not precise enough",
+    });
     fetchAccountApi.mockResolvedValueOnce(reply(429, { code: "rate_limited_osm", message: "Too many map searches." }));
     await expect(scanParks({ point: [0, 0], accuracy: 10 })).rejects.toMatchObject({ code: "rate_limited" });
   });
@@ -112,13 +160,23 @@ describe("defaultPark", () => {
 
 describe("foundPark", () => {
   it("posts the attempt as the signed-in account and reads a founding", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
-      outcome: "founded",
-      park: { id: "osm-way-42", name: "Paterson Park" },
-      coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
-      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z" },
-      founderPoints: 24,
-    }));
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(200, {
+        outcome: "founded",
+        park: { id: "osm-way-42", name: "Paterson Park" },
+        coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
+        visit: {
+          visitId: "v1",
+          parkId: "osm-way-42",
+          outcome: "planted",
+          pointsEarned: 6,
+          pointsBreakdown: { base: 6, days: 0 },
+          previousHolder: null,
+          flagSince: "2026-10-08T20:00:00Z",
+        },
+        founderPoints: 24,
+      }),
+    );
     const result = await foundPark(ACCOUNT, request);
     const [path, init, accountId] = fetchAuthenticated.mock.calls[0];
     expect(path).toBe("/api/parks/found");
@@ -129,28 +187,50 @@ describe("foundPark", () => {
       outcome: "founded",
       park: { id: "osm-way-42", name: "Paterson Park" },
       coverUrl: "/api/parks/osm-way-42/cover/abc.jpg",
-      visit: { visitId: "v1", parkId: "osm-way-42", outcome: "planted", pointsEarned: 6, pointsBreakdown: { base: 6, days: 0 }, previousHolder: null, flagSince: "2026-10-08T20:00:00Z", protected: null },
+      visit: {
+        visitId: "v1",
+        parkId: "osm-way-42",
+        outcome: "planted",
+        pointsEarned: 6,
+        pointsBreakdown: { base: 6, days: 0 },
+        previousHolder: null,
+        flagSince: "2026-10-08T20:00:00Z",
+        protected: null,
+      },
       founderPoints: 24,
     });
   });
 
   it("accepts the visit with its wrapper and a missing bonus", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, {
-      outcome: "founded",
-      park: { id: "p", name: "P" },
-      visit: { visit: { visitId: "v", parkId: "p", outcome: "took", pointsEarned: 3, previousHolder: { handle: "b", flagSeed: "s" }, flagSince: null } },
-    }));
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(200, {
+        outcome: "founded",
+        park: { id: "p", name: "P" },
+        visit: { visit: { visitId: "v", parkId: "p", outcome: "took", pointsEarned: 3, previousHolder: { handle: "b", flagSeed: "s" }, flagSince: null } },
+      }),
+    );
     const result = await foundPark(ACCOUNT, request);
-    expect(result).toMatchObject({ outcome: "founded", founderPoints: 24, coverUrl: null, visit: { outcome: "took", pointsEarned: 3, previousHolder: { handle: "b" } } });
+    expect(result).toMatchObject({
+      outcome: "founded",
+      founderPoints: 24,
+      coverUrl: null,
+      visit: { outcome: "took", pointsEarned: 3, previousHolder: { handle: "b" } },
+    });
   });
 
   it("returns rejected and unsure photos with their flags", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { outcome: "rejected", flags: [{ code: "people", message: "We spotted people. Take one without anyone in it." }, { code: "lighting" }] }));
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(200, { outcome: "rejected", flags: [{ code: "people", message: "We spotted people. Take one without anyone in it." }, { code: "lighting" }] }),
+    );
     const rejected = await foundPark(ACCOUNT, request);
-    expect(rejected).toEqual({ outcome: "rejected", flags: [
-      { code: "people", message: "We spotted people. Take one without anyone in it." },
-      { code: "lighting", message: expect.stringMatching(/dark/) },
-    ], reviewableUntil: null });
+    expect(rejected).toEqual({
+      outcome: "rejected",
+      flags: [
+        { code: "people", message: "We spotted people. Take one without anyone in it." },
+        { code: "lighting", message: expect.stringMatching(/dark/) },
+      ],
+      reviewableUntil: null,
+    });
     fetchAuthenticated.mockResolvedValueOnce(reply(422, { outcome: "unsure", flags: [] }));
     const unsure = await foundPark(ACCOUNT, request);
     expect(unsure).toEqual({ outcome: "unsure", flags: [], reviewableUntil: null });
@@ -177,15 +257,32 @@ describe("foundPark", () => {
   });
 
   it("reads the founder's handle from the server's message", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(409, { error: { code: "already_founded", message: "This park already has a founder: @tester_one." }, code: "already_founded", message: "This park already has a founder: @tester_one." }));
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(409, {
+        error: { code: "already_founded", message: "This park already has a founder: @tester_one." },
+        code: "already_founded",
+        message: "This park already has a founder: @tester_one.",
+      }),
+    );
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "already_founded", founder: "tester_one" });
   });
 
   it("shows the server's reason for other refusals and limits", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(422, { code: "unnamed_park", message: "This park has no name on OpenStreetMap yet, so it can't have a founder." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "refused", retryable: false, message: "This park has no name on OpenStreetMap yet, so it can't have a founder." });
-    fetchAuthenticated.mockResolvedValueOnce(reply(429, { code: "rate_limited_founding", message: "You've become the founder of 5 parks today. Try again tomorrow." }));
-    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "rate_limited", message: "You've become the founder of 5 parks today. Try again tomorrow." });
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(422, { code: "unnamed_park", message: "This park has no name on OpenStreetMap yet, so it can't have a founder." }),
+    );
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({
+      code: "refused",
+      retryable: false,
+      message: "This park has no name on OpenStreetMap yet, so it can't have a founder.",
+    });
+    fetchAuthenticated.mockResolvedValueOnce(
+      reply(429, { code: "rate_limited_founding", message: "You've become the founder of 5 parks today. Try again tomorrow." }),
+    );
+    await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({
+      code: "rate_limited",
+      message: "You've become the founder of 5 parks today. Try again tomorrow.",
+    });
     fetchAuthenticated.mockResolvedValueOnce(reply(401, { code: "authentication_required", message: "Sign in." }));
     await expect(foundPark(ACCOUNT, request)).rejects.toMatchObject({ code: "unauthenticated", message: "Sign in again to become a founder." });
   });
@@ -209,7 +306,12 @@ describe("foundPark", () => {
 });
 
 describe("fetchParkSummary", () => {
-  const body = { parkId: "paterson", founder: { handle: "robin", foundedAt: "2026-10-08T20:00:00Z" }, coverUrl: "/api/parks/paterson/cover/abc.jpg", visits: { total: 12, last30Days: 5, mine: 2 } };
+  const body = {
+    parkId: "paterson",
+    founder: { handle: "robin", foundedAt: "2026-10-08T20:00:00Z" },
+    coverUrl: "/api/parks/paterson/cover/abc.jpg",
+    visits: { total: 12, last30Days: 5, mine: 2 },
+  };
 
   it("reads the summary with the player's own count when signed in", async () => {
     fetchAuthenticated.mockResolvedValueOnce(reply(200, body));
@@ -358,7 +460,8 @@ describe("review button and problems", () => {
   });
 
   it("explains each error code plainly", () => {
-    const problem = (code: ConstructorParameters<typeof FounderError>[0], founder: string | null = null) => reviewProblem(new FounderError(code, 400, "server", founder));
+    const problem = (code: ConstructorParameters<typeof FounderError>[0], founder: string | null = null) =>
+      reviewProblem(new FounderError(code, 400, "server", founder));
     expect(problem("already_founded", "robin")).toEqual({ message: "@robin became the founder first.", canRetry: false });
     expect(problem("already_founded")).toEqual({ message: "Someone else became the founder first.", canRetry: false });
     expect(problem("review_pending")).toEqual({ message: "Your photo for this park is already waiting for review.", canRetry: false });
@@ -387,9 +490,15 @@ describe("founder copy", () => {
     const codes = Object.keys(MESSAGES) as (keyof typeof MESSAGES)[];
     const texts = [
       ...Object.values(MESSAGES),
-      ...codes.flatMap((code) => [reviewProblem(new FounderError(code, 400, "server", "robin")).message, reviewProblem(new FounderError(code, 400, "server")).message]),
+      ...codes.flatMap((code) => [
+        reviewProblem(new FounderError(code, 400, "server", "robin")).message,
+        reviewProblem(new FounderError(code, 400, "server")).message,
+      ]),
       ...["people", "lighting", "not_park", "inappropriate", "not_photo", "personal_info", "unsure", "other"].map(flagMessage),
-      founderLine("robin"), founderLine(null), REVIEW_LABEL, REVIEW_HINT,
+      founderLine("robin"),
+      founderLine(null),
+      REVIEW_LABEL,
+      REVIEW_HINT,
     ];
     for (const text of texts) expect(text).not.toMatch(VERB);
   });

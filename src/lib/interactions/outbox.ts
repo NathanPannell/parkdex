@@ -126,7 +126,8 @@ export class InteractionOutbox {
           for (const item of all) {
             if (!Number.isFinite(item.queuedAt) || item.queuedAt < cutoff) store.delete(item.event.eventId);
           }
-          batch = retained.sort((left, right) => left.queuedAt - right.queuedAt || left.order - right.order || left.event.eventId.localeCompare(right.event.eventId))
+          batch = retained
+            .sort((left, right) => left.queuedAt - right.queuedAt || left.order - right.order || left.event.eventId.localeCompare(right.event.eventId))
             .slice(0, INTERACTION_BATCH_SIZE);
         };
         request.onerror = () => transaction.abort();
@@ -156,7 +157,7 @@ export class InteractionOutbox {
     }
   }
 
-  async count(now = Date.now()): Promise<number> {
+  async count(_now = Date.now()): Promise<number> {
     const database = await this.openDatabase();
     try {
       return await new Promise((resolve, reject) => {

@@ -57,7 +57,9 @@ export function App() {
             <CrewProvider>
               <StoreProvider>
                 <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
-                  <ContentProvider><Stage /></ContentProvider>
+                  <ContentProvider>
+                    <Stage />
+                  </ContentProvider>
                 </div>
                 <UpdateGate status={updateStatus} />
               </StoreProvider>
@@ -118,13 +120,27 @@ function ClaimSnapshotRestorer() {
         const restored = await loadPersonalProgress(owner);
         if (!live || state.progressOwnerKey !== ownerKey) return;
         dispatch({ type: "progressLoaded", ownerKey, claims: projectClaims(restored.claims, restored.photos), claimRevisionAtStart: state.claimRevision });
-        if (owner.kind === "account" && auth.phase === "authenticated" && auth.ownerAccountId?.toLowerCase() === owner.accountId.toLowerCase()) void auth.syncBackup({ retryAfterFlight: true });
+        if (owner.kind === "account" && auth.phase === "authenticated" && auth.ownerAccountId?.toLowerCase() === owner.accountId.toLowerCase())
+          void auth.syncBackup({ retryAfterFlight: true });
       } catch {
         if (live) attemptKey.current = null;
       }
     })();
-    return () => { live = false; };
-  }, [auth.ownerAccountId, auth.phase, auth.progressRevision, auth.syncBackup, content, dispatch, owner, ownerKey, state.progressOwnerKey, state.progressReady]);
+    return () => {
+      live = false;
+    };
+  }, [
+    auth.ownerAccountId,
+    auth.phase,
+    auth.progressRevision,
+    auth.syncBackup,
+    content,
+    dispatch,
+    owner,
+    ownerKey,
+    state.progressOwnerKey,
+    state.progressReady,
+  ]);
 
   return null;
 }
@@ -229,8 +245,7 @@ function Screens() {
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "plant") {
           if (backCanLeavePlant()) for (const action of leavePlant(s.tripId)) dispatch(action);
-        }
-        else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "map" : "onboarding" });
+        } else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "map" : "onboarding" });
         else if (s.screen === "downloads") dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
@@ -272,7 +287,9 @@ function Screens() {
       )}
       <AnimatePresence>{screen === "parks" && <MyDex key="parks" />}</AnimatePresence>
       <AnimatePresence>{screen === "leaderboard" && <Leaderboard key="leaderboard" />}</AnimatePresence>
-      <AnimatePresence>{screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}</AnimatePresence>
+      <AnimatePresence>
+        {screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}
+      </AnimatePresence>
       <AnimatePresence>{screen === "settings" && <Settings key="settings" tabbed />}</AnimatePresence>
       <AnimatePresence>{screen === "downloads" && <ManageDownloads key="downloads" />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>
@@ -287,9 +304,7 @@ function Screens() {
           </motion.div>
         )}
       </Presence>
-      <AnimatePresence>
-        {screen === "plant" && <Plant key="plant" />}
-      </AnimatePresence>
+      <AnimatePresence>{screen === "plant" && <Plant key="plant" />}</AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
       <TakeoverMessages allowed={messagesAllowed && !decisions.current} />

@@ -344,7 +344,9 @@
   background: #2b4a3b;
   border: 5px solid #7a4b2a;
   border-radius: 14px;
-  box-shadow: 0 5px 0 var(--ink), inset 0 0 0 2px var(--ink);
+  box-shadow:
+    0 5px 0 var(--ink),
+    inset 0 0 0 2px var(--ink);
 }
 
 .ob-case__cell {
@@ -487,7 +489,9 @@
 .pm__badge {
   display: block;
   filter: drop-shadow(0 3px 0 rgba(20, 35, 28, 0.35));
-  transition: opacity 0.3s, filter 0.3s;
+  transition:
+    opacity 0.3s,
+    filter 0.3s;
 }
 
 .pm__stem {
@@ -529,7 +533,9 @@
 
 .pm--locked .pm__dot {
   background: #d6aa33;
-  box-shadow: 0 0 0 1.5px var(--ink), 0 0 0 3px var(--paper);
+  box-shadow:
+    0 0 0 1.5px var(--ink),
+    0 0 0 3px var(--paper);
 }
 
 .pm__dot {
@@ -1337,10 +1343,14 @@
 @keyframes glow {
   0%,
   100% {
-    box-shadow: 0 5px 0 var(--ink), 0 0 0 0 rgba(255, 90, 31, 0.5);
+    box-shadow:
+      0 5px 0 var(--ink),
+      0 0 0 0 rgba(255, 90, 31, 0.5);
   }
   50% {
-    box-shadow: 0 5px 0 var(--ink), 0 0 0 10px rgba(255, 90, 31, 0);
+    box-shadow:
+      0 5px 0 var(--ink),
+      0 0 0 10px rgba(255, 90, 31, 0);
   }
 }
 
@@ -1620,7 +1630,9 @@
   background: #4a5750;
   border: 3px solid var(--ink);
   border-radius: 50%;
-  box-shadow: 0 5px 0 var(--ink), 0 0 0 5px var(--paper);
+  box-shadow:
+    0 5px 0 var(--ink),
+    0 0 0 5px var(--paper);
   transition: background 0.3s;
 }
 
@@ -1755,8 +1767,7 @@
 .camera__grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
   background-size: 33.33% 33.33%;
   background-position: -1px -1px;
 }
@@ -2045,8 +2056,7 @@
   border: 3px solid #fff;
   border-radius: 4px;
   box-shadow: 0 0 0 100vmax rgba(11, 21, 17, 0.68);
-  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.22) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.22) 1px, transparent 1px);
   background-size: 33.33% 33.33%;
   background-position: -1px -1px;
   pointer-events: none;
@@ -2131,7 +2141,9 @@
   border: 4px solid var(--sun);
   border-radius: 14px;
   text-shadow: 0 3px 0 #b8620f;
-  box-shadow: 0 4px 0 #b8620f, inset 0 0 0 2px rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 4px 0 #b8620f,
+    inset 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 .claim__stage {
@@ -2427,7 +2439,10 @@
   font-family: var(--display);
   font-weight: 800;
   font-size: 14px;
-  transition: transform 0.12s, box-shadow 0.12s, background 0.15s;
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s,
+    background 0.15s;
 }
 
 .fb-kind:active {

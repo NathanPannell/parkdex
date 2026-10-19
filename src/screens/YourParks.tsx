@@ -76,32 +76,52 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
             </motion.div>
             <h2>Plant your flag in parks</h2>
             <p className="account-help">Go to a park and your flag goes up. You earn a point for every hour it flies.</p>
-            <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in to plant your flag</motion.button>
+            <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => dispatch({ type: "go", screen: "account" })}>
+              Sign in to plant your flag
+            </motion.button>
           </section>
         ) : game.status === "loading" && !game.me ? (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Loading your parks…</strong></div>
+            <div>
+              <strong>Loading your parks…</strong>
+            </div>
           </section>
         ) : !game.me ? (
           <section className="account-card card game-empty" role="alert">
             <Kip size={64} pose="think" />
             <h2>Your parks need a connection</h2>
-            <p className="account-help">{game.status === "offline" ? "Connect to the internet to see your flags and score." : game.error ?? "Parkdex is unavailable right now."}</p>
-            <motion.button whileTap={press} className="btn btn--paper btn--block" onClick={() => void game.refresh()}><Icon name="refresh" /> Try again</motion.button>
+            <p className="account-help">
+              {game.status === "offline" ? "Connect to the internet to see your flags and score." : (game.error ?? "Parkdex is unavailable right now.")}
+            </p>
+            <motion.button whileTap={press} className="btn btn--paper btn--block" onClick={() => void game.refresh()}>
+              <Icon name="refresh" /> Try again
+            </motion.button>
           </section>
         ) : !player ? (
           <section className="account-card card game-empty">
             <Flag seed={game.me.flagSeed} size={110} className="is-waving" />
             <h2>Pick a handle to fly this flag</h2>
             <p className="account-help">Everyone sees your flag and @handle on the parks you hold.</p>
-            <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => game.openHandleSheet()}>Pick your handle</motion.button>
+            <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => game.openHandleSheet()}>
+              Pick your handle
+            </motion.button>
           </section>
         ) : (
           <>
-            <motion.section className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""} ${hasLongHandle(player.handle) ? "has-long-handle" : ""}`} style={handleFit(player.handle)} initial={{ scale: 0.92, rotate: -2, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={bouncy}>
+            <motion.section
+              className={`account-card card game-score ${game.me.score >= 1000 ? "is-long" : ""} ${hasLongHandle(player.handle) ? "has-long-handle" : ""}`}
+              style={handleFit(player.handle)}
+              initial={{ scale: 0.92, rotate: -2, opacity: 0 }}
+              animate={{ scale: 1, rotate: 0, opacity: 1 }}
+              transition={bouncy}
+            >
               <span className="game-score__rays" aria-hidden="true" />
-              <button className="viewer-open game-score__flag" onClick={() => setViewingFlag(true)} aria-label={`Show the flag of @${player.handle} full screen`}>
+              <button
+                className="viewer-open game-score__flag"
+                onClick={() => setViewingFlag(true)}
+                aria-label={`Show the flag of @${player.handle} full screen`}
+              >
                 <FlagPin seed={player.flagSeed} size={64} showAge={false} patches={game.me.flagPatches} className="is-waving-pin" />
               </button>
               <div className="game-score__text">
@@ -109,15 +129,23 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
                 <span>{plural(parks.length, "park", "parks")} held</span>
               </div>
               <div className="game-score__points">
-                <strong><RollingNumber value={score} /></strong>
+                <strong>
+                  <RollingNumber value={score} />
+                </strong>
                 <span>{game.me.score === 1 ? "point" : "points"}</span>
               </div>
             </motion.section>
-            {game.status === "offline" && <p className="account-help game-stale" role="status">Offline. Showing what Parkdex said a moment ago.</p>}
+            {game.status === "offline" && (
+              <p className="account-help game-stale" role="status">
+                Offline. Showing what Parkdex said a moment ago.
+              </p>
+            )}
 
             {parks.length === 0 ? (
               <section className="account-card card game-empty">
-                <Bubble side="down" style={{ position: "relative" }}>No flags up yet. Go plant one!</Bubble>
+                <Bubble side="down" style={{ position: "relative" }}>
+                  No flags up yet. Go plant one!
+                </Bubble>
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}>
                   <Kip pose="idle" size={84} />
                 </motion.div>
@@ -133,11 +161,15 @@ export function YourParks({ title = "Your parks", toolbar }: { title?: string; t
                   const ageMs = flagAgeMs(held.since, now);
                   return (
                     <motion.li key={held.parkId} variants={listItem}>
-                      <motion.button whileTap={press} className={`game-row card ${index === 0 && held.hours > 0 ? "is-top" : ""}`} onClick={() => openOnMap(held.parkId)}>
+                      <motion.button
+                        whileTap={press}
+                        className={`game-row card ${index === 0 && held.hours > 0 ? "is-top" : ""}`}
+                        onClick={() => openOnMap(held.parkId)}
+                      >
                         <FlagPin seed={player.flagSeed} days={held.days} size={44} showAge={false} />
                         <span className="game-row__name">
                           <strong>{park?.name ?? held.parkId}</strong>
-                          <span>{index === 0 && held.hours > 0 ? "Your longest-flying flag" : park?.region ?? "Park"}</span>
+                          <span>{index === 0 && held.hours > 0 ? "Your longest-flying flag" : (park?.region ?? "Park")}</span>
                         </span>
                         <span className="game-row__days" role="img" aria-label={`Flying for ${describeFlagAge(ageMs)}`}>
                           <strong>{formatFlagAge(ageMs)}</strong>

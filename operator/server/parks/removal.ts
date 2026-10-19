@@ -118,17 +118,26 @@ export async function outlineFor(park: RemovalPark, osm: OsmStore): Promise<{ ou
 
   const catalogue = await osm.catalogue(catalogueBox(area));
   const others = catalogue.filter((neighbour) => neighbour.id !== park.id);
-  const self: CatalogueNeighbour = catalogue.find((neighbour) => neighbour.id === park.id)
-    ?? { id: park.id, name: park.name, region: "", lat: park.lat, lng: park.lng, boundary: park.geometry };
+  const self: CatalogueNeighbour = catalogue.find((neighbour) => neighbour.id === park.id) ?? {
+    id: park.id,
+    name: park.name,
+    region: "",
+    lat: park.lat,
+    lng: park.lng,
+    boundary: park.geometry,
+  };
   const mine = ref ? candidates : candidates.filter((feature) => catalogueMatch(feature, [self, ...others])?.parkId === park.id);
   const own = nameKey(park.name);
   const ranked: Array<{ feature: OsmFeature; other: CatalogueMatch | null }> = mine
     .map((feature) => ({ feature, other: catalogueMatch(feature, others) }))
-    .sort((a, b) => Number(a.other !== null) - Number(b.other !== null)
-      || Number(!a.feature.name) - Number(!b.feature.name)
-      || Number(nameKey(a.feature.name) !== own) - Number(nameKey(b.feature.name) !== own)
-      || b.feature.areaM2 - a.feature.areaM2
-      || a.feature.id - b.feature.id);
+    .sort(
+      (a, b) =>
+        Number(a.other !== null) - Number(b.other !== null) ||
+        Number(!a.feature.name) - Number(!b.feature.name) ||
+        Number(nameKey(a.feature.name) !== own) - Number(nameKey(b.feature.name) !== own) ||
+        b.feature.areaM2 - a.feature.areaM2 ||
+        a.feature.id - b.feature.id,
+    );
   const best = ranked[0];
   if (!best) return { outline: null, blocked: { code: "no_outline", message: BLOCK_MESSAGES.no_outline } };
   const outline = outlineOf(best.feature);
@@ -172,8 +181,17 @@ function removedEvent(input: StatementInput): Statement {
   const pending = features.reviews
     ? "(SELECT count(*) FROM kip_founders.review_requests WHERE status = 'pending' AND (park_id = $1 OR (osm_type = $10 AND osm_id = $11)))::integer"
     : "0";
-  const params: unknown[] = [parkId, input.uuid(), input.uuid(), REMOVAL_ROUTE, input.environment, input.at, parkId.length <= 128 ? parkId : null,
-    input.source, `${outline.type}/${outline.id}`];
+  const params: unknown[] = [
+    parkId,
+    input.uuid(),
+    input.uuid(),
+    REMOVAL_ROUTE,
+    input.environment,
+    input.at,
+    parkId.length <= 128 ? parkId : null,
+    input.source,
+    `${outline.type}/${outline.id}`,
+  ];
   if (features.reviews) params.push(outline.type, outline.id);
   return {
     text: `INSERT INTO kip_analytics.events (event_id, event_type, account_id, request_id, route, environment, occurred_at, park_id, properties, schema_version)
@@ -190,14 +208,16 @@ function removedEvent(input: StatementInput): Statement {
  * park_removed. "Superseded" would tell the player someone else founded the park.
  */
 function closeReviews(input: StatementInput): Statement {
-  const logged = input.features.events ? `, logged AS (
+  const logged = input.features.events
+    ? `, logged AS (
       INSERT INTO kip_analytics.events (event_id, event_type, account_id, request_id, route, environment, occurred_at, park_id, properties, schema_version)
       SELECT gen_random_uuid(), 'founding_review_decided', account_id, gen_random_uuid(), $6, $7, $2::timestamptz,
         CASE WHEN length(park_id) <= 128 THEN park_id END,
         jsonb_build_object('decision', 'rejected', 'reason_code', 'park_removed', 'outcome', outcome,
           'waited_minutes', greatest(0, round(extract(epoch FROM ($2::timestamptz - created_at)) / 60))::integer), 1
       FROM closed RETURNING 1
-    )` : "";
+    )`
+    : "";
   const params: unknown[] = [input.parkId, input.at, REMOVED_REASON, input.outline.type, input.outline.id];
   if (input.features.events) params.push(REMOVAL_ROUTE, input.environment);
   return {
@@ -272,7 +292,13 @@ export function createSqlParkRemovalStore(db: SqlRunner, uuid: () => string = ()
            AND conname = 'events_event_type_v2_check' AND pg_get_constraintdef(oid) LIKE '%park_removed%') AS audited`,
     );
     const row = rows[0] ?? {};
-    return { founders: row.founders === true, reviews: row.reviews === true, osm: row.osm === true, events: row.events === true, audited: row.audited === true };
+    return {
+      founders: row.founders === true,
+      reviews: row.reviews === true,
+      osm: row.osm === true,
+      events: row.events === true,
+      audited: row.audited === true,
+    };
   }
 
   async function plan(id: string): Promise<{ plan: RemovalPlan; features: RemovalFeatures } | null> {
@@ -294,29 +320,45 @@ export function createSqlParkRemovalStore(db: SqlRunner, uuid: () => string = ()
     if (!row) return null;
     const geometry = row.geometry ? jsonValue<MultiPolygon>(row.geometry) : null;
     const park: RemovalPark = {
-      id, name: String(row.name), lat: Number(row.lat), lng: Number(row.lng),
+      id,
+      name: String(row.name),
+      lat: Number(row.lat),
+      lng: Number(row.lng),
       geometry: geometry?.type === "MultiPolygon" && geometry.coordinates?.length ? geometry : null,
     };
     const found = available.osm ? await outlineFor(park, osm) : { outline: null, blocked: { code: "no_outline" as const, message: BLOCK_MESSAGES.no_outline } };
     const [founders, pending] = await Promise.all([
-      available.founders ? db.query(
-        `SELECT f.founded_at, f.source, pl.handle FROM kip_founders.parks f LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id
+      available.founders
+        ? db.query(
+            `SELECT f.founded_at, f.source, pl.handle FROM kip_founders.parks f LEFT JOIN kip_game.players pl ON pl.account_id = f.account_id
          WHERE f.park_id = $1`,
-        [id],
-      ) : Promise.resolve([]),
-      available.reviews ? db.query(
-        `SELECT count(*)::integer AS count FROM kip_founders.review_requests
+            [id],
+          )
+        : Promise.resolve([]),
+      available.reviews
+        ? db.query(
+            `SELECT count(*)::integer AS count FROM kip_founders.review_requests
          WHERE status = 'pending' AND (park_id = $1 OR (osm_type = $2 AND osm_id = $3))`,
-        [id, found.outline?.type ?? null, found.outline?.id ?? null],
-      ) : Promise.resolve([{ count: 0 }]),
+            [id, found.outline?.type ?? null, found.outline?.id ?? null],
+          )
+        : Promise.resolve([{ count: 0 }]),
     ]);
     const founder = founders[0];
     const blocked = row.enrichment === true ? { code: "park_in_enrichment" as const, message: BLOCK_MESSAGES.park_in_enrichment } : found.blocked;
     return {
       features: available,
       plan: {
-        parkId: id, name: park.name, source: sourceOf(id, row.legacy === true, row.proposal === true), hidden: row.hidden === true,
-        founder: founder ? { handle: founder.handle === null || founder.handle === undefined ? null : String(founder.handle), foundedAt: iso(founder.founded_at), source: String(founder.source) } : null,
+        parkId: id,
+        name: park.name,
+        source: sourceOf(id, row.legacy === true, row.proposal === true),
+        hidden: row.hidden === true,
+        founder: founder
+          ? {
+              handle: founder.handle === null || founder.handle === undefined ? null : String(founder.handle),
+              foundedAt: iso(founder.founded_at),
+              source: String(founder.source),
+            }
+          : null,
         pendingReviews: Number(pending[0]?.count ?? 0),
         outline: found.outline,
         blocked,
@@ -337,9 +379,17 @@ export function createSqlParkRemovalStore(db: SqlRunner, uuid: () => string = ()
       if (current.blocked || !current.outline) throw blockedError(current);
       let results: Record<string, unknown>[][];
       try {
-        results = await db.transaction(removalStatements({
-          parkId: id, outline: current.outline, source: current.source, at: input.at, environment: input.environment, features: available, uuid,
-        }));
+        results = await db.transaction(
+          removalStatements({
+            parkId: id,
+            outline: current.outline,
+            source: current.source,
+            at: input.at,
+            environment: input.environment,
+            features: available,
+            uuid,
+          }),
+        );
       } catch (error) {
         throw removalError(error);
       }

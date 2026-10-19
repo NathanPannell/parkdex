@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
-  clampTransform, CLOSE_DRAG_PX, DOUBLE_TAP_MS, DOUBLE_TAP_ZOOM, doubleTap, dragDownOpacity, fitInside, flagViewSize, IDENTITY, isDoubleTap, MAX_VIEWER_ZOOM, panBy, releaseAction,
-  viewerKeyAction, viewerReducer, zoomAround, type Release,
+  clampTransform,
+  CLOSE_DRAG_PX,
+  DOUBLE_TAP_MS,
+  DOUBLE_TAP_ZOOM,
+  doubleTap,
+  dragDownOpacity,
+  fitInside,
+  flagViewSize,
+  IDENTITY,
+  isDoubleTap,
+  MAX_VIEWER_ZOOM,
+  panBy,
+  releaseAction,
+  viewerKeyAction,
+  viewerReducer,
+  zoomAround,
+  type Release,
 } from "./viewer";
 
 const box = { width: 360, height: 640 };

@@ -48,13 +48,15 @@ export class BuildMapSource implements Source {
 
     const first = Math.floor(offset / chunkBytes);
     const last = Math.floor((end - 1) / chunkBytes);
-    const parts = await Promise.all(Array.from({ length: last - first + 1 }, (_, i) => {
-      const index = first + i;
-      const chunkStart = index * chunkBytes;
-      const from = Math.max(offset, chunkStart) - chunkStart;
-      const to = Math.min(end, chunkStart + chunkBytes) - chunkStart;
-      return this.readPart(index, from, to - from, signal);
-    }));
+    const parts = await Promise.all(
+      Array.from({ length: last - first + 1 }, (_, i) => {
+        const index = first + i;
+        const chunkStart = index * chunkBytes;
+        const from = Math.max(offset, chunkStart) - chunkStart;
+        const to = Math.min(end, chunkStart + chunkBytes) - chunkStart;
+        return this.readPart(index, from, to - from, signal);
+      }),
+    );
     const result = new Uint8Array(end - offset);
     let cursor = 0;
     for (const part of parts) {

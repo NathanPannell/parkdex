@@ -17,3 +17,6 @@ release/
 .codex/cloud-snapshot/
 .wrangler/
 __pycache__/
+coverage/
+test-results/
+playwright-report/

@@ -1,4 +1,14 @@
-import { API_POINTERS, createNeonAppConfigStore, FEATURE_FLAGS, parseBuild, parseEnvironment, parsePlatform, validateBuildConfigInput, validateUpdateRulesInput, type AppConfigStore } from "../../../worker/appConfig.js";
+import {
+  API_POINTERS,
+  createNeonAppConfigStore,
+  FEATURE_FLAGS,
+  parseBuild,
+  parseEnvironment,
+  parsePlatform,
+  validateBuildConfigInput,
+  validateUpdateRulesInput,
+  type AppConfigStore,
+} from "../../../worker/appConfig.js";
 import { readJsonBody } from "../../../worker/validation.js";
 import type { DashboardEnv, SectionContext } from "../api.js";
 import { allowMethods, databaseUrl, HttpError, json } from "../http.js";
@@ -46,7 +56,11 @@ async function historyState(history: () => OtaHistoryStore): Promise<{ store: Ot
 }
 
 async function safely<T>(work: () => Promise<T>, fallback: T): Promise<T> {
-  try { return await work(); } catch { return fallback; }
+  try {
+    return await work();
+  } catch {
+    return fallback;
+  }
 }
 
 /**
@@ -63,7 +77,13 @@ export async function appRoutes(request: Request, context: SectionContext): Prom
     allowMethods(request, "GET");
     const config = store();
     const [builds, rules] = await Promise.all([config.list(), config.listUpdateRules()]);
-    return json({ builds, rules, knownFlags: FEATURE_FLAGS.filter((flag) => !RETIRED_FLAGS.includes(flag)), retiredFlags: RETIRED_FLAGS, pointers: API_POINTERS });
+    return json({
+      builds,
+      rules,
+      knownFlags: FEATURE_FLAGS.filter((flag) => !RETIRED_FLAGS.includes(flag)),
+      retiredFlags: RETIRED_FLAGS,
+      pointers: API_POINTERS,
+    });
   }
 
   if (path === "/api/app/updates" || path.startsWith("/api/app/updates/")) return updatesRoutes(request, context);
@@ -84,7 +104,7 @@ export async function appRoutes(request: Request, context: SectionContext): Prom
     const platform = parsePlatform(build[1]);
     const number = parseBuild(build[2]);
     if (request.method === "DELETE") {
-      if (!await store().remove(platform, number)) throw new HttpError(404, "not_found", "Build configuration not found.");
+      if (!(await store().remove(platform, number))) throw new HttpError(404, "not_found", "Build configuration not found.");
       return json({ ok: true });
     }
     const input = validateBuildConfigInput(await readJsonBody(request, 8192));
@@ -99,7 +119,7 @@ async function updatesRoutes(request: Request, context: SectionContext): Promise
   const env = context.baseEnv;
   const fetcher: Fetcher = dependencies.otaFetch ?? ((input, init) => fetch(input, init));
   const history = (): OtaHistoryStore => dependencies.otaHistoryStore?.(env) ?? createNeonOtaHistoryStore(databaseUrl(env));
-  const r2 = () => dependencies.otaR2 ? dependencies.otaR2(env) : createCloudflareR2(env, fetcher);
+  const r2 = () => (dependencies.otaR2 ? dependencies.otaR2(env) : createCloudflareR2(env, fetcher));
 
   if (path === "/api/app/updates") {
     allowMethods(request, "GET");
@@ -154,7 +174,12 @@ async function updatesRoutes(request: Request, context: SectionContext): Promise
     context.requireSameOrigin();
     const input = validateMove(await readJsonBody(request, 4096));
     const client = r2();
-    if (!client) throw new HttpError(503, "cloudflare_not_configured", "Publishing from the dashboard needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID on this deployment.");
+    if (!client)
+      throw new HttpError(
+        503,
+        "cloudflare_not_configured",
+        "Publishing from the dashboard needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID on this deployment.",
+      );
     const state = await historyState(history);
     const recorded = state.available ? state.store : null;
     const result = await movePointer(input, { r2: client, fetch: fetcher, history: recorded, now: dependencies.otaNow ?? Date.now });

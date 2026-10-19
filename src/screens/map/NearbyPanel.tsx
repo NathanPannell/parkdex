@@ -64,7 +64,14 @@ export function NearbyPanel({ nearby, all, onSelect }: Props) {
               </button>
             </motion.label>
           ) : (
-            <motion.div key="label" className="nearby__label" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={spring}>
+            <motion.div
+              key="label"
+              className="nearby__label"
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -12 }}
+              transition={spring}
+            >
               <span className="eyebrow">Parks near you</span>
               <motion.button className="nearby__search-open" onClick={() => setSearching(true)} aria-label="Search parks" whileTap={{ scale: 0.88 }}>
                 <Icon name="search" size={16} stroke={2.8} />

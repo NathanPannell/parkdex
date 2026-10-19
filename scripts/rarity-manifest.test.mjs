@@ -40,7 +40,10 @@ test("rarity assignment covers the immutable 100-park seed exactly", async () =>
   }
   assert.deepEqual(counts, EXPECTED_COUNTS);
   assert.deepEqual(manifest.counts, EXPECTED_COUNTS);
-  assert.deepEqual(manifest.parks.filter((park) => park.rarity === "legendary"), []);
+  assert.deepEqual(
+    manifest.parks.filter((park) => park.rarity === "legendary"),
+    [],
+  );
   assert.equal(manifest.parks.find((park) => park.id === SOOKE_POTHOLES_ID)?.rarity, "rare");
   assert.equal(manifest.parks.find((park) => park.id === SOOKE_POTHOLES_ID)?.name, "Sooke Potholes Regional Park");
 });

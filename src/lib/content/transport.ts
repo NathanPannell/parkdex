@@ -1,6 +1,13 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Network } from "@capacitor/network";
-import { canDownloadContent, CONTENT_CDN_ORIGIN, contentTransportPausedError, requiresContentWifi, type Connectivity, type ContentRequestInit } from "./contracts";
+import {
+  canDownloadContent,
+  CONTENT_CDN_ORIGIN,
+  contentTransportPausedError,
+  requiresContentWifi,
+  type Connectivity,
+  type ContentRequestInit,
+} from "./contracts";
 import { contentChannelOverride } from "../contentChannel";
 import { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 import { withRequestContext } from "../requestContext";
@@ -95,10 +102,7 @@ export async function getContentConnectivity(): Promise<ContentConnectivity> {
   if (!Capacitor.isNativePlatform()) return readBrowserConnectivity();
   if (Capacitor.getPlatform() !== "android") return { connected: false, wifi: false, contentDownloadAllowed: false };
 
-  const [networkResult, wifiResult] = await Promise.allSettled([
-    Network.getStatus(),
-    NativeTransport.getWifiStatus(),
-  ]);
+  const [networkResult, wifiResult] = await Promise.allSettled([Network.getStatus(), NativeTransport.getWifiStatus()]);
   const connected = networkResult.status === "fulfilled" && networkResult.value.connected === true;
   const wifi = wifiResult.status === "fulfilled" && wifiResult.value.wifi === true;
   const connectedOrWifi = connected || wifi;
@@ -121,10 +125,12 @@ export function subscribeContentConnectivity(listener: (connectivity: ContentCon
       });
     };
     publish();
-    void Network.addListener("networkStatusChange", publish).then((handle) => {
-      if (active) networkListener = handle;
-      else void handle.remove();
-    }).catch(() => {});
+    void Network.addListener("networkStatusChange", publish)
+      .then((handle) => {
+        if (active) networkListener = handle;
+        else void handle.remove();
+      })
+      .catch(() => {});
     return () => {
       active = false;
       void networkListener?.remove();
@@ -183,8 +189,8 @@ export async function contentFetch(input: RequestInfo | URL, init?: ContentReque
 }
 
 async function browserFetch(request: Request, url: URL, anyNetwork: boolean): Promise<Response> {
-  const allowed = (connectivity: ContentConnectivity) => canDownloadContent(connectivity) &&
-    (anyNetwork || !requiresContentWifi(url.pathname) || connectivity.wifi);
+  const allowed = (connectivity: ContentConnectivity) =>
+    canDownloadContent(connectivity) && (anyNetwork || !requiresContentWifi(url.pathname) || connectivity.wifi);
   const initialConnectivity = await getContentConnectivity();
   if (!allowed(initialConnectivity)) throw contentUnavailableError(initialConnectivity);
   throwIfAborted(request.signal);
@@ -253,11 +259,7 @@ async function browserFetch(request: Request, url: URL, anyNetwork: boolean): Pr
   }
 }
 
-async function readBoundedResponseBody(
-  response: Response,
-  maxBytes: number,
-  abort: (reason: unknown) => void,
-): Promise<ArrayBuffer> {
+async function readBoundedResponseBody(response: Response, maxBytes: number, abort: (reason: unknown) => void): Promise<ArrayBuffer> {
   if (!response.body) return new ArrayBuffer(0);
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -279,7 +281,11 @@ async function readBoundedResponseBody(
     void reader.cancel(error).catch(() => {});
     throw error;
   } finally {
-    try { reader.releaseLock(); } catch { /* A failed stream may keep its reader locked. */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* A failed stream may keep its reader locked. */
+    }
   }
 
   const buffer = new ArrayBuffer(byteLength);

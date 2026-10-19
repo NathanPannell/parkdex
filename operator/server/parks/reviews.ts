@@ -1,6 +1,11 @@
 import {
-  createSqlFoundingReviewStore, emptyCounts, rejectionReason, REVIEW_STATUSES,
-  type AnalyticsEnvironment, type FoundingReviewStore, type ReviewStatus,
+  createSqlFoundingReviewStore,
+  emptyCounts,
+  rejectionReason,
+  REVIEW_STATUSES,
+  type AnalyticsEnvironment,
+  type FoundingReviewStore,
+  type ReviewStatus,
 } from "../../../worker/founding-reviews.js";
 import { readJsonBody } from "../../../worker/validation.js";
 import type { DashboardEnv, SectionContext } from "../api.js";
@@ -31,7 +36,8 @@ export function analyticsEnvironment(env: DashboardEnv): AnalyticsEnvironment {
 function statusParam(url: URL): ReviewStatus | null {
   const value = url.searchParams.get("status") ?? "pending";
   if (value === "all") return null;
-  if (!(REVIEW_STATUSES as readonly string[]).includes(value)) throw new HttpError(400, "invalid_status", "Status is pending, approved, rejected, superseded or all.");
+  if (!(REVIEW_STATUSES as readonly string[]).includes(value))
+    throw new HttpError(400, "invalid_status", "Status is pending, approved, rejected, superseded or all.");
   return value as ReviewStatus;
 }
 
@@ -68,8 +74,11 @@ export async function reviewRoutes(request: Request, context: SectionContext, no
     if (!photo) throw new HttpError(404, "not_found", "This request has no photo any more.");
     return new Response(new Uint8Array(photo.bytes), {
       headers: {
-        "content-type": photo.contentType ?? "image/jpeg", "cache-control": "private, no-store", etag: `"${photo.sha256}"`,
-        "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
+        "content-type": photo.contentType ?? "image/jpeg",
+        "cache-control": "private, no-store",
+        etag: `"${photo.sha256}"`,
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
       },
     });
   }

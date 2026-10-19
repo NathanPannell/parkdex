@@ -19,7 +19,7 @@ import { analyticsEnvironment, reviewRoutes } from "./reviews.js";
  */
 
 /** Settings this section reads from the deployment. */
-export interface ParksEnv {}
+export type ParksEnv = Record<never, never>;
 
 export interface ParksDependencies {
   liveParkStore?(env: DashboardEnv): LiveParkStore;
@@ -53,7 +53,8 @@ function bboxParam(url: URL, maxSpan: number): Bbox {
 
 function reasonOf(value: unknown): string {
   const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
-  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) || text.length > 500) throw new HttpError(400, "invalid_reason", "The reason must be 500 characters or fewer of plain text.");
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text) || text.length > 500)
+    throw new HttpError(400, "invalid_reason", "The reason must be 500 characters or fewer of plain text.");
   return text || "Hidden from the operator dashboard.";
 }
 
@@ -144,8 +145,11 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
       if (!cover) throw new HttpError(404, "not_found", "This park has no cover photo.");
       return new Response(new Uint8Array(cover.bytes), {
         headers: {
-          "content-type": cover.contentType, "cache-control": "private, no-store", etag: `"${cover.sha256}"`,
-          "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
+          "content-type": cover.contentType,
+          "cache-control": "private, no-store",
+          etag: `"${cover.sha256}"`,
+          "x-content-type-options": "nosniff",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
         },
       });
     }
@@ -165,7 +169,7 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
     }
     context.requireSameOrigin();
     if (request.headers.get("content-type")) plainObject(await readJsonBody(request, 1024), [], "Remove from map takes no fields.");
-    return json({ ok: true, ...await removal().remove(id, { at: now(), environment: analyticsEnvironment(context.env) }) });
+    return json({ ok: true, ...(await removal().remove(id, { at: now(), environment: analyticsEnvironment(context.env) })) });
   }
   if (action === "founder") {
     allowMethods(request, "DELETE");
@@ -195,7 +199,7 @@ export async function parksRoutes(request: Request, context: SectionContext): Pr
   if (request.method === "DELETE") return json({ revision: await manager().remove(id) });
 
   const store = live();
-  const body = await readJsonBody(request, 512 * 1024) as Record<string, unknown>;
+  const body = (await readJsonBody(request, 512 * 1024)) as Record<string, unknown>;
   if (typeof body !== "object" || body === null || Array.isArray(body)) throw new HttpError(400, "invalid_request", "Send expected and changes.");
   const expected = validateExpected(body.expected);
   if (expected.id !== id) throw new HttpError(400, "invalid_request", "Send the park as you opened it.");

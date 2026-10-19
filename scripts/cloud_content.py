@@ -135,9 +135,7 @@ def _source_commit(root: Path, requested_commit: str | None = None) -> str:
         )
     )
     if status:
-        raise CloudContentError(
-            "source data or runtime art has uncommitted changes; snapshot only a committed source tree"
-        )
+        raise CloudContentError("source data or runtime art has uncommitted changes; snapshot only a committed source tree")
     for repo_path in [*JSON_SOURCE_PATHS.keys(), *art_paths]:
         source = root / Path(repo_path)
         if not source.is_file():
@@ -213,9 +211,7 @@ def _default_map_source(root: Path) -> Path:
     for candidate in candidates:
         if candidate.is_dir():
             return candidate
-    raise CloudContentError(
-        "map source not found; pass --map-source pointing to a directory with island/ and fonts/"
-    )
+    raise CloudContentError("map source not found; pass --map-source pointing to a directory with island/ and fonts/")
 
 
 def _map_files(map_source: Path) -> tuple[list[tuple[str, Path]], dict[str, int]]:
@@ -254,9 +250,7 @@ def _map_files(map_source: Path) -> tuple[list[tuple[str, Path]], dict[str, int]
         expected_size = min(chunk_bytes, size - index * chunk_bytes)
         actual_size = actual_chunks[index].stat().st_size
         if actual_size != expected_size:
-            raise CloudContentError(
-                f"map chunk {index:03d}.bin has {actual_size} bytes, expected {expected_size}"
-            )
+            raise CloudContentError(f"map chunk {index:03d}.bin has {actual_size} bytes, expected {expected_size}")
 
     font_files: list[Path] = []
     for child in fonts.rglob("*"):
@@ -270,10 +264,7 @@ def _map_files(map_source: Path) -> tuple[list[tuple[str, Path]], dict[str, int]
 
     files: list[tuple[str, Path]] = [("map/island/manifest.json", manifest_path)]
     files.extend((f"map/island/{index:03d}.bin", actual_chunks[index]) for index in range(count))
-    files.extend(
-        (f"map/fonts/{path.relative_to(fonts).as_posix()}", path)
-        for path in sorted(font_files, key=lambda item: item.relative_to(fonts).as_posix())
-    )
+    files.extend((f"map/fonts/{path.relative_to(fonts).as_posix()}", path) for path in sorted(font_files, key=lambda item: item.relative_to(fonts).as_posix()))
     return files, manifest
 
 
@@ -302,10 +293,7 @@ def _safe_logical_path(value: Any) -> str:
 
 
 def _inventory_version(entries: Iterable[dict[str, Any]]) -> str:
-    inventory = [
-        {"path": item["path"], "byte_size": item["byte_size"], "sha256": item["sha256"]}
-        for item in sorted(entries, key=lambda item: item["path"])
-    ]
+    inventory = [{"path": item["path"], "byte_size": item["byte_size"], "sha256": item["sha256"]} for item in sorted(entries, key=lambda item: item["path"])]
     return hashlib.sha256(_canonical_bytes(inventory)).hexdigest()
 
 
@@ -579,9 +567,7 @@ def _verify_database_schema(conn: Any) -> None:
         tables = {row[0] for row in cursor.fetchall()}
         expected_tables = {"parks", "boundaries", "r2_objects", "version_manifests"}
         if tables != expected_tables:
-            raise CloudContentError(
-                f"public tables do not match the cloud content schema; expected {sorted(expected_tables)}, got {sorted(tables)}"
-            )
+            raise CloudContentError(f"public tables do not match the cloud content schema; expected {sorted(expected_tables)}, got {sorted(tables)}")
         cursor.execute(
             """
             SELECT table_name, column_name, data_type, is_nullable
@@ -659,10 +645,7 @@ def _ensure_empty_or_exact_rows(conn: Any, manifest: dict[str, Any], content: di
 
     with conn.cursor() as cursor:
         cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks")
-        actual_parks = {
-            row[0]: dict(zip(PARK_FIELDS, row, strict=True))
-            for row in cursor.fetchall()
-        }
+        actual_parks = {row[0]: dict(zip(PARK_FIELDS, row, strict=True)) for row in cursor.fetchall()}
         extra_park_ids = set(actual_parks) - expected_park_ids
         if extra_park_ids:
             raise CloudContentError(f"database contains unexpected park ids: {sorted(extra_park_ids)[:5]}")
@@ -683,7 +666,9 @@ def _ensure_empty_or_exact_rows(conn: Any, manifest: dict[str, Any], content: di
                 raise CloudContentError(f"existing boundary feature differs from snapshot: {park_id}")
 
         cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects")
-        actual_objects = {row[0]: dict(zip(("logical_path", "object_key", "url", "sha256", "byte_size", "content_type"), row, strict=True)) for row in cursor.fetchall()}
+        actual_objects = {
+            row[0]: dict(zip(("logical_path", "object_key", "url", "sha256", "byte_size", "content_type"), row, strict=True)) for row in cursor.fetchall()
+        }
         extra_paths = set(actual_objects) - expected_object_paths
         if extra_paths:
             raise CloudContentError(f"database contains unexpected R2 object paths: {sorted(extra_paths)[:5]}")
@@ -792,10 +777,7 @@ def _verify_full_database(conn: Any, manifest: dict[str, Any], content: dict[str
 
         cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects")
         actual_objects = {
-            row[0]: dict(
-                zip(("logical_path", "object_key", "url", "sha256", "byte_size", "content_type"), row, strict=True)
-            )
-            for row in cursor.fetchall()
+            row[0]: dict(zip(("logical_path", "object_key", "url", "sha256", "byte_size", "content_type"), row, strict=True)) for row in cursor.fetchall()
         }
         if actual_objects != expected_objects:
             raise CloudContentError("database R2 object inventory does not exactly match snapshot metadata")

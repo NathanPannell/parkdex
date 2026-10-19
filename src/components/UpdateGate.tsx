@@ -18,8 +18,12 @@ export function UpdateGate({ status }: { status: UpdateStatus }) {
         <div className="update-gate__card">
           <Kip pose="wave" size={96} />
           <h2 id="update-gate-title">Time to update Parkdex</h2>
-          <p>This version is too old to keep exploring. Update from Google Play to carry on. Your saved progress stays on your phone, and your flags keep flying.</p>
-          <a ref={updateAction} className="btn btn--block update-gate__button" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Update on Google Play</a>
+          <p>
+            This version is too old to keep exploring. Update from Google Play to carry on. Your saved progress stays on your phone, and your flags keep flying.
+          </p>
+          <a ref={updateAction} className="btn btn--block update-gate__button" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">
+            Update on Google Play
+          </a>
         </div>
       </div>
     );
@@ -29,8 +33,12 @@ export function UpdateGate({ status }: { status: UpdateStatus }) {
     return (
       <div className="update-nudge" role="status">
         <span>A new version of Parkdex is ready.</span>
-        <a className="update-nudge__action" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">Update</a>
-        <button className="update-nudge__close" type="button" aria-label="Dismiss update reminder" onClick={() => setDismissed(true)}>×</button>
+        <a className="update-nudge__action" href={PLAY_STORE_URL} target="_blank" rel="noreferrer">
+          Update
+        </a>
+        <button className="update-nudge__close" type="button" aria-label="Dismiss update reminder" onClick={() => setDismissed(true)}>
+          ×
+        </button>
       </div>
     );
   }

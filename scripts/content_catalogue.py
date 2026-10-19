@@ -12,6 +12,7 @@ reject responses over 4 MiB. See docs/content-catalogue.md.
 
 build only reads. point writes only with --apply.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -110,13 +111,15 @@ def build_release(snapshot: dict[str, Any], minimum_reader: int = DEFAULT_MINIMU
         if len(raw) > MAX_FILE_BYTES:
             raise CatalogueError(f"Boundary chunk {path} exceeds the content file limit")
         boxes = [feature_bbox(feature) for feature in chunk]
-        descriptors.append({
-            "path": path,
-            "sha256": sha256(raw),
-            "byte_size": len(raw),
-            "parkIds": [feature["properties"]["id"] for feature in chunk],
-            "bbox": [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)],
-        })
+        descriptors.append(
+            {
+                "path": path,
+                "sha256": sha256(raw),
+                "byte_size": len(raw),
+                "parkIds": [feature["properties"]["id"] for feature in chunk],
+                "bbox": [min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)],
+            }
+        )
         chunk_files.append((path, raw))
     index = {
         "schema": INDEX_SCHEMA,
@@ -141,14 +144,17 @@ def build_release(snapshot: dict[str, Any], minimum_reader: int = DEFAULT_MINIMU
         "revision": snapshot["revision"],
         "minimumReader": minimum_reader,
         "parkCount": len(parks),
-        "files": [{
-            "path": path,
-            "key": prefix + path,
-            "url": f"{CDN_ORIGIN}/{quote(prefix + path, safe='/')}",
-            "sha256": sha256(raw),
-            "byte_size": len(raw),
-            "content_type": "application/json",
-        } for path, raw in files],
+        "files": [
+            {
+                "path": path,
+                "key": prefix + path,
+                "url": f"{CDN_ORIGIN}/{quote(prefix + path, safe='/')}",
+                "sha256": sha256(raw),
+                "byte_size": len(raw),
+                "content_type": "application/json",
+            }
+            for path, raw in files
+        ],
     }
     pointer = {
         "version": version,
@@ -201,8 +207,13 @@ def load_release(directory: Path) -> tuple[dict[str, Any], dict[str, Any]]:
             raise CatalogueError(f"Release file changed after build: {item['path']}")
     index = next(item for item in manifest["files"] if item["path"] == INDEX_PATH)
     expected = {
-        "version": manifest["version"], "revision": manifest["revision"], "minimumReader": manifest["minimumReader"],
-        "indexUrl": index["url"], "indexSha256": index["sha256"], "indexBytes": index["byte_size"], "parkCount": manifest["parkCount"],
+        "version": manifest["version"],
+        "revision": manifest["revision"],
+        "minimumReader": manifest["minimumReader"],
+        "indexUrl": index["url"],
+        "indexSha256": index["sha256"],
+        "indexBytes": index["byte_size"],
+        "parkCount": manifest["parkCount"],
     }
     if {key: pointer.get(key) for key in expected} != expected or index["sha256"] != manifest["version"]:
         raise CatalogueError("Release pointer does not match its manifest")
@@ -210,6 +221,7 @@ def load_release(directory: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 # Database access. psycopg is imported lazily so unit tests run without it.
+
 
 def _connect():
     database_url = os.environ.get("DATABASE_URL")
@@ -321,7 +333,8 @@ def set_pointer(conn, pointer: dict[str, Any], apply: bool) -> dict[str, Any]:
             if current is not None and current[1] > pointer["revision"]:
                 raise CatalogueError("A newer catalogue release is already published")
             result = {
-                "headRevision": head, "retentionFloor": floor,
+                "headRevision": head,
+                "retentionFloor": floor,
                 "previous": None if current is None else {"version": current[0], "revision": current[1]},
                 "next": {"version": pointer["version"], "revision": pointer["revision"]},
                 "changesToReplay": head - pointer["revision"],
@@ -337,8 +350,15 @@ def set_pointer(conn, pointer: dict[str, Any], apply: bool) -> dict[str, Any]:
                 "ON CONFLICT (singleton) DO UPDATE SET version = EXCLUDED.version, revision = EXCLUDED.revision, "
                 "minimum_reader = EXCLUDED.minimum_reader, index_url = EXCLUDED.index_url, index_sha256 = EXCLUDED.index_sha256, "
                 "index_bytes = EXCLUDED.index_bytes, park_count = EXCLUDED.park_count, published_at = EXCLUDED.published_at",
-                (pointer["version"], pointer["revision"], pointer["minimumReader"], pointer["indexUrl"],
-                 pointer["indexSha256"], pointer["indexBytes"], pointer["parkCount"]),
+                (
+                    pointer["version"],
+                    pointer["revision"],
+                    pointer["minimumReader"],
+                    pointer["indexUrl"],
+                    pointer["indexSha256"],
+                    pointer["indexBytes"],
+                    pointer["parkCount"],
+                ),
             )
             return {**result, "result": "applied"}
 

@@ -95,10 +95,11 @@ function readEnv(): WebAppEnv {
   const fullscreen = !!document.fullscreenElement;
   // A tab put in full screen also matches display-mode: fullscreen, so only count it as
   // installed when no element holds the Fullscreen API.
-  const installed = installedNow
-    || media("(display-mode: standalone)")
-    || (media("(display-mode: fullscreen)") && !fullscreen)
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const installed =
+    installedNow ||
+    media("(display-mode: standalone)") ||
+    (media("(display-mode: fullscreen)") && !fullscreen) ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return {
     native: false,
     installed,

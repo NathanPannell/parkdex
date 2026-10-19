@@ -1,7 +1,16 @@
 import { HttpError } from "../validation.js";
 import { createProgressStore, type ProgressStore } from "./progress-store.js";
 import { deleteAccountData, handlePhotoRequest, isPhotoRoute, type PhotoDependencies } from "./photos.js";
-import type { AccountAuthContext, ClaimDisplay, ClaimDisplayRecord, ClaimPayload, ClaimRecord, ParkSnapshot, PhotoCrop, ProgressEnv } from "./progress-types.js";
+import type {
+  AccountAuthContext,
+  ClaimDisplay,
+  ClaimDisplayRecord,
+  ClaimPayload,
+  ClaimRecord,
+  ParkSnapshot,
+  PhotoCrop,
+  ProgressEnv,
+} from "./progress-types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PARK_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -41,7 +50,14 @@ function errorResponse(error: unknown): Response {
   if (error instanceof HttpError) {
     return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status);
   }
-  return json({ error: { code: "service_unavailable", message: "Progress service is unavailable." }, code: "service_unavailable", message: "Progress service is unavailable." }, 503);
+  return json(
+    {
+      error: { code: "service_unavailable", message: "Progress service is unavailable." },
+      code: "service_unavailable",
+      message: "Progress service is unavailable.",
+    },
+    503,
+  );
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -69,13 +85,32 @@ export function validateParkSnapshot(value: unknown, parkId: string): ParkSnapsh
   const biome = value.biome;
   const shape = value.shape;
   const rarity = value.rarity;
-  if (typeof category !== "string" || !CATEGORY.has(category) || typeof biome !== "string" || !BIOME.has(biome) ||
-    typeof shape !== "string" || !SHAPE.has(shape) || typeof rarity !== "string" || !RARITY.has(rarity)) {
+  if (
+    typeof category !== "string" ||
+    !CATEGORY.has(category) ||
+    typeof biome !== "string" ||
+    !BIOME.has(biome) ||
+    typeof shape !== "string" ||
+    !SHAPE.has(shape) ||
+    typeof rarity !== "string" ||
+    !RARITY.has(rarity)
+  ) {
     throw new HttpError(400, "invalid_request", "Invalid park snapshot.");
   }
-  if (typeof value.lat !== "number" || !Number.isFinite(value.lat) || value.lat < -90 || value.lat > 90 ||
-    typeof value.lng !== "number" || !Number.isFinite(value.lng) || value.lng < -180 || value.lng > 180 ||
-    typeof value.seed !== "number" || !Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 1_000_000) {
+  if (
+    typeof value.lat !== "number" ||
+    !Number.isFinite(value.lat) ||
+    value.lat < -90 ||
+    value.lat > 90 ||
+    typeof value.lng !== "number" ||
+    !Number.isFinite(value.lng) ||
+    value.lng < -180 ||
+    value.lng > 180 ||
+    typeof value.seed !== "number" ||
+    !Number.isSafeInteger(value.seed) ||
+    value.seed < 0 ||
+    value.seed > 1_000_000
+  ) {
     throw new HttpError(400, "invalid_request", "Invalid park snapshot.");
   }
   const scene = value.scene === null ? null : boundedText(value.scene, "park scene", 80);
@@ -97,7 +132,7 @@ export function validateParkSnapshot(value: unknown, parkId: string): ParkSnapsh
   };
 }
 
-function validateClaimBody(value: unknown, claimId: string): Omit<ClaimPayload, "claimId"> {
+function validateClaimBody(value: unknown, _claimId: string): Omit<ClaimPayload, "claimId"> {
   const keys = ["parkId", "claimedAt", "parkSnapshot", "contentReleaseId"];
   if (!record(value) || !hasExactKeys(value, keys)) throw new HttpError(400, "invalid_request", "Invalid claim.");
   const parkId = boundedText(value.parkId, "park id", 160);
@@ -120,8 +155,7 @@ function validateCrop(value: unknown): PhotoCrop | null {
     throw new HttpError(400, "invalid_request", "Invalid photo crop.");
   }
   const crop = { x: x as number, y: y as number, width: width as number, height: height as number };
-  if (crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0 ||
-    crop.x + crop.width > 1 + CROP_EPSILON || crop.y + crop.height > 1 + CROP_EPSILON) {
+  if (crop.x < 0 || crop.y < 0 || crop.width <= 0 || crop.height <= 0 || crop.x + crop.width > 1 + CROP_EPSILON || crop.y + crop.height > 1 + CROP_EPSILON) {
     throw new HttpError(400, "invalid_request", "A photo crop must lie within the photo.");
   }
   return crop;
@@ -186,12 +220,14 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 async function payloadHash(payload: Omit<ClaimPayload, "claimId">): Promise<string> {
-  return sha256Hex(JSON.stringify({
-    parkId: payload.parkId,
-    claimedAt: payload.claimedAt,
-    parkSnapshot: payload.parkSnapshot,
-    contentReleaseId: payload.contentReleaseId,
-  }));
+  return sha256Hex(
+    JSON.stringify({
+      parkId: payload.parkId,
+      claimedAt: payload.claimedAt,
+      parkSnapshot: payload.parkSnapshot,
+      contentReleaseId: payload.contentReleaseId,
+    }),
+  );
 }
 
 function apiClaim(claim: ClaimRecord) {
@@ -218,11 +254,17 @@ function decodeCursor(value: string, accountId: string): string {
   if (value.length > 1024 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new HttpError(400, "invalid_cursor", "Invalid claim cursor.");
   try {
     const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+    const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
     const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-    if (!record(parsed) || !hasExactKeys(parsed, ["accountId", "revision"]) || parsed.accountId !== accountId ||
-      typeof parsed.revision !== "string" || !/^(?:0|[1-9][0-9]{0,18})$/.test(parsed.revision) || BigInt(parsed.revision) > 9_223_372_036_854_775_807n) {
+    if (
+      !record(parsed) ||
+      !hasExactKeys(parsed, ["accountId", "revision"]) ||
+      parsed.accountId !== accountId ||
+      typeof parsed.revision !== "string" ||
+      !/^(?:0|[1-9][0-9]{0,18})$/.test(parsed.revision) ||
+      BigInt(parsed.revision) > 9_223_372_036_854_775_807n
+    ) {
       throw new Error("invalid cursor");
     }
     return parsed.revision;
@@ -308,25 +350,29 @@ export async function handleProgressRequest(
     }
     const store = dependencies.createStore?.(env) ?? createProgressStore(env);
     if (url.pathname === "/api/claims") {
-      if (request.method !== "GET") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+      if (request.method !== "GET")
+        return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
       return await listClaims(request, auth.accountId.toLowerCase(), store);
     }
     if (url.pathname === "/api/claims/display") {
-      if (request.method !== "GET") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+      if (request.method !== "GET")
+        return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
       return await listDisplays(request, auth.accountId.toLowerCase(), store);
     }
     const displayMatch = /^\/api\/claims\/([^/]+)\/display$/.exec(url.pathname);
     if (displayMatch) {
       const claimId = displayMatch[1].toLowerCase();
       if (!UUID.test(claimId)) return json({ error: { code: "not_found", message: "Claim not found." }, code: "not_found", message: "Claim not found." }, 404);
-      if (request.method !== "PUT") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+      if (request.method !== "PUT")
+        return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
       return await putDisplay(request, auth.accountId.toLowerCase(), claimId, store);
     }
     const match = /^\/api\/claims\/([^/]+)$/.exec(url.pathname);
     if (!match) return null;
     const claimId = match[1].toLowerCase();
     if (!UUID.test(claimId)) return json({ error: { code: "not_found", message: "Claim not found." }, code: "not_found", message: "Claim not found." }, 404);
-    if (request.method !== "PUT") return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
+    if (request.method !== "PUT")
+      return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
     return await putClaim(request, auth.accountId.toLowerCase(), claimId, store);
   } catch (error) {
     return errorResponse(error);

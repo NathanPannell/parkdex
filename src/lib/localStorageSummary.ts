@@ -25,7 +25,13 @@ export async function summarizeLocalStorage(runtime: ContentRuntime): Promise<Lo
   // The park index and boundaries are database rows, not files.
   const catalogueBytes = runtime.getCatalogueBytes?.() ?? 0;
   const summary: LocalStorageSummary = {
-    totalBytes: catalogueBytes, savedSquaresBytes: 0, mapCacheBytes: 0, mapCacheChunks: [], mapSupportBytes: 0, parkContentBytes: catalogueBytes, unusedBytes: 0,
+    totalBytes: catalogueBytes,
+    savedSquaresBytes: 0,
+    mapCacheBytes: 0,
+    mapCacheChunks: [],
+    mapSupportBytes: 0,
+    parkContentBytes: catalogueBytes,
+    unusedBytes: 0,
   };
   for (const file of files) {
     summary.totalBytes += file.size;

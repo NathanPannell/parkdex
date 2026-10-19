@@ -34,7 +34,9 @@ export function App() {
   }, [redirect]);
 
   useEffect(() => {
-    api<Health>("/api/health").then(setHealth).catch(() => setHealth(null));
+    api<Health>("/api/health")
+      .then(setHealth)
+      .catch(() => setHealth(null));
   }, []);
 
   useEffect(() => {
@@ -44,14 +46,16 @@ export function App() {
 
   useEffect(() => {
     if (!menuOpen) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
   // Build config always lives in production, whichever database the other pages are showing.
   const pinned = route?.database === "production";
-  const environment = pinned ? "production" : health?.environment ?? "";
+  const environment = pinned ? "production" : (health?.environment ?? "");
   const staging = environment === "staging";
 
   // A cookie, not local state, so screenshots and images load from the same database.
@@ -68,19 +72,37 @@ export function App() {
       <ConfirmProvider>
         <DashboardContext.Provider value={{ health, environment, switchDatabase }}>
           <div className={`shell${staging ? " shell--staging" : ""}`}>
-            <Sidebar route={route} health={health} environment={environment} open={menuOpen} onClose={() => setMenuOpen(false)} onSwitch={switchDatabase} counts={{ "/parks/review": pendingReviews }} />
+            <Sidebar
+              route={route}
+              health={health}
+              environment={environment}
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              onSwitch={switchDatabase}
+              counts={{ "/parks/review": pendingReviews }}
+            />
             <div className="workspace">
               <Topbar route={route} environment={environment} menuOpen={menuOpen} onMenu={() => setMenuOpen(true)} />
               <main className="main" id="main">
                 {staging && (
                   <div className="staging-banner" role="status">
                     <Icon name="alert" size={17} />
-                    <span>Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.</span>
+                    <span>
+                      Editing <strong>staging</strong> data. Only staging and builds pointed at staging see these changes.
+                    </span>
                   </div>
                 )}
                 {Page && <Page path={path} />}
                 {!Page && !redirect && (
-                  <EmptyState title="Nothing lives here" pose="sleep" action={<a className="button" href={DEFAULT_PATH} onClick={linkHandler(DEFAULT_PATH)}>Go to Feedback</a>}>
+                  <EmptyState
+                    title="Nothing lives here"
+                    pose="sleep"
+                    action={
+                      <a className="button" href={DEFAULT_PATH} onClick={linkHandler(DEFAULT_PATH)}>
+                        Go to Feedback
+                      </a>
+                    }
+                  >
                     <p className="muted">The page {path} is not part of the dashboard.</p>
                   </EmptyState>
                 )}

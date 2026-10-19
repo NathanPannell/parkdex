@@ -38,10 +38,21 @@ function Podium({ players, myHandle }: { players: LeaderboardRow[]; myHandle: st
               transition={{ ...bouncy, delay: 0.1 + column * 0.08 + (place === 0 ? 0.15 : 0) }}
             >
               <span className="game-podium__flag">
-                <FlagPin seed={row.flagSeed} patches={row.patches} size={place === 0 ? 70 : 56} showAge={false} className="is-waving-pin" label={`Flag of @${row.handle}`} />
+                <FlagPin
+                  seed={row.flagSeed}
+                  patches={row.patches}
+                  size={place === 0 ? 70 : 56}
+                  showAge={false}
+                  className="is-waving-pin"
+                  label={`Flag of @${row.handle}`}
+                />
               </span>
-              <strong className="game-podium__handle" style={handleFit(row.handle)}>@{row.handle}</strong>
-              <span className="game-podium__score">{formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}</span>
+              <strong className="game-podium__handle" style={handleFit(row.handle)}>
+                @{row.handle}
+              </strong>
+              <span className="game-podium__score">
+                {formatScore(row.score)} {row.score === 1 ? "pt" : "pts"}
+              </span>
               <motion.span
                 className={`game-podium__block game-podium__block--${place + 1}`}
                 initial={{ height: 0 }}
@@ -128,31 +139,41 @@ export function Leaderboard() {
                 onClick={() => setTab(name)}
               >
                 {name === "everyone" ? "Everyone" : "Friends"}
-                {tab === name && <motion.span layoutId="board-tab-pill" className="board-tabs__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
+                {tab === name && (
+                  <motion.span layoutId="board-tab-pill" className="board-tabs__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />
+                )}
               </button>
             ))}
           </div>
         )}
         {showFriends ? (
-          <div id="board-panel" role="tabpanel" aria-labelledby="board-tab-friends" className="board-panel"><FriendsBoard /></div>
+          <div id="board-panel" role="tabpanel" aria-labelledby="board-tab-friends" className="board-panel">
+            <FriendsBoard />
+          </div>
         ) : board.status === "offline" || board.status === "error" ? (
           <section className="account-card card game-empty" role="alert">
             <Kip size={64} pose="think" />
             <h2>{board.status === "offline" ? "The leaderboard needs a connection" : "The leaderboard didn't load"}</h2>
             <p className="account-help">{board.status === "offline" ? "Connect to the internet to see who's ahead." : board.message}</p>
-            <motion.button whileTap={press} className="btn btn--paper btn--block" onClick={() => void load()}><Icon name="refresh" /> Try again</motion.button>
+            <motion.button whileTap={press} className="btn btn--paper btn--block" onClick={() => void load()}>
+              <Icon name="refresh" /> Try again
+            </motion.button>
           </section>
         ) : board.status === "loading" && board.players.length === 0 ? (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Counting flags…</strong></div>
+            <div>
+              <strong>Counting flags…</strong>
+            </div>
           </section>
         ) : board.players.length === 0 ? (
           <section className="account-card card game-empty">
             <Kip size={72} pose="cheer" />
             <h2>No flags yet</h2>
             <p className="account-help">Be the first to plant a flag and top the board.</p>
-            <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => dispatch({ type: "go", screen: "map" })}><Icon name="map" size={18} /> Find a park</motion.button>
+            <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => dispatch({ type: "go", screen: "map" })}>
+              <Icon name="map" size={18} /> Find a park
+            </motion.button>
           </section>
         ) : (
           <>
@@ -170,11 +191,18 @@ export function Leaderboard() {
                   return (
                     <motion.li key={row.handle} variants={listItem}>
                       <div className={`game-row card ${mine ? "is-me" : ""}`} aria-current={mine ? "true" : undefined}>
-                        <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank || index + 4}`}>{row.rank || index + 4}</span>
+                        <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank || index + 4}`}>
+                          {row.rank || index + 4}
+                        </span>
                         <Flag seed={row.flagSeed} patches={row.patches} size={40} />
                         <span className="game-row__name">
-                          <strong style={handleFit(mine ? `${row.handle} (you)` : row.handle)}>@{row.handle}{mine ? " (you)" : ""}</strong>
-                          <span>{row.parksHeld} {row.parksHeld === 1 ? "park" : "parks"} held</span>
+                          <strong style={handleFit(mine ? `${row.handle} (you)` : row.handle)}>
+                            @{row.handle}
+                            {mine ? " (you)" : ""}
+                          </strong>
+                          <span>
+                            {row.parksHeld} {row.parksHeld === 1 ? "park" : "parks"} held
+                          </span>
                         </span>
                         <span className="game-row__score">
                           <strong>{formatScore(row.score)}</strong>

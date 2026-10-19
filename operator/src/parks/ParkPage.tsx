@@ -5,8 +5,20 @@ import { Card, formatCount, fullDate, Icon, Notice, PageHeader, Spinner, timeAgo
 import { MapEditor } from "./MapEditor";
 import { RegionSelect } from "./RegionSelect";
 import {
-  BIOMES, CATEGORIES, RARITIES, SHAPE_FOR_CATEGORY, SOURCE_LABELS, title,
-  type ChangeRow, type LivePark, type LiveParkDetail, type MultiPolygon, type ParkActivity, type Position, type RemovalPlan, type RemovalResult,
+  BIOMES,
+  CATEGORIES,
+  RARITIES,
+  SHAPE_FOR_CATEGORY,
+  SOURCE_LABELS,
+  title,
+  type ChangeRow,
+  type LivePark,
+  type LiveParkDetail,
+  type MultiPolygon,
+  type ParkActivity,
+  type Position,
+  type RemovalPlan,
+  type RemovalResult,
 } from "./types";
 
 /**
@@ -31,7 +43,11 @@ function expectedOf(park: LiveParkDetail): LivePark {
 }
 
 function BackLink() {
-  return <a className="back-link" href="/parks" onClick={linkHandler("/parks")}><Icon name="chevron" size={14} className="flip" /> All parks</a>;
+  return (
+    <a className="back-link" href="/parks" onClick={linkHandler("/parks")}>
+      <Icon name="chevron" size={14} className="flip" /> All parks
+    </a>
+  );
 }
 
 function bytes(value: number): string {
@@ -65,7 +81,10 @@ function describeChange(change: ChangeRow, previous: Record<string, unknown> | n
   return (
     <span className="pp-diff">
       {keys.slice(0, 4).map((key) => (
-        <span key={key}><strong>{FIELD_LABELS[key] ?? key}</strong> {String(previous[key] ?? "").slice(0, 40) || "empty"} <Icon name="chevron" size={11} /> {String(change.value![key] ?? "").slice(0, 40) || "empty"}</span>
+        <span key={key}>
+          <strong>{FIELD_LABELS[key] ?? key}</strong> {String(previous[key] ?? "").slice(0, 40) || "empty"} <Icon name="chevron" size={11} />{" "}
+          {String(change.value![key] ?? "").slice(0, 40) || "empty"}
+        </span>
       ))}
       {keys.length > 4 && <span>and {keys.length - 4} more</span>}
     </span>
@@ -79,16 +98,28 @@ function History({ history }: { history: ChangeRow[] }) {
   return (
     <div className="table-wrap pp-history">
       <table className="table table--dense">
-        <thead><tr><th scope="col" style={{ width: 64 }}>Rev</th><th scope="col" style={{ width: 96 }}>When</th><th scope="col">Change</th></tr></thead>
+        <thead>
+          <tr>
+            <th scope="col" style={{ width: 64 }}>
+              Rev
+            </th>
+            <th scope="col" style={{ width: 96 }}>
+              When
+            </th>
+            <th scope="col">Change</th>
+          </tr>
+        </thead>
         <tbody>
           {history.map((change) => {
             const index = parkValues.indexOf(change);
-            const previous = index >= 0 ? parkValues[index + 1]?.value ?? null : null;
+            const previous = index >= 0 ? (parkValues[index + 1]?.value ?? null) : null;
             return (
               <tr key={`${change.revision}-${change.entity}`}>
                 <td className="pp-num">{change.revision}</td>
                 <td title={fullDate(change.at)}>{timeAgo(change.at)}</td>
-                <td><span className={`pp-op pp-op--${change.operation}`}>{change.entity}</span> {describeChange(change, previous)}</td>
+                <td>
+                  <span className={`pp-op pp-op--${change.operation}`}>{change.entity}</span> {describeChange(change, previous)}
+                </td>
               </tr>
             );
           })}
@@ -119,22 +150,33 @@ export function ParkPage({ id }: { id: string }) {
     const controller = new AbortController();
     setError("");
     api<{ park: LiveParkDetail; activity: ParkActivity }>(path, { signal: controller.signal })
-      .then((loaded) => { setPark(loaded.park); setActivity(loaded.activity); setForm(formOf(loaded.park)); setPin(null); setGeometry(null); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorText(reason, "Could not load this park.")); });
+      .then((loaded) => {
+        setPark(loaded.park);
+        setActivity(loaded.activity);
+        setForm(formOf(loaded.park));
+        setPin(null);
+        setGeometry(null);
+      })
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setError(errorText(reason, "Could not load this park."));
+      });
     return () => controller.abort();
   }, [path, reload]);
 
   // Whether Remove from map can apply, so the button can say why not before anyone clicks it.
-  const loadRemoval = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const loaded = await api<{ plan: RemovalPlan }>(`${path}/remove-from-map`, { signal });
-      setRemoval(loaded.plan);
-      return loaded.plan;
-    } catch {
-      if (!signal?.aborted) setRemoval(null);
-      return null;
-    }
-  }, [path]);
+  const loadRemoval = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const loaded = await api<{ plan: RemovalPlan }>(`${path}/remove-from-map`, { signal });
+        setRemoval(loaded.plan);
+        return loaded.plan;
+      } catch {
+        if (!signal?.aborted) setRemoval(null);
+        return null;
+      }
+    },
+    [path],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -153,8 +195,22 @@ export function ParkPage({ id }: { id: string }) {
     void loadRemoval();
   }, [path, loadRemoval]);
 
-  if (error) return <section className="page"><BackLink /><Notice tone="error">{error}</Notice></section>;
-  if (!park || !form || !activity) return <section className="page"><BackLink /><div className="drawer__state"><Spinner /> Opening park...</div></section>;
+  if (error)
+    return (
+      <section className="page">
+        <BackLink />
+        <Notice tone="error">{error}</Notice>
+      </section>
+    );
+  if (!park || !form || !activity)
+    return (
+      <section className="page">
+        <BackLink />
+        <div className="drawer__state">
+          <Spinner /> Opening park...
+        </div>
+      </section>
+    );
 
   const changed = FORM_KEYS.filter((key) => form[key] !== park[key]);
   const pinChanged = Boolean(pin && (pin[0] !== park.lng || pin[1] !== park.lat));
@@ -173,7 +229,12 @@ export function ParkPage({ id }: { id: string }) {
     if (!park || !form || !dirty) return;
     const confirmed = await confirm({
       title: `Save changes to ${park.name}?`,
-      body: <p>Changing the {describe()}. {hidden ? "The park is hidden, so players see this only after you unhide it." : "Every player's app picks this up on its next content sync."}</p>,
+      body: (
+        <p>
+          Changing the {describe()}.{" "}
+          {hidden ? "The park is hidden, so players see this only after you unhide it." : "Every player's app picks this up on its next content sync."}
+        </p>
+      ),
       confirmLabel: "Save to Parkdex",
       icon: "check",
     });
@@ -212,7 +273,11 @@ export function ParkPage({ id }: { id: string }) {
   }
 
   const unhide = () => act("unhide", () => api(`${path}/unhide`, { method: "POST" }), `${park.name} is visible again`);
-  const hide = () => act("hide", () => api(`${path}/hide`, { method: "POST", body: JSON.stringify({ reason }) }), `${park.name} is hidden`, { label: "Undo", run: () => void unhide() });
+  const hide = () =>
+    act("hide", () => api(`${path}/hide`, { method: "POST", body: JSON.stringify({ reason }) }), `${park.name} is hidden`, {
+      label: "Undo",
+      run: () => void unhide(),
+    });
 
   async function remove() {
     if (!park || !activity) return;
@@ -225,13 +290,33 @@ export function ParkPage({ id }: { id: string }) {
         <>
           <p>This takes the park out of Parkdex in one content change. It cannot be undone from here.</p>
           <ul>
-            <li>Its outline and drive data are deleted. The change feed gets park, boundary and drive tombstones, so phones drop the park on their next sync.</li>
-            {founder ? <li>The founder <strong>@{founder.handle ?? "deleted account"}</strong>, the cover photo and their 10 founder points are deleted.</li> : <li>It has no founder or cover photo.</li>}
-            <li>{formatCount(visits.total)} {visits.total === 1 ? "visit" : "visits"} and {formatCount(tenures)} flag {tenures === 1 ? "tenure stays" : "tenures stay"} in the game history with no park to open.</li>
-            {flag?.up && <li>The flag held by @{flag.handle ?? "deleted"} keeps earning points until it falls on {day(flag.fallsAt)}.</li>}
+            <li>
+              Its outline and drive data are deleted. The change feed gets park, boundary and drive tombstones, so phones drop the park on their next sync.
+            </li>
+            {founder ? (
+              <li>
+                The founder <strong>@{founder.handle ?? "deleted account"}</strong>, the cover photo and their 10 founder points are deleted.
+              </li>
+            ) : (
+              <li>It has no founder or cover photo.</li>
+            )}
+            <li>
+              {formatCount(visits.total)} {visits.total === 1 ? "visit" : "visits"} and {formatCount(tenures)} flag{" "}
+              {tenures === 1 ? "tenure stays" : "tenures stay"} in the game history with no park to open.
+            </li>
+            {flag?.up && (
+              <li>
+                The flag held by @{flag.handle ?? "deleted"} keeps earning points until it falls on {day(flag.fallsAt)}.
+              </li>
+            )}
             <li>Parks already in a player's Dex keep showing from their saved copy.</li>
           </ul>
-          <p className="dialog__recommend"><Icon name="shield" size={15} /> {hidden ? "It is already hidden, which keeps everything and can be undone." : "Hiding keeps everything and can be undone. Prefer Hide unless the park should never have existed."}</p>
+          <p className="dialog__recommend">
+            <Icon name="shield" size={15} />{" "}
+            {hidden
+              ? "It is already hidden, which keeps everything and can be undone."
+              : "Hiding keeps everything and can be undone. Prefer Hide unless the park should never have existed."}
+          </p>
         </>
       ),
     });
@@ -253,8 +338,14 @@ export function ParkPage({ id }: { id: string }) {
     // Read again, so the popup counts what is there now.
     const plan = await loadRemoval();
     setBusy(null);
-    if (!plan) { toast.show("Could not check this park. Nothing was changed.", { tone: "error" }); return; }
-    if (plan.blocked || !plan.outline) { toast.show(plan.blocked?.message ?? "This park can't be removed from the map.", { tone: "error" }); return; }
+    if (!plan) {
+      toast.show("Could not check this park. Nothing was changed.", { tone: "error" });
+      return;
+    }
+    if (plan.blocked || !plan.outline) {
+      toast.show(plan.blocked?.message ?? "This park can't be removed from the map.", { tone: "error" });
+      return;
+    }
     const { outline, founder: planFounder, pendingReviews } = plan;
     const confirmed = await confirm({
       title: `Remove ${park.name} from the map?`,
@@ -265,17 +356,41 @@ export function ParkPage({ id }: { id: string }) {
         <>
           <p>This unfounds the park and takes it off the map in one change, so it can be founded again straight away.</p>
           <ul className="removal-list">
-            <li><strong>Removed from the map.</strong> The park, its outline and drive data get tombstones in one content revision, and phones drop it on their next sync.</li>
-            {planFounder
-              ? <li><strong>Founder @{planFounder.handle ?? "deleted account"} and the cover photo are cleared</strong>, with their 10 founder points.</li>
-              : <li>It has no founder or cover photo to clear.</li>}
-            {pendingReviews > 0
-              ? <li><strong>{formatCount(pendingReviews)} pending founding {pendingReviews === 1 ? "review is" : "reviews are"} closed.</strong> The player reads that the park was removed from the map before anyone reviewed it.</li>
-              : <li>No founding reviews are waiting for it.</li>}
-            <li><strong>The OpenStreetMap outline {outline.name ?? ""} ({outline.type} {outline.id}) is kept.</strong> The app offers it as not in Parkdex, and founding it publishes <code>{outline.parkId}</code>.</li>
-            <li>{formatCount(activity.visits.total)} {activity.visits.total === 1 ? "visit" : "visits"} and {formatCount(activity.tenures)} flag {activity.tenures === 1 ? "tenure stay" : "tenures stay"} as game history, as with Delete.</li>
+            <li>
+              <strong>Removed from the map.</strong> The park, its outline and drive data get tombstones in one content revision, and phones drop it on their
+              next sync.
+            </li>
+            {planFounder ? (
+              <li>
+                <strong>Founder @{planFounder.handle ?? "deleted account"} and the cover photo are cleared</strong>, with their 10 founder points.
+              </li>
+            ) : (
+              <li>It has no founder or cover photo to clear.</li>
+            )}
+            {pendingReviews > 0 ? (
+              <li>
+                <strong>
+                  {formatCount(pendingReviews)} pending founding {pendingReviews === 1 ? "review is" : "reviews are"} closed.
+                </strong>{" "}
+                The player reads that the park was removed from the map before anyone reviewed it.
+              </li>
+            ) : (
+              <li>No founding reviews are waiting for it.</li>
+            )}
+            <li>
+              <strong>
+                The OpenStreetMap outline {outline.name ?? ""} ({outline.type} {outline.id}) is kept.
+              </strong>{" "}
+              The app offers it as not in Parkdex, and founding it publishes <code>{outline.parkId}</code>.
+            </li>
+            <li>
+              {formatCount(activity.visits.total)} {activity.visits.total === 1 ? "visit" : "visits"} and {formatCount(activity.tenures)} flag{" "}
+              {activity.tenures === 1 ? "tenure stay" : "tenures stay"} as game history, as with Delete.
+            </li>
           </ul>
-          {!plan.audited && <p className="muted">This database has no park_removed analytics event yet (founders_003), so only the content change records it.</p>}
+          {!plan.audited && (
+            <p className="muted">This database has no park_removed analytics event yet (founders_003), so only the content change records it.</p>
+          )}
         </>
       ),
     });
@@ -299,22 +414,39 @@ export function ParkPage({ id }: { id: string }) {
       title: "Remove the founder and cover?",
       tone: "danger",
       confirmLabel: "Remove founder and cover",
-      body: <p>Removes <strong>@{founder.handle ?? "deleted account"}</strong> as the founder of {park.name}, deletes the cover photo and takes away their 10 founder points. The park stays, and the next player who stands in it with an approved photo can found it.</p>,
+      body: (
+        <p>
+          Removes <strong>@{founder.handle ?? "deleted account"}</strong> as the founder of {park.name}, deletes the cover photo and takes away their 10 founder
+          points. The park stays, and the next player who stands in it with an approved photo can found it.
+        </p>
+      ),
     });
     if (confirmed) await act("founder", () => api(`${path}/founder`, { method: "DELETE" }), "The founder and cover were removed");
   }
 
   async function replaceCover(file: File | undefined) {
     if (!park || !file) return;
-    if (file.type && file.type !== "image/jpeg") { toast.show("The cover must be a JPEG photo.", { tone: "error" }); return; }
+    if (file.type && file.type !== "image/jpeg") {
+      toast.show("The cover must be a JPEG photo.", { tone: "error" });
+      return;
+    }
     const confirmed = await confirm({
       title: "Replace the cover photo?",
       confirmLabel: "Replace cover",
       icon: "image",
-      body: <p>{file.name} ({bytes(file.size)}) becomes the public cover of {park.name}. Location and camera details are removed before it is stored. The founder stays.</p>,
+      body: (
+        <p>
+          {file.name} ({bytes(file.size)}) becomes the public cover of {park.name}. Location and camera details are removed before it is stored. The founder
+          stays.
+        </p>
+      ),
     });
     if (!confirmed) return;
-    await act("cover", async () => api(`${path}/cover`, { method: "PUT", body: JSON.stringify({ photo: { base64: await readBase64(file) } }) }), "The cover was replaced");
+    await act(
+      "cover",
+      async () => api(`${path}/cover`, { method: "PUT", body: JSON.stringify({ photo: { base64: await readBase64(file) } }) }),
+      "The cover was replaced",
+    );
   }
 
   const shownPin: Position = pin ?? [park.lng, park.lat];
@@ -326,14 +458,45 @@ export function ParkPage({ id }: { id: string }) {
       <PageHeader
         id="park-title"
         eyebrow={`${SOURCE_LABELS[activity.source]} · ${park.id}`}
-        title={<>{form.name || "Untitled park"} <span className={`pp-status${hidden ? " pp-status--hidden" : ""}`}>{status}</span></>}
-        lede={dirty ? `Unsaved: ${describe()}.` : hidden ? `Players do not see this park. ${hidden.reason}` : "This park is in players' apps. Edits stay here until you save."}
-        actions={<>
-          <button type="button" className="button button--ghost" onClick={() => { setForm(formOf(park)); setPin(null); setGeometry(null); }} disabled={!dirty || saving}>Discard changes</button>
-          <button type="button" className="button button--primary" onClick={() => void save()} disabled={!dirty || saving}>
-            {saving ? <><Spinner small /> Saving</> : <><Icon name="check" size={16} /> Save to Parkdex</>}
-          </button>
-        </>}
+        title={
+          <>
+            {form.name || "Untitled park"} <span className={`pp-status${hidden ? " pp-status--hidden" : ""}`}>{status}</span>
+          </>
+        }
+        lede={
+          dirty
+            ? `Unsaved: ${describe()}.`
+            : hidden
+              ? `Players do not see this park. ${hidden.reason}`
+              : "This park is in players' apps. Edits stay here until you save."
+        }
+        actions={
+          <>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => {
+                setForm(formOf(park));
+                setPin(null);
+                setGeometry(null);
+              }}
+              disabled={!dirty || saving}
+            >
+              Discard changes
+            </button>
+            <button type="button" className="button button--primary" onClick={() => void save()} disabled={!dirty || saving}>
+              {saving ? (
+                <>
+                  <Spinner small /> Saving
+                </>
+              ) : (
+                <>
+                  <Icon name="check" size={16} /> Save to Parkdex
+                </>
+              )}
+            </button>
+          </>
+        }
       />
 
       <div className="editor pp-grid">
@@ -342,36 +505,69 @@ export function ParkPage({ id }: { id: string }) {
             boundary={geometry ?? park.geometry}
             pin={shownPin}
             editable
-            onBoundary={(next) => { setGeometry(next); return true; }}
+            onBoundary={(next) => {
+              setGeometry(next);
+              return true;
+            }}
             onPin={setPin}
             fitKey={`${park.id}-${reload}`}
           />
           <p className="muted map-legend">
-            <span className="legend-pin" /> Pin {shownPin[1].toFixed(5)}, {shownPin[0].toFixed(5)}{pinChanged && " (moved, not saved)"}
+            <span className="legend-pin" /> Pin {shownPin[1].toFixed(5)}, {shownPin[0].toFixed(5)}
+            {pinChanged && " (moved, not saved)"}
             <span className="legend-boundary" /> Boundary{geometry && " (redrawn, not saved)"}
           </p>
           {!park.geometry && <Notice>This park has no boundary in the database.</Notice>}
 
           <Card title="Visits and flag" className="pp-card">
             <div className="pp-mini">
-              <div><span>Total visits</span><strong>{formatCount(activity.visits.total)}</strong></div>
-              <div><span>Last 30 days</span><strong>{formatCount(activity.visits.last30Days)}</strong></div>
-              <div><span>Players</span><strong>{formatCount(activity.visits.uniquePlayers)}</strong></div>
-              <div><span>Flag tenures</span><strong>{formatCount(activity.tenures)}</strong></div>
+              <div>
+                <span>Total visits</span>
+                <strong>{formatCount(activity.visits.total)}</strong>
+              </div>
+              <div>
+                <span>Last 30 days</span>
+                <strong>{formatCount(activity.visits.last30Days)}</strong>
+              </div>
+              <div>
+                <span>Players</span>
+                <strong>{formatCount(activity.visits.uniquePlayers)}</strong>
+              </div>
+              <div>
+                <span>Flag tenures</span>
+                <strong>{formatCount(activity.tenures)}</strong>
+              </div>
             </div>
             <div className={`pp-flag${flag?.up ? " is-up" : ""}`}>
               <Icon name="flag" size={18} />
-              {flag ? (flag.up ? (
-                <p><strong>@{flag.handle ?? "deleted account"}</strong> holds the flag since {day(flag.since)}. Last visit {timeAgo(flag.lastVisitAt)}; it falls on {day(flag.fallsAt)} without another visit.</p>
+              {flag ? (
+                flag.up ? (
+                  <p>
+                    <strong>@{flag.handle ?? "deleted account"}</strong> holds the flag since {day(flag.since)}. Last visit {timeAgo(flag.lastVisitAt)}; it
+                    falls on {day(flag.fallsAt)} without another visit.
+                  </p>
+                ) : (
+                  <p>
+                    The flag of <strong>@{flag.handle ?? "deleted account"}</strong> fell on {day(flag.fallsAt)}. The next visit plants a new one.
+                  </p>
+                )
               ) : (
-                <p>The flag of <strong>@{flag.handle ?? "deleted account"}</strong> fell on {day(flag.fallsAt)}. The next visit plants a new one.</p>
-              )) : <p>No flag is planted here.</p>}
+                <p>No flag is planted here.</p>
+              )}
             </div>
           </Card>
         </div>
 
         <div className="editor__main">
-          <Card title="Visibility" subtitle={hidden ? `Hidden ${timeAgo(hidden.hiddenAt)} · ${hidden.source === "operator" ? "by the operator" : "by a category rule"}` : "Live in players' apps"} className="pp-card">
+          <Card
+            title="Visibility"
+            subtitle={
+              hidden
+                ? `Hidden ${timeAgo(hidden.hiddenAt)} · ${hidden.source === "operator" ? "by the operator" : "by a category rule"}`
+                : "Live in players' apps"
+            }
+            className="pp-card"
+          >
             {hidden ? (
               <div className="pp-actions">
                 <p className="pp-reason">{hidden.reason}</p>
@@ -383,20 +579,31 @@ export function ParkPage({ id }: { id: string }) {
               <div className="pp-actions">
                 <label className="field pp-reason-field">
                   <span className="sr-only">Reason for hiding (optional)</span>
-                  <input value={reason} maxLength={500} placeholder="Reason (optional), for example: closed for repairs" onChange={(event) => setReason(event.target.value)} />
+                  <input
+                    value={reason}
+                    maxLength={500}
+                    placeholder="Reason (optional), for example: closed for repairs"
+                    onChange={(event) => setReason(event.target.value)}
+                  />
                 </label>
                 <button type="button" className="button" onClick={() => void hide()} disabled={busy !== null}>
                   {busy === "hide" ? <Spinner small /> : <Icon name="shield" size={16} />} Hide
                 </button>
               </div>
             )}
-            <p className="muted pp-help">{hidden ? "Unhiding sends the park back to phones with its current values." : "Hiding keeps the park, its visits and flags, and takes it off every player's map on their next sync. Undo at any time."}</p>
+            <p className="muted pp-help">
+              {hidden
+                ? "Unhiding sends the park back to phones with its current values."
+                : "Hiding keeps the park, its visits and flags, and takes it off every player's map on their next sync. Undo at any time."}
+            </p>
             <div className="pp-danger">
               <div>
                 <strong>Remove from map</strong>
-                <p className="muted">{removal?.blocked
-                  ? removal.blocked.message
-                  : "Unfounds the park and takes it off the map, but keeps its OpenStreetMap outline so it can be founded again."}</p>
+                <p className="muted">
+                  {removal?.blocked
+                    ? removal.blocked.message
+                    : "Unfounds the park and takes it off the map, but keeps its OpenStreetMap outline so it can be founded again."}
+                </p>
               </div>
               <button
                 type="button"
@@ -422,31 +629,62 @@ export function ParkPage({ id }: { id: string }) {
           <fieldset className="panel form-panel" disabled={saving}>
             <h3>Identity</h3>
             <div className="field-row">
-              <label className="field"><span>Name</span><input value={form.name} maxLength={140} onChange={(event) => set("name", event.target.value)} /></label>
-              <label className="field"><span>Short name</span><input value={form.short} maxLength={140} onChange={(event) => set("short", event.target.value)} /></label>
+              <label className="field">
+                <span>Name</span>
+                <input value={form.name} maxLength={140} onChange={(event) => set("name", event.target.value)} />
+              </label>
+              <label className="field">
+                <span>Short name</span>
+                <input value={form.short} maxLength={140} onChange={(event) => set("short", event.target.value)} />
+              </label>
             </div>
             <div className="field-row">
-              <label className="field"><span>Category</span>
+              <label className="field">
+                <span>Category</span>
                 <select value={form.category} onChange={(event) => set("category", event.target.value)}>
-                  {CATEGORIES.map((value) => <option key={value} value={value}>{title(value)}</option>)}
+                  {CATEGORIES.map((value) => (
+                    <option key={value} value={value}>
+                      {title(value)}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className="field"><span>Region</span><RegionSelect value={form.region} onChange={(value) => set("region", value)} /></label>
+              <label className="field">
+                <span>Region</span>
+                <RegionSelect value={form.region} onChange={(value) => set("region", value)} />
+              </label>
             </div>
             <div className="field">
               <span>Rarity</span>
               <div className="rarity-picker" role="radiogroup" aria-label="Rarity">
                 {RARITIES.map((value) => (
-                  <button key={value} type="button" role="radio" aria-checked={form.rarity === value} className={`rarity rarity--${value}${form.rarity === value ? " is-on" : ""}`} onClick={() => set("rarity", value)}>{value}</button>
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.rarity === value}
+                    className={`rarity rarity--${value}${form.rarity === value ? " is-on" : ""}`}
+                    onClick={() => set("rarity", value)}
+                  >
+                    {value}
+                  </button>
                 ))}
               </div>
             </div>
             <div className="field-row">
-              <label className="field"><span>Biome</span>
-                <select value={form.biome} onChange={(event) => set("biome", event.target.value)}>{BIOMES.map((value) => <option key={value} value={value}>{title(value)}</option>)}</select>
+              <label className="field">
+                <span>Biome</span>
+                <select value={form.biome} onChange={(event) => set("biome", event.target.value)}>
+                  {BIOMES.map((value) => (
+                    <option key={value} value={value}>
+                      {title(value)}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <div className="field"><span>Badge shape</span>
-                <p className="derived">{title(form.category === park.category ? park.shape : SHAPE_FOR_CATEGORY[form.category] ?? park.shape)}</p>
+              <div className="field">
+                <span>Badge shape</span>
+                <p className="derived">{title(form.category === park.category ? park.shape : (SHAPE_FOR_CATEGORY[form.category] ?? park.shape))}</p>
               </div>
             </div>
             <label className="field">
@@ -455,28 +693,67 @@ export function ParkPage({ id }: { id: string }) {
               <small className="muted counter">{form.blurb.length} / 800</small>
             </label>
             <dl className="pp-facts">
-              <div><dt>Seed</dt><dd>{park.seed}</dd></div>
-              <div><dt>Scene</dt><dd>{park.scene ?? "None"}</dd></div>
-              <div><dt>Pin</dt><dd>{park.lat.toFixed(6)}, {park.lng.toFixed(6)}</dd></div>
+              <div>
+                <dt>Seed</dt>
+                <dd>{park.seed}</dd>
+              </div>
+              <div>
+                <dt>Scene</dt>
+                <dd>{park.scene ?? "None"}</dd>
+              </div>
+              <div>
+                <dt>Pin</dt>
+                <dd>
+                  {park.lat.toFixed(6)}, {park.lng.toFixed(6)}
+                </dd>
+              </div>
             </dl>
           </fieldset>
 
           <Card
             title="Founder and cover"
-            subtitle={founder ? `${founder.source === "osm_new" ? "Founded as a new OpenStreetMap park" : "Founded as a catalogue park"} ${timeAgo(founder.foundedAt)}` : "Nobody has founded this park yet"}
+            subtitle={
+              founder
+                ? `${founder.source === "osm_new" ? "Founded as a new OpenStreetMap park" : "Founded as a catalogue park"} ${timeAgo(founder.foundedAt)}`
+                : "Nobody has founded this park yet"
+            }
             className="pp-card"
           >
             {founder ? (
               <div className="pp-founder">
-                <a className="pp-cover" href={`${path}/cover?v=${founder.photoSha256.slice(0, 12)}`} target="_blank" rel="noreferrer" title="Open the full cover">
-                  <img src={`${path}/cover?v=${founder.photoSha256.slice(0, 12)}`} alt={`Cover photo of ${park.name}`} width={founder.photoWidth} height={founder.photoHeight} />
+                <a
+                  className="pp-cover"
+                  href={`${path}/cover?v=${founder.photoSha256.slice(0, 12)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Open the full cover"
+                >
+                  <img
+                    src={`${path}/cover?v=${founder.photoSha256.slice(0, 12)}`}
+                    alt={`Cover photo of ${park.name}`}
+                    width={founder.photoWidth}
+                    height={founder.photoHeight}
+                  />
                 </a>
                 <div className="pp-founder__info">
-                  <p><Icon name="user" size={15} /> <strong>@{founder.handle ?? "deleted account"}</strong></p>
+                  <p>
+                    <Icon name="user" size={15} /> <strong>@{founder.handle ?? "deleted account"}</strong>
+                  </p>
                   <p className="muted">{fullDate(founder.foundedAt)}</p>
-                  <p className="muted">{founder.photoWidth} × {founder.photoHeight} · {bytes(founder.photoBytes)}</p>
+                  <p className="muted">
+                    {founder.photoWidth} × {founder.photoHeight} · {bytes(founder.photoBytes)}
+                  </p>
                   <div className="pp-founder__actions">
-                    <input ref={coverInput} type="file" accept="image/jpeg" hidden onChange={(event) => { void replaceCover(event.target.files?.[0]); event.target.value = ""; }} />
+                    <input
+                      ref={coverInput}
+                      type="file"
+                      accept="image/jpeg"
+                      hidden
+                      onChange={(event) => {
+                        void replaceCover(event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                    />
                     <button type="button" className="button button--small" onClick={() => coverInput.current?.click()} disabled={busy !== null}>
                       {busy === "cover" ? <Spinner small /> : <Icon name="upload" size={15} />} Replace cover
                     </button>
@@ -486,14 +763,22 @@ export function ParkPage({ id }: { id: string }) {
                   </div>
                 </div>
               </div>
-            ) : <p className="muted pp-empty">The first player to stand here with an approved photo becomes the founder, and their photo becomes the cover.</p>}
+            ) : (
+              <p className="muted pp-empty">The first player to stand here with an approved photo becomes the founder, and their photo becomes the cover.</p>
+            )}
           </Card>
 
           <Card title="Content history" subtitle={`The last ${activity.history.length} synchronized changes for this park`} className="pp-card" padded={false}>
             <History history={activity.history} />
           </Card>
 
-          <p className="muted reload-row">Someone else editing this park? <button type="button" className="text-button" onClick={() => setReload((value) => value + 1)}>Reload it</button> (drops unsaved changes).</p>
+          <p className="muted reload-row">
+            Someone else editing this park?{" "}
+            <button type="button" className="text-button" onClick={() => setReload((value) => value + 1)}>
+              Reload it
+            </button>{" "}
+            (drops unsaved changes).
+          </p>
         </div>
       </div>
     </section>

@@ -51,7 +51,7 @@ export function bakedAnalyticsConfig(): ProductAnalyticsConfig | null {
 /** PostHog speaks of production; content and API pointers call it `main`. */
 function environmentLabel(): string {
   const value = apiEnvironment();
-  return value === "main" ? "production" : value ?? "development";
+  return value === "main" ? "production" : (value ?? "development");
 }
 
 function applyIdentity(): void {
@@ -67,11 +67,14 @@ function adoptPersistedIdentity(posthog: PostHog): void {
 }
 
 /** Start the SDK once. Later calls, including with another key, keep the running instance. */
-export function startProductAnalytics(settings: ProductAnalyticsConfig | null, load: () => Promise<{ default: PostHog }> = () => import("posthog-js")): Promise<void> {
+export function startProductAnalytics(
+  settings: ProductAnalyticsConfig | null,
+  load: () => Promise<{ default: PostHog }> = () => import("posthog-js"),
+): Promise<void> {
   if (!settings || typeof window === "undefined") return Promise.resolve();
   starting ??= (async () => {
     try {
-      const installationId = currentInstallationId() ?? await loadInstallationId();
+      const installationId = currentInstallationId() ?? (await loadInstallationId());
       const { default: posthog } = await load();
       posthog.init(settings.key, {
         api_host: settings.host,

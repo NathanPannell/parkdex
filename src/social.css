@@ -80,10 +80,34 @@
   border: 5px solid var(--sun);
 }
 
-.qr-scanner__frame span:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 26px 0 0 0; }
-.qr-scanner__frame span:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-radius: 0 26px 0 0; }
-.qr-scanner__frame span:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 26px; }
-.qr-scanner__frame span:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 26px 0; }
+.qr-scanner__frame span:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 26px 0 0 0;
+}
+.qr-scanner__frame span:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+  border-radius: 0 26px 0 0;
+}
+.qr-scanner__frame span:nth-child(3) {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0 0 0 26px;
+}
+.qr-scanner__frame span:nth-child(4) {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+  border-radius: 0 0 26px 0;
+}
 
 .qr-scanner__frame.is-busy span {
   border-color: var(--moss);

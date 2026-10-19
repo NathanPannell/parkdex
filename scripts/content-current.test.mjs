@@ -36,17 +36,17 @@ async function invoke({ env = { CONTENT_CHANNEL: "staging" }, request = {}, upst
       fetchArgs = args;
       if (upstream instanceof Error) throw upstream;
       if (typeof upstream === "function") return upstream(...args);
-      return upstream ?? new Response(JSON.stringify(POINTER), {
-        status: 200,
-        headers: { "Content-Type": "application/json", ETag: '"pointer-v1"' },
-      });
+      return (
+        upstream ??
+        new Response(JSON.stringify(POINTER), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ETag: '"pointer-v1"' },
+        })
+      );
     },
   });
   const response = makeResponse();
-  await handler(
-    { method: "GET", headers: {}, ...request },
-    response,
-  );
+  await handler({ method: "GET", headers: {}, ...request }, response);
   return { response, fetchArgs };
 }
 

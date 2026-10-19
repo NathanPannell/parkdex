@@ -37,16 +37,15 @@ type ParkPoint = { lng: number; lat: number };
  * Boundary files holding a park within `radiusKm` of the point. Chunks are chosen by
  * their parks, not their bounding boxes, because some chunks span the country.
  */
-export function chunksNear(
-  chunks: readonly CatalogueChunkRef[],
-  parks: ReadonlyMap<string, ParkPoint>,
-  point: MapPoint,
-  radiusKm = NEARBY_GUIDE_KM,
-): string[] {
-  return chunks.filter((chunk) => chunk.parkIds.some((id) => {
-    const park = parks.get(id);
-    return !!park && distanceKm(point, [park.lng, park.lat]) <= radiusKm;
-  })).map((chunk) => chunk.path);
+export function chunksNear(chunks: readonly CatalogueChunkRef[], parks: ReadonlyMap<string, ParkPoint>, point: MapPoint, radiusKm = NEARBY_GUIDE_KM): string[] {
+  return chunks
+    .filter((chunk) =>
+      chunk.parkIds.some((id) => {
+        const park = parks.get(id);
+        return !!park && distanceKm(point, [park.lng, park.lat]) <= radiusKm;
+      }),
+    )
+    .map((chunk) => chunk.path);
 }
 
 /** Boundary files with parks inside the view, those with the most parks in view first, at most `limit`. */
@@ -56,13 +55,15 @@ export function chunksInView(
   [west, south, east, north]: MapBox,
   limit = VIEW_GUIDE_MAX_CHUNKS,
 ): string[] {
-  const counted = chunks.map((chunk) => ({
-    path: chunk.path,
-    count: chunk.parkIds.filter((id) => {
-      const park = parks.get(id);
-      return !!park && park.lng >= west && park.lng <= east && park.lat >= south && park.lat <= north;
-    }).length,
-  })).filter((entry) => entry.count > 0);
+  const counted = chunks
+    .map((chunk) => ({
+      path: chunk.path,
+      count: chunk.parkIds.filter((id) => {
+        const park = parks.get(id);
+        return !!park && park.lng >= west && park.lng <= east && park.lat >= south && park.lat <= north;
+      }).length,
+    }))
+    .filter((entry) => entry.count > 0);
   counted.sort((a, b) => b.count - a.count || a.path.localeCompare(b.path));
   return counted.slice(0, limit).map((entry) => entry.path);
 }

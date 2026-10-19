@@ -15,22 +15,24 @@ export function MyFlagViewer({ open, onClose }: { open: boolean; onClose: () => 
   const game = useGame();
   const player = game.me?.player ?? null;
   const badges = useFeatureFlag("badges");
-  const patches = badges ? game.me?.flagPatches ?? [] : [];
+  const patches = badges ? (game.me?.flagPatches ?? []) : [];
   const score = game.me?.score ?? 0;
   const slides: ViewerSlide[] = player
-    ? [{
-      key: "my-flag",
-      alt: `Flag of @${player.handle}${patches.length ? ` with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}` : ""}`,
-      render: (stage) => (
-        <div className="flag-view">
-          <Flag seed={player.flagSeed} size={flagViewSize(stage)} patches={patches} />
-          <div className="flag-view__name">
-            <strong>@{player.handle}</strong>
-            <span>{formatPoints(score)}</span>
-          </div>
-        </div>
-      ),
-    }]
+    ? [
+        {
+          key: "my-flag",
+          alt: `Flag of @${player.handle}${patches.length ? ` with ${patches.length} ${patches.length === 1 ? "badge" : "badges"}` : ""}`,
+          render: (stage) => (
+            <div className="flag-view">
+              <Flag seed={player.flagSeed} size={flagViewSize(stage)} patches={patches} />
+              <div className="flag-view__name">
+                <strong>@{player.handle}</strong>
+                <span>{formatPoints(score)}</span>
+              </div>
+            </div>
+          ),
+        },
+      ]
     : [];
   return <FullscreenViewer slides={slides} index={open ? 0 : null} onClose={onClose} label="Your flag" />;
 }

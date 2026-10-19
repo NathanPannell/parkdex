@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Publish one immutable Parkdex badge and one park metadata update."""
+
 from __future__ import annotations
 
 import argparse
@@ -203,10 +204,7 @@ def update_in_transaction(conn, park_update: ParkUpdate, asset: dict[str, object
                 if existing_asset is not None and not _descriptor_matches(existing_asset, asset):
                     raise PublishError("That scene slug already names a different immutable badge; use a new slug")
 
-            changed_fields = [
-                field for field in PARK_MUTABLE_FIELDS
-                if field in desired and current[field] != desired[field]
-            ]
+            changed_fields = [field for field in PARK_MUTABLE_FIELDS if field in desired and current[field] != desired[field]]
             if not changed_fields and (asset is None or existing_asset is not None):
                 return "already-current"
 
@@ -214,10 +212,7 @@ def update_in_transaction(conn, park_update: ParkUpdate, asset: dict[str, object
 
             asset_inserted = False
             if asset is not None and existing_asset is None:
-                descriptor_row = {
-                    key: asset[key]
-                    for key in ("logical_path", "object_key", "url", "sha256", "byte_size", "content_type")
-                }
+                descriptor_row = {key: asset[key] for key in ("logical_path", "object_key", "url", "sha256", "byte_size", "content_type")}
                 cursor.execute(
                     """
                     INSERT INTO public.r2_objects
@@ -253,10 +248,7 @@ def update_in_transaction(conn, park_update: ParkUpdate, asset: dict[str, object
 
 def _desired_values(park_update: ParkUpdate, current: dict[str, object], has_badge: bool) -> dict[str, object]:
     if park_update.full_record is not None:
-        ignored_changes = [
-            field for field in PARK_FIELDS
-            if field not in {"id", *PARK_MUTABLE_FIELDS} and park_update.full_record[field] != current[field]
-        ]
+        ignored_changes = [field for field in PARK_FIELDS if field not in {"id", *PARK_MUTABLE_FIELDS} and park_update.full_record[field] != current[field]]
         if ignored_changes:
             fields = ", ".join(ignored_changes)
             raise PublishError(f"This publisher only changes blurb, rarity, and scene; these full-record fields differ from the database: {fields}")
@@ -305,7 +297,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "mode": "apply" if args.apply else "dry-run",
         "park_id": park_update.park_id,
         "changes": dict(park_update.fields),
-        "asset": None if asset is None else {
+        "asset": None
+        if asset is None
+        else {
             "logical_path": asset["logical_path"],
             "object_key": asset["object_key"],
             "url": asset["url"],

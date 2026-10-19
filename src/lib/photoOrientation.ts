@@ -69,14 +69,22 @@ export function uprightSize(width: number, height: number, orientation: Orientat
  */
 export function orientationTransform(orientation: Orientation, width: number, height: number): [number, number, number, number, number, number] {
   switch (orientation) {
-    case 2: return [-1, 0, 0, 1, width, 0];
-    case 3: return [-1, 0, 0, -1, width, height];
-    case 4: return [1, 0, 0, -1, 0, height];
-    case 5: return [0, 1, 1, 0, 0, 0];
-    case 6: return [0, 1, -1, 0, height, 0];
-    case 7: return [0, -1, -1, 0, height, width];
-    case 8: return [0, -1, 1, 0, 0, width];
-    default: return [1, 0, 0, 1, 0, 0];
+    case 2:
+      return [-1, 0, 0, 1, width, 0];
+    case 3:
+      return [-1, 0, 0, -1, width, height];
+    case 4:
+      return [1, 0, 0, -1, 0, height];
+    case 5:
+      return [0, 1, 1, 0, 0, 0];
+    case 6:
+      return [0, 1, -1, 0, height, 0];
+    case 7:
+      return [0, -1, -1, 0, height, width];
+    case 8:
+      return [0, -1, 1, 0, 0, width];
+    default:
+      return [1, 0, 0, 1, 0, 0];
   }
 }
 
@@ -85,6 +93,10 @@ export function orientationTransform(orientation: Orientation, width: number, he
  * width and height. Mirror-only and half-turn codes keep the size, so they cannot be told apart
  * and are left to the decoder; camera apps write 1, 3, 6 or 8.
  */
-export function decoderIgnoredOrientation(orientation: Orientation, stored: { width: number; height: number }, decoded: { width: number; height: number }): boolean {
+export function decoderIgnoredOrientation(
+  orientation: Orientation,
+  stored: { width: number; height: number },
+  decoded: { width: number; height: number },
+): boolean {
   return orientation >= 5 && stored.width !== stored.height && decoded.width === stored.width && decoded.height === stored.height;
 }

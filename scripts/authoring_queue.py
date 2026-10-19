@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Operate the durable, single-flight Parkdex park enrichment queue."""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +20,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLISHER = ROOT / "scripts" / "publish_park_update.py"
+
+
 def _find_workspace_root(root: Path) -> Path:
     required = ("parkdex", "parkdex-landing", "parkdex-badge-mockup")
     for candidate in (root, *root.parents):
@@ -36,9 +39,21 @@ RARITIES = {"common", "uncommon", "rare", "epic", "legendary"}
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 JOB_COLUMNS = (
-    "rank", "park_id", "state", "lease_token", "lease_expires_at", "attempt_count",
-    "frozen_research", "render_calls_started", "run_manifest_path", "run_manifest_sha256",
-    "render_call_log", "selected_art", "publication_result", "published_at", "last_error",
+    "rank",
+    "park_id",
+    "state",
+    "lease_token",
+    "lease_expires_at",
+    "attempt_count",
+    "frozen_research",
+    "render_calls_started",
+    "run_manifest_path",
+    "run_manifest_sha256",
+    "render_call_log",
+    "selected_art",
+    "publication_result",
+    "published_at",
+    "last_error",
 )
 
 
@@ -125,16 +140,15 @@ def validate_research(value: Any) -> dict[str, Any]:
         seen_image_urls.add(normalized_url)
         seen_image_hashes.add(item["sha256"])
         normalized = dict(item)
-        normalized.update({"google_search_url": google_url, "image_url": image_url,
-                           "source_url": source_url, "local_path": str(path), "sha256": item["sha256"]})
+        normalized.update(
+            {"google_search_url": google_url, "image_url": image_url, "source_url": source_url, "local_path": str(path), "sha256": item["sha256"]}
+        )
         normalized_refs.append(normalized)
     fact_urls = value.get("fact_urls")
     if not isinstance(fact_urls, list) or not fact_urls:
         raise QueueError("research.fact_urls must contain at least one source URL")
     normalized_facts = [_https_url(item, f"research.fact_urls[{index}]") for index, item in enumerate(fact_urls, 1)]
-    dossier_path, dossier_size = _file_digest(
-        value.get("dossier_path"), value.get("dossier_sha256"), "research dossier"
-    )
+    dossier_path, dossier_size = _file_digest(value.get("dossier_path"), value.get("dossier_sha256"), "research dossier")
     prompts = value.get("prompts")
     if not isinstance(prompts, dict):
         raise QueueError("research.prompts must be an object")
@@ -156,13 +170,15 @@ def validate_research(value: Any) -> dict[str, Any]:
             normalized_inputs.append({**item, "local_path": str(Path(path_text).expanduser().resolve(strict=True))})
         normalized_prompts["image_inputs"] = normalized_inputs
     normalized = dict(value)
-    normalized.update({
-        "google_image_refs": normalized_refs,
-        "fact_urls": normalized_facts,
-        "dossier_path": str(dossier_path),
-        "dossier_sha256": value["dossier_sha256"],
-        "prompts": normalized_prompts,
-    })
+    normalized.update(
+        {
+            "google_image_refs": normalized_refs,
+            "fact_urls": normalized_facts,
+            "dossier_path": str(dossier_path),
+            "dossier_sha256": value["dossier_sha256"],
+            "prompts": normalized_prompts,
+        }
+    )
     return normalized
 
 
@@ -200,6 +216,7 @@ def validate_selected_art(value: Any) -> dict[str, Any]:
         raise QueueError("selected_art.desired.scene must match selected_art.scene_slug")
     try:
         from PIL import Image
+
         with path.open("rb") as stream:
             with Image.open(stream) as image:
                 if image.format != "WEBP":
@@ -236,22 +253,26 @@ def _prepared_generation_records(path_value: Path, rank: int, park_id: str) -> t
     if record.get("render_calls_started") != 5 or record.get("correction_calls_started") != 2:
         raise QueueError("prepared generation record must contain exactly three initial and two correction calls")
     final_review = record.get("final_review")
-    if not isinstance(final_review, dict) or final_review.get("render_calls") != 5 \
-            or final_review.get("correction_count") != 2 or final_review.get("further_generation_allowed") is not False:
+    if (
+        not isinstance(final_review, dict)
+        or final_review.get("render_calls") != 5
+        or final_review.get("correction_count") != 2
+        or final_review.get("further_generation_allowed") is not False
+    ):
         raise QueueError("prepared generation final_review does not confirm the fixed five-call budget")
     compositions = record.get("compositions")
     corrections = record.get("corrections")
-    if not isinstance(compositions, list) or len(compositions) != 3 \
-            or not isinstance(corrections, list) or len(corrections) != 2:
+    if not isinstance(compositions, list) or len(compositions) != 3 or not isinstance(corrections, list) or len(corrections) != 2:
         raise QueueError("prepared generation record must contain three initial and two correction entries")
     expected_initial = {"A", "B", "C"}
     if {item.get("composition_id") for item in compositions if isinstance(item, dict)} != expected_initial:
         raise QueueError("prepared initial composition ids must be A, B, and C")
     if any(not isinstance(item, dict) or item.get("revision") != 0 or item.get("status") != "generated" for item in compositions):
         raise QueueError("each initial prepared composition must have a generated output")
-    if any(not isinstance(item, dict) or item.get("composition_id") != "B"
-           or item.get("revision") != index or item.get("status") != "generated"
-           for index, item in enumerate(corrections, start=1)):
+    if any(
+        not isinstance(item, dict) or item.get("composition_id") != "B" or item.get("revision") != index or item.get("status") != "generated"
+        for index, item in enumerate(corrections, start=1)
+    ):
         raise QueueError("prepared correction entries must be generated Beacon Hill B revisions 1 and 2")
     selected = record.get("selected")
     if not isinstance(selected, dict) or selected.get("composition_id") != "B" or selected.get("revision") != 2:
@@ -261,20 +282,18 @@ def _prepared_generation_records(path_value: Path, rank: int, park_id: str) -> t
         raise QueueError("prepared selected WebP byte size does not match the generation record")
     selected_png = selected.get("png_path")
     final_correction = corrections[-1]
-    final_png_path, final_png_size = _file_digest(
-        final_correction.get("output_path"), final_correction.get("output_sha256"), "prepared final PNG"
-    )
+    final_png_path, final_png_size = _file_digest(final_correction.get("output_path"), final_correction.get("output_sha256"), "prepared final PNG")
     try:
         selected_png_path = Path(selected_png).expanduser().resolve(strict=True)
         selected_png_bytes = selected_png_path.read_bytes()
     except (OSError, TypeError) as exc:
         raise QueueError(f"Could not read prepared selected PNG ({type(exc).__name__})") from None
     selected_png_sha = hashlib.sha256(selected_png_bytes).hexdigest()
-    if selected_png_path.suffix.lower() != ".png" or selected_png_sha != final_correction.get("output_sha256") \
-            or len(selected_png_bytes) != final_png_size:
+    if selected_png_path.suffix.lower() != ".png" or selected_png_sha != final_correction.get("output_sha256") or len(selected_png_bytes) != final_png_size:
         raise QueueError("prepared selected PNG must be a byte-identical copy of the final correction output")
     try:
         from PIL import Image
+
         with Image.open(BytesIO(selected_png_bytes)) as image:
             if image.format != "PNG":
                 raise QueueError("prepared selected output is not a PNG")
@@ -321,15 +340,24 @@ def _prepared_generation_records(path_value: Path, rank: int, park_id: str) -> t
         calls.append(call)
     if selected_webp_path != Path(selected.get("webp_path")).expanduser().resolve(strict=True):
         raise QueueError("prepared selected WebP path changed during validation")
-    return record, source_record_sha, calls, {
-        "local_path": str(selected_webp_path), "sha256": selected["webp_sha256"],
-        "byte_size": selected_size, "png_path": str(selected_png_path),
-        "png_sha256": selected_png_sha, "final_correction_png_path": str(final_png_path),
-    }
+    return (
+        record,
+        source_record_sha,
+        calls,
+        {
+            "local_path": str(selected_webp_path),
+            "sha256": selected["webp_sha256"],
+            "byte_size": selected_size,
+            "png_path": str(selected_png_path),
+            "png_sha256": selected_png_sha,
+            "final_correction_png_path": str(final_png_path),
+        },
+    )
 
 
-def _prepare_prepared_manifests(rank: int, park_id: str, calls: list[dict[str, Any]], source_path: str,
-                                source_sha: str) -> tuple[list[dict[str, Any]], str, str]:
+def _prepare_prepared_manifests(
+    rank: int, park_id: str, calls: list[dict[str, Any]], source_path: str, source_sha: str
+) -> tuple[list[dict[str, Any]], str, str]:
     workdir = workdir_for(rank)
     try:
         workdir.mkdir(parents=True, exist_ok=True)
@@ -353,12 +381,19 @@ def _prepare_prepared_manifests(rank: int, park_id: str, calls: list[dict[str, A
             except OSError as exc:
                 raise QueueError(f"Could not persist prepared render manifest ({type(exc).__name__})") from None
         digest = hashlib.sha256(data).hexdigest()
-        history.append({
-            "origin": "prequeue-prepared", "call_index": call_index, "call": call,
-            "manifest_path": str(manifest_path), "manifest_sha256": digest,
-            "source_record_path": source_path, "source_record_sha256": source_sha,
-            "output_path": call["output_path"], "output_sha256": call["output_sha256"],
-        })
+        history.append(
+            {
+                "origin": "prequeue-prepared",
+                "call_index": call_index,
+                "call": call,
+                "manifest_path": str(manifest_path),
+                "manifest_sha256": digest,
+                "source_record_path": source_path,
+                "source_record_sha256": source_sha,
+                "output_path": call["output_path"],
+                "output_sha256": call["output_sha256"],
+            }
+        )
     last = history[-1]
     return history, last["manifest_path"], last["manifest_sha256"]
 
@@ -429,9 +464,7 @@ def verify_target(conn: Any, target: str, target_id: str | None, expected_host: 
     if target == "staging" and identity["host"] != CLONED_STAGING_HOST:
         raise QueueError("staging authoring is bound to the current Neon staging endpoint")
     with conn.cursor() as cursor:
-        cursor.execute(
-            "SELECT target_environment, target_id, database_host FROM public.park_enrichment_rollout WHERE singleton = true"
-        )
+        cursor.execute("SELECT target_environment, target_id, database_host FROM public.park_enrichment_rollout WHERE singleton = true")
         row = cursor.fetchone()
     if row is None:
         raise QueueError("park enrichment rollout receipt is missing; apply the owned staging or preview reset first")
@@ -440,9 +473,7 @@ def verify_target(conn: Any, target: str, target_id: str | None, expected_host: 
         raise QueueError("requested target does not match the immutable rollout receipt")
     marker_host = str(marker_host).lower().rstrip(".")
     inherited_staging_receipt = (
-        target == "staging" and target_id is None
-        and marker_host == CLONED_STAGING_SOURCE_HOST
-        and identity["host"] == CLONED_STAGING_HOST
+        target == "staging" and target_id is None and marker_host == CLONED_STAGING_SOURCE_HOST and identity["host"] == CLONED_STAGING_HOST
     )
     if marker_host != identity["host"] and not inherited_staging_receipt:
         raise QueueError("DATABASE_URL host does not match the immutable rollout receipt")
@@ -504,30 +535,38 @@ def _transferred_rank18(source_export: Path) -> dict[str, Any]:
         source = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         raise QueueError("Could not read the exact reviewed parent branch export") from None
-    if (source.get("schema") != "parkdex.kip-public-content-backup/v1"
-            or source.get("revision") != 26
-            or source.get("database", {}).get("host") != CLONED_STAGING_SOURCE_HOST
-            or source.get("target") != {"environment": "staging", "targetId": None}):
+    if (
+        source.get("schema") != "parkdex.kip-public-content-backup/v1"
+        or source.get("revision") != 26
+        or source.get("database", {}).get("host") != CLONED_STAGING_SOURCE_HOST
+        or source.get("target") != {"environment": "staging", "targetId": None}
+    ):
         raise QueueError("Parent branch export does not match the reviewed pre-cutover state")
     jobs = [row for row in source.get("tables", {}).get("park_enrichment_jobs", []) if row.get("rank") == 18]
     if len(jobs) != 1:
         raise QueueError("Parent branch export has no unique rank 18 job")
     job = jobs[0]
     art = job.get("selected_art")
-    if (job.get("park_id") != CLONED_STAGING_RANK18_PARK_ID or job.get("state") != "published"
-            or job.get("attempt_count") != 1 or job.get("render_calls_started") != 5
-            or not isinstance(job.get("frozen_research"), dict)
-            or not isinstance(job.get("render_call_log"), list) or len(job["render_call_log"]) != 5
-            or not isinstance(art, dict) or art.get("sha256") != CLONED_STAGING_RANK18_WEBP_SHA256):
+    if (
+        job.get("park_id") != CLONED_STAGING_RANK18_PARK_ID
+        or job.get("state") != "published"
+        or job.get("attempt_count") != 1
+        or job.get("render_calls_started") != 5
+        or not isinstance(job.get("frozen_research"), dict)
+        or not isinstance(job.get("render_call_log"), list)
+        or len(job["render_call_log"]) != 5
+        or not isinstance(art, dict)
+        or art.get("sha256") != CLONED_STAGING_RANK18_WEBP_SHA256
+    ):
         raise QueueError("Parent branch rank 18 history does not match the reviewed publication")
     selected = validate_selected_art(art)
-    if selected["expected"] != {"blurb": "A new park to explore. Badge and park story coming soon.",
-                                 "rarity": "common", "scene": None}:
+    if selected["expected"] != {"blurb": "A new park to explore. Badge and park story coming soon.", "rarity": "common", "scene": None}:
         raise QueueError("Parent branch selected art has unexpected pre-publication park values")
     for record in job["render_call_log"]:
         _file_digest(record.get("manifest_path"), record.get("manifest_sha256"), "recorded render manifest")
-    if (job.get("run_manifest_path") != job["render_call_log"][-1].get("manifest_path")
-            or job.get("run_manifest_sha256") != job["render_call_log"][-1].get("manifest_sha256")):
+    if job.get("run_manifest_path") != job["render_call_log"][-1].get("manifest_path") or job.get("run_manifest_sha256") != job["render_call_log"][-1].get(
+        "manifest_sha256"
+    ):
         raise QueueError("Parent branch final render manifest does not match the call history")
     research = job["frozen_research"]
     _file_digest(research.get("research_json_path"), research.get("research_json_sha256"), "frozen research")
@@ -535,14 +574,12 @@ def _transferred_rank18(source_export: Path) -> dict[str, Any]:
     gallery_root = Path.home() / ".codex" / "skills" / "park-badges" / "selected-badges"
     try:
         gallery = json.loads((gallery_root / "index.json").read_text(encoding="utf-8"))
-        selection = next(entry for entry in gallery["selections"]
-                         if entry["id"] == "matheson-lake-regional-park/2026-09-29-e-r1")
+        selection = next(entry for entry in gallery["selections"] if entry["id"] == "matheson-lake-regional-park/2026-09-29-e-r1")
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, StopIteration):
         raise QueueError("The reviewed rank 18 gallery selection is unavailable") from None
     if selection["image_hashes"].get("final-flat-cartoon.webp") != art["sha256"]:
         raise QueueError("The reviewed rank 18 gallery hash differs from selected art")
-    _file_digest(str(gallery_root / selection["path"] / "final-flat-cartoon.webp"),
-                 art["sha256"], "archived selected WebP")
+    _file_digest(str(gallery_root / selection["path"] / "final-flat-cartoon.webp"), art["sha256"], "archived selected WebP")
     return job
 
 
@@ -561,8 +598,7 @@ def _live_rank18_expected() -> tuple[dict[str, Any], int]:
     return {key: rows[0].get(key) for key in ("blurb", "rarity", "scene")}, revision
 
 
-def adopt_transferred_rank18(conn: Any, source_export: Path, *, apply: bool = False,
-                             reviewed_plan_sha256: str | None = None) -> dict[str, Any]:
+def adopt_transferred_rank18(conn: Any, source_export: Path, *, apply: bool = False, reviewed_plan_sha256: str | None = None) -> dict[str, Any]:
     """Carry a reviewed parent-branch art audit into the cloned staging child."""
     source = _transferred_rank18(source_export)
     expected = source["selected_art"]["expected"]
@@ -584,25 +620,32 @@ def adopt_transferred_rank18(conn: Any, source_export: Path, *, apply: bool = Fa
             cursor.execute("SELECT count(*) FROM public.park_enrichment_jobs WHERE lease_token IS NOT NULL")
             if cursor.fetchone() != (0,):
                 raise QueueError("Staging queue has an active lease")
-            cursor.execute("SELECT blurb, rarity, scene FROM public.parks WHERE id = %s",
-                           (CLONED_STAGING_RANK18_PARK_ID,))
+            cursor.execute("SELECT blurb, rarity, scene FROM public.parks WHERE id = %s", (CLONED_STAGING_RANK18_PARK_ID,))
             if cursor.fetchone() != (expected["blurb"], expected["rarity"], expected["scene"]):
                 raise QueueError("Staging rank 18 park values changed")
-            cursor.execute("SELECT count(*) FROM public.r2_objects WHERE logical_path = %s",
-                           ("art/badges/scenes/matheson-lake-sandy-beach.webp",))
+            cursor.execute("SELECT count(*) FROM public.r2_objects WHERE logical_path = %s", ("art/badges/scenes/matheson-lake-sandy-beach.webp",))
             if cursor.fetchone() != (0,):
                 raise QueueError("Staging rank 18 scene asset already exists")
             current = _select_job(cursor, 18, lock=True)
-            if (current is None or current["park_id"] != CLONED_STAGING_RANK18_PARK_ID
-                    or current["state"] != "queued" or current["attempt_count"] != 0
-                    or current["lease_token"] is not None or current["frozen_research"] is not None
-                    or current["render_calls_started"] != 0 or current["selected_art"] is not None):
+            if (
+                current is None
+                or current["park_id"] != CLONED_STAGING_RANK18_PARK_ID
+                or current["state"] != "queued"
+                or current["attempt_count"] != 0
+                or current["lease_token"] is not None
+                or current["frozen_research"] is not None
+                or current["render_calls_started"] != 0
+                or current["selected_art"] is not None
+            ):
                 raise QueueError("Staging rank 18 queue state changed")
-            plan = {"command": "adopt-transferred-rank18",
-                    "source_export_sha256": CLONED_STAGING_SOURCE_EXPORT_SHA256,
-                    "selected_webp_sha256": CLONED_STAGING_RANK18_WEBP_SHA256,
-                    "render_calls_preserved": 5, "staging_revision": live_revision,
-                    "resulting_state": "ready"}
+            plan = {
+                "command": "adopt-transferred-rank18",
+                "source_export_sha256": CLONED_STAGING_SOURCE_EXPORT_SHA256,
+                "selected_webp_sha256": CLONED_STAGING_RANK18_WEBP_SHA256,
+                "render_calls_preserved": 5,
+                "staging_revision": live_revision,
+                "resulting_state": "ready",
+            }
             plan_sha256 = hashlib.sha256(_json_text(plan).encode("utf-8")).hexdigest()
             if not apply:
                 return {**plan, "mode": "dry-run", "planSha256": plan_sha256}
@@ -611,17 +654,25 @@ def adopt_transferred_rank18(conn: Any, source_export: Path, *, apply: bool = Fa
             cursor.execute("DELETE FROM public.park_enrichment_jobs WHERE rank = 18 AND state = 'queued' AND attempt_count = 0 AND lease_token IS NULL")
             if cursor.rowcount != 1:
                 raise QueueError("Staging rank 18 changed during adoption")
-            cursor.execute("""INSERT INTO public.park_enrichment_jobs
+            cursor.execute(
+                """INSERT INTO public.park_enrichment_jobs
                 (rank, park_id, state, lease_token, lease_expires_at, attempt_count,
                  frozen_research, render_calls_started, run_manifest_path, run_manifest_sha256,
                  render_call_log, selected_art, publication_result, published_at, last_error,
                  created_at, updated_at)
                 VALUES (18, %s, 'ready', NULL, NULL, %s, %s::jsonb, 5, %s, %s,
                         %s::jsonb, %s::jsonb, NULL, NULL, NULL, %s, clock_timestamp())""",
-                (CLONED_STAGING_RANK18_PARK_ID, source["attempt_count"],
-                 _json_text(source["frozen_research"]), source["run_manifest_path"],
-                 source["run_manifest_sha256"], _json_text(source["render_call_log"]),
-                 _json_text(source["selected_art"]), source["created_at"]))
+                (
+                    CLONED_STAGING_RANK18_PARK_ID,
+                    source["attempt_count"],
+                    _json_text(source["frozen_research"]),
+                    source["run_manifest_path"],
+                    source["run_manifest_sha256"],
+                    _json_text(source["render_call_log"]),
+                    _json_text(source["selected_art"]),
+                    source["created_at"],
+                ),
+            )
             if cursor.rowcount != 1:
                 raise QueueError("Staging rank 18 adoption did not insert exactly one job")
             return {**plan, "mode": "applied", "planSha256": plan_sha256}
@@ -657,9 +708,7 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
         "lease_expires_at": job["lease_expires_at"],
         "research_frozen": job["frozen_research"] is not None,
         "render_calls_started": job["render_calls_started"],
-        "selected_art": None if art is None else {
-            "scene_slug": art.get("scene_slug"), "sha256": art.get("sha256")
-        },
+        "selected_art": None if art is None else {"scene_slug": art.get("scene_slug"), "sha256": art.get("sha256")},
         "published_at": job["published_at"],
         "last_error": job["last_error"],
         "workdir": job["workdir"],
@@ -720,21 +769,30 @@ def inspect_queue(conn: Any, rank: int | None = None) -> dict[str, Any]:
     job_items = []
     if detailed:
         for item in jobs:
-            job_items.append({
-                **_job_progress(item),
-                "published_at": item["published_at"],
-                "last_error": item["last_error"],
-            })
+            job_items.append(
+                {
+                    **_job_progress(item),
+                    "published_at": item["published_at"],
+                    "last_error": item["last_error"],
+                }
+            )
     else:
         for row in jobs:
-            job_items.append({
-                "rank": row[0], "park_id": row[1], "state": row[2], "attempt_count": row[3],
-                "lease_expires_at": row[4].isoformat() if hasattr(row[4], "isoformat") else row[4],
-                "research_frozen": row[5], "render_calls_started": row[6],
-                "selected_art": None if row[7] is None else {"scene_slug": row[7], "sha256": row[8]},
-                "published_at": row[9].isoformat() if hasattr(row[9], "isoformat") else row[9],
-                "last_error": row[10], "workdir": str(workdir_for(row[0])),
-            })
+            job_items.append(
+                {
+                    "rank": row[0],
+                    "park_id": row[1],
+                    "state": row[2],
+                    "attempt_count": row[3],
+                    "lease_expires_at": row[4].isoformat() if hasattr(row[4], "isoformat") else row[4],
+                    "research_frozen": row[5],
+                    "render_calls_started": row[6],
+                    "selected_art": None if row[7] is None else {"scene_slug": row[7], "sha256": row[8]},
+                    "published_at": row[9].isoformat() if hasattr(row[9], "isoformat") else row[9],
+                    "last_error": row[10],
+                    "workdir": str(workdir_for(row[0])),
+                }
+            )
     return {
         "command": "status",
         "expected_count": expected,
@@ -833,9 +891,7 @@ def _set_expired_state(cursor: Any, job: dict[str, Any], next_state: str, reason
             (next_state, new_token, LEASE_SECONDS, rank, old_token),
         )
         resumed = _job(cursor.fetchone())
-        return {"outcome": "reclaimed", "job": _job_progress(resumed, include_token=True)} if resumed else {
-            "outcome": "superseded", "job": None
-        }
+        return {"outcome": "reclaimed", "job": _job_progress(resumed, include_token=True)} if resumed else {"outcome": "superseded", "job": None}
     if job["attempt_count"] >= 3 and next_state in {"queued", "leased", "ready"}:
         next_state = "needs_attention"
         reason = "lease expired after the third attempt"
@@ -902,21 +958,18 @@ def _recover_expired_locked(conn: Any, *, rank: int | None, resume: bool) -> dic
                 reconciled = _job(cursor.fetchone())
                 return {"outcome": "recovered_published", "job": _job_progress(reconciled) if reconciled else None}
             if _public_matches(cursor, job, desired=False) and _asset_is_absent_or_matches(cursor, job["selected_art"]):
-                return _set_expired_state(
-                    cursor, job, "ready", "publication lease expired before the park update was visible", resume=resume
-                )
+                return _set_expired_state(cursor, job, "ready", "publication lease expired before the park update was visible", resume=resume)
             return _set_expired_state(
-                cursor, job, "needs_attention",
-                "publication lease expired and database state diverged from expected and desired values", resume=False,
+                cursor,
+                job,
+                "needs_attention",
+                "publication lease expired and database state diverged from expected and desired values",
+                resume=False,
             )
         if state == "leased":
-            return _set_expired_state(
-                cursor, job, "leased", "lease expired before the job was checkpointed", resume=resume
-            )
+            return _set_expired_state(cursor, job, "leased", "lease expired before the job was checkpointed", resume=resume)
         if state == "ready":
-            return _set_expired_state(
-                cursor, job, "ready", "ready lease expired before publication", resume=resume
-            )
+            return _set_expired_state(cursor, job, "ready", "ready lease expired before publication", resume=resume)
         raise QueueError("job does not have a recoverable lease")
 
 
@@ -937,8 +990,7 @@ def claim_one(conn: Any) -> dict[str, Any]:
             )
             active = _job(cursor.fetchone())
             if active is not None:
-                return {"command": "claim", "outcome": "busy", "job": _job_progress(active),
-                        **_completion_summary(cursor)}
+                return {"command": "claim", "outcome": "busy", "job": _job_progress(active), **_completion_summary(cursor)}
 
             recovered = _recover_expired_locked(conn, rank=None, resume=True)
             if recovered is not None:
@@ -1148,9 +1200,12 @@ def checkpoint_render(conn: Any, rank: int, token: str, manifest_path: Path) -> 
                 if last.get("manifest_path") != str(path) or last.get("manifest_sha256") != digest or last.get("call") != call:
                     raise QueueError("render manifest does not match the last recorded checkpoint")
                 return {
-                    "command": "start-render", "outcome": "already_checkpointed",
-                    "render_calls_started": count, "call_index": count,
-                    "run_manifest_sha256": digest, "workdir": str(workdir_for(rank)),
+                    "command": "start-render",
+                    "outcome": "already_checkpointed",
+                    "render_calls_started": count,
+                    "call_index": count,
+                    "run_manifest_sha256": digest,
+                    "workdir": str(workdir_for(rank)),
                 }
             if call_index != count + 1:
                 raise QueueError("render manifest must describe the next uncheckpointed call")
@@ -1177,16 +1232,19 @@ def checkpoint_render(conn: Any, rank: int, token: str, manifest_path: Path) -> 
             if updated is None:
                 raise QueueError("job changed while recording the render checkpoint")
             return {
-                "command": "start-render", "outcome": "checkpointed",
-                "render_calls_started": updated[0], "call_index": updated[0],
-                "run_manifest_sha256": updated[1], "lease_expires_at": updated[2].isoformat(),
+                "command": "start-render",
+                "outcome": "checkpointed",
+                "render_calls_started": updated[0],
+                "call_index": updated[0],
+                "run_manifest_sha256": updated[1],
+                "lease_expires_at": updated[2].isoformat(),
                 "workdir": str(workdir_for(rank)),
             }
 
 
 def _preflight_selected_art(cursor: Any, rank: int, art: dict[str, Any]) -> None:
     cursor.execute(
-        "SELECT \"rank\" FROM public.park_enrichment_jobs WHERE selected_art->>'scene_slug' = %s AND \"rank\" <> %s",
+        'SELECT "rank" FROM public.park_enrichment_jobs WHERE selected_art->>\'scene_slug\' = %s AND "rank" <> %s',
         (art["scene_slug"], rank),
     )
     if cursor.fetchone() is not None:
@@ -1206,14 +1264,12 @@ def _require_initial_compositions(render_calls_started: int) -> None:
         raise QueueError("art selection requires all three initial render calls before review")
 
 
-def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Path,
-                   research: dict[str, Any], art: dict[str, Any]) -> dict[str, Any]:
+def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Path, research: dict[str, Any], art: dict[str, Any]) -> dict[str, Any]:
     if rank != 1:
         raise QueueError("adopt-prepared is restricted to rank 1 Beacon Hill")
     park_id = "municipal-city-of-victoria-1442"
     record, source_sha, calls, record_art = _prepared_generation_records(generation_record_path, rank, park_id)
-    if art["local_path"] != record_art["local_path"] or art["sha256"] != record_art["sha256"] \
-            or art["byte_size"] != record_art["byte_size"]:
+    if art["local_path"] != record_art["local_path"] or art["sha256"] != record_art["sha256"] or art["byte_size"] != record_art["byte_size"]:
         raise QueueError("selected-art JSON does not match the prepared generation record WebP")
     art = dict(art)
     art["prepared_png_path"] = record_art["png_path"]
@@ -1235,8 +1291,7 @@ def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Pat
                 raise QueueError("lease token is stale or does not own this job")
             if job["state"] != "leased" or job["attempt_count"] != 1:
                 raise QueueError("prepared adoption requires the first live Beacon Hill lease")
-            if job["frozen_research"] is not None or job["selected_art"] is not None \
-                    or job["render_calls_started"] != 0 or job["render_call_log"]:
+            if job["frozen_research"] is not None or job["selected_art"] is not None or job["render_calls_started"] != 0 or job["render_call_log"]:
                 raise QueueError("prepared adoption is allowed only before any queue research or render progress")
             cursor.execute(
                 "SELECT lease_expires_at > clock_timestamp() FROM public.park_enrichment_jobs WHERE rank = %s",
@@ -1264,14 +1319,12 @@ def adopt_prepared(conn: Any, rank: int, token: str, generation_record_path: Pat
                           frozen_research, render_calls_started, run_manifest_path, run_manifest_sha256,
                           render_call_log, selected_art, publication_result, published_at, last_error
                 """,
-                (_json_text(research), last_manifest_path, last_manifest_sha,
-                 _json_text(history), _json_text(art), LEASE_SECONDS, park_id, token),
+                (_json_text(research), last_manifest_path, last_manifest_sha, _json_text(history), _json_text(art), LEASE_SECONDS, park_id, token),
             )
             updated = _job(cursor.fetchone())
             if updated is None:
                 raise QueueError("job changed while adopting prepared Beacon Hill work")
-            return {"command": "adopt-prepared", "outcome": "adopted", "source_record_sha256": source_sha,
-                    "selected_art": art, "job": _job_progress(updated)}
+            return {"command": "adopt-prepared", "outcome": "adopted", "source_record_sha256": source_sha, "selected_art": art, "job": _job_progress(updated)}
 
 
 def select_art(conn: Any, rank: int, token: str, art: dict[str, Any]) -> dict[str, Any]:
@@ -1339,10 +1392,15 @@ def renew_lease(conn: Any, rank: int, token: str) -> dict[str, Any]:
     if row is None:
         raise QueueError("lease token is stale or the lease has expired")
     return {
-        "command": "renew", "outcome": "renewed", "rank": rank,
-        "state": row[0], "lease_expires_at": row[1].isoformat(),
-        "render_calls_started": row[2], "run_manifest_path": row[3],
-        "run_manifest_sha256": row[4], "workdir": str(workdir_for(rank)),
+        "command": "renew",
+        "outcome": "renewed",
+        "rank": rank,
+        "state": row[0],
+        "lease_expires_at": row[1].isoformat(),
+        "render_calls_started": row[2],
+        "run_manifest_path": row[3],
+        "run_manifest_sha256": row[4],
+        "workdir": str(workdir_for(rank)),
     }
 
 
@@ -1375,10 +1433,19 @@ def fail_job(conn: Any, rank: int, token: str, reason: str, *, permanent: bool) 
             row = cursor.fetchone()
     if row is None:
         raise QueueError("lease token is stale, expired, or publishing has already started")
-    return {"command": "fail", "outcome": row[2], "rank": row[0], "park_id": row[1],
-            "state": row[2], "attempt_count": row[3], "render_calls_started": row[4],
-            "run_manifest_path": row[5], "run_manifest_sha256": row[6], "selected_art": _json_value(row[7]),
-            "workdir": str(workdir_for(row[0]))}
+    return {
+        "command": "fail",
+        "outcome": row[2],
+        "rank": row[0],
+        "park_id": row[1],
+        "state": row[2],
+        "attempt_count": row[3],
+        "render_calls_started": row[4],
+        "run_manifest_path": row[5],
+        "run_manifest_sha256": row[6],
+        "selected_art": _json_value(row[7]),
+        "workdir": str(workdir_for(row[0])),
+    }
 
 
 def recover_one(conn: Any, rank: int | None, retry_attention: bool) -> dict[str, Any]:
@@ -1407,12 +1474,23 @@ def recover_one(conn: Any, rank: int | None, retry_attention: bool) -> dict[str,
                     (next_state, rank),
                 )
                 row = cursor.fetchone()
-                return {"command": "recover", "outcome": "retry_queued" if row else "superseded",
-                        "job": None if row is None else {
-                            "rank": row[0], "park_id": row[1], "state": row[2], "attempt_count": row[3],
-                            "render_calls_started": row[4], "run_manifest_path": row[5],
-                            "run_manifest_sha256": row[6], "selected_art": _json_value(row[7]),
-                            "workdir": str(workdir_for(row[0]))}}
+                return {
+                    "command": "recover",
+                    "outcome": "retry_queued" if row else "superseded",
+                    "job": None
+                    if row is None
+                    else {
+                        "rank": row[0],
+                        "park_id": row[1],
+                        "state": row[2],
+                        "attempt_count": row[3],
+                        "render_calls_started": row[4],
+                        "run_manifest_path": row[5],
+                        "run_manifest_sha256": row[6],
+                        "selected_art": _json_value(row[7]),
+                        "workdir": str(workdir_for(row[0])),
+                    },
+                }
             if rank is not None:
                 job = _select_job(cursor, rank, lock=True)
                 if job is None:
@@ -1435,9 +1513,17 @@ def _publisher_command(job: dict[str, Any], args: argparse.Namespace) -> dict[st
         input_path = Path(directory) / "park-update.json"
         input_path.write_text(_json_text(update) + "\n", encoding="utf-8")
         command = [
-            sys.executable, str(PUBLISHER), "--park-json", str(input_path),
-            "--badge-webp", art["local_path"], "--account-id", args.account_id,
-            "--bucket", args.bucket, "--apply",
+            sys.executable,
+            str(PUBLISHER),
+            "--park-json",
+            str(input_path),
+            "--badge-webp",
+            art["local_path"],
+            "--account-id",
+            args.account_id,
+            "--bucket",
+            args.bucket,
+            "--apply",
         ]
         if args.wrangler_config:
             command.extend(["--wrangler-config", str(args.wrangler_config.resolve())])
@@ -1456,8 +1542,9 @@ def _publisher_command(job: dict[str, Any], args: argparse.Namespace) -> dict[st
         return {"status": "publisher_succeeded", "result": parsed}
 
 
-def publish_job(conn: Any, rank: int, token: str, args: argparse.Namespace, database_url: str,
-                target: str, target_id: str | None, expected_host: str) -> dict[str, Any]:
+def publish_job(
+    conn: Any, rank: int, token: str, args: argparse.Namespace, database_url: str, target: str, target_id: str | None, expected_host: str
+) -> dict[str, Any]:
     with conn.transaction():
         with conn.cursor() as cursor:
             _lock_rollout(cursor)
@@ -1501,13 +1588,16 @@ def publish_job(conn: Any, rank: int, token: str, args: argparse.Namespace, data
                 if current is None:
                     raise QueueError("job disappeared during publication")
                 if current["lease_token"] != token or current["state"] != "publishing":
-                    return {"command": "publish", "outcome": "superseded", "rank": rank,
-                            "publisher": publisher_result}
+                    return {"command": "publish", "outcome": "superseded", "rank": rank, "publisher": publisher_result}
                 if _public_matches(cursor, current, desired=True):
                     reconciled = _mark_published(cursor, current, token, publisher_result, require_live=True)
-                    return {"command": "publish", "outcome": "published" if reconciled else "lease_expired",
-                            "rank": rank, "publisher": publisher_result,
-                            "verified": "park-and-asset" if reconciled else None}
+                    return {
+                        "command": "publish",
+                        "outcome": "published" if reconciled else "lease_expired",
+                        "rank": rank,
+                        "publisher": publisher_result,
+                        "verified": "park-and-asset" if reconciled else None,
+                    }
                 reason = "publisher did not produce the exact desired park values and selected asset"
                 if publisher_result["status"] != "publisher_succeeded":
                     reason = f"publisher did not complete ({publisher_result['status']})"
@@ -1529,8 +1619,7 @@ def publish_job(conn: Any, rank: int, token: str, args: argparse.Namespace, data
                     (next_state, reason, rank, token),
                 )
                 failed = cursor.fetchone() is not None
-                return {"command": "publish", "outcome": next_state if failed else "lease_expired",
-                        "rank": rank, "publisher": publisher_result}
+                return {"command": "publish", "outcome": next_state if failed else "lease_expired", "rank": rank, "publisher": publisher_result}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1557,8 +1646,7 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.add_argument("--research-json", type=Path, required=True)
     adopt.add_argument("--selected-art-json", type=Path, required=True)
 
-    transfer = subparsers.add_parser("adopt-transferred-rank18",
-                                     help="carry the reviewed rank 18 art into the cloned staging queue")
+    transfer = subparsers.add_parser("adopt-transferred-rank18", help="carry the reviewed rank 18 art into the cloned staging queue")
     transfer.add_argument("--source-export", type=Path, required=True)
     transfer.add_argument("--apply", action="store_true")
     transfer.add_argument("--reviewed-plan-sha256")
@@ -1654,8 +1742,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             raise QueueError("The reviewed adoption plan hash is valid only with --apply")
         with _connect(database_url) as conn:
             verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)
-            return adopt_transferred_rank18(conn, args.source_export, apply=args.apply,
-                                           reviewed_plan_sha256=args.reviewed_plan_sha256)
+            return adopt_transferred_rank18(conn, args.source_export, apply=args.apply, reviewed_plan_sha256=args.reviewed_plan_sha256)
     if args.command == "select-art":
         with _connect(database_url) as conn:
             verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)
@@ -1664,8 +1751,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         with _connect(database_url) as conn:
             verify_target(conn, args.target, args.target_id, args.expected_database_host, database_url)
             conn.commit()
-            return publish_job(conn, args.rank, args.lease_token, args, database_url,
-                               args.target, args.target_id, args.expected_database_host)
+            return publish_job(conn, args.rank, args.lease_token, args, database_url, args.target, args.target_id, args.expected_database_host)
     raise QueueError("unsupported command")
 
 

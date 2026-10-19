@@ -70,7 +70,14 @@ export function FoundingDecisionSheet({ decision, onDismiss }: { decision: Found
     <AnimatePresence>
       {decision && message && (
         <>
-          <motion.div key="decision-scrim" className="sheet-scrim takeover-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onDismiss} />
+          <motion.div
+            key="decision-scrim"
+            className="sheet-scrim takeover-scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onDismiss}
+          />
           <motion.div
             key={`decision-${decision.requestId}`}
             className="sheet takeover-sheet decision-sheet"
@@ -101,10 +108,14 @@ export function FoundingDecisionSheet({ decision, onDismiss }: { decision: Found
                   </div>
                 </div>
               )}
-              <p id="decision-text" className="decision-sheet__text">{message.text}</p>
+              <p id="decision-text" className="decision-sheet__text">
+                {message.text}
+              </p>
             </div>
             <div className="takeover-sheet__foot">
-              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={onDismiss}>Got it</motion.button>
+              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={onDismiss}>
+                Got it
+              </motion.button>
             </div>
           </motion.div>
         </>

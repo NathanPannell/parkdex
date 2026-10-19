@@ -49,7 +49,12 @@ export class MemoryAppConfigStore implements AppConfigStore {
 /** Fictional build rows so the section can be explored without a database. */
 export function demoApp(): AppDependencies {
   const builds = new MemoryAppConfigStore();
-  void builds.upsert("android", 0, { label: "Default", apiPointer: "production", flags: { mapDownloads: false }, notes: "Applies to every Android build without its own row." });
+  void builds.upsert("android", 0, {
+    label: "Default",
+    apiPointer: "production",
+    flags: { mapDownloads: false },
+    notes: "Applies to every Android build without its own row.",
+  });
   // Build 12 still carries a retired flag, as older rows in production do.
   void builds.upsert("android", 12, { label: "1.4 closed test", apiPointer: "staging", flags: { parkProposals: true, mapDownloads: true }, notes: "" });
   void builds.setUpdateRules("production", 9, 11);
@@ -85,16 +90,39 @@ export function demoOta(empty = false): AppDependencies {
       const bundle = bundles[index];
       generation = { ...generation, [channel]: generation[channel] + 1 };
       const pointer = {
-        schema: APP_BUNDLE_POINTER_SCHEMA, channel, generation: generation[channel], version: bundleVersion(bundle.commit, bundle.sha256),
-        bundleUrl: bundleUrlFor(CDN_ORIGIN, bundle.sha256), sha256: bundle.sha256, byteSize: bundle.size,
-        minimumNativeBuild: bundle.min, maximumNativeBuild: bundle.max, sourceCommit: bundle.commit, publishedAt: hours(at),
+        schema: APP_BUNDLE_POINTER_SCHEMA,
+        channel,
+        generation: generation[channel],
+        version: bundleVersion(bundle.commit, bundle.sha256),
+        bundleUrl: bundleUrlFor(CDN_ORIGIN, bundle.sha256),
+        sha256: bundle.sha256,
+        byteSize: bundle.size,
+        minimumNativeBuild: bundle.min,
+        maximumNativeBuild: bundle.max,
+        sourceCommit: bundle.commit,
+        publishedAt: hours(at),
       };
       cloud.put(pointerKey(channel), `${JSON.stringify(pointer, null, 2)}\n`, hours(at));
-      void history.record({
-        channel, generation: pointer.generation, previousGeneration: pointer.generation - 1, action, source, sha256: bundle.sha256,
-        previousSha256: previous[channel], version: pointer.version, byteSize: bundle.size, minimumNativeBuild: bundle.min,
-        maximumNativeBuild: bundle.max, sourceCommit: bundle.commit, outcome: "confirmed", note, publishedAt: hours(at),
-      }, hours(at));
+      void history.record(
+        {
+          channel,
+          generation: pointer.generation,
+          previousGeneration: pointer.generation - 1,
+          action,
+          source,
+          sha256: bundle.sha256,
+          previousSha256: previous[channel],
+          version: pointer.version,
+          byteSize: bundle.size,
+          minimumNativeBuild: bundle.min,
+          maximumNativeBuild: bundle.max,
+          sourceCommit: bundle.commit,
+          outcome: "confirmed",
+          note,
+          publishedAt: hours(at),
+        },
+        hours(at),
+      );
       previous[channel] = bundle.sha256;
     };
     publish("staging", 0, 399, "publish", "script", "First over-the-air bundle");

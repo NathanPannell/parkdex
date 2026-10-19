@@ -209,7 +209,9 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
       )}
 
       <div className="camera__bottom">
-        <div className="camera__hint" role={error && !taken ? "alert" : undefined}>{(!taken && error) || (busy ? "Getting your photo ready…" : hint)}</div>
+        <div className="camera__hint" role={error && !taken ? "alert" : undefined}>
+          {(!taken && error) || (busy ? "Getting your photo ready…" : hint)}
+        </div>
         <div className="camera__controls">
           <motion.button className="shutter" onClick={shoot} disabled={busy} whileTap={{ scale: 0.86 }} aria-label="Take photo">
             <span />
@@ -225,18 +227,7 @@ export function PhotoCapture({ place, hint, caption, onUse, onClose, aspect = CR
       </AnimatePresence>
 
       <AnimatePresence>
-        {taken && (
-          <PhotoCropper
-            key={taken.id}
-            photo={taken.photo}
-            caption={caption}
-            busy={busy}
-            error={error}
-            onRetake={retake}
-            onUse={use}
-            aspect={aspect}
-          />
-        )}
+        {taken && <PhotoCropper key={taken.id} photo={taken.photo} caption={caption} busy={busy} error={error} onRetake={retake} onUse={use} aspect={aspect} />}
       </AnimatePresence>
     </motion.div>
   );

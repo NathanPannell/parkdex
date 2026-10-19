@@ -100,15 +100,13 @@ export function mergeVisits(server: readonly ServerDexPark[], claims: readonly L
 
 /** Photos the player has not removed, newest first. */
 export function visiblePhotos(photos: readonly DexPhoto[]): DexPhoto[] {
-  return photos.filter((photo) => !photo.removed)
-    .sort((a, b) => Date.parse(b.claimedAt) - Date.parse(a.claimedAt) || b.claimId.localeCompare(a.claimId));
+  return photos.filter((photo) => !photo.removed).sort((a, b) => Date.parse(b.claimedAt) - Date.parse(a.claimedAt) || b.claimId.localeCompare(a.claimId));
 }
 
 /** The cover: the photo most recently chosen as cover, otherwise the newest photo. */
 export function coverPhoto(photos: readonly DexPhoto[]): DexPhoto | null {
   const shown = visiblePhotos(photos);
-  const chosen = shown.filter((photo) => photo.coverAt)
-    .sort((a, b) => Date.parse(b.coverAt!) - Date.parse(a.coverAt!))[0];
+  const chosen = shown.filter((photo) => photo.coverAt).sort((a, b) => Date.parse(b.coverAt!) - Date.parse(a.coverAt!))[0];
   return chosen ?? shown[0] ?? null;
 }
 

@@ -10,19 +10,21 @@ const mocks = vi.hoisted(() => ({
   },
   native: {
     getWifiStatus: vi.fn(async () => ({ wifi: true })),
-    request: vi.fn(async (): Promise<{
-      status: number;
-      statusText: string;
-      headers: Record<string, string>;
-      bodyBase64: string;
-      url: string;
-    }> => ({
-      status: 200,
-      statusText: "OK",
-      headers: { "content-type": "application/octet-stream", etag: "\"content-v1\"" },
-      bodyBase64: "AQID",
-      url: "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin",
-    })),
+    request: vi.fn(
+      async (): Promise<{
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        bodyBase64: string;
+        url: string;
+      }> => ({
+        status: 200,
+        statusText: "OK",
+        headers: { "content-type": "application/octet-stream", etag: '"content-v1"' },
+        bodyBase64: "AQID",
+        url: "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin",
+      }),
+    ),
     abort: vi.fn(async () => undefined),
   },
 }));
@@ -36,7 +38,14 @@ vi.mock("@capacitor/network", () => ({ Network: mocks.network }));
 
 import { setContentChannelOverride } from "../contentChannel";
 import { isContentTransportPaused } from "./contracts";
-import { contentFetch, getContentApiOrigin, getContentConnectivity, isContentDownloadAvailable, isContentWifiAvailable, subscribeContentConnectivity } from "./transport";
+import {
+  contentFetch,
+  getContentApiOrigin,
+  getContentConnectivity,
+  isContentDownloadAvailable,
+  isContentWifiAvailable,
+  subscribeContentConnectivity,
+} from "./transport";
 
 const API_URL = "https://staging.web.parkdex.app/api/content/current";
 const CDN_URL = "https://kip-assets.parkdex.app/releases/v1/map/island/000.bin";
@@ -57,7 +66,10 @@ describe("content transport", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("web-body", { status: 200 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("web-body", { status: 200 })),
+    );
     vi.stubGlobal("window", browserWindow);
     setBrowserNetwork({ online: true, type: "wifi", effectiveType: "4g" });
     mocks.capacitor.isNativePlatform.mockReturnValue(false);
@@ -72,7 +84,7 @@ describe("content transport", () => {
     mocks.native.request.mockResolvedValue({
       status: 200,
       statusText: "OK",
-      headers: { "content-type": "application/octet-stream", etag: "\"content-v1\"" },
+      headers: { "content-type": "application/octet-stream", etag: '"content-v1"' },
       bodyBase64: "AQID",
       url: CDN_URL,
     });
@@ -155,9 +167,11 @@ describe("content transport", () => {
     vi.stubEnv("VITE_CONTENT_API_URL", productionApiUrl);
     expect(getContentApiOrigin()).toBe("https://parkdex-kip.vercel.app");
     await contentFetch(productionApiUrl);
-    expect(mocks.native.request).toHaveBeenCalledWith(expect.objectContaining({
-      approvedApiOrigin: "https://parkdex-kip.vercel.app",
-    }));
+    expect(mocks.native.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedApiOrigin: "https://parkdex-kip.vercel.app",
+      }),
+    );
   });
 
   it("reads the remotely selected content database's host", async () => {
@@ -189,25 +203,36 @@ describe("content transport", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("web-body");
-    expect(globalThis.fetch).toHaveBeenCalledWith(new URL(API_URL), expect.objectContaining({
-      credentials: "omit",
-      redirect: "error",
-      headers: expect.any(Headers),
-    }));
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      new URL(API_URL),
+      expect.objectContaining({
+        credentials: "omit",
+        redirect: "error",
+        headers: expect.any(Headers),
+      }),
+    );
   });
 
   it("continues browser content when physical Wi-Fi is unknown or changes to cellular", async () => {
     setBrowserNetwork({ online: true, type: "wifi" });
     let releaseBody!: () => void;
-    const bodyStarted = new Promise<void>((resolve) => { releaseBody = resolve; });
+    const bodyStarted = new Promise<void>((resolve) => {
+      releaseBody = resolve;
+    });
     let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        streamController = controller;
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-        releaseBody();
-      },
-    }), { headers: { "content-type": "application/octet-stream" } }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              streamController = controller;
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+              releaseBody();
+            },
+          }),
+          { headers: { "content-type": "application/octet-stream" } },
+        ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const pending = contentFetch(ART_URL);
 
@@ -223,11 +248,17 @@ describe("content transport", () => {
 
   it("aborts browser content when the browser goes offline during a streaming response", async () => {
     setBrowserNetwork({ online: true, type: "wifi" });
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-      },
-    }), { headers: { "content-type": "application/octet-stream" } }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+            },
+          }),
+          { headers: { "content-type": "application/octet-stream" } },
+        ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const pending = contentFetch(CDN_URL);
 
@@ -240,7 +271,10 @@ describe("content transport", () => {
 
   it("bounds buffered browser content responses to four MiB", async () => {
     setBrowserNetwork({ online: true, type: "wifi" });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(4 * 1024 * 1024 + 1))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Uint8Array(4 * 1024 * 1024 + 1))),
+    );
 
     await expect(contentFetch(CDN_URL)).rejects.toThrow("exceeds its byte limit");
   });
@@ -278,16 +312,18 @@ describe("content transport", () => {
 
     const response = await contentFetch(CDN_URL, { headers: { Range: "bytes=0-3" } });
 
-    expect(mocks.native.request).toHaveBeenCalledWith(expect.objectContaining({
-      url: CDN_URL,
-      method: "GET",
-      approvedApiOrigin: "https://staging.web.parkdex.app",
-      approvedCdnOrigin: "https://kip-assets.parkdex.app",
-      maxResponseBytes: 4 * 1024 * 1024,
-      headers: { range: "bytes=0-3" },
-    }));
+    expect(mocks.native.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: CDN_URL,
+        method: "GET",
+        approvedApiOrigin: "https://staging.web.parkdex.app",
+        approvedCdnOrigin: "https://kip-assets.parkdex.app",
+        maxResponseBytes: 4 * 1024 * 1024,
+        headers: { range: "bytes=0-3" },
+      }),
+    );
     expect(response.url).toBe(CDN_URL);
-    expect(response.headers.get("etag")).toBe("\"content-v1\"");
+    expect(response.headers.get("etag")).toBe('"content-v1"');
     expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([1, 2, 3]);
   });
 
@@ -297,15 +333,15 @@ describe("content transport", () => {
     mocks.native.request.mockResolvedValue({
       status: 304,
       statusText: "Not Modified",
-      headers: { etag: "\"content-v1\"" },
+      headers: { etag: '"content-v1"' },
       bodyBase64: "",
       url: API_URL,
     });
 
-    const response = await contentFetch(API_URL, { headers: { "If-None-Match": "\"content-v1\"" } });
+    const response = await contentFetch(API_URL, { headers: { "If-None-Match": '"content-v1"' } });
 
     expect(response.status).toBe(304);
-    expect(response.headers.get("etag")).toBe("\"content-v1\"");
+    expect(response.headers.get("etag")).toBe('"content-v1"');
     expect(await response.arrayBuffer()).toHaveProperty("byteLength", 0);
   });
 
@@ -360,21 +396,21 @@ describe("content transport", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "Content requests stop when Parkdex leaves the foreground",
-    "Content requests require Parkdex to be in the foreground",
-  ])("treats the vc14 plugin's pause rejection %j as a cancellation, not a failure", async (message) => {
-    mocks.capacitor.isNativePlatform.mockReturnValue(true);
-    mocks.capacitor.getPlatform.mockReturnValue("android");
-    // Capacitor rejects a plugin call with an Error that carries the native message.
-    mocks.native.request.mockRejectedValue(new Error(message));
+  it.each(["Content requests stop when Parkdex leaves the foreground", "Content requests require Parkdex to be in the foreground"])(
+    "treats the vc14 plugin's pause rejection %j as a cancellation, not a failure",
+    async (message) => {
+      mocks.capacitor.isNativePlatform.mockReturnValue(true);
+      mocks.capacitor.getPlatform.mockReturnValue("android");
+      // Capacitor rejects a plugin call with an Error that carries the native message.
+      mocks.native.request.mockRejectedValue(new Error(message));
 
-    const error = await contentFetch(CDN_URL).catch((caught: unknown) => caught);
+      const error = await contentFetch(CDN_URL).catch((caught: unknown) => caught);
 
-    expect(error).toBeInstanceOf(DOMException);
-    expect((error as DOMException).name).toBe("AbortError");
-    expect(isContentTransportPaused(error)).toBe(true);
-  });
+      expect(error).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name).toBe("AbortError");
+      expect(isContentTransportPaused(error)).toBe(true);
+    },
+  );
 
   it("keeps other native failures and caller aborts as they are", async () => {
     mocks.capacitor.isNativePlatform.mockReturnValue(true);
@@ -420,11 +456,19 @@ describe("content transport", () => {
   it("times out a stalled browser response so content recovery can retry", async () => {
     vi.useFakeTimers();
     try {
-      vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-        start(controller) {
-          init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-        },
-      }))));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async (_input: RequestInfo | URL, init?: RequestInit) =>
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+                },
+              }),
+            ),
+        ),
+      );
       const pending = contentFetch(ART_URL);
       const result = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
       await vi.advanceTimersByTimeAsync(60_000);
@@ -434,10 +478,7 @@ describe("content transport", () => {
     }
   });
 
-  it.each([
-    { type: "cellular" },
-    { connectionApi: false },
-  ])("defers detailed maps without confirmed Wi-Fi while downloading art", async (network) => {
+  it.each([{ type: "cellular" }, { connectionApi: false }])("defers detailed maps without confirmed Wi-Fi while downloading art", async (network) => {
     setBrowserNetwork({ online: true, ...network });
     await expect(contentFetch(CDN_URL)).rejects.toMatchObject({ name: "WifiUnavailableError" });
     await expect(contentFetch(CDN_URL.replace("map/island/", "map%2Fisland%2F"))).rejects.toMatchObject({ name: "WifiUnavailableError" });
@@ -461,11 +502,16 @@ describe("content transport", () => {
   });
 
   it("aborts detailed map streaming when Wi-Fi changes to cellular", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-      },
-    })));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+            },
+          }),
+        ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const pending = contentFetch(CDN_URL);
     const result = expect(pending).rejects.toMatchObject({ name: "WifiUnavailableError" });

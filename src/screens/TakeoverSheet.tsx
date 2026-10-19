@@ -39,9 +39,11 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
     if (!latest || !game.accountId) return;
     setDismissedAt(latest);
     buzz(10);
-    void markTakeoversSeen(game.accountId, latest).then(() => game.refresh()).catch(() => {
-      // Unseen messages come back on the next open, which is the right outcome offline.
-    });
+    void markTakeoversSeen(game.accountId, latest)
+      .then(() => game.refresh())
+      .catch(() => {
+        // Unseen messages come back on the next open, which is the right outcome offline.
+      });
   };
 
   const sorted = [...takeovers].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
@@ -57,7 +59,14 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
     <AnimatePresence>
       {open && (
         <>
-          <motion.div key="scrim" className="sheet-scrim takeover-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={dismiss} />
+          <motion.div
+            key="scrim"
+            className="sheet-scrim takeover-scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={dismiss}
+          />
           <motion.div
             key="sheet"
             className="sheet takeover-sheet"
@@ -86,11 +95,18 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
                   <motion.li key={`${takeover.parkId}:${takeover.at}`} className="takeover-row" variants={listItem}>
                     <Flag seed={takeover.byFlagSeed} size={44} className="is-waving" />
                     <span>
-                      <strong>@{takeover.byHandle} took {park?.short ?? park?.name ?? "one of your parks"}</strong>
+                      <strong>
+                        @{takeover.byHandle} took {park?.short ?? park?.name ?? "one of your parks"}
+                      </strong>
                       <em>{timeAgo(takeover.at, game.serverNow())}</em>
                     </span>
                     {park && (
-                      <motion.button whileTap={press} className="btn btn--sm btn--paper takeover-row__go" onClick={() => takeBack(takeover.parkId)} aria-label={`Show ${park.short} on the map`}>
+                      <motion.button
+                        whileTap={press}
+                        className="btn btn--sm btn--paper takeover-row__go"
+                        onClick={() => takeBack(takeover.parkId)}
+                        aria-label={`Show ${park.short} on the map`}
+                      >
                         <Icon name="map" size={16} />
                       </motion.button>
                     )}
@@ -100,7 +116,9 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
             </motion.ul>
             <div className="takeover-sheet__foot">
               <p className="account-help">Visit a park again to take it back.</p>
-              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>Got it</motion.button>
+              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>
+                Got it
+              </motion.button>
             </div>
           </motion.div>
         </>

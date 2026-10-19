@@ -13,7 +13,11 @@ export function ContentGate({ overMap = false }: { overMap?: boolean }) {
         <Kip pose={view.showError ? "think" : "walk"} size={72} />
         <strong>{view.title}</strong>
         {view.message && <span>{view.message}</span>}
-        {view.showRetry && <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>Try again</button>}
+        {view.showRetry && (
+          <button className="btn btn--sm btn--paper" onClick={() => void runtime.retry()}>
+            Try again
+          </button>
+        )}
       </div>
     </div>
   );

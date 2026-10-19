@@ -17,7 +17,9 @@ export function useReviewCount(): number {
     let alive = true;
     const load = () => {
       api<{ available: boolean; pending: number }>("/api/parks/review/count")
-        .then((result) => { if (alive) setPending(result.available ? result.pending : 0); })
+        .then((result) => {
+          if (alive) setPending(result.available ? result.pending : 0);
+        })
         // A badge is not worth an error; the Review page says what went wrong.
         .catch(() => undefined);
     };

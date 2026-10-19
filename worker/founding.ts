@@ -64,7 +64,18 @@ export interface FoundExistingInput extends FoundCommon {
 export type FoundResult =
   | { status: "founded"; record: FoundedRecord }
   /** park_exists: the OpenStreetMap park was published another way meanwhile; found it as an existing park. */
-  | { status: "already_founded" | "park_exists" | "park_missing" | "park_hidden" | "blocked" | "attempt_reused" | "visit_failed" | "review_not_pending" | "account_unavailable" };
+  | {
+      status:
+        | "already_founded"
+        | "park_exists"
+        | "park_missing"
+        | "park_hidden"
+        | "blocked"
+        | "attempt_reused"
+        | "visit_failed"
+        | "review_not_pending"
+        | "account_unavailable";
+    };
 
 /** How a founding differs by path. */
 export interface FoundingMode {
@@ -76,9 +87,7 @@ export interface FoundingMode {
   after?: Statement[];
 }
 
-export type FoundingPlan =
-  | ({ kind: "osm" } & FoundOsmInput)
-  | ({ kind: "existing" } & FoundExistingInput);
+export type FoundingPlan = ({ kind: "osm" } & FoundOsmInput) | ({ kind: "existing" } & FoundExistingInput);
 
 const guard = (condition: string, reason: string, params: unknown[]): Statement => ({
   text: `SELECT kip_park_drafts.require(${condition}, '${reason}')`,
@@ -97,8 +106,18 @@ function founderStatement(input: FoundCommon, parkId: string, source: "osm_new" 
         (park_id, account_id, attempt_id, founded_at, source, photo_sha256, photo_bytes, photo_width, photo_height, moderation)
       VALUES ($1, $2::uuid, $3::uuid, $4::timestamptz, $5, $6, decode($7, 'base64'), $8, $9, $10::jsonb)
       RETURNING kip_founders.bonus_points() AS founder_points`,
-    params: [parkId, input.accountId, input.attemptId, input.at, source, input.photo.sha256, input.photo.base64,
-      input.photo.width, input.photo.height, JSON.stringify(input.moderation)],
+    params: [
+      parkId,
+      input.accountId,
+      input.attemptId,
+      input.at,
+      source,
+      input.photo.sha256,
+      input.photo.base64,
+      input.photo.width,
+      input.photo.height,
+      JSON.stringify(input.moderation),
+    ],
   };
 }
 
@@ -160,9 +179,21 @@ export async function foundingStatements(plan: FoundingPlan, mode: FoundingMode)
         text: `INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, note, longitude, latitude, context, status,
             osm_type, osm_id, decision, moderation, decided_at, published_park_id, founder_account_id)
           VALUES ($1::uuid, $2::uuid, $3, $4, '', $5, $6, $7::jsonb, 'accepted', $8, $9, 'approved', $10::jsonb, $11::timestamptz, $12, $13::uuid)`,
-        params: [plan.proposal.id, plan.attemptId, plan.photo.sha256, park.name.slice(0, 120), park.lng, park.lat,
-          JSON.stringify({ source: mode.reviewRequestId ? "founder_review" : "founder" }), plan.osm.type, plan.osm.id,
-          JSON.stringify(plan.proposal.moderation), plan.at, park.id, plan.accountId],
+        params: [
+          plan.proposal.id,
+          plan.attemptId,
+          plan.photo.sha256,
+          park.name.slice(0, 120),
+          park.lng,
+          park.lat,
+          JSON.stringify({ source: mode.reviewRequestId ? "founder_review" : "founder" }),
+          plan.osm.type,
+          plan.osm.id,
+          JSON.stringify(plan.proposal.moderation),
+          plan.at,
+          park.id,
+          plan.accountId,
+        ],
       },
       {
         // The draft is written inside the founding transaction, so a failed founding leaves no
@@ -174,8 +205,24 @@ export async function foundingStatements(plan: FoundingPlan, mode: FoundingMode)
             lng = EXCLUDED.lng, biome = EXCLUDED.biome, shape = EXCLUDED.shape, rarity = EXCLUDED.rarity, seed = EXCLUDED.seed,
             blurb = EXCLUDED.blurb, updated_at = EXCLUDED.updated_at
           WHERE kip_park_drafts.drafts.status = 'draft' AND kip_park_drafts.drafts.source ? 'proposal'`,
-        params: [park.id, JSON.stringify(park.source), sourceSha256, JSON.stringify(park.geometry), park.name, park.short, park.category,
-          park.region, park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb, plan.at],
+        params: [
+          park.id,
+          JSON.stringify(park.source),
+          sourceSha256,
+          JSON.stringify(park.geometry),
+          park.name,
+          park.short,
+          park.category,
+          park.region,
+          park.lat,
+          park.lng,
+          park.biome,
+          park.shape,
+          park.rarity,
+          park.seed,
+          park.blurb,
+          plan.at,
+        ],
       },
       ...publishStatements(park.id, plan.at, null),
       founderStatement(plan, park.id, "osm_new"),
@@ -220,7 +267,7 @@ export function foundingFailure(error: unknown): Exclude<FoundResult, { status: 
 }
 
 function jsonValue(value: unknown): unknown {
-  return typeof value === "string" ? JSON.parse(value) as unknown : value;
+  return typeof value === "string" ? (JSON.parse(value) as unknown) : value;
 }
 
 /** Runs the founding transaction and reads the founder bonus and the visit back from it. */
@@ -240,7 +287,10 @@ export async function runFounding(db: SqlRunner, plan: FoundingPlan, parkName: s
   return {
     status: "founded",
     record: {
-      parkId: plan.kind === "osm" ? plan.park.id : plan.parkId, parkName, photoSha256: plan.photo.sha256, founderPoints,
+      parkId: plan.kind === "osm" ? plan.park.id : plan.parkId,
+      parkName,
+      photoSha256: plan.photo.sha256,
+      founderPoints,
       visit: body?.visit ? visitFromJson(body.visit) : null,
       badges: badgeUnlocksFromJson(jsonValue(badgesRow?.badges_unlocked)),
     },

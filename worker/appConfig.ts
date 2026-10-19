@@ -124,16 +124,20 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
   const sql = database(databaseUrl);
   return {
     async resolve(platform, build) {
-      const rows = await sql.query(`SELECT ${BUILD_COLUMNS} FROM kip_app_config.builds WHERE platform = $1 AND build IN ($2, $3)`, [platform, build, DEFAULT_BUILD]) as BuildRow[];
+      const rows = (await sql.query(`SELECT ${BUILD_COLUMNS} FROM kip_app_config.builds WHERE platform = $1 AND build IN ($2, $3)`, [
+        platform,
+        build,
+        DEFAULT_BUILD,
+      ])) as BuildRow[];
       return rows.map(toRecord);
     },
     async list() {
-      const rows = await sql.query(`SELECT ${BUILD_COLUMNS} FROM kip_app_config.builds ORDER BY platform, build DESC`) as BuildRow[];
+      const rows = (await sql.query(`SELECT ${BUILD_COLUMNS} FROM kip_app_config.builds ORDER BY platform, build DESC`)) as BuildRow[];
       return rows.map(toRecord);
     },
     async upsert(platform, build, input) {
       // The content channel column is kept in step for any reader of the original schema.
-      const rows = await sql.query(
+      const rows = (await sql.query(
         `INSERT INTO kip_app_config.builds (platform, build, label, api_pointer, content_channel, flags, notes)
          VALUES ($1, $2, $3, $4, CASE $4::text WHEN 'production' THEN 'main' WHEN 'staging' THEN 'staging' END, $5::jsonb, $6)
          ON CONFLICT (platform, build) DO UPDATE SET
@@ -145,7 +149,7 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
            updated_at = now()
          RETURNING ${BUILD_COLUMNS}`,
         [platform, build, input.label, input.apiPointer, JSON.stringify(input.flags), input.notes],
-      ) as BuildRow[];
+      )) as BuildRow[];
       return toRecord(rows[0]);
     },
     async remove(platform, build) {
@@ -153,20 +157,27 @@ export function createNeonAppConfigStore(databaseUrl: string): AppConfigStore {
       return rows.length > 0;
     },
     async updateRules(environment) {
-      const rows = await sql.query("SELECT environment, minimum_build, latest_build, updated_at FROM kip_app_config.update_rules WHERE environment = $1", [environment]) as RulesRow[];
+      const rows = (await sql.query("SELECT environment, minimum_build, latest_build, updated_at FROM kip_app_config.update_rules WHERE environment = $1", [
+        environment,
+      ])) as RulesRow[];
       return toRules(environment, rows[0]);
     },
     async listUpdateRules() {
-      const rows = await sql.query("SELECT environment, minimum_build, latest_build, updated_at FROM kip_app_config.update_rules") as RulesRow[];
-      return API_POINTERS.map((environment) => toRules(environment, rows.find((row) => row.environment === environment)));
+      const rows = (await sql.query("SELECT environment, minimum_build, latest_build, updated_at FROM kip_app_config.update_rules")) as RulesRow[];
+      return API_POINTERS.map((environment) =>
+        toRules(
+          environment,
+          rows.find((row) => row.environment === environment),
+        ),
+      );
     },
     async setUpdateRules(environment, minimumBuild, latestBuild) {
-      const rows = await sql.query(
+      const rows = (await sql.query(
         `INSERT INTO kip_app_config.update_rules (environment, minimum_build, latest_build) VALUES ($1, $2, $3)
          ON CONFLICT (environment) DO UPDATE SET minimum_build = EXCLUDED.minimum_build, latest_build = EXCLUDED.latest_build, updated_at = now()
          RETURNING environment, minimum_build, latest_build, updated_at`,
         [environment, minimumBuild, latestBuild],
-      ) as RulesRow[];
+      )) as RulesRow[];
       return toRules(environment, rows[0]);
     },
   };
@@ -222,7 +233,11 @@ export function validateBuildConfigInput(body: unknown): BuildConfigInput {
   if (entries.length > MAX_FLAGS) throw new HttpError(400, "invalid_flags", `A build can set at most ${MAX_FLAGS} flags.`);
   for (const [key, value] of entries) {
     if (!FLAG_NAME.test(key) || typeof value !== "boolean") {
-      throw new HttpError(400, "invalid_flags", `Flag names start with a letter and use letters, digits or underscores; values are on or off (${key.slice(0, 40)}).`);
+      throw new HttpError(
+        400,
+        "invalid_flags",
+        `Flag names start with a letter and use letters, digits or underscores; values are on or off (${key.slice(0, 40)}).`,
+      );
     }
   }
   return { label: label.trim(), notes: notes.trim(), apiPointer: pointer as ApiPointer | null, flags: sanitizeFlags(rawFlags) };
@@ -252,8 +267,8 @@ function optionalBuild(value: unknown, name: string): number | null {
 /** A null pointer on a build's own row deliberately keeps that build's built-in server. */
 function pointerFor(rows: BuildConfigRecord[], platform: AppConfigPlatform, build: number) {
   const fallback = rows.find((row) => row.build === DEFAULT_BUILD && row.platform === platform) ?? null;
-  const exact = build === DEFAULT_BUILD ? null : rows.find((row) => row.build === build && row.platform === platform) ?? null;
-  return { fallback, exact, apiPointer: exact ? exact.apiPointer : fallback?.apiPointer ?? null };
+  const exact = build === DEFAULT_BUILD ? null : (rows.find((row) => row.build === build && row.platform === platform) ?? null);
+  return { fallback, exact, apiPointer: exact ? exact.apiPointer : (fallback?.apiPointer ?? null) };
 }
 
 /** The environment whose update rules apply: the pointer if set, else what the build says it was made for. */
@@ -265,9 +280,14 @@ export function updateEnvironment(rows: BuildConfigRecord[], platform: AppConfig
 export function resolveAppConfig(platform: AppConfigPlatform, build: number, rows: BuildConfigRecord[], rules: UpdateRules): AppConfigResponse {
   const { fallback, exact, apiPointer } = pointerFor(rows, platform, build);
   // Build 0 is an unversioned web or development build, which never needs a store update.
-  const update = build === DEFAULT_BUILD ? "none"
-    : rules.minimumBuild !== null && build < rules.minimumBuild ? "required"
-      : rules.latestBuild !== null && build < rules.latestBuild ? "available" : "none";
+  const update =
+    build === DEFAULT_BUILD
+      ? "none"
+      : rules.minimumBuild !== null && build < rules.minimumBuild
+        ? "required"
+        : rules.latestBuild !== null && build < rules.latestBuild
+          ? "available"
+          : "none";
   return {
     schema: "parkdex.app-config/v1",
     platform,

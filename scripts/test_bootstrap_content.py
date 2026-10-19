@@ -66,8 +66,12 @@ class FakeCursor:
             self.rows = []
         elif compact.startswith("INSERT INTO public.r2_objects"):
             self.connection.objects[params["path"]] = (
-                params["path"], params["key"], params["url"], params["sha256"],
-                params["byte_size"], params["content_type"],
+                params["path"],
+                params["key"],
+                params["url"],
+                params["sha256"],
+                params["byte_size"],
+                params["content_type"],
             )
             self.rows = []
         elif compact.startswith("INSERT INTO public.boundaries"):
@@ -157,9 +161,7 @@ class BootstrapContentTests(unittest.TestCase):
             shutil.copy2(bootstrap.ROOT / "src" / "data" / "parks.json", root / "src" / "data" / "parks.json")
             shutil.copy2(bootstrap.ROOT / "src" / "data" / "drive.json", root / "src" / "data" / "drive.json")
             shutil.copy2(bootstrap.ROOT / "public" / "boundaries.geojson", root / "public" / "boundaries.geojson")
-            (root / "src" / "data" / "parks.json").write_bytes(
-                (root / "src" / "data" / "parks.json").read_bytes() + b" "
-            )
+            (root / "src" / "data" / "parks.json").write_bytes((root / "src" / "data" / "parks.json").read_bytes() + b" ")
             with self.assertRaisesRegex(bootstrap.BootstrapError, "tracked source does not match"):
                 bootstrap.load_baseline(root)
 
@@ -173,10 +175,7 @@ class BootstrapContentTests(unittest.TestCase):
             },
             self.baseline.map_report["manifestUrl"]: self.baseline.map_manifest_bytes,
         }
-        responses.update({
-            self.baseline.files_by_path[path]["url"]: content
-            for path, content in self.baseline.active_scene_bytes.items()
-        })
+        responses.update({self.baseline.files_by_path[path]["url"]: content for path, content in self.baseline.active_scene_bytes.items()})
         requested: list[str] = []
 
         def fetch(url: str) -> bytes:
@@ -218,8 +217,15 @@ class BootstrapContentTests(unittest.TestCase):
         self.assertEqual(
             touched_tables,
             {
-                "version_manifests", "r2_objects", "drive_hubs", "parks", "boundaries",
-                "park_drive_settings", "park_drive", "content_map", "content_bootstrap_receipt",
+                "version_manifests",
+                "r2_objects",
+                "drive_hubs",
+                "parks",
+                "boundaries",
+                "park_drive_settings",
+                "park_drive",
+                "content_map",
+                "content_bootstrap_receipt",
             },
         )
 
@@ -262,15 +268,19 @@ class BootstrapContentTests(unittest.TestCase):
             def connect(*_args: Any, **_kwargs: Any) -> FakeConnection:
                 return connection
 
-        with patch.object(bootstrap, "_database_url", return_value="postgresql://hidden"), \
-             patch.object(bootstrap, "_import_psycopg", return_value=(FakePsycopg, lambda value: value)), \
-             patch.object(bootstrap, "verify_public_artifacts", side_effect=AssertionError("CDN should not be read")):
+        with (
+            patch.object(bootstrap, "_database_url", return_value="postgresql://hidden"),
+            patch.object(bootstrap, "_import_psycopg", return_value=(FakePsycopg, lambda value: value)),
+            patch.object(bootstrap, "verify_public_artifacts", side_effect=AssertionError("CDN should not be read")),
+        ):
             result = bootstrap.run("staging", True)
         self.assertIn(f"receipt {bootstrap.PINNED_VERSION}", result)
 
         connection.receipt = ("0" * 64, "https://kip-assets.parkdex.app/releases/" + "0" * 64 + "/manifest.json", "0" * 64)
-        with patch.object(bootstrap, "_database_url", return_value="postgresql://hidden"), \
-             patch.object(bootstrap, "_import_psycopg", return_value=(FakePsycopg, lambda value: value)):
+        with (
+            patch.object(bootstrap, "_database_url", return_value="postgresql://hidden"),
+            patch.object(bootstrap, "_import_psycopg", return_value=(FakePsycopg, lambda value: value)),
+        ):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "receipt does not match"):
                 bootstrap.run("staging", True)
 

@@ -54,7 +54,9 @@ describe("account transport", () => {
     expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, true)).not.toThrow();
     expect(() => assertSecureAccountRequest(new URL(`${local}/api/auth/login`), local, false)).toThrow("HTTPS account API");
     expect(() => assertSecureAccountRequest(new URL("http://127.0.0.1:8787/api/auth/login"), local, true)).toThrow("HTTPS account API");
-    expect(() => assertSecureAccountRequest(new URL("http://staging.web.parkdex.app/api/auth/login"), "http://staging.web.parkdex.app", true)).toThrow("HTTPS account API");
+    expect(() => assertSecureAccountRequest(new URL("http://staging.web.parkdex.app/api/auth/login"), "http://staging.web.parkdex.app", true)).toThrow(
+      "HTTPS account API",
+    );
   });
 
   it("blocks redirects on native authenticated requests", async () => {
@@ -79,10 +81,7 @@ describe("native auth session renewal", () => {
   it("persists the rotated token before the next authenticated request", async () => {
     const account = { id: "account-a", email: "a@example.test", emailVerified: true, displayName: "A", providers: ["email"] };
     const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-    nativeMocks.responses.push(
-      jsonResponse({ renewed: true, sessionToken: "new-token", expiresAt }),
-      jsonResponse({ account }),
-    );
+    nativeMocks.responses.push(jsonResponse({ renewed: true, sessionToken: "new-token", expiresAt }), jsonResponse({ account }));
 
     await renewSession(account.id);
     expect(nativeMocks.activeToken).toBe("new-token");

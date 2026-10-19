@@ -19,7 +19,8 @@ function subscribeToContentNetwork(listener: () => void) {
         connectivity.connected === contentNetworkSnapshot.connected &&
         connectivity.wifi === contentNetworkSnapshot.wifi &&
         connectivity.contentDownloadAllowed === contentNetworkSnapshot.contentDownloadAllowed
-      ) return;
+      )
+        return;
       contentNetworkSnapshot = { ...connectivity };
       for (const subscriber of contentNetworkSubscribers) subscriber();
     });
@@ -60,15 +61,16 @@ function useEarnedScene(park: Park, claim: Claim) {
   const display = resolveEarnedParkDisplay(park, claim, activePark, !!currentSceneHref);
   const displayPark = display.park;
   const activeSceneVersion = runtime.getSceneAssetVersion(earnedPark.id, earnedPark.scene);
-  const matchesArchivedReleaseArt = !!earnedPark.scene && !!claim.contentReleaseId &&
-    activePark?.scene === earnedPark.scene && activeSceneVersion === claim.contentReleaseId;
+  const matchesArchivedReleaseArt =
+    !!earnedPark.scene && !!claim.contentReleaseId && activePark?.scene === earnedPark.scene && activeSceneVersion === claim.contentReleaseId;
   const sceneKey = `${claim.claimId}:${claim.contentReleaseId ?? ""}:${earnedPark.scene ?? ""}`;
   const [archivedScene, setArchivedScene] = useState<{ key: string; url: string } | null>(null);
-  const activeSceneHref = display.usesCurrentArt && activePark?.scene
-    ? currentSceneHref
-    : matchesArchivedReleaseArt && earnedPark.scene
-      ? content?.assetUrls.get(scenePath(earnedPark.scene))
-      : undefined;
+  const activeSceneHref =
+    display.usesCurrentArt && activePark?.scene
+      ? currentSceneHref
+      : matchesArchivedReleaseArt && earnedPark.scene
+        ? content?.assetUrls.get(scenePath(earnedPark.scene))
+        : undefined;
   const matchesActiveArt = display.usesCurrentArt ? !!activeSceneHref : matchesArchivedReleaseArt;
   const sceneHref = activeSceneHref ?? (archivedScene?.key === sceneKey ? archivedScene.url : undefined);
 
@@ -77,20 +79,32 @@ function useEarnedScene(park: Park, claim: Claim) {
     // Nothing shows badge art, so do not fetch or restore archived scenes.
     if (!SHOW_BADGE_ART || !earnedPark.scene || !claim.contentReleaseId) {
       setArchivedScene(null);
-      return () => { live = false; };
+      return () => {
+        live = false;
+      };
     }
     if (activeSceneHref) {
       setArchivedScene(null);
-      return () => { live = false; };
+      return () => {
+        live = false;
+      };
     }
-    if (archivedScene?.key === sceneKey) return () => { live = false; };
-    setArchivedScene((current) => current?.key === sceneKey ? current : null);
+    if (archivedScene?.key === sceneKey)
+      return () => {
+        live = false;
+      };
+    setArchivedScene((current) => (current?.key === sceneKey ? current : null));
     // This lookup first checks the durable local archive, so reconnect retries also
     // render from cache while offline. Status and network changes retry a pending miss.
-    void runtime.ensureArchivedScene(claim.contentReleaseId, earnedPark.scene)
-      .then((url) => { if (live) setArchivedScene({ key: sceneKey, url }); })
+    void runtime
+      .ensureArchivedScene(claim.contentReleaseId, earnedPark.scene)
+      .then((url) => {
+        if (live) setArchivedScene({ key: sceneKey, url });
+      })
       .catch(() => {});
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [activeSceneHref, archivedScene, claim.contentReleaseId, earnedPark.id, earnedPark.scene, runtime, sceneKey, status.phase, contentDownloadAvailable]);
 
   return { displayPark, sceneHref, contentDownloadAvailable, matchesActiveArt, adoptedCurrentArt: display.usesCurrentArt };
@@ -111,12 +125,13 @@ export function EarnedBadge({ park, claim, ...badgeProps }: Props) {
   const needsExactScene = displayPark.scene !== null && (!matchesActiveArt || !sceneHref);
   if (needsExactScene && !sceneHref) {
     const size = badgeProps.size ?? 120;
-    const message = !claim.contentReleaseId && !adoptedCurrentArt
-      ? "Art unavailable"
-      : !contentDownloadAvailable
-        ? "Badge art unavailable"
-        : "Restoring badge art";
-    return <div className="earned-badge__restoring" style={{ width: size, height: size }} role="img" aria-label={`${earnedPark.short} badge. ${message}.`}><span>{message}</span></div>;
+    const message =
+      !claim.contentReleaseId && !adoptedCurrentArt ? "Art unavailable" : !contentDownloadAvailable ? "Badge art unavailable" : "Restoring badge art";
+    return (
+      <div className="earned-badge__restoring" style={{ width: size, height: size }} role="img" aria-label={`${earnedPark.short} badge. ${message}.`}>
+        <span>{message}</span>
+      </div>
+    );
   }
   return <Badge park={displayPark} sceneHref={sceneHref} {...badgeProps} />;
 }

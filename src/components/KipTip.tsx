@@ -45,13 +45,7 @@ function KipTipCard({ shown }: { shown: ShownKipTip }) {
 
   return (
     <>
-      <motion.div
-        className="kip-tip-scrim"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={() => close("outside")}
-      />
+      <motion.div className="kip-tip-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => close("outside")} />
       <motion.section
         className="kip-tip card"
         role="dialog"
@@ -66,7 +60,9 @@ function KipTipCard({ shown }: { shown: ShownKipTip }) {
         <div className="kip-tip__kip" aria-hidden="true">
           <Kip key={content.pose} pose={content.pose} size={92} />
         </div>
-        <button className="kip-tip__skip" onClick={() => close("skip")}>Skip</button>
+        <button className="kip-tip__skip" onClick={() => close("skip")}>
+          Skip
+        </button>
         <span className="eyebrow">Kip's Tips</span>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -84,15 +80,14 @@ function KipTipCard({ shown }: { shown: ShownKipTip }) {
         <div className="kip-tip__foot">
           {tip.pages.length > 1 ? (
             <span className="kip-tip__dots" aria-label={`Page ${page + 1} of ${tip.pages.length}`}>
-              {tip.pages.map((_, index) => <span key={index} className={index === page ? "is-current" : undefined} />)}
+              {tip.pages.map((_, index) => (
+                <span key={index} className={index === page ? "is-current" : undefined} />
+              ))}
             </span>
-          ) : <span />}
-          <motion.button
-            ref={primary}
-            whileTap={press}
-            className="btn btn--sm btn--sun"
-            onClick={() => (last ? close("done") : setPage((value) => value + 1))}
-          >
+          ) : (
+            <span />
+          )}
+          <motion.button ref={primary} whileTap={press} className="btn btn--sm btn--sun" onClick={() => (last ? close("done") : setPage((value) => value + 1))}>
             {last ? "Got it" : "Next"}
           </motion.button>
         </div>

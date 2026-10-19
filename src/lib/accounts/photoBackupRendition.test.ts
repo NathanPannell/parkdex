@@ -5,22 +5,32 @@ import { createPhotoBackupRendition, MAX_BACKUP_PHOTO_BYTES, MAX_PHOTO_CONVERSIO
 
 // Frozen fields from the saved 1,740-byte Thetis desktop demo photo fixture.
 const THETIS: Park = {
-  id: "regional-thetis-lake-regional-park", name: "Thetis Lake Regional Park", short: "Thetis Lake",
-  category: "regional", region: "Capital Region", lat: 48.48123, lng: -123.4774,
-  biome: "lake", shape: "hex", rarity: "common", seed: 331,
+  id: "regional-thetis-lake-regional-park",
+  name: "Thetis Lake Regional Park",
+  short: "Thetis Lake",
+  category: "regional",
+  region: "Capital Region",
+  lat: 48.48123,
+  lng: -123.4774,
+  biome: "lake",
+  shape: "hex",
+  rarity: "common",
+  seed: 331,
   blurb: "Two lakes, cliff-jump rumours and a forest loop that ends in a swim. Summer's favourite badge.",
   scene: "lake-a",
 };
 const THETIS_SHA256 = "3afacd5977a531aa126b3fd873887378f003164123c3d5035c3a3ca1d56f2145";
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0xff, 0xd9]);
 
-function installImageBrowser(options: {
-  width?: number;
-  height?: number;
-  decodeFails?: boolean;
-  decodeRejects?: boolean;
-  jpeg?: Blob | null;
-} = {}) {
+function installImageBrowser(
+  options: {
+    width?: number;
+    height?: number;
+    decodeFails?: boolean;
+    decodeRejects?: boolean;
+    jpeg?: Blob | null;
+  } = {},
+) {
   const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:photo-test");
   const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   let imageCreations = 0;
@@ -30,9 +40,11 @@ function installImageBrowser(options: {
     naturalHeight = options.height ?? 800;
     onload: (() => void) | null = null;
     onerror: (() => void) | null = null;
-    constructor() { imageCreations += 1; }
+    constructor() {
+      imageCreations += 1;
+    }
     set src(_value: string) {
-      queueMicrotask(() => options.decodeFails ? this.onerror?.() : this.onload?.());
+      queueMicrotask(() => (options.decodeFails ? this.onerror?.() : this.onload?.()));
     }
     decode() {
       decodeCalls += 1;
@@ -50,10 +62,14 @@ function installImageBrowser(options: {
   });
   vi.stubGlobal("document", {
     createElement: vi.fn(() => ({
-      width: 0, height: 0,
+      width: 0,
+      height: 0,
       getContext: () => ({
-        set fillStyle(value: string) { fills.push(value); },
-        fillRect: vi.fn(), drawImage: vi.fn(),
+        set fillStyle(value: string) {
+          fills.push(value);
+        },
+        fillRect: vi.fn(),
+        drawImage: vi.fn(),
       }),
       toBlob,
     })),
@@ -76,8 +92,7 @@ function oversizedWebpVp8l(height: number) {
 
 function oversizedJpeg(width: number, height: number) {
   const bytes = new Uint8Array(MAX_BACKUP_PHOTO_BYTES + 1);
-  bytes.set([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08,
-    (height >>> 8) & 0xff, height & 0xff, (width >>> 8) & 0xff, width & 0xff], 0);
+  bytes.set([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, (height >>> 8) & 0xff, height & 0xff, (width >>> 8) & 0xff, width & 0xff], 0);
   return new Blob([bytes], { type: "image/jpeg" });
 }
 
@@ -119,9 +134,7 @@ describe("photo backup rendition", () => {
 
   it("rejects excessive input bytes and the packed VP8L height beyond the dimension limit before decode", async () => {
     const browser = installImageBrowser();
-    expect(await createPhotoBackupRendition(
-      new Blob([new Uint8Array(MAX_PHOTO_CONVERSION_INPUT_BYTES + 1)], { type: "image/webp" }), THETIS,
-    )).toBeNull();
+    expect(await createPhotoBackupRendition(new Blob([new Uint8Array(MAX_PHOTO_CONVERSION_INPUT_BYTES + 1)], { type: "image/webp" }), THETIS)).toBeNull();
     expect(await createPhotoBackupRendition(oversizedWebpVp8l(8_193), THETIS)).toBeNull();
     expect(browser.imageCreations()).toBe(0);
     expect(browser.createUrl).not.toHaveBeenCalled();

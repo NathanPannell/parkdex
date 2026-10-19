@@ -13,6 +13,7 @@ new flag game visits. See docs/park-visibility.md.
   apply  Apply one reviewed plan in one transaction. A replay is a no-op; a
          catalogue that changed since planning needs a new plan.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -96,8 +97,7 @@ def read_state(cursor, categories: list[str]) -> dict[str, Any]:
         "WHERE park.category = ANY(%s) ORDER BY park.id",
         (categories,),
     )
-    parks = [{"id": row[0], "category": row[1], "hiddenBy": row[2], "playerProposal": row[3], "minimumReader": row[4]}
-             for row in cursor.fetchall()]
+    parks = [{"id": row[0], "category": row[1], "hiddenBy": row[2], "playerProposal": row[3], "minimumReader": row[4]} for row in cursor.fetchall()]
     cursor.execute("SELECT category, reason FROM public.content_hidden_categories WHERE category = ANY(%s) ORDER BY category", (categories,))
     rules = {row[0]: row[1] for row in cursor.fetchall()}
     return {"revision": revision, "parks": parks, "rules": rules}
@@ -106,14 +106,18 @@ def read_state(cursor, categories: list[str]) -> dict[str, Any]:
 def targets(action: str, parks: list[dict[str, Any]], min_reader_floor: int | None = None) -> list[dict[str, Any]]:
     if action == "hide":
         # With a floor, only parks served to newer readers only (such as the legacy BC import) are hidden.
-        return [park for park in parks if park["hiddenBy"] is None and not park["playerProposal"]
-                and (min_reader_floor is None or (park["minimumReader"] or 0) >= min_reader_floor)]
+        return [
+            park
+            for park in parks
+            if park["hiddenBy"] is None and not park["playerProposal"] and (min_reader_floor is None or (park["minimumReader"] or 0) >= min_reader_floor)
+        ]
     # Unhide only what the category rule hid; parks an operator hid stay hidden.
     return [park for park in parks if park["hiddenBy"] == "category"]
 
 
-def build_plan(action: str, categories: list[str], reason: str | None, identity: dict[str, Any], state: dict[str, Any],
-               min_reader_floor: int | None = None) -> dict[str, Any]:
+def build_plan(
+    action: str, categories: list[str], reason: str | None, identity: dict[str, Any], state: dict[str, Any], min_reader_floor: int | None = None
+) -> dict[str, Any]:
     if action != "hide" and min_reader_floor is not None:
         raise VisibilityError("--min-reader-floor applies to hide only")
     changes = targets(action, state["parks"], min_reader_floor)
@@ -128,9 +132,10 @@ def build_plan(action: str, categories: list[str], reason: str | None, identity:
             "keptVisibleAsPlayerProposals": sum(park["playerProposal"] for park in in_category) if action == "hide" else 0,
             "alreadyHidden": sum(park["hiddenBy"] is not None for park in in_category) if action == "hide" else 0,
             "keptVisibleBelowReaderFloor": sum(
-                park["hiddenBy"] is None and not park["playerProposal"] and (park["minimumReader"] or 0) < min_reader_floor
-                for park in in_category
-            ) if action == "hide" and min_reader_floor is not None else 0,
+                park["hiddenBy"] is None and not park["playerProposal"] and (park["minimumReader"] or 0) < min_reader_floor for park in in_category
+            )
+            if action == "hide" and min_reader_floor is not None
+            else 0,
         }
     plan: dict[str, Any] = {
         "schema": SCHEMA,
@@ -163,7 +168,9 @@ def load_plan(path: Path, expected_sha: str) -> dict[str, Any]:
 
 def apply_plan(conn, plan: dict[str, Any], host: str, environment: str) -> dict[str, Any]:
     identity = _identity(conn, host, environment)
-    if {key: identity[key] for key in ("host", "port", "database", "environment")} != {key: plan["target"][key] for key in ("host", "port", "database", "environment")}:
+    if {key: identity[key] for key in ("host", "port", "database", "environment")} != {
+        key: plan["target"][key] for key in ("host", "port", "database", "environment")
+    }:
         raise VisibilityError("Connected database does not match the reviewed plan")
     action, categories = plan["action"], plan["categories"]
     try:
@@ -176,8 +183,10 @@ def apply_plan(conn, plan: dict[str, Any], host: str, environment: str) -> dict[
                 planned = set(plan["parkIds"])
                 remaining = {park["id"] for park in targets(action, state["parks"], plan.get("minReaderFloor"))}
                 rules_done = (set(state["rules"]) == set(categories)) if action == "hide" else not state["rules"]
-                if not remaining and rules_done and all(
-                    (park["hiddenBy"] is not None) == (action == "hide") for park in state["parks"] if park["id"] in planned
+                if (
+                    not remaining
+                    and rules_done
+                    and all((park["hiddenBy"] is not None) == (action == "hide") for park in state["parks"] if park["id"] in planned)
                 ):
                     return {"result": "already-current", "revision": state["revision"], "changed": 0}
                 if remaining != planned:

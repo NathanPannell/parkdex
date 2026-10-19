@@ -117,7 +117,12 @@ function FlagHills() {
           <PlantedFlag seed={seed} size={96} />
         </motion.div>
       ))}
-      <motion.div className="ob-guide ob-guide--left" initial={{ x: -120, rotate: -20 }} animate={{ x: 0, rotate: 0 }} transition={{ type: "spring", delay: 0.7, stiffness: 200, damping: 14 }}>
+      <motion.div
+        className="ob-guide ob-guide--left"
+        initial={{ x: -120, rotate: -20 }}
+        animate={{ x: 0, rotate: 0 }}
+        transition={{ type: "spring", delay: 0.7, stiffness: 200, damping: 14 }}
+      >
         <Kip pose="wave" size={84} />
         <Bubble side="to-left" style={{ position: "relative", marginBottom: 24, whiteSpace: "nowrap" }}>
           Hi! I'm Kip.
@@ -147,7 +152,11 @@ function GoThere() {
           <animateMotion path={ROUTE} dur="4.2s" repeatCount="indefinite" {...keys} />
         </g>
       </svg>
-      <motion.span className="ob-go__in" animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }} transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}>
+      <motion.span
+        className="ob-go__in"
+        animate={{ opacity: [0, 0, 1, 1, 0], scale: [0.3, 0.3, 1.12, 1, 1] }}
+        transition={{ ...loop, times: [0, 0.6, 0.66, 0.95, 1] }}
+      >
         You're in!
       </motion.span>
       <motion.div
@@ -176,14 +185,22 @@ function PointsPerDay() {
   const days = day === 1 ? 0 : day * 3;
   return (
     <div className="ob-days">
-      <motion.span key={day} className="ob-days__chip" initial={{ y: -14, opacity: 0, rotate: -8 }} animate={{ y: 0, opacity: 1, rotate: -4 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+      <motion.span
+        key={day}
+        className="ob-days__chip"
+        initial={{ y: -14, opacity: 0, rotate: -8 }}
+        animate={{ y: 0, opacity: 1, rotate: -4 }}
+        transition={{ type: "spring", stiffness: 500, damping: 18 }}
+      >
         Day {day}
       </motion.span>
       <div className="ob-days__flag">
         <PlantedFlag seed={YOU_SEED} size={118} days={days} />
       </div>
       <div className="ob-days__score card">
-        <strong><RollingNumber value={(day - 1) * 24} /></strong>
+        <strong>
+          <RollingNumber value={(day - 1) * 24} />
+        </strong>
         <span>points</span>
       </div>
       <div className="ob-guide ob-guide--right">
@@ -200,14 +217,18 @@ function TakeOver() {
   const loop = { duration: 4.6, repeat: Infinity, repeatDelay: 0.4 };
   return (
     <div className="ob-take">
-      <div className="ob-take__ground"><Mound width={190} /></div>
+      <div className="ob-take__ground">
+        <Mound width={190} />
+      </div>
       <motion.div
         className="ob-take__flag ob-take__flag--rival"
         animate={{ rotate: [0, 0, 84, 84, 0], x: [0, 0, 18, 18, 0], opacity: [1, 1, 1, 0, 0] }}
         transition={{ ...loop, times: [0, 0.3, 0.42, 0.6, 1], ease: "easeIn" }}
       >
         <span className="ob-take__pole" />
-        <span className="ob-take__cloth"><Flag seed={RIVAL_SEED} size={100} days={12} /></span>
+        <span className="ob-take__cloth">
+          <Flag seed={RIVAL_SEED} size={100} days={12} />
+        </span>
         <span className="ob-take__tag">@sam · 12d</span>
       </motion.div>
       <motion.div
@@ -218,7 +239,9 @@ function TakeOver() {
         transition={{ ...loop, times: [0, 0.4, 0.46, 0.56, 0.95, 1], ease: "easeIn" }}
       >
         <span className="ob-take__pole" />
-        <span className="ob-take__cloth plant-flag__cloth--wave"><Flag seed={YOU_SEED} size={100} /></span>
+        <span className="ob-take__cloth plant-flag__cloth--wave">
+          <Flag seed={YOU_SEED} size={100} />
+        </span>
       </motion.div>
       <motion.span
         className="ob-take__points"
@@ -278,7 +301,12 @@ function YourFlag() {
       </motion.div>
       <AnimatePresence>
         {shuffle < 0 && (
-          <motion.span className="ob-you__handle" initial={{ y: 16, opacity: 0, scale: 0.8 }} animate={{ y: 0, opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.1 }}>
+          <motion.span
+            className="ob-you__handle"
+            initial={{ y: 16, opacity: 0, scale: 0.8 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.1 }}
+          >
             @{player?.handle ?? "you"}
           </motion.span>
         )}
@@ -299,7 +327,9 @@ function FoundIt() {
   return (
     <div className="ob-found">
       <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-      <div className="ob-found__ground"><Mound width={210} /></div>
+      <div className="ob-found__ground">
+        <Mound width={210} />
+      </div>
       <motion.div
         className="ob-found__photo"
         // The drop starts at the top of this illustration, never above it, so the photo stays on
@@ -429,7 +459,19 @@ export function Onboarding() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? <FlagHills /> : index === 1 ? <GoThere /> : index === 2 ? <PointsPerDay /> : index === 3 ? <TakeOver /> : index === YOU_SLIDE ? <YourFlag /> : <FoundIt />}
+                {index === 0 ? (
+                  <FlagHills />
+                ) : index === 1 ? (
+                  <GoThere />
+                ) : index === 2 ? (
+                  <PointsPerDay />
+                ) : index === 3 ? (
+                  <TakeOver />
+                ) : index === YOU_SLIDE ? (
+                  <YourFlag />
+                ) : (
+                  <FoundIt />
+                )}
               </div>
             </motion.div>
           </AnimatePresence>

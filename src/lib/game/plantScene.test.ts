@@ -14,7 +14,14 @@ describe("plant scene", () => {
 
   it("gives revisits a smaller version and leaves a second visit today unplanted", () => {
     expect(plantPlan({ outcome: "held", pointsEarned: 1 })).toMatchObject({ slam: "small", payoff: "small", count: 1 });
-    expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({ yank: false, slam: null, settle: true, raise: false, payoff: "tiny", count: null });
+    expect(plantPlan({ outcome: "already_today", pointsEarned: 0 })).toEqual({
+      yank: false,
+      slam: null,
+      settle: true,
+      raise: false,
+      payoff: "tiny",
+      count: null,
+    });
   });
 
   it("raises a pennant for a crew join and settles back for a logged visit", () => {

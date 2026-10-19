@@ -57,7 +57,12 @@ describe("map download coverage", () => {
     for (const z of [9, 10, 12, 14]) {
       const shift = z - cell.z;
       const size = 2 ** shift;
-      for (const [dx, dy] of [[0, 0], [size - 1, size - 1], [Math.floor(size / 2), 0], [0, size - 1]]) {
+      for (const [dx, dy] of [
+        [0, 0],
+        [size - 1, size - 1],
+        [Math.floor(size / 2), 0],
+        [0, size - 1],
+      ]) {
         expect(inRanges(zxyToTileId(z, (cell.x << shift) + dx, (cell.y << shift) + dy))).toBe(true);
       }
       // The neighbouring square's tiles stay outside.
@@ -109,15 +114,7 @@ describe("map download coverage", () => {
     } as unknown as ContentRuntime;
     const controller = new AbortController();
     const allowed = new Set([1]);
-    const source = new RuntimeChunkSource(
-      runtime,
-      "release-v2",
-      { size: 4, chunkBytes: 2, count: 2 },
-      "island",
-      () => allowed,
-      false,
-      controller.signal,
-    );
+    const source = new RuntimeChunkSource(runtime, "release-v2", { size: 4, chunkBytes: 2, count: 2 }, "island", () => allowed, false, controller.signal);
 
     await expect(source.getBytes(0, 1, controller.signal)).rejects.toThrow("has not been downloaded");
     online = true;
@@ -129,7 +126,7 @@ describe("map download coverage", () => {
     expect(ensureFile).toHaveBeenCalledWith("release-v2", "map/island/001.bin", "nearby", controller.signal);
     expect(getAllowedMapChunks("release-v2")).toContain(0);
     resetAllowedMapChunks("release-v2");
-  });;
+  });
 });
 
 describe("bundled overview PMTiles source", () => {
@@ -156,9 +153,7 @@ describe("bundled overview PMTiles source", () => {
 
   it("rejects unsafe ranges and retries a failed complete-archive load", async () => {
     const bytes = new Uint8Array([4, 5, 6]).buffer;
-    const loadArchive = vi.fn()
-      .mockRejectedValueOnce(new Error("offline fetch failed"))
-      .mockResolvedValueOnce(bytes);
+    const loadArchive = vi.fn().mockRejectedValueOnce(new Error("offline fetch failed")).mockResolvedValueOnce(bytes);
     const source = new BundledOverviewSource(loadArchive);
 
     await expect(source.getBytes(Number.MAX_SAFE_INTEGER, 2)).rejects.toThrow("Invalid bundled PMTiles byte range");
@@ -199,7 +194,7 @@ describe("bundled overview PMTiles source", () => {
     const zoom = BASE_OVERVIEW_MAX_ZOOM;
     const scale = 2 ** zoom;
     // Victoria, Kelowna, Prince George and Toronto all render from the bundled map.
-    for (const [lng, lat] of [VICTORIA, [-119.4960, 49.8880], [-122.7497, 53.9171], [-79.3832, 43.6532]]) {
+    for (const [lng, lat] of [VICTORIA, [-119.496, 49.888], [-122.7497, 53.9171], [-79.3832, 43.6532]]) {
       const radians = (lat * Math.PI) / 180;
       const x = Math.floor(((lng + 180) / 360) * scale);
       const y = Math.floor(((1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2) * scale);
@@ -241,7 +236,7 @@ describe("detail map coverage notifications", () => {
       unsubscribe();
       resetAllowedMapChunks(releaseId);
     }
-  });;
+  });
 
   it("recreates the detail source through a style diff and preserves overview and live overlays", () => {
     const style: StyleSpecification = {
@@ -285,7 +280,7 @@ describe("detail map coverage notifications", () => {
   it("leaves a missing detail source pending instead of applying an incomplete style", () => {
     const setStyle = vi.fn();
     const map = {
-      getStyle: () => ({ version: 8, sources: {}, layers: [] } as unknown as StyleSpecification),
+      getStyle: () => ({ version: 8, sources: {}, layers: [] }) as unknown as StyleSpecification,
       setStyle,
     } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
     const pending = { current: true };
@@ -302,11 +297,10 @@ describe("detail map coverage notifications", () => {
       layers: [{ id: "detail-water", type: "fill", source: "protomaps", "source-layer": "water" }],
     };
     const pending = { current: true };
-    let map: Parameters<typeof reloadDetailedMapSource>[0];
     const setStyle = vi.fn(() => {
       flushPendingDetailedMapSourceRefresh(map, pending);
     });
-    map = { getStyle: () => style, setStyle } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
+    const map = { getStyle: () => style, setStyle } as unknown as Parameters<typeof reloadDetailedMapSource>[0];
 
     expect(flushPendingDetailedMapSourceRefresh(map, pending)).toBe(true);
     expect(setStyle).toHaveBeenCalledOnce();
@@ -362,63 +356,86 @@ describe("detail map coverage notifications", () => {
 const canonicalArchivePath = join(process.cwd(), "..", "..", "..", "parkdex-badge-mockup", ".tools", "island.pmtiles");
 
 describe("canonical PMTiles chunk selection", () => {
-  it.skipIf(!existsSync(canonicalArchivePath))("uses the archive index to find starter and nearby chunks", async () => {
-    const archive = readFileSync(canonicalArchivePath);
-    const mapManifest: MapManifest = { size: archive.byteLength, chunkBytes: 2 * 1024 * 1024, count: Math.ceil(archive.byteLength / (2 * 1024 * 1024)) };
-    const releaseId = "map-census-fixture";
-    const snapshot = {
-      releaseId,
-      manifest: {
-        mapManifest,
-        files: Array.from({ length: mapManifest.count }, (_, index) => {
-          const path = `map/island/${String(index).padStart(3, "0")}.bin`;
+  it.skipIf(!existsSync(canonicalArchivePath))(
+    "uses the archive index to find starter and nearby chunks",
+    async () => {
+      const archive = readFileSync(canonicalArchivePath);
+      const mapManifest: MapManifest = { size: archive.byteLength, chunkBytes: 2 * 1024 * 1024, count: Math.ceil(archive.byteLength / (2 * 1024 * 1024)) };
+      const releaseId = "map-census-fixture";
+      const snapshot = {
+        releaseId,
+        manifest: {
+          mapManifest,
+          files: Array.from({ length: mapManifest.count }, (_, index) => {
+            const path = `map/island/${String(index).padStart(3, "0")}.bin`;
+            const start = index * mapManifest.chunkBytes;
+            return {
+              path,
+              key: path,
+              url: path,
+              sha256: "",
+              byte_size: Math.min(mapManifest.chunkBytes, archive.byteLength - start),
+              content_type: "application/octet-stream",
+            };
+          }),
+        },
+      } as ContentSnapshot;
+      const runtime = {
+        getStatus: () => ({ snapshot }),
+        ensureFile: async () => undefined,
+        readFile: async (_id: string, path: string) => {
+          const index = Number(path.match(/\/(\d{3})\.bin$/)?.[1]);
+          if (!Number.isInteger(index)) throw new Error(`Unexpected fixture path: ${path}`);
           const start = index * mapManifest.chunkBytes;
-          return { path, key: path, url: path, sha256: "", byte_size: Math.min(mapManifest.chunkBytes, archive.byteLength - start), content_type: "application/octet-stream" };
-        }),
-      },
-    } as ContentSnapshot;
-    const runtime = {
-      getStatus: () => ({ snapshot }),
-      ensureFile: async () => undefined,
-      readFile: async (_id: string, path: string) => {
-        const index = Number(path.match(/\/(\d{3})\.bin$/)?.[1]);
-        if (!Number.isInteger(index)) throw new Error(`Unexpected fixture path: ${path}`);
-        const start = index * mapManifest.chunkBytes;
-        const chunk = archive.subarray(start, Math.min(start + mapManifest.chunkBytes, archive.byteLength));
-        return chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as ArrayBuffer;
-      },
-    } as unknown as ContentRuntime;
+          const chunk = archive.subarray(start, Math.min(start + mapManifest.chunkBytes, archive.byteLength));
+          return chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength) as ArrayBuffer;
+        },
+      } as unknown as ContentRuntime;
 
-    const starter = await prefetchMapArea(runtime, releaseId, VICTORIA, "starter", undefined, snapshot);
-    expect(starter.chunkIds.length).toBeGreaterThan(0);
-    expect(starter.chunkIds.length).toBeLessThanOrEqual(4);
+      const starter = await prefetchMapArea(runtime, releaseId, VICTORIA, "starter", undefined, snapshot);
+      expect(starter.chunkIds.length).toBeGreaterThan(0);
+      expect(starter.chunkIds.length).toBeLessThanOrEqual(4);
 
-    resetAllowedMapChunks(releaseId);
-    const nearby = await prefetchMapArea(runtime, releaseId, VICTORIA, "nearby", undefined, snapshot);
+      resetAllowedMapChunks(releaseId);
+      const nearby = await prefetchMapArea(runtime, releaseId, VICTORIA, "nearby", undefined, snapshot);
 
-    // Cross-check against a brute-force scan of every tile in the archive.
-    const cells = new Set(mapAreaTiles(VICTORIA, "nearby").map(({ x, y }) => `${x}/${y}`));
-    const pmtiles = new PMTiles(new BundledOverviewSource(async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer));
-    const header = await pmtiles.getHeader();
-    const expected = new Set<number>();
-    const walk = async (offset: number, length: number): Promise<void> => {
-      for (const entry of await pmtiles.cache.getDirectory(pmtiles.source, offset, length, header)) {
-        if (entry.runLength === 0) { await walk(header.leafDirectoryOffset + entry.offset, entry.length); continue; }
-        for (let i = 0; i < entry.runLength; i += 1) {
-          const [z, x, y] = tileIdToZxy(entry.tileId + i);
-          const inCell = z >= 9 ? cells.has(`${x >> (z - 9)}/${y >> (z - 9)}`)
-            : z >= 7 && [...cells].some((key) => { const [cx, cy] = key.split("/").map(Number); return cx >> (9 - z) === x && cy >> (9 - z) === y; });
-          if (!inCell) continue;
-          const start = header.tileDataOffset + entry.offset;
-          for (let c = Math.floor(start / mapManifest.chunkBytes); c <= Math.floor((start + entry.length - 1) / mapManifest.chunkBytes); c += 1) expected.add(c);
+      // Cross-check against a brute-force scan of every tile in the archive.
+      const cells = new Set(mapAreaTiles(VICTORIA, "nearby").map(({ x, y }) => `${x}/${y}`));
+      const pmtiles = new PMTiles(
+        new BundledOverviewSource(async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer),
+      );
+      const header = await pmtiles.getHeader();
+      const expected = new Set<number>();
+      const walk = async (offset: number, length: number): Promise<void> => {
+        for (const entry of await pmtiles.cache.getDirectory(pmtiles.source, offset, length, header)) {
+          if (entry.runLength === 0) {
+            await walk(header.leafDirectoryOffset + entry.offset, entry.length);
+            continue;
+          }
+          for (let i = 0; i < entry.runLength; i += 1) {
+            const [z, x, y] = tileIdToZxy(entry.tileId + i);
+            const inCell =
+              z >= 9
+                ? cells.has(`${x >> (z - 9)}/${y >> (z - 9)}`)
+                : z >= 7 &&
+                  [...cells].some((key) => {
+                    const [cx, cy] = key.split("/").map(Number);
+                    return cx >> (9 - z) === x && cy >> (9 - z) === y;
+                  });
+            if (!inCell) continue;
+            const start = header.tileDataOffset + entry.offset;
+            for (let c = Math.floor(start / mapManifest.chunkBytes); c <= Math.floor((start + entry.length - 1) / mapManifest.chunkBytes); c += 1)
+              expected.add(c);
+          }
         }
+      };
+      await walk(header.rootDirectoryOffset, header.rootDirectoryLength);
+      for (const chunk of expected) expect(nearby.chunkIds).toContain(chunk);
+      // Anything extra holds directories, which sit before the tile data.
+      for (const chunk of nearby.chunkIds.filter((id) => !expected.has(id))) {
+        expect(chunk * mapManifest.chunkBytes).toBeLessThan(header.tileDataOffset);
       }
-    };
-    await walk(header.rootDirectoryOffset, header.rootDirectoryLength);
-    for (const chunk of expected) expect(nearby.chunkIds).toContain(chunk);
-    // Anything extra holds directories, which sit before the tile data.
-    for (const chunk of nearby.chunkIds.filter((id) => !expected.has(id))) {
-      expect(chunk * mapManifest.chunkBytes).toBeLessThan(header.tileDataOffset);
-    }
-  }, 30000);
+    },
+    30000,
+  );
 });

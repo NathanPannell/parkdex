@@ -38,22 +38,28 @@ export interface ChoiceAnswer {
  * The shared moderation module, adapted to choice questions. Resolves null when the model is not
  * configured, fails or times out, so callers fall back to the operator.
  */
-export type ProposalModerator = (input: { kind: string; state: unknown; questions: Record<string, ChoiceQuestion> }) =>
-  Promise<{ model: string | null; answers: Record<string, ChoiceAnswer> } | null>;
+export type ProposalModerator = (input: {
+  kind: string;
+  state: unknown;
+  questions: Record<string, ChoiceQuestion>;
+}) => Promise<{ model: string | null; answers: Record<string, ChoiceAnswer> } | null>;
 
 export const QUESTIONS: Record<"park" | "name" | "duplicate", ChoiceQuestion> = {
   park: {
     type: "choice",
-    instructions: "A player of a park-visiting game proposed adding this place to the game's park catalogue. Using the OpenStreetMap feature and the player's note, decide whether it is a real park or green space that members of the public can freely visit.",
+    instructions:
+      "A player of a park-visiting game proposed adding this place to the game's park catalogue. Using the OpenStreetMap feature and the player's note, decide whether it is a real park or green space that members of the public can freely visit.",
     criteria: {
       approve: "A real, publicly accessible park, nature reserve, public garden or protected green space that people can walk into.",
-      reject: "Private land, a backyard, a business, a school yard or sports facility with no public park, a road or building, a joke, spam, offensive content, or not a real place.",
+      reject:
+        "Private land, a backyard, a business, a school yard or sports facility with no public park, a road or building, a joke, spam, offensive content, or not a real place.",
       unsure: "Not enough information to tell.",
     },
   },
   name: {
     type: "choice",
-    instructions: "Does the player's proposed park name refer to the same place as the OpenStreetMap feature? If the feature has no name, decide whether the proposed name is a plausible, inoffensive name for it.",
+    instructions:
+      "Does the player's proposed park name refer to the same place as the OpenStreetMap feature? If the feature has no name, decide whether the proposed name is a plausible, inoffensive name for it.",
     criteria: {
       match: "The proposed name is the feature's name, a common variant of it, or a plausible inoffensive name for an unnamed feature.",
       mismatch: "The proposed name describes a different place, is misleading, or is offensive.",
@@ -62,7 +68,8 @@ export const QUESTIONS: Record<"park" | "name" | "duplicate", ChoiceQuestion> = 
   },
   duplicate: {
     type: "choice",
-    instructions: "Is the proposed place the same as one of the existing catalogue parks listed in nearbyParks (for example the same park under a different name, or a part of one)?",
+    instructions:
+      "Is the proposed place the same as one of the existing catalogue parks listed in nearbyParks (for example the same park under a different name, or a part of one)?",
     criteria: {
       new: "None of the nearby catalogue parks is this place.",
       duplicate: "One of the nearby catalogue parks is this place or contains it.",
@@ -96,10 +103,15 @@ function highest(answer: ChoiceAnswer | undefined): string | null {
  */
 export function decide(answers: Record<string, ChoiceAnswer>, threshold: number): { decision: Exclude<Decision, "skipped">; reasons: string[] } {
   const reasons: string[] = [];
-  const park = answers.park, name = answers.name, duplicate = answers.duplicate;
-  if (highest(park) === "reject" || probability(park, "reject") > 0.5) return { decision: "rejected", reasons: ["The model judged this is not a public park."] };
-  if (highest(name) === "mismatch" || probability(name, "mismatch") > 0.5) return { decision: "rejected", reasons: ["The model judged the name does not fit the mapped place."] };
-  if (highest(duplicate) === "duplicate" || probability(duplicate, "duplicate") > 0.5) return { decision: "rejected", reasons: ["The model judged this is already in the catalogue."] };
+  const park = answers.park,
+    name = answers.name,
+    duplicate = answers.duplicate;
+  if (highest(park) === "reject" || probability(park, "reject") > 0.5)
+    return { decision: "rejected", reasons: ["The model judged this is not a public park."] };
+  if (highest(name) === "mismatch" || probability(name, "mismatch") > 0.5)
+    return { decision: "rejected", reasons: ["The model judged the name does not fit the mapped place."] };
+  if (highest(duplicate) === "duplicate" || probability(duplicate, "duplicate") > 0.5)
+    return { decision: "rejected", reasons: ["The model judged this is already in the catalogue."] };
   if (highest(park) !== "approve" || probability(park, "approve") < threshold) reasons.push("Not clearly a public park.");
   if (highest(name) !== "match" || probability(name, "match") < threshold) reasons.push("Not clearly the same place as the name.");
   if (highest(duplicate) !== "new" || probability(duplicate, "new") < threshold) reasons.push("Might already be in the catalogue.");
@@ -175,7 +187,8 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
       return { decision: (rows[0].decision as Decision | null) ?? null, publishedParkId: (rows[0].published_park_id as string | null) ?? null };
     },
     async nearbyParks(lat, lng, km) {
-      const dLat = km / 110.54, dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
+      const dLat = km / 110.54,
+        dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
       const params = [lat - dLat, lat + dLat, lng - dLng, lng + dLng, lat, lng];
       let rows: Record<string, unknown>[];
       try {
@@ -188,16 +201,21 @@ export function createSqlProposalReviewStore(db: SqlRunner): ProposalReviewStore
       return rows.map((row) => {
         const geometry = row.geometry as MultiPolygon | null;
         return {
-          id: String(row.id), name: String(row.name), region: String(row.region), lat: Number(row.lat), lng: Number(row.lng),
+          id: String(row.id),
+          name: String(row.name),
+          region: String(row.region),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
           boundary: geometry && geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates) ? geometry : null,
         };
       });
     },
     async record(proposalId, decision, moderation) {
-      await db.query(
-        `UPDATE kip_proposals.parks SET decision = $2, moderation = $3::jsonb, decided_at = now(), updated_at = now() WHERE id = $1::uuid`,
-        [proposalId, decision, JSON.stringify(moderation)],
-      );
+      await db.query(`UPDATE kip_proposals.parks SET decision = $2, moderation = $3::jsonb, decided_at = now(), updated_at = now() WHERE id = $1::uuid`, [
+        proposalId,
+        decision,
+        JSON.stringify(moderation),
+      ]);
     },
     sql: () => db,
   };
@@ -249,9 +267,10 @@ function overlaps(feature: OsmFeature, park: NearbyPark): boolean {
 }
 
 function regionFrom(parks: NearbyPark[], point: [number, number], province: string): string | null {
-  return parks.find((park) =>
-    park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM && provinceFor([park.lng, park.lat]) === province,
-  )?.region ?? null;
+  return (
+    parks.find((park) => park.region.trim() && distanceKm(point, [park.lng, park.lat]) <= REGION_KM && provinceFor([park.lng, park.lat]) === province)
+      ?.region ?? null
+  );
 }
 
 /**
@@ -266,9 +285,7 @@ export async function regionFor(
   outline?: MultiPolygon,
 ): Promise<string> {
   const province = outline ? provinceOfOutline(outline) : provinceFor(point);
-  return regionFrom(nearby, point, province) ??
-    regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point, province) ??
-    province;
+  return regionFrom(nearby, point, province) ?? regionFrom(await store.nearbyParks(point[1], point[0], REGION_KM), point, province) ?? province;
 }
 
 /**
@@ -280,7 +297,16 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
   if (existing?.publishedParkId) return { decision: "approved", parkId: existing.publishedParkId, parkName: proposal.name };
   if (existing?.decision) return { decision: "pending" };
 
-  const record: ModerationRecord = { version: 1, checkedAt: deps.now().toISOString(), model: null, threshold: null, answers: null, reasons: [], osm: null, nearby: [] };
+  const record: ModerationRecord = {
+    version: 1,
+    checkedAt: deps.now().toISOString(),
+    model: null,
+    threshold: null,
+    answers: null,
+    reasons: [],
+    osm: null,
+    nearby: [],
+  };
   const wait = async (decision: Decision, reason: string): Promise<ReviewOutcome> => {
     record.reasons.push(reason);
     await deps.store.record(proposal.id, decision, record);
@@ -304,7 +330,10 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
 
   const nearby = await deps.store.nearbyParks(proposal.point[1], proposal.point[0], NEARBY_KM);
   record.nearby = nearby.slice(0, 15).map((park) => ({
-    id: park.id, name: park.name, distanceM: Math.round(distanceKm(proposal.point, [park.lng, park.lat]) * 1000), overlaps: overlaps(feature!, park),
+    id: park.id,
+    name: park.name,
+    distanceM: Math.round(distanceKm(proposal.point, [park.lng, park.lat]) * 1000),
+    overlaps: overlaps(feature!, park),
   }));
   // The app marks these as "Already on the map"; this stops one sent anyway, without asking the model.
   const listed = catalogueMatch(feature, nearby);
@@ -314,15 +343,28 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
   }
 
   record.threshold = deps.threshold;
-  const result = await deps.moderate({
-    kind: "park_proposal",
-    state: {
-      proposal: { name: proposal.name, note: proposal.note || null, pin: { lat: proposal.point[1], lng: proposal.point[0] } },
-      openStreetMap: { name: feature.name, kind: feature.kind, tags: feature.tags, areaSquareMetres: feature.areaM2, pinInside: distanceM === 0, pinDistanceMetres: distanceM },
-      nearbyParks: record.nearby.map(({ name, distanceM: metres, overlaps: overlapping }) => ({ name, distanceMetres: metres, overlapsOutline: overlapping })),
-    },
-    questions: QUESTIONS,
-  }).catch(() => null);
+  const result = await deps
+    .moderate({
+      kind: "park_proposal",
+      state: {
+        proposal: { name: proposal.name, note: proposal.note || null, pin: { lat: proposal.point[1], lng: proposal.point[0] } },
+        openStreetMap: {
+          name: feature.name,
+          kind: feature.kind,
+          tags: feature.tags,
+          areaSquareMetres: feature.areaM2,
+          pinInside: distanceM === 0,
+          pinDistanceMetres: distanceM,
+        },
+        nearbyParks: record.nearby.map(({ name, distanceM: metres, overlaps: overlapping }) => ({
+          name,
+          distanceMetres: metres,
+          overlapsOutline: overlapping,
+        })),
+      },
+      questions: QUESTIONS,
+    })
+    .catch(() => null);
   if (!result) return wait("skipped", "The moderation model was unavailable.");
   record.model = result.model;
   record.answers = result.answers;
@@ -333,7 +375,12 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
     await deps.store.record(proposal.id, verdict.decision, record);
     return { decision: "pending" };
   }
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
+  const park = parkFromProposal(
+    feature,
+    { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt },
+    await regionFor(deps.store, nearby, proposal.point, feature.geometry),
+    proposal.point,
+  );
   try {
     const published = await publishProposalPark(deps.store.sql(), park, proposal.id);
     if (published.status === "blocked") {
@@ -356,21 +403,33 @@ export async function reviewProposal(proposal: ReviewInput, deps: ReviewDependen
  * The operator approves a waiting proposal from the dashboard: the same outline fetch and
  * publish transaction, without the model. The model's stored answers stay as they were.
  */
-export async function publishProposalByOperator(proposal: ReviewInput, deps: Pick<ReviewDependencies, "store" | "osm">): Promise<{ parkId: string; parkName: string }> {
+export async function publishProposalByOperator(
+  proposal: ReviewInput,
+  deps: Pick<ReviewDependencies, "store" | "osm">,
+): Promise<{ parkId: string; parkName: string }> {
   const state = await deps.store.state(proposal.id);
   if (state?.publishedParkId) return { parkId: state.publishedParkId, parkName: proposal.name };
   if (!proposal.osm) throw new HttpError(422, "no_osm_outline", "This proposal has no OpenStreetMap outline. Create a draft and draw the boundary instead.");
   const feature = await deps.osm.feature(proposal.osm);
   if (!feature) throw new HttpError(422, "osm_missing", "That OpenStreetMap outline no longer exists or is not a park.");
   const nearby = await deps.store.nearbyParks(proposal.point[1], proposal.point[0], NEARBY_KM);
-  const park = parkFromProposal(feature, { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt }, await regionFor(deps.store, nearby, proposal.point, feature.geometry), proposal.point);
+  const park = parkFromProposal(
+    feature,
+    { id: proposal.id, name: proposal.name, note: proposal.note, point: proposal.point, createdAt: proposal.createdAt },
+    await regionFor(deps.store, nearby, proposal.point, feature.geometry),
+    proposal.point,
+  );
   const published = await publishProposalPark(deps.store.sql(), park, proposal.id).catch((error: unknown) => {
     // PostgreSQL errors can include connection details; pass on only the guard name.
     const guard = error instanceof Error ? /park_exists|draft_changed|draft_incomplete|draft_missing/.exec(error.message)?.[0] : undefined;
     throw new HttpError(422, "publish_failed", `Publishing was rolled back${guard ? ` (${guard})` : ""}. Try again.`);
   });
   if (published.status === "blocked") {
-    throw new HttpError(409, published.reason, published.reason === "park_exists" ? "A park with this outline is already in Parkdex." : "A draft for this outline already exists. Open it from Drafts.");
+    throw new HttpError(
+      409,
+      published.reason,
+      published.reason === "park_exists" ? "A park with this outline is already in Parkdex." : "A draft for this outline already exists. Open it from Drafts.",
+    );
   }
   return { parkId: published.parkId, parkName: park.name };
 }

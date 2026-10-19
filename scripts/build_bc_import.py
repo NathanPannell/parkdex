@@ -8,6 +8,7 @@ Every new park gets content reader floor 3: builds installed today keep their
 small API snapshot, and newer builds load the whole catalogue from a CDN
 release (docs/content-catalogue.md).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,14 +68,70 @@ BIOME_RULES = (
     ("lake", ("lake", "lakes", "pond", "ponds", "reservoir", "lac")),
     ("marsh", ("marsh", "marshes", "swamp", "bog", "wetland", "wetlands", "fen", "slough")),
     ("river", ("river", "creek", "brook", "stream", "rapids", "estuary", "canyon")),
-    ("coast", ("beach", "beaches", "bay", "cove", "point", "spit", "marine", "harbour", "harbor", "lagoon",
-               "island", "islands", "islet", "islets", "inlet", "shore", "shoreline", "waterfront", "seaside",
-               "sound", "strait", "sands", "wharf", "dock", "foreshore", "headland", "arm", "passage", "channel",
-               "ocean", "oceanview", "seaview", "sea", "seawall")),
-    ("mountain", ("mount", "mountain", "mountains", "mt", "peak", "peaks", "ridge", "hill", "hills", "summit",
-                  "bluff", "bluffs", "plateau", "alpine", "range", "glacier", "butte", "rock", "rocks")),
-    ("heritage", ("heritage", "historic", "memorial", "cemetery", "fort", "centennial", "cenotaph", "monument",
-                  "pioneer", "museum")),
+    (
+        "coast",
+        (
+            "beach",
+            "beaches",
+            "bay",
+            "cove",
+            "point",
+            "spit",
+            "marine",
+            "harbour",
+            "harbor",
+            "lagoon",
+            "island",
+            "islands",
+            "islet",
+            "islets",
+            "inlet",
+            "shore",
+            "shoreline",
+            "waterfront",
+            "seaside",
+            "sound",
+            "strait",
+            "sands",
+            "wharf",
+            "dock",
+            "foreshore",
+            "headland",
+            "arm",
+            "passage",
+            "channel",
+            "ocean",
+            "oceanview",
+            "seaview",
+            "sea",
+            "seawall",
+        ),
+    ),
+    (
+        "mountain",
+        (
+            "mount",
+            "mountain",
+            "mountains",
+            "mt",
+            "peak",
+            "peaks",
+            "ridge",
+            "hill",
+            "hills",
+            "summit",
+            "bluff",
+            "bluffs",
+            "plateau",
+            "alpine",
+            "range",
+            "glacier",
+            "butte",
+            "rock",
+            "rocks",
+        ),
+    ),
+    ("heritage", ("heritage", "historic", "memorial", "cemetery", "fort", "centennial", "cenotaph", "monument", "pioneer", "museum")),
 )
 SHORT_NAME = re.compile(
     r"\s+(?:(?:regional|provincial|marine|nature|heritage|ecological|national|community)\s+)?park(?:\s+reserve)?$",
@@ -124,6 +181,7 @@ def read_sources(bundle_dir: Path) -> dict[str, bytes]:
 # Geometry normalization: the same planar-face even-odd rule as the island
 # bundle, so invalid source rings keep exactly the area the app counts as inside.
 
+
 def in_ring(point: tuple[float, float], ring: list[list[float]]) -> bool:
     x, y = point
     inside = False
@@ -135,10 +193,7 @@ def in_ring(point: tuple[float, float], ring: list[list[float]]) -> bool:
 
 def legacy_inside(point: tuple[float, float], geometry: dict[str, Any]) -> bool:
     polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
-    return any(
-        in_ring(point, polygon[0]) and not any(in_ring(point, hole) for hole in polygon[1:])
-        for polygon in polygons
-    )
+    return any(in_ring(point, polygon[0]) and not any(in_ring(point, hole) for hole in polygon[1:]) for polygon in polygons)
 
 
 def polygons_of(geometry: dict[str, Any]) -> list[Any]:
@@ -264,6 +319,7 @@ def containment_probes(geometry: dict[str, Any]) -> dict[str, list[float]]:
 # Presentation for new parks. Per-park art and descriptions are retired, so
 # every new park is plain: no scene, a circle badge and a factual line.
 
+
 def short_name(name: str) -> str:
     return SHORT_NAME.sub("", name.strip()).strip() or name.strip()
 
@@ -315,8 +371,7 @@ def compact_size(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
 
-def projected_snapshot_bytes(snapshot: dict[str, Any], parks: list[dict[str, Any]], features: list[dict[str, Any]],
-                             drive: dict[str, Any]) -> int:
+def projected_snapshot_bytes(snapshot: dict[str, Any], parks: list[dict[str, Any]], features: list[dict[str, Any]], drive: dict[str, Any]) -> int:
     projected = {
         **snapshot,
         "parks": [*snapshot["parks"], *parks],
@@ -347,8 +402,7 @@ def island_projection(raw: dict[str, bytes], hub_count: int) -> tuple[list, list
     for park_id in review:
         park, drive_record = importer.validate_new_park(park_id, park_id, catalogue[park_id], review[park_id], hubs)
         parks.append(park)
-        features.append({"type": "Feature", "properties": {"id": park_id, "biome": park["biome"]},
-                         "geometry": boundaries[park_id]["geometry"]})
+        features.append({"type": "Feature", "properties": {"id": park_id, "biome": park["biome"]}, "geometry": boundaries[park_id]["geometry"]})
         drive[park_id] = {"drive": drive_record["drive"], "walkM": drive_record["walkM"]}
     return parks, features, drive
 
@@ -370,13 +424,15 @@ def overlaps(new_features: dict[str, dict[str, Any]], existing: dict[str, dict[s
                 continue
             new_share, existing_share = shared / candidate.area, shared / other.area
             if max(new_share, existing_share) >= OVERLAP_REPORT_FLOOR:
-                found.append({
-                    "newId": park_id,
-                    "existingId": ids[int(index)],
-                    "shareOfNewPark": round(new_share, 6),
-                    "shareOfExistingPark": round(existing_share, 6),
-                    "duplicate": min(new_share, existing_share) >= DUPLICATE_OVERLAP,
-                })
+                found.append(
+                    {
+                        "newId": park_id,
+                        "existingId": ids[int(index)],
+                        "shareOfNewPark": round(new_share, 6),
+                        "shareOfExistingPark": round(existing_share, 6),
+                        "duplicate": min(new_share, existing_share) >= DUPLICATE_OVERLAP,
+                    }
+                )
     return found
 
 
@@ -407,9 +463,12 @@ def release_size(snapshot: dict[str, Any], additions: list[tuple[list, list, dic
     parks = [access_fields(park) for park in snapshot["parks"]] + [access_fields(park) for group in additions for park in group[0]]
     features = snapshot["boundaries"]["features"] + [feature for group in additions for feature in group[1]]
     drive = {**snapshot["drive"]["parks"], **{key: value for group in additions for key, value in group[2].items()}}
-    full = {**snapshot, "parks": sorted(parks, key=lambda park: park["id"]),
-            "boundaries": {"type": "FeatureCollection", "features": sorted(features, key=lambda feature: feature["properties"]["id"])},
-            "drive": {"hubs": snapshot["drive"]["hubs"], "parks": dict(sorted(drive.items()))}}
+    full = {
+        **snapshot,
+        "parks": sorted(parks, key=lambda park: park["id"]),
+        "boundaries": {"type": "FeatureCollection", "features": sorted(features, key=lambda feature: feature["properties"]["id"])},
+        "drive": {"hubs": snapshot["drive"]["hubs"], "parks": dict(sorted(drive.items()))},
+    }
     release = content_catalogue.build_release(full)
     sizes = [item["byte_size"] for item in release["manifest"]["files"][1:]]
     return {
@@ -451,9 +510,13 @@ def size_projections(raw, staging, production, wire, selected, hub_count) -> dic
             "staging": release_size(staging, [new]),
             "productionAfterIslandBundle": release_size(production, [island, new]),
         },
-        "importChangeBatchBytes": compact_size([{"entity": kind, "op": "upsert", "id": park_id, "value": value}
-                                                for park_id, park, feature in (wire[item] for item in selected)
-                                                for kind, value in (("park", park), ("boundary", feature), ("drive", {"drive": [None] * hub_count, "walkM": 0}))]),
+        "importChangeBatchBytes": compact_size(
+            [
+                {"entity": kind, "op": "upsert", "id": park_id, "value": value}
+                for park_id, park, feature in (wire[item] for item in selected)
+                for kind, value in (("park", park), ("boundary", feature), ("drive", {"drive": [None] * hub_count, "walkM": 0}))
+            ]
+        ),
     }
 
 
@@ -487,11 +550,7 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     if removed_ids & staging_ids or not removed_ids <= production_ids:
         raise importer.ParkImportError("Operator removals must be absent from staging and present in production revision 26")
 
-    existing_features = {
-        feature["properties"]["id"]: feature
-        for snapshot in (production, staging)
-        for feature in snapshot["boundaries"]["features"]
-    }
+    existing_features = {feature["properties"]["id"]: feature for snapshot in (production, staging) for feature in snapshot["boundaries"]["features"]}
     normalized: dict[str, dict[str, Any]] = {}
     normalization_reports: list[dict[str, Any]] = []
     for park_id, feature in legacy_features.items():
@@ -518,8 +577,9 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         feature = {"type": "Feature", "properties": {"id": park_id, "biome": park["biome"]}, "geometry": records[park_id]["geometry"]}
         wire[park_id] = (park_id, park, feature)
 
-    comparison = comparison_rows(places_list, legacy_features, normalized, records, set(selected),
-                                 staging_ids, production_ids, removed_ids, duplicates, existing_features)
+    comparison = comparison_rows(
+        places_list, legacy_features, normalized, records, set(selected), staging_ids, production_ids, removed_ids, duplicates, existing_features
+    )
     projections = size_projections(raw, staging, production, wire, selected, hub_count)
     check_projections(projections)
 
@@ -531,16 +591,21 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         "minimumReader": MINIMUM_READER,
         "delivery": "Every new park gets reader floor 3: readers 1 and 2 keep today's snapshot, and reader 3 loads the whole catalogue from a CDN release.",
         "excluded": {
-            "islands": {"reason": "Legacy island check-offs are not parks, and installed builds reject an island category.", "ids": sorted(park_id for park_id in places if places[park_id]["category"] == EXCLUDED_CATEGORY)},
+            "islands": {
+                "reason": "Legacy island check-offs are not parks, and installed builds reject an island category.",
+                "ids": sorted(park_id for park_id in places if places[park_id]["category"] == EXCLUDED_CATEGORY),
+            },
             "operatorRemovals": {"reason": removals["note"], "ids": sorted(removed_ids)},
             "existingStaging": {"reason": "Already in the staging catalogue at revision 158.", "count": len(staging_ids & set(places))},
-            "existingProductionOnly": {"reason": "Already in the production catalogue at revision 26.", "ids": sorted((production_ids - staging_ids) & set(places) - removed_ids)},
+            "existingProductionOnly": {
+                "reason": "Already in the production catalogue at revision 26.",
+                "ids": sorted((production_ids - staging_ids) & set(places) - removed_ids),
+            },
             "duplicates": {"reason": f"At least {DUPLICATE_OVERLAP:.0%} of both footprints overlap an existing park.", "ids": sorted(duplicates)},
         },
     }
     sources = {park_id: normalized[park_id] for park_id in selected}
-    outputs, boundaries_raw = write_outputs(bundle_dir, places, selected, reviews, sources, selection, comparison,
-                                            normalization_reports, overlap_report)
+    outputs, boundaries_raw = write_outputs(bundle_dir, places, selected, reviews, sources, selection, comparison, normalization_reports, overlap_report)
     manifest = {
         "schema": SCHEMA,
         "sources": {name: {"sha256": sha256(data), "bytes": len(data)} for name, data in raw.items()},
@@ -573,8 +638,9 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     }
 
 
-def comparison_rows(places_list, legacy_features, normalized, records, selected_set, staging_ids,
-                    production_ids, removed_ids, duplicates, existing_features) -> list[dict[str, Any]]:
+def comparison_rows(
+    places_list, legacy_features, normalized, records, selected_set, staging_ids, production_ids, removed_ids, duplicates, existing_features
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for place in places_list:
         park_id = place["id"]
@@ -595,16 +661,18 @@ def comparison_rows(places_list, legacy_features, normalized, records, selected_
         if park_id in selected_set:
             output = records[park_id]["geometry"]
             output_counts = counts(output)
-            row.update({
-                "status": "new",
-                "outputSourceFeatureIds": [str(item) for item in records[park_id]["sourceFeatureIds"]],
-                "outputCounts": output_counts,
-                "polygonsMatch": output_counts["polygons"] == row["sourceCounts"]["polygons"],
-                "holesMatch": output_counts["holes"] == row["sourceCounts"]["holes"],
-                "coverage": coverage(source["geometry"], output),
-                **({} if row["sourceValid"] else {"evenOddAgreement": even_odd_agreement(source["geometry"], output)}),
-                "probes": containment_probes(output),
-            })
+            row.update(
+                {
+                    "status": "new",
+                    "outputSourceFeatureIds": [str(item) for item in records[park_id]["sourceFeatureIds"]],
+                    "outputCounts": output_counts,
+                    "polygonsMatch": output_counts["polygons"] == row["sourceCounts"]["polygons"],
+                    "holesMatch": output_counts["holes"] == row["sourceCounts"]["holes"],
+                    "coverage": coverage(source["geometry"], output),
+                    **({} if row["sourceValid"] else {"evenOddAgreement": even_odd_agreement(source["geometry"], output)}),
+                    "probes": containment_probes(output),
+                }
+            )
         elif park_id in duplicates:
             row["status"] = "excluded-duplicate"
         elif park_id in removed_ids:
@@ -650,8 +718,9 @@ def summary_counts(places, selected, reviews, records, normalization_reports, co
     }
 
 
-def write_outputs(bundle_dir, places, selected, reviews, sources, selection, comparison,
-                  normalization_reports, overlap_report) -> tuple[dict[str, bytes], bytes]:
+def write_outputs(
+    bundle_dir, places, selected, reviews, sources, selection, comparison, normalization_reports, overlap_report
+) -> tuple[dict[str, bytes], bytes]:
     files: dict[str, bytes] = {
         "selection.json": json_bytes(selection),
         "catalogue.json": json_bytes([places[park_id] for park_id in selected]),

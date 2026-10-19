@@ -1,11 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { accountBackupFetch, assertAccountBackupRequest, isAccountBackupPath } from "./accountBackupTransport";
-import {
-  nativeAuthFetch,
-  persistNativeSession,
-  type NativeAccountSession,
-  type ServerAccountSession,
-} from "./nativeIdentity";
+import { nativeAuthFetch, persistNativeSession, type NativeAccountSession, type ServerAccountSession } from "./nativeIdentity";
 import { hasUrlCredentials, isDevLoopbackHttp, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
 import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
 import { withRequestContext } from "../requestContext";
@@ -43,7 +38,10 @@ export function isValidGoogleWebClientId(value: string | null | undefined): valu
 }
 
 export class AuthHttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
     super(message);
     this.name = "AuthHttpError";
   }
@@ -52,16 +50,21 @@ export class AuthHttpError extends Error {
 const isNative = Capacitor.isNativePlatform();
 
 function accountApiOrigin(): string {
-  const configured = pointedApiUrl([import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
-    .map((value) => (value ?? "").trim())
-    .find(Boolean) ?? "") ?? "";
-  return resolveUserDataApiOrigin(configured, {
-    native: isNative,
-    webOrigin: isNative ? undefined : (typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin),
-    allowLoopbackHttp: import.meta.env.DEV,
-    environment: apiEnvironment(),
-    previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
-  }) || KIP_STAGING_ORIGIN;
+  const configured =
+    pointedApiUrl(
+      [import.meta.env.VITE_ACCOUNT_API_URL, import.meta.env.VITE_APP_URL, import.meta.env.VITE_PREVIEW_API_ORIGIN]
+        .map((value) => (value ?? "").trim())
+        .find(Boolean) ?? "",
+    ) ?? "";
+  return (
+    resolveUserDataApiOrigin(configured, {
+      native: isNative,
+      webOrigin: isNative ? undefined : typeof location === "undefined" ? KIP_STAGING_ORIGIN : location.origin,
+      allowLoopbackHttp: import.meta.env.DEV,
+      environment: apiEnvironment(),
+      previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+    }) || KIP_STAGING_ORIGIN
+  );
 }
 
 function apiUrl(path: string) {
@@ -70,10 +73,17 @@ function apiUrl(path: string) {
 
 function csrfToken() {
   if (typeof document === "undefined") return "";
-  const encoded = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("kip_account_csrf="))?.slice("kip_account_csrf=".length);
+  const encoded = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("kip_account_csrf="))
+    ?.slice("kip_account_csrf=".length);
   if (!encoded) return "";
-  try { return decodeURIComponent(encoded); }
-  catch { return ""; }
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return "";
+  }
 }
 
 function writeMethod(method: string) {
@@ -90,10 +100,19 @@ function requestMethod(init: RequestInit, input?: RequestInfo | URL) {
 export function assertSecureAccountRequest(url: URL, accountOrigin: string, allowDevLoopback = isDevLoopbackHttp(new URL(accountOrigin))): void {
   const origin = new URL(accountOrigin);
   if (allowDevLoopback && isDevLoopbackHttp(origin, true) && url.origin === origin.origin && !hasUrlCredentials(url) && !url.hash) return;
-  if (origin.protocol !== "https:" || hasUrlCredentials(origin) || origin.search || origin.hash ||
-      !["", "/"].includes(origin.pathname) || (origin.port && origin.port !== "443") ||
-      url.protocol !== "https:" || url.origin !== origin.origin ||
-      hasUrlCredentials(url) || url.hash || (url.port && url.port !== "443")) {
+  if (
+    origin.protocol !== "https:" ||
+    hasUrlCredentials(origin) ||
+    origin.search ||
+    origin.hash ||
+    !["", "/"].includes(origin.pathname) ||
+    (origin.port && origin.port !== "443") ||
+    url.protocol !== "https:" ||
+    url.origin !== origin.origin ||
+    hasUrlCredentials(url) ||
+    url.hash ||
+    (url.port && url.port !== "443")
+  ) {
     throw new Error("Account requests require the configured HTTPS account API.");
   }
 }
@@ -101,7 +120,7 @@ export function assertSecureAccountRequest(url: URL, accountOrigin: string, allo
 async function parseBody(response: Response): Promise<Record<string, unknown>> {
   try {
     const body: unknown = await response.json();
-    return body && typeof body === "object" && !Array.isArray(body) ? body as Record<string, unknown> : {};
+    return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
   } catch {
     return {};
   }
@@ -160,7 +179,8 @@ async function requestJson<T>(path: string, init: RequestInit = {}, authenticate
   const response = await fetchRequest(path, { ...init, headers }, authenticated, expectedAccountId);
   const body = await parseBody(response);
   if (!response.ok) {
-    const message = typeof body.error === "string" ? body.error : typeof body.message === "string" ? body.message : "The account service is unavailable. Try again shortly.";
+    const message =
+      typeof body.error === "string" ? body.error : typeof body.message === "string" ? body.message : "The account service is unavailable. Try again shortly.";
     throw new AuthHttpError(response.status, message.slice(0, 240));
   }
   return body as T;
@@ -241,7 +261,12 @@ export async function confirmPasswordReset(token: string, newPassword: string): 
 }
 
 export async function createGoogleChallenge(purpose: GooglePurpose, expectedAccountId?: string): Promise<GoogleChallenge> {
-  return requestJson<GoogleChallenge>("/api/auth/google/challenge", { method: "POST", body: JSON.stringify({ purpose }) }, purpose !== "sign_in", expectedAccountId);
+  return requestJson<GoogleChallenge>(
+    "/api/auth/google/challenge",
+    { method: "POST", body: JSON.stringify({ purpose }) },
+    purpose !== "sign_in",
+    expectedAccountId,
+  );
 }
 
 export async function completeGoogleSignIn(idToken: string, nonce: string, transport: "web" | "native"): Promise<AccountProfile> {
@@ -256,11 +281,16 @@ export async function completeGoogleSignIn(idToken: string, nonce: string, trans
 
 export async function linkGoogleAccount(idToken: string, nonce: string, transport: "web" | "native", expectedAccountId: string): Promise<AccountProfile> {
   const path = transport === "native" ? "/api/auth/google/native" : "/api/auth/google";
-  const body = await requestJson<{ account: AccountProfile }>(path, {
-    method: "POST",
-    headers: transport === "native" ? { "X-Kip-Auth-Transport": "native" } : undefined,
-    body: JSON.stringify({ idToken, nonce }),
-  }, true, expectedAccountId);
+  const body = await requestJson<{ account: AccountProfile }>(
+    path,
+    {
+      method: "POST",
+      headers: transport === "native" ? { "X-Kip-Auth-Transport": "native" } : undefined,
+      body: JSON.stringify({ idToken, nonce }),
+    },
+    true,
+    expectedAccountId,
+  );
   if (!body.account || body.account.id.toLowerCase() !== expectedAccountId.toLowerCase()) {
     throw new Error("Google did not link to the signed-in account.");
   }
@@ -273,11 +303,16 @@ export async function reauthenticatePassword(password: string, expectedAccountId
 
 export async function reauthenticateGoogle(idToken: string, nonce: string, transport: "web" | "native", expectedAccountId: string): Promise<void> {
   const path = transport === "native" ? "/api/auth/google/native" : "/api/auth/google";
-  const body = await requestJson<GoogleReauthResponse>(path, {
-    method: "POST",
-    headers: transport === "native" ? { "X-Kip-Auth-Transport": "native" } : undefined,
-    body: JSON.stringify({ idToken, nonce }),
-  }, true, expectedAccountId);
+  const body = await requestJson<GoogleReauthResponse>(
+    path,
+    {
+      method: "POST",
+      headers: transport === "native" ? { "X-Kip-Auth-Transport": "native" } : undefined,
+      body: JSON.stringify({ idToken, nonce }),
+    },
+    true,
+    expectedAccountId,
+  );
   if (!body.reauthenticatedUntil) throw new Error("Google did not confirm recent account verification.");
 }
 

@@ -1,7 +1,13 @@
 import { catalogueMatch } from "./catalogueMatch.js";
 import {
-  decidePhoto, DEFAULT_FLAG_THRESHOLDS, FLAG_MESSAGES, UNAVAILABLE_MESSAGE, UNSURE_MESSAGE,
-  type PhotoAnswers, type PhotoChecker, type PhotoFlag,
+  decidePhoto,
+  DEFAULT_FLAG_THRESHOLDS,
+  FLAG_MESSAGES,
+  UNAVAILABLE_MESSAGE,
+  UNSURE_MESSAGE,
+  type PhotoAnswers,
+  type PhotoChecker,
+  type PhotoFlag,
 } from "./founderPhoto.js";
 import type { FoundedRecord, FoundersStore, FoundResult, KeptAttempt } from "./founders-store.js";
 import { apiNewBadges, apiVisit, badgeEvents, visitEvents } from "./game.js";
@@ -40,8 +46,17 @@ const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$
 const COVER_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/cover\/([0-9a-f]{64})\.jpg$/;
 const SUMMARY_PATH = /^\/api\/parks\/([a-z0-9]+(?:-[a-z0-9]+)*)\/summary$/;
 
-export type FounderEventName = "park_founded" | "founder_photo_checked" | "founding_review_requested"
-  | "flag_planted" | "flag_taken" | "flag_held" | "visit_already_today" | "flag_fell" | "visit_logged_protected" | "badge_unlocked";
+export type FounderEventName =
+  | "park_founded"
+  | "founder_photo_checked"
+  | "founding_review_requested"
+  | "flag_planted"
+  | "flag_taken"
+  | "flag_held"
+  | "visit_already_today"
+  | "flag_fell"
+  | "visit_logged_protected"
+  | "badge_unlocked";
 
 export interface FoundersHandlers {
   store(): FoundersStore;
@@ -108,8 +123,15 @@ export function validateFoundBody(body: unknown): FoundRequest {
   const target = validateTarget(value.target);
   const photo = exactKeys(value.photo, ["mime", "base64", "width", "height"], "Send the photo as a JPEG.");
   if (photo.mime !== "image/jpeg" || typeof photo.base64 !== "string") throw invalidPhoto();
-  if (typeof photo.width !== "number" || typeof photo.height !== "number" || !Number.isInteger(photo.width) || !Number.isInteger(photo.height) ||
-      photo.width < 1 || photo.height < 1) throw invalidPhoto();
+  if (
+    typeof photo.width !== "number" ||
+    typeof photo.height !== "number" ||
+    !Number.isInteger(photo.width) ||
+    !Number.isInteger(photo.height) ||
+    photo.width < 1 ||
+    photo.height < 1
+  )
+    throw invalidPhoto();
   if (photo.width > MAX_PHOTO_DIMENSION || photo.height > MAX_PHOTO_DIMENSION) {
     throw new HttpError(413, "photo_too_large", "That photo is too large. Use one of at most 2,048 pixels on each side.");
   }
@@ -165,7 +187,7 @@ function checkResponse(outcome: "reject" | "unsure", flags: readonly string[], k
   return json({
     outcome: outcome === "reject" ? "rejected" : "unsure",
     flags: list,
-    message: outcome === "reject" ? list[0]?.message ?? FLAG_MESSAGES.not_park : UNSURE_MESSAGE,
+    message: outcome === "reject" ? (list[0]?.message ?? FLAG_MESSAGES.not_park) : UNSURE_MESSAGE,
     reviewableUntil: keptAt ? new Date(Date.parse(keptAt) + REVIEW_KEEP_MS).toISOString() : null,
   });
 }
@@ -229,7 +251,7 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   const photoSha256 = await sha256Hex(input.photo.bytes);
   const visitId = await founderVisitId(input.attemptId);
 
-  if (!await store.hasHandle(accountId)) throw new HttpError(409, "handle_required", "Choose a handle before you become a founder.");
+  if (!(await store.hasHandle(accountId))) throw new HttpError(409, "handle_required", "Choose a handle before you become a founder.");
 
   // A retry with the same attempt answers what the first request did, without asking the model again.
   const earlier = await store.attempt(accountId, input.attemptId, visitId);
@@ -239,11 +261,13 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   }
   if (earlier.check) {
     if (earlier.check.photoSha256 !== photoSha256) throw new HttpError(409, "attempt_id_reused", "This attempt ID was already used for another photo.");
-    if (earlier.check.outcome === "reject" || earlier.check.outcome === "unsure") return checkResponse(earlier.check.outcome, earlier.check.flags, earlier.check.keptAt);
+    if (earlier.check.outcome === "reject" || earlier.check.outcome === "unsure")
+      return checkResponse(earlier.check.outcome, earlier.check.flags, earlier.check.keptAt);
   }
 
   const usage = await store.usage(accountId, at);
-  if (usage.foundedLastDay >= FOUNDED_PER_DAY) throw new HttpError(429, "rate_limited_founding", `You've become the founder of ${FOUNDED_PER_DAY} parks today. Try again tomorrow.`);
+  if (usage.foundedLastDay >= FOUNDED_PER_DAY)
+    throw new HttpError(429, "rate_limited_founding", `You've become the founder of ${FOUNDED_PER_DAY} parks today. Try again tomorrow.`);
   if (usage.checksLastHour >= CHECKS_PER_HOUR) throw new HttpError(429, "rate_limited_founding", "That's a lot of photos this hour. Try again a little later.");
 
   const resolved = await resolveTarget(handlers, store, input.target, input.position);
@@ -255,28 +279,44 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
   const checker = handlers.photoChecker();
   const answers = checker
     ? await checker({
-      jpeg: input.photo.bytes,
-      parkName: resolved.kind === "osm" ? resolved.feature.name ?? "an unnamed park" : resolved.name,
-      parkKind: resolved.kind === "osm" ? resolved.feature.kind : resolved.label,
-    }).catch(() => null)
+        jpeg: input.photo.bytes,
+        parkName: resolved.kind === "osm" ? (resolved.feature.name ?? "an unnamed park") : resolved.name,
+        parkKind: resolved.kind === "osm" ? resolved.feature.kind : resolved.label,
+      }).catch(() => null)
     : null;
   const decision = answers ? decidePhoto(answers) : null;
   const outcome = decision?.outcome ?? "unavailable";
   const flags: string[] = decision?.flags ?? [];
   const photo = { sha256: photoSha256, base64: Buffer.from(input.photo.bytes).toString("base64"), width: input.photo.width, height: input.photo.height };
   // A photo the player can appeal (#153) is kept for a day, with the position and the target.
-  const keep: KeptAttempt | null = decision && decision.outcome !== "approve" ? {
-    parkName: resolved.kind === "osm" ? resolved.feature.name ?? "Unnamed park" : resolved.name,
-    osmFeature: resolved.kind === "osm" ? resolved.feature : null,
-    position: { lat: input.position.lat, lng: input.position.lng, accuracyM: input.position.accuracyM },
-    photo,
-  } : null;
+  const keep: KeptAttempt | null =
+    decision && decision.outcome !== "approve"
+      ? {
+          parkName: resolved.kind === "osm" ? (resolved.feature.name ?? "Unnamed park") : resolved.name,
+          osmFeature: resolved.kind === "osm" ? resolved.feature : null,
+          position: { lat: input.position.lat, lng: input.position.lng, accuracyM: input.position.accuracyM },
+          photo,
+        }
+      : null;
   await store.recordCheck({
-    id: handlers.uuid(), accountId, attemptId: input.attemptId, parkId: resolved.parkId, osm, at, outcome, flags, photoSha256,
+    id: handlers.uuid(),
+    accountId,
+    attemptId: input.attemptId,
+    parkId: resolved.parkId,
+    osm,
+    at,
+    outcome,
+    flags,
+    photoSha256,
     moderation: answers ? moderationRecord(answers, at, flags) : null,
     keep,
   });
-  handlers.emit("founder_photo_checked", { parkId: resolved.parkId, outcome, flags: flags.join(","), source: resolved.kind === "osm" ? "osm_new" : "existing" });
+  handlers.emit("founder_photo_checked", {
+    parkId: resolved.parkId,
+    outcome,
+    flags: flags.join(","),
+    source: resolved.kind === "osm" ? "osm_new" : "existing",
+  });
   if (!decision) throw new HttpError(503, "photo_check_unavailable", UNAVAILABLE_MESSAGE);
   if (decision.outcome !== "approve") return checkResponse(decision.outcome, decision.flags, at);
 
@@ -298,8 +338,12 @@ async function postFound(request: Request, handlers: FoundersHandlers): Promise<
         id: proposalId,
         // The shape the operator dashboard shows for proposals.
         moderation: {
-          version: 2, checkedAt: at, model: answers?.model ?? null, flagThresholds: DEFAULT_FLAG_THRESHOLDS,
-          answers: answers?.answers ?? null, reasons: ["Founded by a signed-in player standing in the park, with an approved photo."],
+          version: 2,
+          checkedAt: at,
+          model: answers?.model ?? null,
+          flagThresholds: DEFAULT_FLAG_THRESHOLDS,
+          answers: answers?.answers ?? null,
+          reasons: ["Founded by a signed-in player standing in the park, with an approved photo."],
           osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, areaM2: feature.areaM2, distanceM, containsPin: distanceM === 0 },
           nearby: [],
         },
@@ -345,14 +389,15 @@ async function postReview(request: Request, handlers: FoundersHandlers): Promise
   if (typeof body.attemptId !== "string" || !UUID.test(body.attemptId)) throw new HttpError(400, "invalid_request", "Invalid attempt ID.");
   const attemptId = body.attemptId.toLowerCase();
   const store = handlers.store();
-  if (!await store.hasHandle(accountId)) throw new HttpError(409, "handle_required", "Choose a handle before asking for a review.");
+  if (!(await store.hasHandle(accountId))) throw new HttpError(409, "handle_required", "Choose a handle before asking for a review.");
 
   // Asking again for the same attempt answers with the request it already made.
   const found = await store.reviewAttempt(accountId, attemptId);
   if (found.request) return json({ status: found.request.status, requestId: found.request.id });
   const { check } = found;
   if (!check) throw new HttpError(404, "attempt_not_found", "We couldn't find that photo. Take a new one and try again.");
-  if (check.outcome !== "reject" && check.outcome !== "unsure") throw new HttpError(409, "not_reviewable", "Only photos the check turned down can be reviewed.");
+  if (check.outcome !== "reject" && check.outcome !== "unsure")
+    throw new HttpError(409, "not_reviewable", "Only photos the check turned down can be reviewed.");
   if (!check.kept) throw new HttpError(410, "photo_expired", "That photo is no longer kept. Take a new one and try again.");
   const [hidden, founders] = await Promise.all([store.hidden([check.parkId]), store.founders([check.parkId])]);
   if (hidden.has(check.parkId)) throw new HttpError(404, "park_not_found", "That park is not in Parkdex.");
@@ -388,7 +433,11 @@ async function postReviewSeen(request: Request, handlers: FoundersHandlers): Pro
     throw new HttpError(400, "invalid_request", `Send 1 to ${MAX_SEEN_IDS} request IDs.`);
   }
   const at = new Date(handlers.now()).toISOString();
-  const seen = await handlers.store().markReviewsSeen(accountId, (ids as string[]).map((id) => id.toLowerCase()), at);
+  const seen = await handlers.store().markReviewsSeen(
+    accountId,
+    (ids as string[]).map((id) => id.toLowerCase()),
+    at,
+  );
   return json({ seen });
 }
 

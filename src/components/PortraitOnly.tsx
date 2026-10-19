@@ -30,7 +30,8 @@ function DesktopPanel() {
         {DEMO_TOOLS && (
           // `npm run dev` on a desktop lands here first, so the demo hints live here.
           <p className="portrait-only__dev">
-            Development build: make the window taller than it is wide to run the app. Then open <kbd>Demo controls</kbd> in the map menu, or tap <kbd>Demo: simulate trip</kbd> after choosing a park.
+            Development build: make the window taller than it is wide to run the app. Then open <kbd>Demo controls</kbd> in the map menu, or tap{" "}
+            <kbd>Demo: simulate trip</kbd> after choosing a park.
           </p>
         )}
       </div>

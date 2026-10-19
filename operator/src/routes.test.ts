@@ -22,7 +22,17 @@ test("retired and bare paths redirect to where their pages live now", () => {
 });
 
 test("current paths, including the feedback link in operator emails, stay put", () => {
-  for (const path of ["/feedback", "/feedback/review", "/parks", "/parks/beacon-hill-park", "/analytics/overview", "/analytics/accounts", "/analytics/events", "/app/builds", "/app/updates"]) {
+  for (const path of [
+    "/feedback",
+    "/feedback/review",
+    "/parks",
+    "/parks/beacon-hill-park",
+    "/analytics/overview",
+    "/analytics/accounts",
+    "/analytics/events",
+    "/app/builds",
+    "/app/updates",
+  ]) {
     assert.equal(redirectFor(path), null, path);
   }
   // Paths that only share letters with a retired page are not redirected.
@@ -31,7 +41,10 @@ test("current paths, including the feedback link in operator emails, stay put", 
 });
 
 test("every path resolves to its section, and Build config is pinned to production", () => {
-  assert.deepEqual(SECTIONS.map((section) => section.path), ["/feedback", "/parks", "/analytics", "/app"]);
+  assert.deepEqual(
+    SECTIONS.map((section) => section.path),
+    ["/feedback", "/parks", "/analytics", "/app"],
+  );
   assert.equal(resolveRoute("/feedback/review")?.section.id, "feedback");
   assert.equal(resolveRoute("/parks/beacon-hill-park")?.section.id, "parks");
   // The most specific page wins: Review owns /parks/review, the catalogue every other park path.

@@ -60,7 +60,13 @@ export function BottomNav() {
   };
 
   return (
-    <motion.nav className={`nav nav--four ${over ? "nav--over" : ""}`} initial={{ y: 120 }} animate={{ y: 0 }} exit={{ y: 120 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}>
+    <motion.nav
+      className={`nav nav--four ${over ? "nav--over" : ""}`}
+      initial={{ y: 120 }}
+      animate={{ y: 0 }}
+      exit={{ y: 120 }}
+      transition={{ type: "spring", stiffness: 300, damping: 28 }}
+    >
       <div className="nav__bar">
         {[...LEFT, ...RIGHT].map((t, index) => (
           <button
@@ -91,7 +97,13 @@ export function BottomNav() {
         <Icon name="flag" size={26} stroke={2.4} />
         <AnimatePresence>
           {here && (
-            <motion.span className="fab__label" initial={{ scale: 0, y: 6 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 600, damping: 18 }}>
+            <motion.span
+              className="fab__label"
+              initial={{ scale: 0, y: 6 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0 }}
+              transition={{ type: "spring", stiffness: 600, damping: 18 }}
+            >
               {visit.shortLabelFor(here.id)}
             </motion.span>
           )}

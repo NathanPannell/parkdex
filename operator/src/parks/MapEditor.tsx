@@ -65,7 +65,9 @@ export function MapEditor({ boundary, pin, sketch, editable, onBoundary, onPin, 
     if (!full) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
+    return () => {
+      document.body.style.overflow = previous;
+    };
   }, [full]);
 
   return (
@@ -74,7 +76,7 @@ export function MapEditor({ boundary, pin, sketch, editable, onBoundary, onPin, 
         <ParkMap
           boundary={boundary}
           pin={pin}
-          sketch={showSketch ? sketch ?? null : null}
+          sketch={showSketch ? (sketch ?? null) : null}
           drawing={vertices}
           onMapClick={drawing ? (position) => setVertices([...vertices, round(position)]) : undefined}
           onMapRightClick={editable ? (position) => onPin(round(position)) : undefined}
@@ -87,27 +89,59 @@ export function MapEditor({ boundary, pin, sketch, editable, onBoundary, onPin, 
           {drawing ? (
             <>
               <span className="map-tools__hint">Click to add corners ({vertices.length}). Drag to pan.</span>
-              <button type="button" className="button button--ghost button--small" disabled={!vertices.length} onClick={() => setVertices(vertices.slice(0, -1))}>Undo</button>
-              <button type="button" className="button button--ghost button--small" onClick={() => setVertices(null)}>Cancel</button>
-              <button type="button" className="button button--primary button--small" disabled={vertices.length < 3} onClick={() => void finish()}><Icon name="check" size={15} /> Use boundary</button>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                disabled={!vertices.length}
+                onClick={() => setVertices(vertices.slice(0, -1))}
+              >
+                Undo
+              </button>
+              <button type="button" className="button button--ghost button--small" onClick={() => setVertices(null)}>
+                Cancel
+              </button>
+              <button type="button" className="button button--primary button--small" disabled={vertices.length < 3} onClick={() => void finish()}>
+                <Icon name="check" size={15} /> Use boundary
+              </button>
             </>
           ) : (
             <>
-              {editable && <button type="button" className="button button--ghost button--small" onClick={() => setVertices([])}><Icon name="edit" size={15} /> {boundary ? "Redraw boundary" : "Draw boundary"}</button>}
+              {editable && (
+                <button type="button" className="button button--ghost button--small" onClick={() => setVertices([])}>
+                  <Icon name="edit" size={15} /> {boundary ? "Redraw boundary" : "Draw boundary"}
+                </button>
+              )}
               {editable && <span className="map-tools__hint map-tools__hint--quiet">Right-click to drop the pin</span>}
               <span className="map-tools__spacer" />
             </>
           )}
           <div className="map-tools__group">
             {sketch && (
-              <button type="button" className={`chip-toggle${showSketch ? " is-on" : ""}`} aria-pressed={showSketch} onClick={() => setShowSketch(!showSketch)} title="Show the player's sketch">
+              <button
+                type="button"
+                className={`chip-toggle${showSketch ? " is-on" : ""}`}
+                aria-pressed={showSketch}
+                onClick={() => setShowSketch(!showSketch)}
+                title="Show the player's sketch"
+              >
                 <span className="legend-sketch" /> Sketch
               </button>
             )}
-            <button type="button" className="chip-toggle is-on" onClick={() => setBasemap(basemap === "satellite" ? "streets" : "satellite")} title="Switch the base map">
+            <button
+              type="button"
+              className="chip-toggle is-on"
+              onClick={() => setBasemap(basemap === "satellite" ? "streets" : "satellite")}
+              title="Switch the base map"
+            >
               <Icon name="layers" size={14} /> {basemap === "satellite" ? "Satellite" : "Map"}
             </button>
-            <button type="button" className="icon-button icon-button--small map-tools__full" onClick={() => setFull(!full)} aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen (Esc)" : "Full screen"}>
+            <button
+              type="button"
+              className="icon-button icon-button--small map-tools__full"
+              onClick={() => setFull(!full)}
+              aria-label={full ? "Exit full screen" : "Full screen"}
+              title={full ? "Exit full screen (Esc)" : "Full screen"}
+            >
               <Icon name={full ? "close" : "expand"} size={15} />
             </button>
           </div>

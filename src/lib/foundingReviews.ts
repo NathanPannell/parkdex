@@ -30,9 +30,19 @@ export function decisionMessage(decision: FoundingDecision): DecisionMessage {
   const park = decision.parkName;
   switch (decision.status) {
     case "approved":
-      return { eyebrow: "Photo review", title: `You're the founder of ${park}!`, text: `Your photo was approved. You're the founder of ${park}! +${FOUNDER_POINTS}`, kip: "cheer" };
+      return {
+        eyebrow: "Photo review",
+        title: `You're the founder of ${park}!`,
+        text: `Your photo was approved. You're the founder of ${park}! +${FOUNDER_POINTS}`,
+        kip: "cheer",
+      };
     case "superseded":
-      return { eyebrow: "Photo review", title: decision.founderHandle ? `@${decision.founderHandle} became the founder first` : "Someone else became the founder first", text: `${park} has a founder now. You can still plant your flag there.`, kip: "point" };
+      return {
+        eyebrow: "Photo review",
+        title: decision.founderHandle ? `@${decision.founderHandle} became the founder first` : "Someone else became the founder first",
+        text: `${park} has a founder now. You can still plant your flag there.`,
+        kip: "point",
+      };
     case "rejected": {
       const reason = decision.reason ? reasonClause(decision.reason) : "";
       return {
@@ -54,9 +64,7 @@ export function createDecisionQueue(markSeen: (requestIds: string[]) => Promise<
   const shown = new Set<string>();
   return {
     pending(decided: readonly FoundingDecision[]): FoundingDecision[] {
-      return decided
-        .filter((decision) => !shown.has(decision.requestId))
-        .sort((a, b) => Date.parse(a.decidedAt) - Date.parse(b.decidedAt));
+      return decided.filter((decision) => !shown.has(decision.requestId)).sort((a, b) => Date.parse(a.decidedAt) - Date.parse(b.decidedAt));
     },
     next(decided: readonly FoundingDecision[]): FoundingDecision | null {
       return this.pending(decided)[0] ?? null;

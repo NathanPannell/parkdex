@@ -2,14 +2,18 @@
 // recomputed in the browser from the saved probabilities whenever a threshold moves. A photo is
 // approved when no flag is above its threshold. Runs made before the verdict question was dropped
 // still load; their verdict is shown on the cards but plays no part in the decision.
-import { CATEGORIES, decideLab, exportSettings, productionSettings, summarize, yesProbability } from "/modules/tools/photo-lab/evaluate.ts";
+import { CATEGORIES, exportSettings, productionSettings, summarize, yesProbability } from "/modules/tools/photo-lab/evaluate.ts";
 import { PHOTO_FLAGS } from "/modules/worker/founderPhoto.ts";
 
 // What the flag-only check reported per photo in the lab (#160).
 const COST_PER_PHOTO = 0.0002;
 const FLAG_NAMES = {
-  people: "People", lighting: "Dark or blurry", not_park: "Not a park", inappropriate: "Inappropriate",
-  not_photo: "Not a photo", personal_info: "Personal info",
+  people: "People",
+  lighting: "Dark or blurry",
+  not_park: "Not a park",
+  inappropriate: "Inappropriate",
+  not_photo: "Not a photo",
+  personal_info: "Personal info",
 };
 // Version 2 holds flag thresholds only; version 1 also had the approve threshold and unsure mode.
 const STORE_KEY = "photo-lab:settings:v2";
@@ -102,17 +106,43 @@ const syncers = [];
 function buildControls() {
   const container = $("flag-controls");
   for (const flag of PHOTO_FLAGS) {
-    container.append(el("div", { class: "control", "data-flag": flag },
-      el("div", { class: "control-head" },
-        el("label", { for: `t-${flag}`, text: FLAG_NAMES[flag] }),
-        el("input", { type: "number", id: `n-${flag}`, min: 0, max: 1, step: 0.01 })),
-      el("input", { type: "range", id: `t-${flag}`, min: 0, max: 1, step: 0.01 })));
-    syncers.push(bindPair(`t-${flag}`, `n-${flag}`, () => state.settings.flags[flag], (value) => { state.settings.flags[flag] = value; }));
+    container.append(
+      el(
+        "div",
+        { class: "control", "data-flag": flag },
+        el(
+          "div",
+          { class: "control-head" },
+          el("label", { for: `t-${flag}`, text: FLAG_NAMES[flag] }),
+          el("input", { type: "number", id: `n-${flag}`, min: 0, max: 1, step: 0.01 }),
+        ),
+        el("input", { type: "range", id: `t-${flag}`, min: 0, max: 1, step: 0.01 }),
+      ),
+    );
+    syncers.push(
+      bindPair(
+        `t-${flag}`,
+        `n-${flag}`,
+        () => state.settings.flags[flag],
+        (value) => {
+          state.settings.flags[flag] = value;
+        },
+      ),
+    );
   }
-  syncers.push(bindPair("t-all", "n-all", () => {
-    const values = PHOTO_FLAGS.map((flag) => state.settings.flags[flag]);
-    return values.reduce((a, b) => a + b, 0) / values.length;
-  }, (value) => { for (const flag of PHOTO_FLAGS) state.settings.flags[flag] = value; }));
+  syncers.push(
+    bindPair(
+      "t-all",
+      "n-all",
+      () => {
+        const values = PHOTO_FLAGS.map((flag) => state.settings.flags[flag]);
+        return values.reduce((a, b) => a + b, 0) / values.length;
+      },
+      (value) => {
+        for (const flag of PHOTO_FLAGS) state.settings.flags[flag] = value;
+      },
+    ),
+  );
   $("reset").addEventListener("click", () => {
     state.settings = productionSettings();
     saveSettings();
@@ -129,7 +159,9 @@ function buildControls() {
     button.addEventListener("click", async () => {
       await navigator.clipboard.writeText($(button.dataset.copy).textContent);
       button.textContent = "Copied";
-      setTimeout(() => { button.textContent = button.dataset.copy === "export-json" ? "Copy JSON" : "Copy code"; }, 1200);
+      setTimeout(() => {
+        button.textContent = button.dataset.copy === "export-json" ? "Copy JSON" : "Copy code";
+      }, 1200);
     });
   }
 }
@@ -174,23 +206,44 @@ function buildCards() {
       const value = el("span", { class: "value" });
       const nameClass = expected.flags.includes(flag) ? "name expected" : expected.optionalFlags.includes(flag) ? "name optional" : "name";
       const title = expected.flags.includes(flag) ? "Expected" : expected.optionalFlags.includes(flag) ? "Optional: not scored" : "Not expected";
-      bars.append(el("div", { class: "bar-row", title: `${FLAG_NAMES[flag]} (${title})` },
-        el("span", { class: nameClass, text: FLAG_NAMES[flag] }), el("div", { class: "track" }, fill, tick), value));
+      bars.append(
+        el(
+          "div",
+          { class: "bar-row", title: `${FLAG_NAMES[flag]} (${title})` },
+          el("span", { class: nameClass, text: FLAG_NAMES[flag] }),
+          el("div", { class: "track" }, fill, tick),
+          value,
+        ),
+      );
       flagRows.set(flag, { fill, tick, value });
     }
-    const card = el("article", { class: "card", "data-id": photo.id },
-      el("a", { class: "thumb", href: `/images/${photo.id}.jpg`, target: "_blank", rel: "noopener", title: "Open the full image" },
-        el("img", { src: `/images/${photo.id}.jpg`, alt: photo.description, loading: "lazy" })),
+    const card = el(
+      "article",
+      { class: "card", "data-id": photo.id },
+      el(
+        "a",
+        { class: "thumb", href: `/images/${photo.id}.jpg`, target: "_blank", rel: "noopener", title: "Open the full image" },
+        el("img", { src: `/images/${photo.id}.jpg`, alt: photo.description, loading: "lazy" }),
+      ),
       el("label", { class: "select" }, checkbox),
-      el("div", { class: "body" },
+      el(
+        "div",
+        { class: "body" },
         el("div", { class: "title" }, el("strong", { text: photo.id }), el("span", { class: "subtle", text: photo.category.replace("_", " ") })),
         el("p", { class: "desc", text: photo.description }),
-        el("div", { class: "line" }, el("span", { class: "key", text: "Expected" }),
-          chip(expected.outcome, expected.outcome), ...expected.flags.map((flag) => chip("", FLAG_NAMES[flag]))),
+        el(
+          "div",
+          { class: "line" },
+          el("span", { class: "key", text: "Expected" }),
+          chip(expected.outcome, expected.outcome),
+          ...expected.flags.map((flag) => chip("", FLAG_NAMES[flag])),
+        ),
         decisionLine,
         compareLine,
         el("div", { class: "verdict", hidden: true }, verdictStack, verdictLegend),
-        bars));
+        bars,
+      ),
+    );
     card.classList.toggle("selected", state.selected.has(photo.id));
     grid.append(card);
     state.cards.set(photo.id, { card, decisionLine, compareLine, verdictStack, verdictLegend, flagRows });
@@ -210,8 +263,8 @@ function updateCards() {
     const answers = state.run?.results[photo.id]?.answers ?? null;
     view.card.classList.remove("agree", "disagree");
     if (evaluation && evaluation.agreement !== "error") view.card.classList.add(evaluation.agreement);
-    const match = !evaluation || evaluation.agreement === "error" ? null
-      : evaluation.agreement === "agree" ? chip("approve", "agrees") : chip("reject", "disagrees");
+    const match =
+      !evaluation || evaluation.agreement === "error" ? null : evaluation.agreement === "agree" ? chip("approve", "agrees") : chip("reject", "disagrees");
     view.decisionLine.replaceChildren(el("span", { class: "key", text: "Decided" }), ...describe(evaluation?.decision ?? null), match);
     const before = state.compareEvaluations.get(photo.id);
     if (state.compare && before) {
@@ -259,10 +312,13 @@ function updateCards() {
 // Summary ------------------------------------------------------------------------------------
 
 function tile(label, value, detail, kind, delta) {
-  return el("div", { class: `tile ${kind ?? ""}` },
+  return el(
+    "div",
+    { class: `tile ${kind ?? ""}` },
     el("div", { class: "label", text: label }),
     el("div", { class: "value" }, value, delta ?? null),
-    detail ? el("div", { class: "detail", text: detail }) : null);
+    detail ? el("div", { class: "detail", text: detail }) : null,
+  );
 }
 
 function deltaNode(now, before, higherIsBetter, format) {
@@ -276,12 +332,27 @@ function deltaNode(now, before, higherIsBetter, format) {
 function renderSummary(summary, compareSummary) {
   const c = compareSummary;
   $("tiles").replaceChildren(
-    tile("Accuracy", pct(summary.accuracy), `${summary.correct} of ${summary.scored} approve or reject labels`, "",
-      c ? deltaNode(summary.accuracy, c.accuracy, true, (d) => `${Math.round(d * 100)} pts`) : null),
-    tile("False approvals", String(summary.falseApprovals.length), "bad photos approved", summary.falseApprovals.length ? "danger" : "",
-      c ? deltaNode(summary.falseApprovals.length, c.falseApprovals.length, false, String) : null),
-    tile("False rejections", String(summary.falseRejections.length), `of ${summary.goodTotal} good photos`, summary.falseRejections.length ? "warn" : "",
-      c ? deltaNode(summary.falseRejections.length, c.falseRejections.length, false, String) : null),
+    tile(
+      "Accuracy",
+      pct(summary.accuracy),
+      `${summary.correct} of ${summary.scored} approve or reject labels`,
+      "",
+      c ? deltaNode(summary.accuracy, c.accuracy, true, (d) => `${Math.round(d * 100)} pts`) : null,
+    ),
+    tile(
+      "False approvals",
+      String(summary.falseApprovals.length),
+      "bad photos approved",
+      summary.falseApprovals.length ? "danger" : "",
+      c ? deltaNode(summary.falseApprovals.length, c.falseApprovals.length, false, String) : null,
+    ),
+    tile(
+      "False rejections",
+      String(summary.falseRejections.length),
+      `of ${summary.goodTotal} good photos`,
+      summary.falseRejections.length ? "warn" : "",
+      c ? deltaNode(summary.falseRejections.length, c.falseRejections.length, false, String) : null,
+    ),
     tile("Bad photos rejected", `${summary.badBlocked}/${summary.badTotal}`, `${summary.goodApproved}/${summary.goodTotal} good photos approved`),
     tile("Right reason", `${summary.rightReason}/${summary.badBlocked}`, "rejections naming an expected flag"),
     tile("No answer", String(summary.errors), state.run ? `${state.run.model}` : ""),
@@ -292,33 +363,49 @@ function renderSummary(summary, compareSummary) {
   const table = $("confusion");
   table.replaceChildren(el("tr", {}, el("th", { text: "Expected ↓ / decided →" }), ...cols.map((col) => el("th", { text: col }))));
   for (const row of rows) {
-    table.append(el("tr", {}, el("th", { text: row }), ...cols.map((col) => {
-      const kind = row === "either" ? "" : row === col ? "hit" : "miss";
-      const active = state.cell && state.cell.expected === row && state.cell.decided === col;
-      return el("td", {
-        class: `cell ${summary.confusion[row][col] ? kind : ""} ${active ? "active" : ""}`, text: String(summary.confusion[row][col]),
-        onclick: () => {
-          state.cell = active ? null : { expected: row, decided: col };
-          recompute();
-        },
-      });
-    })));
+    table.append(
+      el(
+        "tr",
+        {},
+        el("th", { text: row }),
+        ...cols.map((col) => {
+          const kind = row === "either" ? "" : row === col ? "hit" : "miss";
+          const active = state.cell && state.cell.expected === row && state.cell.decided === col;
+          return el("td", {
+            class: `cell ${summary.confusion[row][col] ? kind : ""} ${active ? "active" : ""}`,
+            text: String(summary.confusion[row][col]),
+            onclick: () => {
+              state.cell = active ? null : { expected: row, decided: col };
+              recompute();
+            },
+          });
+        }),
+      ),
+    );
   }
 
   const flagTable = $("flag-table");
   flagTable.replaceChildren(el("tr", {}, ...["Flag", "Above", "TP", "FP", "FN", "Precision", "Recall"].map((text) => el("th", { text }))));
   for (const score of summary.flags) {
-    flagTable.append(el("tr", { title: score.covered ? "" : "Not covered by the dataset" },
-      el("td", { text: `${FLAG_NAMES[score.flag]}${score.covered ? "" : " (not covered)"}` }),
-      el("td", { text: state.settings.flags[score.flag].toFixed(2) }),
-      el("td", { text: String(score.truePositive) }), el("td", { text: String(score.falsePositive) }), el("td", { text: String(score.falseNegative) }),
-      el("td", { class: score.precision === null ? "na" : "", text: pct(score.precision) }),
-      el("td", { class: score.recall === null ? "na" : "", text: pct(score.recall) })));
+    flagTable.append(
+      el(
+        "tr",
+        { title: score.covered ? "" : "Not covered by the dataset" },
+        el("td", { text: `${FLAG_NAMES[score.flag]}${score.covered ? "" : " (not covered)"}` }),
+        el("td", { text: state.settings.flags[score.flag].toFixed(2) }),
+        el("td", { text: String(score.truePositive) }),
+        el("td", { text: String(score.falsePositive) }),
+        el("td", { text: String(score.falseNegative) }),
+        el("td", { class: score.precision === null ? "na" : "", text: pct(score.precision) }),
+        el("td", { class: score.recall === null ? "na" : "", text: pct(score.recall) }),
+      ),
+    );
   }
 
-  const listChips = (ids) => ids.length
-    ? ids.map((id) => el("button", { type: "button", class: "chip", text: id, onclick: () => scrollToCard(id) }))
-    : [el("span", { class: "empty", text: "None" })];
+  const listChips = (ids) =>
+    ids.length
+      ? ids.map((id) => el("button", { type: "button", class: "chip", text: id, onclick: () => scrollToCard(id) }))
+      : [el("span", { class: "empty", text: "None" })];
   $("false-approvals").replaceChildren(...listChips(summary.falseApprovals));
   $("false-rejections").replaceChildren(...listChips(summary.falseRejections));
 }
@@ -341,23 +428,31 @@ function scrollToCard(id) {
 function visibleIds() {
   const category = $("f-category").value;
   const agreement = $("f-agreement").value;
-  return state.manifest.photos.filter((photo) => {
-    const evaluation = state.evaluations.get(photo.id);
-    if (category !== "all" && photo.category !== category) return false;
-    if (state.cell && (photo.expected.outcome !== state.cell.expected || evaluation?.decision?.outcome !== state.cell.decided)) return false;
-    switch (agreement) {
-      case "agree": return evaluation?.agreement === "agree";
-      case "disagree": return evaluation?.agreement === "disagree";
-      case "false-approval": return Boolean(evaluation?.falseApproval);
-      case "false-rejection": return Boolean(evaluation?.falseRejection);
-      case "error": return evaluation?.agreement === "error";
-      case "changed": {
-        const before = state.compareEvaluations.get(photo.id);
-        return Boolean(state.compare && before && (before.decision?.outcome ?? "error") !== (evaluation?.decision?.outcome ?? "error"));
+  return state.manifest.photos
+    .filter((photo) => {
+      const evaluation = state.evaluations.get(photo.id);
+      if (category !== "all" && photo.category !== category) return false;
+      if (state.cell && (photo.expected.outcome !== state.cell.expected || evaluation?.decision?.outcome !== state.cell.decided)) return false;
+      switch (agreement) {
+        case "agree":
+          return evaluation?.agreement === "agree";
+        case "disagree":
+          return evaluation?.agreement === "disagree";
+        case "false-approval":
+          return Boolean(evaluation?.falseApproval);
+        case "false-rejection":
+          return Boolean(evaluation?.falseRejection);
+        case "error":
+          return evaluation?.agreement === "error";
+        case "changed": {
+          const before = state.compareEvaluations.get(photo.id);
+          return Boolean(state.compare && before && (before.decision?.outcome ?? "error") !== (evaluation?.decision?.outcome ?? "error"));
+        }
+        default:
+          return true;
       }
-      default: return true;
-    }
-  }).map((photo) => photo.id);
+    })
+    .map((photo) => photo.id);
 }
 
 function applyFilters() {
@@ -368,8 +463,18 @@ function applyFilters() {
   const cellFilter = $("cell-filter");
   cellFilter.hidden = !state.cell;
   if (state.cell) {
-    cellFilter.replaceChildren(`Expected ${state.cell.expected}, decided ${state.cell.decided}`,
-      el("button", { type: "button", text: "x", "aria-label": "Clear cell filter", onclick: () => { state.cell = null; recompute(); } }));
+    cellFilter.replaceChildren(
+      `Expected ${state.cell.expected}, decided ${state.cell.decided}`,
+      el("button", {
+        type: "button",
+        text: "x",
+        "aria-label": "Clear cell filter",
+        onclick: () => {
+          state.cell = null;
+          recompute();
+        },
+      }),
+    );
   }
   return shown;
 }
@@ -471,7 +576,9 @@ async function pollJob(previousRunId) {
     }
     await new Promise((resolve) => setTimeout(resolve, 800));
   }
-  setTimeout(() => { $("progress").hidden = true; }, 1500);
+  setTimeout(() => {
+    $("progress").hidden = true;
+  }, 1500);
   setRerunEnabled(true);
 }
 
@@ -487,11 +594,13 @@ async function main() {
   buildControls();
   refreshControls();
   state.manifest = await getJson("/api/manifest");
-  $("f-category").replaceChildren(el("option", { value: "all", text: "All" }),
+  $("f-category").replaceChildren(
+    el("option", { value: "all", text: "All" }),
     ...CATEGORIES.map((category) => {
       const count = state.manifest.photos.filter((photo) => photo.category === category).length;
       return el("option", { value: category, text: `${category.replace("_", " ")} (${count})` });
-    }));
+    }),
+  );
   $("f-category").addEventListener("change", applyFilters);
   $("f-agreement").addEventListener("change", applyFilters);
   $("run").addEventListener("change", (event) => selectRun(event.target.value));

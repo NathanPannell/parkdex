@@ -170,9 +170,7 @@ async function handleEdgeRequest(request, env) {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
     if (request.method !== "GET") return methodNotAllowed("GET");
-    const releaseSha = typeof env.RELEASE_SHA === "string" && /^[a-f0-9]{7,64}$/i.test(env.RELEASE_SHA)
-      ? env.RELEASE_SHA
-      : null;
+    const releaseSha = typeof env.RELEASE_SHA === "string" && /^[a-f0-9]{7,64}$/i.test(env.RELEASE_SHA) ? env.RELEASE_SHA : null;
     return jsonResponse(200, { status: "ok", releaseSha });
   }
 
@@ -249,7 +247,10 @@ export class AccountPhotos {
 
   serialize(operation) {
     const result = this.lockTail.then(operation, operation);
-    this.lockTail = result.then(() => undefined, () => undefined);
+    this.lockTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
     return result;
   }
 
@@ -296,11 +297,7 @@ export class AccountPhotos {
       return httpError(500, "Stored photo is invalid.");
     }
     const contentType = normalizedContentType(object.httpMetadata?.contentType);
-    if (
-      bytes.byteLength !== object.size ||
-      !contentType ||
-      !hasImageMagic(bytes, contentType)
-    ) {
+    if (bytes.byteLength !== object.size || !contentType || !hasImageMagic(bytes, contentType)) {
       return httpError(500, "Stored photo is invalid.");
     }
 
@@ -350,11 +347,7 @@ export class AccountPhotos {
     if (existing) {
       const existingDigest = hashHeader(existing.customMetadata?.sha256);
       const existingContentType = normalizedContentType(existing.httpMetadata?.contentType);
-      if (
-        existingDigest !== digest ||
-        existing.size !== bytes.byteLength ||
-        existingContentType !== contentType
-      ) {
+      if (existingDigest !== digest || existing.size !== bytes.byteLength || existingContentType !== contentType) {
         return httpError(409, "A different photo is already backed up.");
       }
       return new Response(null, {
@@ -391,9 +384,7 @@ export class AccountPhotos {
 
     const prefix = accountPrefix(accountId);
     const page = await this.env.PHOTOS.list({ prefix, limit: PHOTO_DELETE_PAGE_SIZE });
-    const keys = page.objects
-      .map((object) => object.key)
-      .filter((key) => typeof key === "string" && key.startsWith(prefix));
+    const keys = page.objects.map((object) => object.key).filter((key) => typeof key === "string" && key.startsWith(prefix));
     if (keys.length > 0) await this.env.PHOTOS.delete(keys);
     if (page.truncated && keys.length === 0) throw new Error("R2 returned an empty truncated page.");
 
@@ -409,15 +400,7 @@ function validateRetentionUrl(value, environment) {
   } catch {
     throw new Error("Retention endpoint configuration is invalid.");
   }
-  if (
-    !expectedOrigin ||
-    url.origin !== expectedOrigin ||
-    url.pathname !== RETENTION_PATH ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  ) {
+  if (!expectedOrigin || url.origin !== expectedOrigin || url.pathname !== RETENTION_PATH || url.username || url.password || url.search || url.hash) {
     throw new Error("Retention endpoint configuration is invalid.");
   }
   return url.href;
@@ -458,9 +441,12 @@ async function callRetentionEndpoint(url, secret, fetchImpl) {
     const authDeleted = result?.authDeleted ?? 0;
     const remaining = result?.remainingExpired;
     if (
-      !Number.isSafeInteger(deleted) || deleted < 0 ||
-      !Number.isSafeInteger(authDeleted) || authDeleted < 0 ||
-      !Number.isSafeInteger(remaining) || remaining < 0
+      !Number.isSafeInteger(deleted) ||
+      deleted < 0 ||
+      !Number.isSafeInteger(authDeleted) ||
+      authDeleted < 0 ||
+      !Number.isSafeInteger(remaining) ||
+      remaining < 0
     ) {
       throw new Error("Retention response was invalid.");
     }

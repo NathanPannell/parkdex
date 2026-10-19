@@ -81,7 +81,7 @@ export function createAccountDeleter(databaseUrl: string, photo: PhotoService, f
         complete = false;
       }
       if (!complete) return "pending";
-      return await auth.completeDeletion(receiptId, new Date().toISOString()) ? "complete" : "pending";
+      return (await auth.completeDeletion(receiptId, new Date().toISOString())) ? "complete" : "pending";
     },
   };
 }

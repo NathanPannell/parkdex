@@ -4,6 +4,7 @@ The active Neon catalogue is authoritative. This command never edits the rollout
 seed, claims, badge scenes, or immutable assets. Apply requires a reviewed plan
 hash and the exact content revision observed during planning.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -93,8 +94,7 @@ def plan_hash(revision: int, changes: list[dict[str, str]]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def verify_rollout_receipt(receipt: tuple[str, str | None, str] | None, target: str,
-                           pull_request: int | None, expected_host: str) -> None:
+def verify_rollout_receipt(receipt: tuple[str, str | None, str] | None, target: str, pull_request: int | None, expected_host: str) -> None:
     if receipt is None:
         raise DownshiftError("the immutable Victoria 100 rollout receipt is missing")
     environment, target_id, host = receipt
@@ -129,7 +129,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             cursor.execute("SELECT park_id FROM public.park_enrichment_jobs WHERE selected_art IS NOT NULL AND state <> 'published' ORDER BY park_id")
             selected = [row[0] for row in cursor.fetchall()]
             if selected:
-                raise DownshiftError(f"unpublished frozen authoring art exists for {len(selected)} park(s); let it publish or reconcile it before changing rarities")
+                raise DownshiftError(
+                    f"unpublished frozen authoring art exists for {len(selected)} park(s); let it publish or reconcile it before changing rarities"
+                )
             if actual == target:
                 return {"status": "already_applied", "revision": revision, "park_count": 100}
             if actual != expected:
@@ -137,9 +139,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 raise DownshiftError(f"live catalogue differs from reviewed source for {len(mismatched)} park(s): {mismatched[:5]}")
             digest = plan_hash(revision, changes)
             result: dict[str, object] = {
-                "status": "planned", "revision": revision, "park_count": 100,
-                "change_count": len(changes), "source_counts": SOURCE_COUNTS,
-                "target_counts": TARGET_COUNTS, "plan_sha256": digest,
+                "status": "planned",
+                "revision": revision,
+                "park_count": 100,
+                "change_count": len(changes),
+                "source_counts": SOURCE_COUNTS,
+                "target_counts": TARGET_COUNTS,
+                "plan_sha256": digest,
             }
             if not args.apply:
                 return result

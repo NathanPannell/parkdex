@@ -57,13 +57,39 @@ test("moderate honours the model override and an optional user", async () => {
 test("moderate returns null without a key, on errors, malformed answers and timeouts", async () => {
   const request = { kind: "handle", state: { handle: "a" }, questions: { handle: HANDLE_QUESTION } };
   let called = false;
-  assert.equal(await moderate(request, {}, async () => { called = true; return decisionsResponse({}); }), null);
+  assert.equal(
+    await moderate(request, {}, async () => {
+      called = true;
+      return decisionsResponse({});
+    }),
+    null,
+  );
   assert.equal(called, false, "no key means no network call");
-  assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => { throw new Error("offline"); }), null);
-  assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => new Response(JSON.stringify({ error: { code: 429, message: "slow down" } }), { status: 429 })), null);
-  assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => new Response(JSON.stringify({ error: { code: 400, message: "bad" } }), { status: 200 })), null);
+  assert.equal(
+    await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => {
+      throw new Error("offline");
+    }),
+    null,
+  );
+  assert.equal(
+    await moderate(
+      request,
+      { OPENROUTER_API_KEY: KEY },
+      async () => new Response(JSON.stringify({ error: { code: 429, message: "slow down" } }), { status: 429 }),
+    ),
+    null,
+  );
+  assert.equal(
+    await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => new Response(JSON.stringify({ error: { code: 400, message: "bad" } }), { status: 200 })),
+    null,
+  );
   assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => decisionsResponse({})), null, "missing answer");
-  assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => decisionsResponse({ handle: { type: "choice", choice: "allow", probabilities: { allow: 7 } } })), null);
+  assert.equal(
+    await moderate(request, { OPENROUTER_API_KEY: KEY }, async () =>
+      decisionsResponse({ handle: { type: "choice", choice: "allow", probabilities: { allow: 7 } } }),
+    ),
+    null,
+  );
   assert.equal(await moderate(request, { OPENROUTER_API_KEY: KEY }, async () => new Response("not json")), null);
   const started = Date.now();
   const hanging = await moderate(request, { OPENROUTER_API_KEY: KEY }, () => new Promise<Response>(() => undefined), 30);
@@ -82,22 +108,61 @@ test("choice threshold rejects the top label or any probability above the thresh
 });
 
 test("handle blocklist catches slurs, leetspeak and impersonation without flagging ordinary words", () => {
-  for (const handle of ["fuck_yeah", "sh1tlord", "f_u_c_k", "admin", "the_admin", "parkdex_team", "kip", "kip_2", "ass", "big_ass", "n4zi_fan", "staff", "fuuuck"]) {
+  for (const handle of [
+    "fuck_yeah",
+    "sh1tlord",
+    "f_u_c_k",
+    "admin",
+    "the_admin",
+    "parkdex_team",
+    "kip",
+    "kip_2",
+    "ass",
+    "big_ass",
+    "n4zi_fan",
+    "staff",
+    "fuuuck",
+  ]) {
     assert.equal(blocklisted(handle), true, handle);
   }
-  for (const handle of ["classic_sam", "skipper", "assassin", "document99", "peacock", "spicy_sam", "canal_walker", "badminton", "therapist", "trail_runner", "kipling", "sexton_fan", "grape_ape"]) {
+  for (const handle of [
+    "classic_sam",
+    "skipper",
+    "assassin",
+    "document99",
+    "peacock",
+    "spicy_sam",
+    "canal_walker",
+    "badminton",
+    "therapist",
+    "trail_runner",
+    "kipling",
+    "sexton_fan",
+    "grape_ape",
+  ]) {
     assert.equal(blocklisted(handle), false, handle);
   }
 });
 
 test("checkHandle uses the model after the blocklist and falls back when it is unavailable", async () => {
   let calls = 0;
-  const reject = async () => { calls += 1; return decisionsResponse({ handle: { type: "choice", choice: "reject", confidence: 0.9, probabilities: { allow: 0.1, reject: 0.85, unsure: 0.05 } } }); };
-  const allow = async () => { calls += 1; return decisionsResponse({ handle: { type: "choice", choice: "allow", confidence: 0.9, probabilities: { allow: 0.9, reject: 0.05, unsure: 0.05 } } }); };
+  const reject = async () => {
+    calls += 1;
+    return decisionsResponse({ handle: { type: "choice", choice: "reject", confidence: 0.9, probabilities: { allow: 0.1, reject: 0.85, unsure: 0.05 } } });
+  };
+  const allow = async () => {
+    calls += 1;
+    return decisionsResponse({ handle: { type: "choice", choice: "allow", confidence: 0.9, probabilities: { allow: 0.9, reject: 0.05, unsure: 0.05 } } });
+  };
   assert.deepEqual(await checkHandle("fuck_yeah", { OPENROUTER_API_KEY: KEY }, allow), { allowed: false, source: "blocklist" });
   assert.equal(calls, 0, "blocklisted handles never reach the model");
   assert.deepEqual(await checkHandle("jane_doe_555", { OPENROUTER_API_KEY: KEY }, reject), { allowed: false, source: "model" });
   assert.deepEqual(await checkHandle("trail_runner", { OPENROUTER_API_KEY: KEY }, allow), { allowed: true, source: "model" });
   assert.deepEqual(await checkHandle("trail_runner", {}, reject), { allowed: true, source: "blocklist_only" });
-  assert.deepEqual(await checkHandle("trail_runner", { OPENROUTER_API_KEY: KEY }, async () => { throw new Error("down"); }), { allowed: true, source: "blocklist_only" });
+  assert.deepEqual(
+    await checkHandle("trail_runner", { OPENROUTER_API_KEY: KEY }, async () => {
+      throw new Error("down");
+    }),
+    { allowed: true, source: "blocklist_only" },
+  );
 });

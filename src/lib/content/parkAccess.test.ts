@@ -3,8 +3,19 @@ import { directionsUrl, parkLocationUrl } from "../../screens/map/ParkSheet";
 import { validateParkRecord } from "./manifest";
 
 const base = {
-  id: "regional-thetis-lake", name: "Thetis Lake", short: "Thetis", category: "regional", region: "West Shore",
-  lat: 48.46, lng: -123.47, biome: "lake", shape: "circle", rarity: "common", scene: null, seed: 4, blurb: "A lake.",
+  id: "regional-thetis-lake",
+  name: "Thetis Lake",
+  short: "Thetis",
+  category: "regional",
+  region: "West Shore",
+  lat: 48.46,
+  lng: -123.47,
+  biome: "lake",
+  shape: "circle",
+  rarity: "common",
+  scene: null,
+  seed: 4,
+  blurb: "A lake.",
 };
 
 describe("park access fields", () => {

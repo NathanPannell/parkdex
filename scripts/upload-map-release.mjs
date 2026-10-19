@@ -12,10 +12,12 @@ const BUCKET = "parkdex-kip-content";
 const CDN_ORIGIN = "https://kip-assets.parkdex.app";
 const CONCURRENCY = 4;
 
-const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, index, all) => {
-  if (value.startsWith("--")) pairs.push([value.slice(2), all[index + 1]]);
-  return pairs;
-}, []));
+const args = Object.fromEntries(
+  process.argv.slice(2).reduce((pairs, value, index, all) => {
+    if (value.startsWith("--")) pairs.push([value.slice(2), all[index + 1]]);
+    return pairs;
+  }, []),
+);
 const token = process.env.CLOUDFLARE_API_TOKEN;
 if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required");
 if (!/^[a-f0-9]{64}$/.test(args.version ?? "")) throw new Error("--version must be the release SHA-256");
@@ -25,7 +27,7 @@ async function listFiles(directory) {
   const out = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) out.push(...await listFiles(path));
+    if (entry.isDirectory()) out.push(...(await listFiles(path)));
     else out.push(path);
   }
   return out;

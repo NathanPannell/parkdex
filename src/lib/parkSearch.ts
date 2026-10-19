@@ -2,7 +2,12 @@ import type { Park } from "./parks";
 
 // Accents and punctuation are ignored, so "saint" style typing finds "St." names loosely.
 export function normalizeQuery(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function score(park: Park, words: string[]): number | null {

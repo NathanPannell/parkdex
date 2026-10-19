@@ -109,7 +109,10 @@ export function publishStatements(id: string, expectedUpdatedAt: string, asset: 
     },
     // Access starts unverified: walk 0 and no route to any hub, the importer's explicit sentinel.
     { text: "INSERT INTO public.park_drive_settings (park_id, walk_m) VALUES ($1, 0)", params: [id] },
-    { text: "INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) SELECT $1, position, NULL, NULL FROM public.drive_hubs ORDER BY position", params: [id] },
+    {
+      text: "INSERT INTO public.park_drive (park_id, hub_position, distance_km, duration_min) SELECT $1, position, NULL, NULL FROM public.drive_hubs ORDER BY position",
+      params: [id],
+    },
     {
       // The public feature carries exactly id and biome, like the legacy importer writes.
       text: `INSERT INTO public.boundaries (park_id, feature)

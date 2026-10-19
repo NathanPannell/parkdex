@@ -46,15 +46,19 @@ export function MyDex() {
             setSegment(item.id);
           }}
         >
-          {segment === item.id && <motion.span layoutId="dex-segment-pill" className="dex-segments__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />}
+          {segment === item.id && (
+            <motion.span layoutId="dex-segment-pill" className="dex-segments__pill" transition={{ type: "spring", stiffness: 500, damping: 34 }} />
+          )}
           <span className="dex-segments__label">{item.label}</span>
         </button>
       ))}
     </div>
   );
-  return segment === "flags"
-    ? <YourParks key="flags" title="My Dex" toolbar={toolbar} />
-    : <DexCollection key="collection" toolbar={toolbar} shelf={<BadgeShelf />} />;
+  return segment === "flags" ? (
+    <YourParks key="flags" title="My Dex" toolbar={toolbar} />
+  ) : (
+    <DexCollection key="collection" toolbar={toolbar} shelf={<BadgeShelf />} />
+  );
 }
 
 /**
@@ -97,7 +101,12 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
     sfx.pop();
     setOpenPark(parkId);
   };
-  const tile = openPark ? collection.provinces.flatMap((province) => province.regions).flatMap((region) => region.tiles).find((item) => item.park.id === openPark) ?? null : null;
+  const tile = openPark
+    ? (collection.provinces
+        .flatMap((province) => province.regions)
+        .flatMap((region) => region.tiles)
+        .find((item) => item.park.id === openPark) ?? null)
+    : null;
   const empty = !loading && collection.visited === 0 && dex.visits.size === 0;
 
   return (
@@ -130,19 +139,31 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
         </section>
         {!dex.signedIn && dex.status !== "loading" && (
           <p className="account-help dex-note">
-            Showing parks saved on this device. <button className="fb-link" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in</button> to add the parks where you planted flags.
+            Showing parks saved on this device.{" "}
+            <button className="fb-link" onClick={() => dispatch({ type: "go", screen: "account" })}>
+              Sign in
+            </button>{" "}
+            to add the parks where you planted flags.
           </p>
         )}
-        {dex.serverStale && <p className="account-help game-stale" role="status">Offline. Showing what Parkdex knew a moment ago.</p>}
+        {dex.serverStale && (
+          <p className="account-help game-stale" role="status">
+            Offline. Showing what Parkdex knew a moment ago.
+          </p>
+        )}
 
         {loading ? (
           <section className="account-card card account-loading" aria-live="polite">
             <Kip size={64} pose="think" />
-            <div><strong>Loading your Dex…</strong></div>
+            <div>
+              <strong>Loading your Dex…</strong>
+            </div>
           </section>
         ) : empty && onlyMine ? (
           <section className="account-card card game-empty">
-            <Bubble side="down" style={{ position: "relative" }}>Your Dex is empty. Go visit a park!</Bubble>
+            <Bubble side="down" style={{ position: "relative" }}>
+              Your Dex is empty. Go visit a park!
+            </Bubble>
             <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}>
               <Kip pose="map" size={84} />
             </motion.div>
@@ -158,7 +179,13 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
                 <em>{visitedLabel(province.visited, province.total)}</em>
               </h2>
               {province.regions.map((region) => (
-                <RegionView key={region.key} region={region} collapsed={collapsed.has(region.key)} onToggle={() => toggleRegion(region.key)} onOpen={openTile} />
+                <RegionView
+                  key={region.key}
+                  region={region}
+                  collapsed={collapsed.has(region.key)}
+                  onToggle={() => toggleRegion(region.key)}
+                  onOpen={openTile}
+                />
               ))}
             </section>
           ))
@@ -182,7 +209,17 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
   );
 }
 
-function RegionView({ region, collapsed, onToggle, onOpen }: { region: DexRegion; collapsed: boolean; onToggle: () => void; onOpen: (parkId: string) => void }) {
+function RegionView({
+  region,
+  collapsed,
+  onToggle,
+  onOpen,
+}: {
+  region: DexRegion;
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpen: (parkId: string) => void;
+}) {
   const id = `dex-region-${region.key.replace(/[^a-z0-9]+/gi, "-")}`;
   return (
     <section className={`dex-region ${collapsed ? "is-collapsed" : ""}`}>
@@ -207,16 +244,22 @@ function LazyTiles({ id, tiles, onOpen }: { id: string; tiles: DexTile[]; onOpen
   const [near, setNear] = useState(tiles.length <= 12 || typeof IntersectionObserver !== "function");
   useEffect(() => {
     if (near || !holder.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) setNear(true);
-    }, { rootMargin: "800px 0px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setNear(true);
+      },
+      { rootMargin: "800px 0px" },
+    );
     observer.observe(holder.current);
     return () => observer.disconnect();
   }, [near]);
-  if (!near) return <div ref={holder} id={id} className="dex-grid dex-grid--waiting" style={{ height: Math.ceil(tiles.length / 2) * TILE_ROW_PX }} aria-busy="true" />;
+  if (!near)
+    return <div ref={holder} id={id} className="dex-grid dex-grid--waiting" style={{ height: Math.ceil(tiles.length / 2) * TILE_ROW_PX }} aria-busy="true" />;
   return (
     <ul id={id} className="dex-grid">
-      {tiles.map((item) => <TileView key={item.park.id} tile={item} onOpen={onOpen} />)}
+      {tiles.map((item) => (
+        <TileView key={item.park.id} tile={item} onOpen={onOpen} />
+      ))}
     </ul>
   );
 }
@@ -227,11 +270,17 @@ const TileView = memo(function TileView({ tile, onOpen }: { tile: DexTile; onOpe
   const name = tile.park.short || tile.park.name;
   return (
     <li>
-      <button className={`dex-tile ${visited ? "is-visited" : "is-unvisited"}`} onClick={() => onOpen(tile.park.id)} aria-label={`${tile.park.name}, ${visited ? visitCountLabel(tile.visit!.days.length) : "not visited yet"}`}>
+      <button
+        className={`dex-tile ${visited ? "is-visited" : "is-unvisited"}`}
+        onClick={() => onOpen(tile.park.id)}
+        aria-label={`${tile.park.name}, ${visited ? visitCountLabel(tile.visit!.days.length) : "not visited yet"}`}
+      >
         <span className="dex-tile__art">
-          {image.kind === "photo"
-            ? <CroppedPhoto blob={image.photo.blob} crop={image.photo.crop} alt="" />
-            : <Badge park={tile.park} size={104} state={visited ? "earned" : "silhouette"} remoteArt={false} />}
+          {image.kind === "photo" ? (
+            <CroppedPhoto blob={image.photo.blob} crop={image.photo.crop} alt="" />
+          ) : (
+            <Badge park={tile.park} size={104} state={visited ? "earned" : "silhouette"} remoteArt={false} />
+          )}
           {tile.photos.length > 1 && <span className="dex-tile__more">{tile.photos.length}</span>}
         </span>
         <span className="dex-tile__name">{name}</span>

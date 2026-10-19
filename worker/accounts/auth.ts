@@ -154,7 +154,14 @@ function errorResponse(error: unknown): Response {
     const headers = error instanceof RateLimitError ? { "retry-after": String(error.retryAfterSeconds) } : undefined;
     return jsonResponse({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
-  return jsonResponse({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+  return jsonResponse(
+    {
+      error: { code: "service_unavailable", message: "Service temporarily unavailable." },
+      code: "service_unavailable",
+      message: "Service temporarily unavailable.",
+    },
+    503,
+  );
 }
 
 function requireSecret(env: AuthEnvironment): string {
@@ -203,7 +210,11 @@ function nativeAppRequest(request: Request): boolean {
 
 function emailLinkBase(env: AuthEnvironment): URL | null {
   let base: URL;
-  try { base = new URL(env.PUBLIC_APP_URL ?? ""); } catch { return null; }
+  try {
+    base = new URL(env.PUBLIC_APP_URL ?? "");
+  } catch {
+    return null;
+  }
   const localHttp = base.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname);
   if ((base.protocol !== "https:" && !localHttp) || base.username || base.password || !base.hostname) return null;
   return base;
@@ -341,7 +352,6 @@ function dummyPasswordHash(): Promise<string> {
 function sessionMaterial(transport: StoredTransport, now: number, dependencies: AuthDependencies): SessionMaterial {
   const token = bytesToken();
   const csrfToken = transport === "web" ? bytesToken() : null;
-  const createdAt = new Date(now);
   return {
     token,
     csrfToken,
@@ -359,7 +369,10 @@ function sessionMaterial(transport: StoredTransport, now: number, dependencies: 
 function parseCookie(request: Request, name: string): string | null {
   const header = request.headers.get("cookie");
   if (!header) return null;
-  const matches = header.split(";").map((part) => part.trim()).filter((part) => part.startsWith(`${name}=`));
+  const matches = header
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith(`${name}=`));
   if (matches.length !== 1) return null;
   const value = matches[0].slice(name.length + 1);
   return value.length <= 256 ? value : null;
@@ -421,19 +434,11 @@ function assertExpectedAccount(request: Request, accountId: string): void {
   }
 }
 
-export async function authenticateAccount(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext | null> {
+export async function authenticateAccount(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext | null> {
   return (await lookupSession(request, env, dependencies))?.context ?? null;
 }
 
-export async function requireAccount(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext> {
+export async function requireAccount(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext> {
   if (!authAvailable(env)) throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
   const context = await authenticateAccount(request, env, dependencies);
   if (!context) throw new HttpError(401, "authentication_required", "Authentication required.");
@@ -441,11 +446,7 @@ export async function requireAccount(
   return context;
 }
 
-export async function requireAccountMutation(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext> {
+export async function requireAccountMutation(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext> {
   const lookup = await lookupSession(request, env, dependencies);
   if (!lookup) {
     if (!authAvailable(env)) throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
@@ -503,18 +504,7 @@ function transportHint(request: Request): StoredTransport {
   throw new HttpError(400, "invalid_request", "Invalid authentication transport.");
 }
 
-function requireMethod(request: Request, method: string): void {
-  if (request.method !== method) throw new HttpError(405, "method_not_allowed", "Method not allowed.");
-}
-
-async function reserveLimit(
-  env: AuthEnvironment,
-  store: AccountAuthStore,
-  action: string,
-  scope: string,
-  limit: number,
-  windowMs: number,
-): Promise<string> {
+async function reserveLimit(env: AuthEnvironment, store: AccountAuthStore, action: string, scope: string, limit: number, windowMs: number): Promise<string> {
   const secret = requireSecret(env);
   const scopeHash = hmacScope(secret, action, scope);
   const result = await store.reserveRateLimit(action, scopeHash, limit, windowMs);
@@ -541,7 +531,7 @@ async function eventScope(env: AuthEnvironment, action: string, value: string): 
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
+  return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 }
 
 function authMailShell(heading: string, body: string): string {
@@ -618,12 +608,9 @@ function queueEmail(
   eventType: string,
   scopeHash: string,
 ): void {
-  const delivery = (dependencies.sendEmail
-    ? dependencies.sendEmail(message, env)
-    : sendResendEmail(message, env, dependencies))
-    .catch(async () => {
-      await store.recordSecurityEvent(eventType, scopeHash, "delivery_failed").catch(() => undefined);
-    });
+  const delivery = (dependencies.sendEmail ? dependencies.sendEmail(message, env) : sendResendEmail(message, env, dependencies)).catch(async () => {
+    await store.recordSecurityEvent(eventType, scopeHash, "delivery_failed").catch(() => undefined);
+  });
   try {
     (dependencies.waitUntil ?? vercelWaitUntil)(delivery);
   } catch {
@@ -671,10 +658,22 @@ async function googleClaims(
   const audienceMatches = typeof claims.aud === "string" && audiences.includes(claims.aud);
   const issuerMatches = claims.iss === "https://accounts.google.com" || claims.iss === "accounts.google.com";
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
-  if (!claims || typeof claims.sub !== "string" || claims.sub.length < 1 || claims.sub.length > 255 ||
-      !audienceMatches || !issuerMatches || !Number.isFinite(expMillis) || expMillis <= now ||
-      !Number.isFinite(iatMillis) || iatMillis > now + 60_000 || expMillis - iatMillis > 3_600_000 ||
-      claims.email_verified !== true || !EMAIL_PATTERN.test(email) || claims.nonce !== expectedNonce) {
+  if (
+    !claims ||
+    typeof claims.sub !== "string" ||
+    claims.sub.length < 1 ||
+    claims.sub.length > 255 ||
+    !audienceMatches ||
+    !issuerMatches ||
+    !Number.isFinite(expMillis) ||
+    expMillis <= now ||
+    !Number.isFinite(iatMillis) ||
+    iatMillis > now + 60_000 ||
+    expMillis - iatMillis > 3_600_000 ||
+    claims.email_verified !== true ||
+    !EMAIL_PATTERN.test(email) ||
+    claims.nonce !== expectedNonce
+  ) {
     throw new HttpError(401, "invalid_google_token", "Google sign-in could not be verified.");
   }
   return { ...claims, email };
@@ -713,17 +712,21 @@ function methodForAuthRoute(path: string): string | null {
   return methods[path] ?? null;
 }
 
-async function routeAuth(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies,
-): Promise<Response | null> {
+async function routeAuth(request: Request, env: AuthEnvironment, dependencies: AuthDependencies): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
   const expectedMethod = methodForAuthRoute(path);
-  if (!expectedMethod) return path === "/api/auth" || path.startsWith("/api/auth/") || path === "/api/account" ? jsonResponse({ error: { code: "not_found", message: "Account API route not found." }, code: "not_found", message: "Account API route not found." }, 404) : null;
+  if (!expectedMethod)
+    return path === "/api/auth" || path.startsWith("/api/auth/") || path === "/api/account"
+      ? jsonResponse({ error: { code: "not_found", message: "Account API route not found." }, code: "not_found", message: "Account API route not found." }, 404)
+      : null;
   if (request.method === "OPTIONS") return noContent({ allow: "GET, POST, DELETE, OPTIONS" });
-  if (request.method !== expectedMethod) return jsonResponse({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405, { allow: `${expectedMethod}, OPTIONS` });
+  if (request.method !== expectedMethod)
+    return jsonResponse(
+      { error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." },
+      405,
+      { allow: `${expectedMethod}, OPTIONS` },
+    );
 
   const now = nowValue(dependencies);
   const nowIso = new Date(now).toISOString();
@@ -735,7 +738,7 @@ async function routeAuth(
     const originAllowed = !origin || requestOriginAllowed(request, env);
     const webClientId = enabled && originAllowed && validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID) ? env.GOOGLE_WEB_CLIENT_ID : null;
     // Installed Android builds read googleWebClientId as their Credential Manager server client ID.
-    const clientId = webClientId && nativeAppRequest(request) ? nativeGoogleClientId(env) ?? webClientId : webClientId;
+    const clientId = webClientId && nativeAppRequest(request) ? (nativeGoogleClientId(env) ?? webClientId) : webClientId;
     const googleNativeEnabled = Boolean(clientId);
     const googleWebEnabled = Boolean(clientId && originAllowed);
     const emailEnabled = enabled;
@@ -788,7 +791,14 @@ async function routeAuth(
     await store.recordSecurityEvent("register", emailScope, "succeeded").catch(() => undefined);
     if (verificationToken && emailDeliveryEnabled(env)) {
       const link = authLink(env, "verification", verificationToken);
-      queueEmail({ to: email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") }, env, dependencies, store, "verification_email", emailScope);
+      queueEmail(
+        { to: email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") },
+        env,
+        dependencies,
+        store,
+        "verification_email",
+        emailScope,
+      );
     }
     return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, transport, 201, now);
   }
@@ -823,13 +833,15 @@ async function routeAuth(
     if (!lookup) throw new HttpError(401, "authentication_required", "Authentication required.");
     const account = await store.findAccountById(lookup.context.accountId);
     if (!account || account.deletionState !== "active") throw new HttpError(401, "authentication_required", "Authentication required.");
-    return jsonResponse(accountResult({
-      id: account.id,
-      email: account.email,
-      emailVerified: account.emailVerified,
-      displayName: account.displayName,
-      providers: account.providers,
-    }));
+    return jsonResponse(
+      accountResult({
+        id: account.id,
+        email: account.email,
+        emailVerified: account.emailVerified,
+        displayName: account.displayName,
+        providers: account.providers,
+      }),
+    );
   }
 
   if (path === "/api/auth/sessions/renew") {
@@ -882,7 +894,14 @@ async function routeAuth(
       const created = await store.issueActionToken(account.id, "verification", sha256(token), new Date(now + VERIFICATION_LIFETIME_MS).toISOString());
       if (created) {
         const link = authLink(env, "verification", token);
-        queueEmail({ to: account.email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") }, env, dependencies, store, "verification_email", accountScope);
+        queueEmail(
+          { to: account.email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") },
+          env,
+          dependencies,
+          store,
+          "verification_email",
+          accountScope,
+        );
       }
     }
     return jsonResponse({ accepted: true }, 202);
@@ -911,12 +930,31 @@ async function routeAuth(
       const issued = await store.issueActionToken(account.id, "password_reset", sha256(token), new Date(now + RESET_LIFETIME_MS).toISOString());
       if (issued) {
         const link = authLink(env, "password_reset", token);
-        queueEmail({ to: account.email, subject: "Reset your Parkdex password", html: authMailHtml(link, "password_reset"), text: authMailText(link, "password_reset") }, env, dependencies, store, "password_reset_email", emailScope);
+        queueEmail(
+          { to: account.email, subject: "Reset your Parkdex password", html: authMailHtml(link, "password_reset"), text: authMailText(link, "password_reset") },
+          env,
+          dependencies,
+          store,
+          "password_reset_email",
+          emailScope,
+        );
       }
     } else if (account && account.deletionState === "active" && account.providers.includes("google")) {
       // Only the inbox owner sees this, and the response below is the same, so it reveals nothing about the account.
       const link = accountPageLink(env).toString();
-      queueEmail({ to: account.email, subject: "How to sign in to Parkdex", html: googleSignInMailHtml(link, account.email), text: googleSignInMailText(link, account.email) }, env, dependencies, store, "password_reset_google_email", emailScope);
+      queueEmail(
+        {
+          to: account.email,
+          subject: "How to sign in to Parkdex",
+          html: googleSignInMailHtml(link, account.email),
+          text: googleSignInMailText(link, account.email),
+        },
+        env,
+        dependencies,
+        store,
+        "password_reset_google_email",
+        emailScope,
+      );
     }
     return jsonResponse({ accepted: true }, 202);
   }
@@ -929,7 +967,7 @@ async function routeAuth(
     const tokenHash = sha256(token);
     await reserveLimit(env, store, "password_reset_confirm", token, 5, 60 * 60 * 1000);
     await reserveIpLimit(env, store, request, "password_reset_confirm_ip", 30, 60 * 60 * 1000);
-    if (!await store.hasValidActionToken(tokenHash, "password_reset", nowIso)) {
+    if (!(await store.hasValidActionToken(tokenHash, "password_reset", nowIso))) {
       throw new HttpError(400, "invalid_token", "This link is invalid or has expired.");
     }
     const newHash = await passwordHash(newPassword, dependencies);
@@ -1017,8 +1055,12 @@ async function routeAuth(
     }
 
     const lookup = await lookupSession(request, env, dependencies);
-    if (!lookup || lookup.context.transport !== (routeTransport === "native" ? "bearer" : "cookie") ||
-        lookup.context.accountId !== challenge.accountId || lookup.context.sessionId !== challenge.sessionId) {
+    if (
+      !lookup ||
+      lookup.context.transport !== (routeTransport === "native" ? "bearer" : "cookie") ||
+      lookup.context.accountId !== challenge.accountId ||
+      lookup.context.sessionId !== challenge.sessionId
+    ) {
       throw new HttpError(401, "authentication_required", "Authentication required.");
     }
     if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
@@ -1136,10 +1178,7 @@ export async function resumeAccountDeletion(
   return { receiptId, status: complete ? "complete" : "pending", complete };
 }
 
-export async function purgeAuthRetention(
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<{ deleted: number; remainingExpired: number }> {
+export async function purgeAuthRetention(env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<{ deleted: number; remainingExpired: number }> {
   if (!env.DATABASE_URL && !dependencies.createStore) {
     throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
   }
@@ -1152,11 +1191,7 @@ export async function purgeAuthRetention(
   );
 }
 
-export async function handleAuthRequest(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<Response | null> {
+export async function handleAuthRequest(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<Response | null> {
   try {
     return await routeAuth(request, env, dependencies);
   } catch (error) {

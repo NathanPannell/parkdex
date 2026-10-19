@@ -279,10 +279,12 @@ describe("NativeContentStore deletion guard", () => {
 
   it("refuses to delete a retained earned-park scene after its release is retired", async () => {
     activeRelease = release([]);
-    retainedRows = [{
-      park_json: JSON.stringify(park("earned-park", "Earned Park")),
-      scene_file_json: JSON.stringify(sceneFile),
-    }];
+    retainedRows = [
+      {
+        park_json: JSON.stringify(park("earned-park", "Earned Park")),
+        scene_file_json: JSON.stringify(sceneFile),
+      },
+    ];
     const store = new NativeContentStore();
     await store.initialize();
 
@@ -340,7 +342,13 @@ describe("NativeContentStore deletion guard", () => {
     const other = "c".repeat(64);
     const query = nativeMocks.db.query.getMockImplementation()!;
     nativeMocks.db.query.mockImplementation(async (statement: string, values?: unknown[]) => {
-      if (statement === "SELECT hash, byte_size FROM content_files") return { values: [{ hash: HASH, byte_size: 12 }, { hash: other, byte_size: 99 }] };
+      if (statement === "SELECT hash, byte_size FROM content_files")
+        return {
+          values: [
+            { hash: HASH, byte_size: 12 },
+            { hash: other, byte_size: 99 },
+          ],
+        };
       return query(statement, values);
     });
     nativeMocks.stat.mockResolvedValue({ size: 12 });
@@ -385,7 +393,9 @@ describe("NativeContentStore deletion guard", () => {
     expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_retained_parks ADD COLUMN scene_file_json TEXT NULL");
     expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_sync_rows ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
     expect(nativeMocks.db.execute).toHaveBeenCalledWith("ALTER TABLE content_sync_cursors ADD COLUMN source_id TEXT NOT NULL DEFAULT ''");
-    expect(nativeMocks.db.execute).toHaveBeenCalledWith("UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')");
+    expect(nativeMocks.db.execute).toHaveBeenCalledWith(
+      "UPDATE content_sync_cursors SET source_id = source WHERE source IS NOT NULL AND (source_id IS NULL OR source_id = '')",
+    );
     expect(nativeMocks.files.has(blob)).toBe(true);
     expect(nativeMocks.deleteFile).not.toHaveBeenCalled();
     await store.close();
@@ -403,8 +413,8 @@ describe("NativeContentStore deletion guard", () => {
       }
       if (statement.includes("content_releases")) {
         const releaseRows = [
-        { id: "release", release_json: JSON.stringify(activeRelease) },
-        { id: "broken", release_json: "{broken" },
+          { id: "release", release_json: JSON.stringify(activeRelease) },
+          { id: "broken", release_json: "{broken" },
         ];
         return { values: statement.includes("WHERE id = ?") ? releaseRows.filter((row) => row.id === values?.[0]) : releaseRows };
       }
@@ -482,13 +492,15 @@ describe("NativeContentStore deletion guard", () => {
 
     const store = new NativeContentStore();
     await store.initialize();
-    const items = await Promise.all(["one", "two", "three", "four"].map(async (value) => {
-      const encoded = new TextEncoder().encode(value);
-      const bytes = encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
-      const digest = await hash(bytes);
-      await store.putFile(digest, bytes);
-      return { digest, size: bytes.byteLength };
-    }));
+    const items = await Promise.all(
+      ["one", "two", "three", "four"].map(async (value) => {
+        const encoded = new TextEncoder().encode(value);
+        const bytes = encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
+        const digest = await hash(bytes);
+        await store.putFile(digest, bytes);
+        return { digest, size: bytes.byteLength };
+      }),
+    );
 
     expect(await store.listFiles()).toHaveLength(items.length);
     expect(await Promise.all(items.map(({ digest, size }) => store.hasFile(digest, size)))).toEqual([true, true, true, true]);

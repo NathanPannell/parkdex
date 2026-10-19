@@ -53,10 +53,12 @@ class MemoryInteractionStore implements InteractionStore {
   }
 
   async saveBatch(items: Array<{ event: InteractionEvent; payloadHash: string }>) {
-    const conflicts = items.filter((item) => {
-      const prior = this.events.get(item.event.eventId);
-      return prior && prior.payloadHash !== item.payloadHash;
-    }).map((item) => item.event.eventId);
+    const conflicts = items
+      .filter((item) => {
+        const prior = this.events.get(item.event.eventId);
+        return prior && prior.payloadHash !== item.payloadHash;
+      })
+      .map((item) => item.event.eventId);
     if (conflicts.length > 0) return { inserted: 0, conflictingEventIds: conflicts };
     let inserted = 0;
     for (const item of items) {
@@ -91,13 +93,16 @@ function makeRequest(path: string, body?: unknown, options: { method?: string; i
 }
 
 async function json(response: Response): Promise<Record<string, unknown>> {
-  return await response.json() as Record<string, unknown>;
+  return (await response.json()) as Record<string, unknown>;
 }
 
 test("accepts only the three event types and their exact context fields", () => {
   const result = validateInteractionBatch({ events: [event(1), event(2, "directions_opened"), event(3, "park_claimed")] }, NOW);
   assert.equal(result.length, 3);
-  assert.deepEqual(result.map((item) => item.type), ["park_viewed", "directions_opened", "park_claimed"]);
+  assert.deepEqual(
+    result.map((item) => item.type),
+    ["park_viewed", "directions_opened", "park_claimed"],
+  );
 
   const extraFields = ["accountId", "email", "ipAddress", "latitude", "photo", "message"];
   for (const field of extraFields) {
@@ -189,7 +194,10 @@ test("the protected purge deletes only events older than 90 days and reports rem
     remainingExpired: 0,
     cutoff: new Date(NOW - NINETY_DAYS).toISOString(),
   });
-  assert.deepEqual(store.purgeRows.map((row) => row.id), [2, 3]);
+  assert.deepEqual(
+    store.purgeRows.map((row) => row.id),
+    [2, 3],
+  );
   assert.equal(store.lastPurgeLimit, INTERACTION_PURGE_BATCH_LIMIT);
 });
 

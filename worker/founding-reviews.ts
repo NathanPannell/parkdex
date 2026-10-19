@@ -196,8 +196,17 @@ function eventStatement(input: {
   return {
     text: `INSERT INTO kip_analytics.events (event_id, event_type, account_id, request_id, route, environment, occurred_at, park_id, properties, schema_version)
       VALUES ($1::uuid, $2, $3::uuid, $4::uuid, $5, $6, $7::timestamptz, $8, $9::jsonb, 1)`,
-    params: [crypto.randomUUID(), input.type, input.accountId, crypto.randomUUID(), input.route, input.environment, input.at,
-      input.parkId.length <= 128 ? input.parkId : null, JSON.stringify(input.properties)],
+    params: [
+      crypto.randomUUID(),
+      input.type,
+      input.accountId,
+      crypto.randomUUID(),
+      input.route,
+      input.environment,
+      input.at,
+      input.parkId.length <= 128 ? input.parkId : null,
+      JSON.stringify(input.properties),
+    ],
   };
 }
 
@@ -241,7 +250,8 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
           db.query("SELECT status, count(*)::integer AS count FROM kip_founders.review_requests GROUP BY status"),
         ]);
         const totals = emptyCounts();
-        for (const row of counts) if ((REVIEW_STATUSES as readonly string[]).includes(String(row.status))) totals[String(row.status) as ReviewStatus] = Number(row.count);
+        for (const row of counts)
+          if ((REVIEW_STATUSES as readonly string[]).includes(String(row.status))) totals[String(row.status) as ReviewStatus] = Number(row.count);
         return { requests: rows.map(listItem), counts: totals };
       } catch (error) {
         if (missingRelation(error)) return null;
@@ -281,20 +291,28 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
         ...listItem(row),
         position: { lat: Number(row.latitude), lng: Number(row.longitude), accuracyM: Number(row.accuracy_m) },
         photo: {
-          sha256: String(row.photo_sha256), width: Number(row.photo_width), height: Number(row.photo_height),
-          bytes: row.photo_size === null || row.photo_size === undefined ? null : Number(row.photo_size), purgedAt: nullableIso(row.photo_purged_at),
+          sha256: String(row.photo_sha256),
+          width: Number(row.photo_width),
+          height: Number(row.photo_height),
+          bytes: row.photo_size === null || row.photo_size === undefined ? null : Number(row.photo_size),
+          purgedAt: nullableIso(row.photo_purged_at),
         },
-        moderation: moderation ? {
-          model: typeof moderation.model === "string" ? moderation.model : null,
-          threshold: typeof moderation.threshold === "number" ? moderation.threshold : null,
-          flagThresholds: numberRecord(moderation.flagThresholds),
-          answers: (moderation.answers ?? {}) as NonNullable<ReviewDetail["moderation"]>["answers"],
-        } : null,
+        moderation: moderation
+          ? {
+              model: typeof moderation.model === "string" ? moderation.model : null,
+              threshold: typeof moderation.threshold === "number" ? moderation.threshold : null,
+              flagThresholds: numberRecord(moderation.flagThresholds),
+              answers: (moderation.answers ?? {}) as NonNullable<ReviewDetail["moderation"]>["answers"],
+            }
+          : null,
         geometry: geometry?.type === "MultiPolygon" ? geometry : null,
         park: {
           inParkdex: row.in_parkdex === true,
           hidden: row.hidden === true,
-          founder: row.founded === true ? { handle: row.founder_handle === null || row.founder_handle === undefined ? null : String(row.founder_handle), foundedAt: iso(row.founded_at) } : null,
+          founder:
+            row.founded === true
+              ? { handle: row.founder_handle === null || row.founder_handle === undefined ? null : String(row.founder_handle), foundedAt: iso(row.founded_at) }
+              : null,
         },
         otherPending: Number(row.other_pending ?? 0),
         seenAt: nullableIso(row.seen_at),
@@ -303,7 +321,10 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
 
     async photo(id) {
       try {
-        const rows = await db.query("SELECT encode(photo_bytes, 'base64') AS photo, photo_sha256 FROM kip_founders.review_requests WHERE id = $1::uuid AND photo_bytes IS NOT NULL", [id]);
+        const rows = await db.query(
+          "SELECT encode(photo_bytes, 'base64') AS photo, photo_sha256 FROM kip_founders.review_requests WHERE id = $1::uuid AND photo_bytes IS NOT NULL",
+          [id],
+        );
         return rows[0] ? { bytes: base64Bytes(String(rows[0].photo)), sha256: String(rows[0].photo_sha256) } : null;
       } catch (error) {
         if (missingRelation(error)) return null;
@@ -312,10 +333,9 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
     },
 
     async approve(id, input) {
-      const rows = await db.query(
-        `SELECT r.*, encode(r.photo_bytes, 'base64') AS photo_base64 FROM kip_founders.review_requests r WHERE r.id = $1::uuid`,
-        [id],
-      );
+      const rows = await db.query(`SELECT r.*, encode(r.photo_bytes, 'base64') AS photo_base64 FROM kip_founders.review_requests r WHERE r.id = $1::uuid`, [
+        id,
+      ]);
       const request = rows[0];
       if (!request) throw new HttpError(404, "not_found", "That review request does not exist.");
       if (request.status !== "pending") throw decidedError(String(request.status));
@@ -326,18 +346,36 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
       const position = { lat: Number(request.latitude), lng: Number(request.longitude), accuracyM: Number(request.accuracy_m) };
       const stored = request.moderation ? jsonValue<Record<string, unknown>>(request.moderation) : {};
       const common = {
-        accountId, attemptId, visitId: attemptId, at: input.at,
-        photo: { sha256: String(request.photo_sha256), base64: String(request.photo_base64).replace(/\s+/g, ""), width: Number(request.photo_width), height: Number(request.photo_height) },
+        accountId,
+        attemptId,
+        visitId: attemptId,
+        at: input.at,
+        photo: {
+          sha256: String(request.photo_sha256),
+          base64: String(request.photo_base64).replace(/\s+/g, ""),
+          width: Number(request.photo_width),
+          height: Number(request.photo_height),
+        },
         moderation: { ...stored, review: { requestId: id, approvedAt: input.at, outcome: String(request.outcome) } },
       };
       const osmRef = request.osm_type ? { type: String(request.osm_type), id: Number(request.osm_id) } : null;
       const after = (parkId: string, source: "osm_new" | "existing"): Statement[] => [
         eventStatement({
-          type: "founding_review_decided", accountId, parkId, at: input.at, route: DECIDE_ROUTE("approve"), environment: input.environment,
+          type: "founding_review_decided",
+          accountId,
+          parkId,
+          at: input.at,
+          route: DECIDE_ROUTE("approve"),
+          environment: input.environment,
           properties: { decision: "approved", outcome: String(request.outcome), source, waited_minutes: waitedMinutes(request.created_at, input.at) },
         }),
         eventStatement({
-          type: "park_founded", accountId, parkId, at: input.at, route: DECIDE_ROUTE("approve"), environment: input.environment,
+          type: "park_founded",
+          accountId,
+          parkId,
+          at: input.at,
+          route: DECIDE_ROUTE("approve"),
+          environment: input.environment,
           properties: { source, via: "review" },
         }),
       ];
@@ -347,7 +385,12 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
         const parks = await db.query("SELECT name FROM public.parks WHERE id = $1", [parkId]);
         if (!parks[0]) return { result: { status: "park_missing" }, parkId, parkName: "", source: "existing" };
         const plan: FoundingPlan = { kind: "existing", ...common, parkId, osm: osmRef };
-        return { result: await runFounding(db, plan, String(parks[0].name), mode(parkId, "existing")), parkId, parkName: String(parks[0].name), source: "existing" };
+        return {
+          result: await runFounding(db, plan, String(parks[0].name), mode(parkId, "existing")),
+          parkId,
+          parkName: String(parks[0].name),
+          source: "existing",
+        };
       }
 
       let outcome: { result: FoundResult; parkId: string; parkName: string; source: "osm_new" | "existing" };
@@ -358,7 +401,9 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
         const publishedId = osmParkId(feature);
         const nearby = await catalogue.nearbyParks(position.lat, position.lng, CATALOGUE_KM);
         // Published another way, or already a Parkdex park under its own id: found that park.
-        const listed = (await db.query("SELECT 1 FROM public.parks WHERE id = $1", [publishedId])).length ? { parkId: publishedId } : catalogueMatch(feature, nearby);
+        const listed = (await db.query("SELECT 1 FROM public.parks WHERE id = $1", [publishedId])).length
+          ? { parkId: publishedId }
+          : catalogueMatch(feature, nearby);
         if (listed) {
           outcome = await existing(listed.parkId);
         } else {
@@ -368,16 +413,32 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
           const park = parkFromProposal(feature, { id: proposalId, name: feature.name ?? "", note: "", point: marker, createdAt: input.at }, region, marker);
           const distanceM = Math.round(positionInside(position, feature.geometry).distanceM);
           const plan: FoundingPlan = {
-            kind: "osm", ...common, park, osm: { type: feature.type, id: feature.id },
+            kind: "osm",
+            ...common,
+            park,
+            osm: { type: feature.type, id: feature.id },
             proposal: {
               id: proposalId,
               // The shape the operator dashboard shows for proposals.
               moderation: {
-                version: stored.version ?? 1, checkedAt: input.at, model: stored.model ?? null, threshold: stored.threshold ?? null,
-                flagThresholds: stored.flagThresholds ?? null, answers: stored.answers ?? null,
+                version: stored.version ?? 1,
+                checkedAt: input.at,
+                model: stored.model ?? null,
+                threshold: stored.threshold ?? null,
+                flagThresholds: stored.flagThresholds ?? null,
+                answers: stored.answers ?? null,
                 reasons: ["Founded after the operator approved a manual review of the player's photo."],
-                osm: { type: feature.type, id: feature.id, name: feature.name, kind: feature.kind, areaM2: feature.areaM2, distanceM, containsPin: distanceM === 0 },
-                nearby: [], review: { requestId: id },
+                osm: {
+                  type: feature.type,
+                  id: feature.id,
+                  name: feature.name,
+                  kind: feature.kind,
+                  areaM2: feature.areaM2,
+                  distanceM,
+                  containsPin: distanceM === 0,
+                },
+                nearby: [],
+                review: { requestId: id },
               },
             },
           };
@@ -395,14 +456,24 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
           [id, input.at],
         );
         const handle = await founderHandle(outcome.parkId);
-        throw new HttpError(409, "already_founded", `${outcome.parkName || "This park"} was founded first${handle ? ` by @${handle}` : ""}. The request is closed as superseded.`);
+        throw new HttpError(
+          409,
+          "already_founded",
+          `${outcome.parkName || "This park"} was founded first${handle ? ` by @${handle}` : ""}. The request is closed as superseded.`,
+        );
       }
       if (result.status === "review_not_pending") throw decidedError(await currentStatus(id));
       if (result.status === "park_missing" || result.status === "park_hidden") {
-        throw new HttpError(409, "park_unavailable", "The park is hidden or no longer in Parkdex, so it cannot be founded. Unhide it first or reject the request.");
+        throw new HttpError(
+          409,
+          "park_unavailable",
+          "The park is hidden or no longer in Parkdex, so it cannot be founded. Unhide it first or reject the request.",
+        );
       }
-      if (result.status === "account_unavailable") throw new HttpError(409, "account_unavailable", "The player's account is being deleted, so the park cannot be founded for them.");
-      if (result.status === "blocked") throw new HttpError(409, "founding_blocked", "An operator draft holds this park's id, so it cannot be founded right now.");
+      if (result.status === "account_unavailable")
+        throw new HttpError(409, "account_unavailable", "The player's account is being deleted, so the park cannot be founded for them.");
+      if (result.status === "blocked")
+        throw new HttpError(409, "founding_blocked", "An operator draft holds this park's id, so it cannot be founded right now.");
       throw new HttpError(409, "founding_failed", "The founding did not go through. Nothing was changed.");
     },
 
@@ -424,9 +495,18 @@ export function createSqlFoundingReviewStore(db: SqlRunner): FoundingReviewStore
             params: [id, input.at, input.reasonCode, input.reason],
           },
           eventStatement({
-            type: "founding_review_decided", accountId: String(request.account_id), parkId: String(request.park_id), at: input.at,
-            route: DECIDE_ROUTE("reject"), environment: input.environment,
-            properties: { decision: "rejected", reason_code: input.reasonCode, outcome: String(request.outcome), waited_minutes: waitedMinutes(request.created_at, input.at) },
+            type: "founding_review_decided",
+            accountId: String(request.account_id),
+            parkId: String(request.park_id),
+            at: input.at,
+            route: DECIDE_ROUTE("reject"),
+            environment: input.environment,
+            properties: {
+              decision: "rejected",
+              reason_code: input.reasonCode,
+              outcome: String(request.outcome),
+              waited_minutes: waitedMinutes(request.created_at, input.at),
+            },
           }),
         ]);
       } catch (error) {
@@ -454,7 +534,8 @@ export async function purgeFoundingPhotos(run: QueryRunner, now: number, batchLi
   const checkCutoff = new Date(now - CHECK_PHOTO_RETENTION_MS).toISOString();
   const decidedCutoff = new Date(now - DECIDED_PHOTO_RETENTION_MS).toISOString();
   try {
-    const kept = await run(`
+    const kept = await run(
+      `
       WITH expired AS MATERIALIZED (
         SELECT check_id FROM kip_founders.check_photos WHERE created_at <= $1::timestamptz ORDER BY created_at, check_id LIMIT $2
       ),
@@ -463,8 +544,10 @@ export async function purgeFoundingPhotos(run: QueryRunner, now: number, batchLi
       )
       SELECT (SELECT count(*) FROM removed)::int AS deleted,
         ((SELECT count(*) FROM kip_founders.check_photos WHERE created_at <= $1::timestamptz) - (SELECT count(*) FROM removed))::int AS remaining`,
-    [checkCutoff, batchLimit]);
-    const decided = await run(`
+      [checkCutoff, batchLimit],
+    );
+    const decided = await run(
+      `
       WITH expired AS MATERIALIZED (
         SELECT id FROM kip_founders.review_requests
         WHERE status <> 'pending' AND decided_at <= $1::timestamptz AND photo_bytes IS NOT NULL
@@ -477,7 +560,8 @@ export async function purgeFoundingPhotos(run: QueryRunner, now: number, batchLi
       SELECT (SELECT count(*) FROM purged)::int AS deleted,
         ((SELECT count(*) FROM kip_founders.review_requests WHERE status <> 'pending' AND decided_at <= $1::timestamptz AND photo_bytes IS NOT NULL)
           - (SELECT count(*) FROM purged))::int AS remaining`,
-    [decidedCutoff, batchLimit, new Date(now).toISOString()]);
+      [decidedCutoff, batchLimit, new Date(now).toISOString()],
+    );
     return {
       deleted: Number(kept[0]?.deleted ?? 0) + Number(decided[0]?.deleted ?? 0),
       remainingExpired: Math.max(0, Number(kept[0]?.remaining ?? 0)) + Math.max(0, Number(decided[0]?.remaining ?? 0)),

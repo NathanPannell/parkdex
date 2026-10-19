@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { deleteAccountData, handleProgressRequest } from "./accounts/progress.js";
 import type { ProgressStore } from "./accounts/progress-store.js";
-import type { AccountAuthContext, ClaimDisplay, ClaimDisplayRecord, ClaimPayload, ClaimRecord, PhotoContentType, PhotoMetadata, ProgressEnv } from "./accounts/progress-types.js";
+import type {
+  AccountAuthContext,
+  ClaimDisplay,
+  ClaimDisplayRecord,
+  ClaimPayload,
+  ClaimRecord,
+  PhotoContentType,
+  PhotoMetadata,
+  ProgressEnv,
+} from "./accounts/progress-types.js";
 
 const ACCOUNT_A = "ae172e85-a8ab-4e1d-a032-901100000001";
 const ACCOUNT_B = "ae172e85-a8ab-4e1d-a032-901100000002";
@@ -79,13 +88,20 @@ class MemoryProgressStore implements ProgressStore {
   displayClock = 0;
 
   async listClaimDisplays(accountId: string, limit: number) {
-    return [...this.displays.entries()].filter(([key]) => key.startsWith(`${accountId}:`)).map(([, row]) => structuredClone(row)).slice(0, limit);
+    return [...this.displays.entries()]
+      .filter(([key]) => key.startsWith(`${accountId}:`))
+      .map(([, row]) => structuredClone(row))
+      .slice(0, limit);
   }
 
   async putClaimDisplay(accountId: string, claimId: string, display: ClaimDisplay) {
     if (!this.claims.has(claimKey(accountId, claimId))) return { status: "claim_missing" as const };
     this.displayClock += 1;
-    const saved: ClaimDisplayRecord = { claimId, ...structuredClone(display), updatedAt: new Date(Date.UTC(2026, 9, 1, 0, 0, this.displayClock)).toISOString() };
+    const saved: ClaimDisplayRecord = {
+      claimId,
+      ...structuredClone(display),
+      updatedAt: new Date(Date.UTC(2026, 9, 1, 0, 0, this.displayClock)).toISOString(),
+    };
     this.displays.set(claimKey(accountId, claimId), saved);
     return { status: "saved" as const, display: structuredClone(saved) };
   }
@@ -99,7 +115,8 @@ class MemoryProgressStore implements ProgressStore {
   async putClaim(accountId: string, claim: ClaimPayload, payloadHash: string) {
     const key = claimKey(accountId, claim.claimId);
     const existing = this.claims.get(key);
-    if (existing) return existing.payloadHash === payloadHash ? { status: "identical" as const, claim: structuredClone(existing) } : { status: "conflict" as const };
+    if (existing)
+      return existing.payloadHash === payloadHash ? { status: "identical" as const, claim: structuredClone(existing) } : { status: "conflict" as const };
     const saved: ClaimRecord = {
       ...structuredClone(claim),
       payloadHash,
@@ -115,7 +132,13 @@ class MemoryProgressStore implements ProgressStore {
     const rows = [...this.claims.entries()]
       .filter(([key]) => key.startsWith(`${accountId}:`))
       .map(([, row]) => row)
-      .sort((left, right) => BigInt(left.syncRevision) < BigInt(right.syncRevision) ? -1 : BigInt(left.syncRevision) > BigInt(right.syncRevision) ? 1 : left.claimId.localeCompare(right.claimId))
+      .sort((left, right) =>
+        BigInt(left.syncRevision) < BigInt(right.syncRevision)
+          ? -1
+          : BigInt(left.syncRevision) > BigInt(right.syncRevision)
+            ? 1
+            : left.claimId.localeCompare(right.claimId),
+      )
       .filter((row) => cursorRevision === null || BigInt(row.syncRevision) > BigInt(cursorRevision));
     const page = rows.slice(0, limit);
     return { rows: page.map((row) => structuredClone(row)), hasMore: rows.length > limit };
@@ -131,9 +154,7 @@ class MemoryProgressStore implements ProgressStore {
     if (!this.claims.has(key)) return { status: "claim_missing" as const };
     const existing = this.photos.get(key);
     if (existing) {
-      return existing.sha256 === photo.sha256
-        ? { status: "existing" as const, photo: structuredClone(existing) }
-        : { status: "conflict" as const };
+      return existing.sha256 === photo.sha256 ? { status: "existing" as const, photo: structuredClone(existing) } : { status: "conflict" as const };
     }
     const saved: PhotoMetadata = { ...photo, status: "pending", createdAt: "2026-09-27T00:00:00.000Z" };
     const claim = this.claims.get(key)!;
@@ -275,8 +296,8 @@ test("claim uploads are account scoped, idempotent, and conflict on changed retr
   assert.equal(otherAccount?.status, 201);
   const pageA = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
   const pageB = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authB, deps);
-  assert.equal((await pageA?.json() as { claims: unknown[] }).claims.length, 1);
-  assert.equal((await pageB?.json() as { claims: unknown[] }).claims.length, 1);
+  assert.equal(((await pageA?.json()) as { claims: unknown[] }).claims.length, 1);
+  assert.equal(((await pageB?.json()) as { claims: unknown[] }).claims.length, 1);
 });
 
 test("all catalogue park categories upload and restore with their frozen category", async () => {
@@ -294,19 +315,25 @@ test("all catalogue park categories upload and restore with their frozen categor
     payload.parkSnapshot = { ...payload.parkSnapshot, id: parkId, category };
     const created = await handleProgressRequest(claimRequest(claimId, payload), env, authA, deps);
     assert.equal(created?.status, 201);
-    assert.deepEqual((await created?.json() as { claim: { parkSnapshot: unknown } }).claim.parkSnapshot, payload.parkSnapshot);
+    assert.deepEqual(((await created?.json()) as { claim: { parkSnapshot: unknown } }).claim.parkSnapshot, payload.parkSnapshot);
     const retry = await handleProgressRequest(claimRequest(claimId, payload), env, authA, deps);
     assert.equal(retry?.status, 200);
   }
   const page = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
-  const restored = (await page?.json() as { claims: ClaimRecord[] }).claims;
+  const restored = ((await page?.json()) as { claims: ClaimRecord[] }).claims;
   assert.equal(restored.length, 5);
   assert.deepEqual(restored.map((claim) => claim.parkSnapshot.category).sort(), ["community", "municipal", "national", "provincial", "regional"]);
 
   const invalid = claimPayload("be172e85-a8ab-4e1d-a032-901100000006");
-  const rejected = await handleProgressRequest(claimRequest("be172e85-a8ab-4e1d-a032-901100000006", {
-    ...invalid, parkSnapshot: { ...invalid.parkSnapshot, category: "unknown" },
-  }), env, authA, deps);
+  const rejected = await handleProgressRequest(
+    claimRequest("be172e85-a8ab-4e1d-a032-901100000006", {
+      ...invalid,
+      parkSnapshot: { ...invalid.parkSnapshot, category: "unknown" },
+    }),
+    env,
+    authA,
+    deps,
+  );
   assert.equal(rejected?.status, 400);
   assert.equal(store.claims.size, 5);
 });
@@ -316,12 +343,22 @@ test("claim cursor is account scoped and the final nonempty page carries a high-
   addClaim(store, ACCOUNT_A, CLAIM_A);
   const deps = { createStore: () => store };
   const first = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
-  const firstBody = await first?.json() as { claims: unknown[]; nextCursor: string | null };
+  const firstBody = (await first?.json()) as { claims: unknown[]; nextCursor: string | null };
   assert.equal(firstBody.claims.length, 1);
   assert.equal(typeof firstBody.nextCursor, "string");
-  const terminal = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor!)}`), env, authA, deps);
+  const terminal = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor!)}`),
+    env,
+    authA,
+    deps,
+  );
   assert.deepEqual(await terminal?.json(), { claims: [], nextCursor: null });
-  const wrongAccount = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor!)}`), env, authB, deps);
+  const wrongAccount = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor!)}`),
+    env,
+    authB,
+    deps,
+  );
   assert.equal(wrongAccount?.status, 400);
 });
 
@@ -334,13 +371,23 @@ test("revision cursor pages claims created within the same millisecond exactly o
   }
   const deps = { createStore: () => store };
   const first = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
-  const firstBody = await first?.json() as { claims: Array<{ claimId: string }>; nextCursor: string | null };
+  const firstBody = (await first?.json()) as { claims: Array<{ claimId: string }>; nextCursor: string | null };
   assert.equal(firstBody.claims.length, 50);
   assert.ok(firstBody.nextCursor);
-  const second = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor)}`), env, authA, deps);
-  const secondBody = await second?.json() as { claims: Array<{ claimId: string }>; nextCursor: string | null };
+  const second = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(firstBody.nextCursor)}`),
+    env,
+    authA,
+    deps,
+  );
+  const secondBody = (await second?.json()) as { claims: Array<{ claimId: string }>; nextCursor: string | null };
   assert.equal(secondBody.claims.length, 1);
-  const terminal = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(secondBody.nextCursor!)}`), env, authA, deps);
+  const terminal = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(secondBody.nextCursor!)}`),
+    env,
+    authA,
+    deps,
+  );
   assert.deepEqual(await terminal?.json(), { claims: [], nextCursor: null });
   assert.equal(new Set([...firstBody.claims, ...secondBody.claims].map((claim) => claim.claimId)).size, 51);
 });
@@ -379,7 +426,10 @@ test("photo accepts PNG and WebP magic bytes, rejects SVG and MIME mismatches, a
   const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_A, "PUT", png, "image/png"), env, authA, deps))?.status, 201);
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_B, "PUT", webp, "image/webp"), env, authA, deps))?.status, 201);
-  assert.equal((await handleProgressRequest(photoRequest(thirdClaim, "PUT", new TextEncoder().encode("<svg/>"), "image/svg+xml"), env, authA, deps))?.status, 415);
+  assert.equal(
+    (await handleProgressRequest(photoRequest(thirdClaim, "PUT", new TextEncoder().encode("<svg/>"), "image/svg+xml"), env, authA, deps))?.status,
+    415,
+  );
   assert.equal((await handleProgressRequest(photoRequest(thirdClaim, "PUT", png, "image/jpeg"), env, authA, deps))?.status, 415);
   assert.equal((await handleProgressRequest(photoRequest(fourthClaim, "PUT", jpegBytes(2_621_440), CONTENT_TYPE), env, authA, deps))?.status, 201);
   const oversized = jpegBytes(2_621_441);
@@ -393,14 +443,19 @@ test("photo pending and ready transitions are replayed after an earlier claim cu
   const created = await handleProgressRequest(claimRequest(CLAIM_A, claimPayload(CLAIM_A)), env, authA, deps);
   assert.equal(created?.status, 201);
   const initial = await handleProgressRequest(new Request("https://api.example.test/api/claims"), env, authA, deps);
-  const initialBody = await initial?.json() as { claims: Array<{ photo: { status: string } }>; nextCursor: string };
+  const initialBody = (await initial?.json()) as { claims: Array<{ photo: { status: string } }>; nextCursor: string };
   assert.equal(initialBody.claims[0].photo.status, "missing");
 
   const bytes = jpegBytes();
   photoService.failPut = true;
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_A, "PUT", bytes, CONTENT_TYPE), env, authA, deps))?.status, 503);
-  const pending = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(initialBody.nextCursor)}`), env, authA, deps);
-  const pendingBody = await pending?.json() as { claims: Array<{ claimId: string; photo: { status: string } }>; nextCursor: string };
+  const pending = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(initialBody.nextCursor)}`),
+    env,
+    authA,
+    deps,
+  );
+  const pendingBody = (await pending?.json()) as { claims: Array<{ claimId: string; photo: { status: string } }>; nextCursor: string };
   assert.equal(pendingBody.claims[0].claimId, CLAIM_A);
   assert.equal(pendingBody.claims[0].photo.status, "pending");
 
@@ -409,8 +464,13 @@ test("photo pending and ready transitions are replayed after an earlier claim cu
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_A, "PUT", bytes, CONTENT_TYPE), env, authA, deps))?.status, 503);
   photoService.badPutAck = false;
   assert.equal((await handleProgressRequest(photoRequest(CLAIM_A, "PUT", bytes, CONTENT_TYPE), env, authA, deps))?.status, 200);
-  const ready = await handleProgressRequest(new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(pendingBody.nextCursor)}`), env, authA, deps);
-  const readyBody = await ready?.json() as { claims: Array<{ claimId: string; photo: { status: string } }>; nextCursor: string };
+  const ready = await handleProgressRequest(
+    new Request(`https://api.example.test/api/claims?cursor=${encodeURIComponent(pendingBody.nextCursor)}`),
+    env,
+    authA,
+    deps,
+  );
+  const readyBody = (await ready?.json()) as { claims: Array<{ claimId: string; photo: { status: string } }>; nextCursor: string };
   assert.equal(readyBody.claims[0].claimId, CLAIM_A);
   assert.equal(readyBody.claims[0].photo.status, "ready");
 });
@@ -476,7 +536,7 @@ test("photo display choices back up per claim, last write wins, and list per acc
 
   const saved = await handleProgressRequest(displayRequest(CLAIM_A, { crop, coverAt: "2026-09-21T10:00:00Z", removed: false }), env, authA, deps);
   assert.equal(saved?.status, 200);
-  const savedBody = await saved?.json() as { display: Record<string, unknown> };
+  const savedBody = (await saved?.json()) as { display: Record<string, unknown> };
   assert.deepEqual(savedBody.display, { claimId: CLAIM_A, crop, coverAt: "2026-09-21T10:00:00.000Z", removed: false, updatedAt: "2026-10-01T00:00:01.000Z" });
 
   const replaced = await handleProgressRequest(displayRequest(CLAIM_A, { crop: null, coverAt: null, removed: true }), env, authA, deps);
@@ -490,7 +550,11 @@ test("photo display choices back up per claim, last write wins, and list per acc
 
   // Another account's claim, and a claim never backed up, are not found.
   assert.equal((await handleProgressRequest(displayRequest(CLAIM_B, { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
-  assert.equal((await handleProgressRequest(displayRequest("be172e85-a8ab-4e1d-a032-901100000009", { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
+  assert.equal(
+    (await handleProgressRequest(displayRequest("be172e85-a8ab-4e1d-a032-901100000009", { crop: null, coverAt: null, removed: false }), env, authA, deps))
+      ?.status,
+    404,
+  );
   assert.equal((await handleProgressRequest(displayRequest("not-a-uuid", { crop: null, coverAt: null, removed: false }), env, authA, deps))?.status, 404);
   assert.equal((await handleProgressRequest(new Request(`https://api.example.test/api/claims/${CLAIM_A}/display`), env, authA, deps))?.status, 405);
   assert.equal((await handleProgressRequest(jsonRequest("https://api.example.test/api/claims/display", "PUT", {}), env, authA, deps))?.status, 405);

@@ -84,5 +84,10 @@ for (let i = 0; i < parks.length; i += CHUNK) {
 }
 
 writeFileSync(join(root, "src", "data", "drive.json"), JSON.stringify(out));
-const sample = ["regional-gonzales-hill-regional-park", "provincial-goldstream-park", "regional-east-sooke-regional-park", "national-pacific-rim-national-park-reserve"];
+const sample = [
+  "regional-gonzales-hill-regional-park",
+  "provincial-goldstream-park",
+  "regional-east-sooke-regional-park",
+  "national-pacific-rim-national-park-reserve",
+];
 for (const id of sample) console.log(id, JSON.stringify(out.parks[id].drive[0]), `walk ${out.parks[id].walkM} m`);

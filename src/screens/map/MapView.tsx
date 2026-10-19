@@ -5,13 +5,28 @@ import type { BoundaryCollection } from "../../lib/boundaries";
 import type { LngLat } from "../../lib/geo";
 import { mapStyle } from "../../lib/mapStyle";
 import { configureMapLibreWorker } from "../../lib/mapStartup";
-import { BUILD_MAP_KEY, flushPendingDetailedMapSourceRefresh, registerBuildMapProtocols, retryUnavailableBuildMap, subscribeMapCoverage } from "../../lib/offlineTiles";
+import {
+  BUILD_MAP_KEY,
+  flushPendingDetailedMapSourceRefresh,
+  registerBuildMapProtocols,
+  retryUnavailableBuildMap,
+  subscribeMapCoverage,
+} from "../../lib/offlineTiles";
 import { createLongPress, type ScreenPoint } from "../../lib/longPress";
 import type { Park } from "../../lib/parks";
 import { useContent, useContentRuntime } from "../../lib/content/provider";
 import type { ParkFlag } from "../../lib/game/client";
 import { PIN_POLE_X } from "../../lib/game/flag";
-import { buildPins, FLAG_PIN_ZOOM, PATCHED_PIN_PIXEL_RATIO, patchMinZoom, PIN_PIXEL_RATIO, PIN_SCALE_STOPS, pinImageSvg, type PinImage } from "../../lib/game/mapPins";
+import {
+  buildPins,
+  FLAG_PIN_ZOOM,
+  PATCHED_PIN_PIXEL_RATIO,
+  patchMinZoom,
+  PIN_PIXEL_RATIO,
+  PIN_SCALE_STOPS,
+  pinImageSvg,
+  type PinImage,
+} from "../../lib/game/mapPins";
 import { useFeatureFlag } from "../../lib/appConfig";
 import { badgeArtUrl } from "../../lib/game/badges";
 import { PIN_HEIGHT, PIN_WIDTH } from "../../lib/game/flag";
@@ -56,18 +71,42 @@ export type MapLongPress = { lngLat: LngLat; point: ScreenPoint };
 const BIOME_FILL = [
   "match",
   ["get", "biome"],
-  "coast", "#5CC6D6",
-  "mountain", "#7C8BE8",
-  "lake", "#3DB2E0",
-  "waterfall", "#8B7BE6",
-  "river", "#4FB8D9",
-  "cave", "#6D5BD0",
-  "marsh", "#72B865",
-  "heritage", "#C9774C",
+  "coast",
+  "#5CC6D6",
+  "mountain",
+  "#7C8BE8",
+  "lake",
+  "#3DB2E0",
+  "waterfall",
+  "#8B7BE6",
+  "river",
+  "#4FB8D9",
+  "cave",
+  "#6D5BD0",
+  "marsh",
+  "#72B865",
+  "heritage",
+  "#C9774C",
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags, flagsNow, selectedId, tripId, arrivedId, route, onSelect, onLongPress, visible }: Props) {
+export function MapView({
+  mapRef,
+  user,
+  showUser,
+  initialView,
+  fc,
+  parks,
+  flags,
+  flagsNow,
+  selectedId,
+  tripId,
+  arrivedId,
+  route,
+  onSelect,
+  onLongPress,
+  visible,
+}: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -93,7 +132,10 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
   const crews = useFeatureFlag("crews");
   // Badge patches (#175) are drawn on pins only with the badges flag on.
   const badges = useFeatureFlag("badges");
-  const pins = useMemo(() => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews, badges }), [hasReadyMapContent, parks, flags, flagsNow, crews, badges]);
+  const pins = useMemo(
+    () => buildPins(hasReadyMapContent ? parks : [], flags, flagsNow, { crews, badges }),
+    [hasReadyMapContent, parks, flags, flagsNow, crews, badges],
+  );
   // The style never changes after creation, so the map draws its detail once.
   const loaded = styleIsReady;
 
@@ -172,12 +214,16 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
     };
   }, []);
 
-  useEffect(() => subscribeMapCoverage(BUILD_MAP_KEY, () => {
-    pendingDetailReload.current = true;
-    const map = mapRef.current;
-    if (!map || !styleReady.current) return;
-    flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
-  }), []);
+  useEffect(
+    () =>
+      subscribeMapCoverage(BUILD_MAP_KEY, () => {
+        pendingDetailReload.current = true;
+        const map = mapRef.current;
+        if (!map || !styleReady.current) return;
+        flushPendingDetailedMapSourceRefresh(map, pendingDetailReload);
+      }),
+    [],
+  );
 
   // Tiles that failed offline are retried once, when the network returns or
   // saved map files become readable, rather than on every status change.
@@ -236,7 +282,13 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
       filter: ["==", ["get", "id"], ""],
       paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
     });
-    addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#FFF8EC", "line-width": 10 } });
+    addLayer({
+      id: "route-casing",
+      type: "line",
+      source: "route",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FFF8EC", "line-width": 10 },
+    });
     addLayer({
       id: "route-line",
       type: "line",
@@ -265,7 +317,15 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
           source: "park-pins",
           maxzoom: FAR_ZOOM,
           paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, ["case", ["==", ["get", "held"], 1], 4, 2.5], FAR_ZOOM, ["case", ["==", ["get", "held"], 1], 7, 4.5]],
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              5,
+              ["case", ["==", ["get", "held"], 1], 4, 2.5],
+              FAR_ZOOM,
+              ["case", ["==", ["get", "held"], 1], 7, 4.5],
+            ],
             "circle-color": ["get", "dot"],
             "circle-stroke-color": ["case", ["==", ["get", "held"], 1], "#14231C", "#5B6B62"],
             "circle-stroke-width": ["case", ["==", ["get", "held"], 1], 1.8, 1.2],
@@ -274,7 +334,10 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
       }
       // Two layers split at PATCH_ZOOM rather than one zoom step in icon-image: MapLibre lays out
       // symbol images at the tile's whole zoom, while layer zoom ranges follow the camera exactly.
-      for (const [id, range] of [["park-flag", { minzoom: FAR_ZOOM, maxzoom: PATCH_ZOOM }], ["park-flag-close", { minzoom: PATCH_ZOOM }]] as const) {
+      for (const [id, range] of [
+        ["park-flag", { minzoom: FAR_ZOOM, maxzoom: PATCH_ZOOM }],
+        ["park-flag-close", { minzoom: PATCH_ZOOM }],
+      ] as const) {
         if (map.getLayer(id)) continue;
         map.addLayer({
           id,
@@ -294,7 +357,9 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
         });
       }
     });
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [loaded, pins]);
 
   useEffect(() => {
@@ -326,9 +391,7 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
   useEffect(() => {
     const src = mapRef.current?.getSource("route") as GeoJSONSource | undefined;
     src?.setData(
-      route
-        ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: route } }
-        : { type: "FeatureCollection", features: [] },
+      route ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: route } } : { type: "FeatureCollection", features: [] },
     );
   }, [route, loaded, fc]);
 
@@ -345,7 +408,10 @@ export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags,
 function parkAtPoint(map: MLMap, point: [number, number], pinned: ReadonlySet<string>): string | null {
   const pinLayers = PIN_LAYERS.filter((id) => map.getLayer(id));
   // A small box around the tap makes thin poles and small dots easy to hit.
-  const box: [[number, number], [number, number]] = [[point[0] - 8, point[1] - 8], [point[0] + 8, point[1] + 8]];
+  const box: [[number, number], [number, number]] = [
+    [point[0] - 8, point[1] - 8],
+    [point[0] + 8, point[1] + 8],
+  ];
   const hits = [
     ...(pinLayers.length ? map.queryRenderedFeatures(box, { layers: pinLayers }) : []),
     ...(map.getLayer("park-fill") ? map.queryRenderedFeatures(point, { layers: ["park-fill"] }) : []),
@@ -382,13 +448,15 @@ function loadSvgImage(svg: string): Promise<HTMLImageElement> {
 function ensurePinImage(map: MLMap, pending: Map<string, Promise<void>>, id: string, image: PinImage): Promise<void> {
   const existing = pending.get(id);
   if (existing) return existing;
-  const work = drawPinImage(image).then(({ data, pixelRatio }) => {
-    if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio });
-  }).catch((error: unknown) => {
-    // Let a later refresh try this image again.
-    pending.delete(id);
-    throw error;
-  });
+  const work = drawPinImage(image)
+    .then(({ data, pixelRatio }) => {
+      if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio });
+    })
+    .catch((error: unknown) => {
+      // Let a later refresh try this image again.
+      pending.delete(id);
+      throw error;
+    });
   pending.set(id, work);
   return work;
 }

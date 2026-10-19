@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
 import type { GameMe, ParkFlag, VisitOutcome } from "./client";
-import { formatPoints, formatScore, hasVisitedToday, latestTakeoverAt, nextVisitStep, parkHolder, plantCheer, sortHeldParks, takeLabel, takePoints, visitHeadline, visitLabel, visitShortLabel } from "./visit";
+import {
+  formatPoints,
+  formatScore,
+  hasVisitedToday,
+  latestTakeoverAt,
+  nextVisitStep,
+  parkHolder,
+  plantCheer,
+  sortHeldParks,
+  takeLabel,
+  takePoints,
+  visitHeadline,
+  visitLabel,
+  visitShortLabel,
+} from "./visit";
 
 const flag = (parkId: string, handle: string): ParkFlag => ({ parkId, handle, flagSeed: `${handle}-seed`, since: "2026-10-01T00:00:00Z" });
-const flags = new Map([["blueberry", flag("blueberry", "sam")], ["beacon", flag("beacon", "robin")]]);
+const flags = new Map([
+  ["blueberry", flag("blueberry", "sam")],
+  ["beacon", flag("beacon", "robin")],
+]);
 const me = (player: GameMe["player"]): GameMe => ({ player, score: 0, parks: [], takeovers: [], flagSeed: player?.flagSeed ?? null });
 
 describe("park holder", () => {
@@ -63,7 +80,15 @@ describe("visit steps", () => {
 });
 
 describe("visit results", () => {
-  const base = { visitId: "v", parkId: "blueberry", pointsEarned: 0, pointsBreakdown: { base: 0, days: 0 }, previousHolder: null, flagSince: null, protected: null };
+  const base = {
+    visitId: "v",
+    parkId: "blueberry",
+    pointsEarned: 0,
+    pointsBreakdown: { base: 0, days: 0 },
+    previousHolder: null,
+    flagSince: null,
+    protected: null,
+  };
 
   it("names what happened", () => {
     const planted = visitHeadline({ ...base, outcome: "planted" }, "Blueberry");
@@ -80,10 +105,22 @@ describe("visit results", () => {
   it("explains a logged visit during someone else's protected hour, whatever the crews flag says", () => {
     // 3:42 pm on this device's clock, so the test reads the same in every time zone.
     const until = new Date(2026, 9, 13, 15, 42).toISOString();
-    const logged = visitHeadline({ ...base, outcome: "logged", pointsEarned: 1, pointsBreakdown: { base: 1, days: 0 }, protected: { until, leader: { handle: "tom", flagSeed: "t" }, crewSize: 2 } }, "Blueberry");
+    const logged = visitHeadline(
+      {
+        ...base,
+        outcome: "logged",
+        pointsEarned: 1,
+        pointsBreakdown: { base: 1, days: 0 },
+        protected: { until, leader: { handle: "tom", flagSeed: "t" }, crewSize: 2 },
+      },
+      "Blueberry",
+    );
     expect(logged).toEqual({ title: "Visit logged", detail: "This flag was just planted. Come back after 3:42 pm to take it." });
     expect(visitHeadline({ ...base, outcome: "logged", pointsEarned: 1 }, "Blueberry").detail).toBe("Your visit counts. The flag stays where it is.");
-    expect(visitHeadline({ ...base, outcome: "joined", pointsEarned: 2 }, "Blueberry")).toEqual({ title: "You joined the crew", detail: "You hold Blueberry together now. One point for every hour your flag flies." });
+    expect(visitHeadline({ ...base, outcome: "joined", pointsEarned: 2 }, "Blueberry")).toEqual({
+      title: "You joined the crew",
+      detail: "You hold Blueberry together now. One point for every hour your flag flies.",
+    });
   });
 });
 

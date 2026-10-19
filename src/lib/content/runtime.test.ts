@@ -48,7 +48,8 @@ vi.mock("./map-downloads", () => ({
     mapMock.calls.push({ releaseId, detail });
     if (detail === "nearby") mapMock.nearbySignals.push(signal);
     if (!snapshotOverride || snapshotOverride.releaseId !== releaseId) throw new Error("candidate prefetch requires a private matching snapshot");
-    if (!releaseId.startsWith("sync-") && runtime.getStatus().snapshot?.releaseId === releaseId) throw new Error("candidate snapshot was published before map verification");
+    if (!releaseId.startsWith("sync-") && runtime.getStatus().snapshot?.releaseId === releaseId)
+      throw new Error("candidate snapshot was published before map verification");
     mapMock.onCall?.(detail);
     if (mapMock.pauseNext) {
       mapMock.pauseNext = false;
@@ -92,11 +93,25 @@ async function makeRelease(id: string, generation: number, parkId: string, scene
   const park = { id: parkId, name: `${parkId} park`, short: parkId, ...PARK_FIELDS, scene };
   const boundaries = {
     type: "FeatureCollection",
-    features: [{
-      type: "Feature",
-      properties: { id: parkId, biome: park.biome },
-      geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
-    }],
+    features: [
+      {
+        type: "Feature",
+        properties: { id: parkId, biome: park.biome },
+        geometry: {
+          type: "MultiPolygon",
+          coordinates: [
+            [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 0],
+              ],
+            ],
+          ],
+        },
+      },
+    ],
   };
   const drive = { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [parkId]: { drive: [null], walkM: 0 } } };
   const mapIndex = { size: 8, chunkBytes: 4, count: 2 };
@@ -115,10 +130,15 @@ async function makeRelease(id: string, generation: number, parkId: string, scene
   for (const [path, bytes] of entries) {
     const sha256 = await sha256Hex(bytes);
     const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-    const content_type = path.endsWith(".geojson") ? "application/geo+json"
-      : path.endsWith(".webp") ? "image/webp"
-        : path.endsWith(".pbf") ? "application/x-protobuf"
-          : path.endsWith(".bin") ? "application/octet-stream" : "application/json";
+    const content_type = path.endsWith(".geojson")
+      ? "application/geo+json"
+      : path.endsWith(".webp")
+        ? "image/webp"
+        : path.endsWith(".pbf")
+          ? "application/x-protobuf"
+          : path.endsWith(".bin")
+            ? "application/octet-stream"
+            : "application/json";
     files.push({
       path,
       key: `releases/${id}/${path}`,
@@ -157,7 +177,7 @@ async function makeArchivedRelease(parkId: string, scene: string) {
   const rawManifest = structuredClone(draft.rawManifest);
   const inventory = rawManifest.files
     .map(({ path, byte_size, sha256 }) => ({ byte_size, path, sha256 }))
-    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   const releaseId = await sha256Hex(toBytes(inventory));
   const files = rawManifest.files.map((file) => {
     const encodedPath = file.path.split("/").map(encodeURIComponent).join("/");
@@ -187,7 +207,6 @@ async function makeArchivedRelease(parkId: string, scene: string) {
   return { channel, rawManifest: rawManifest as ContentManifest, content, park: draft.park };
 }
 
-
 class MemoryContentStore implements ContentStore {
   activeId: string | null = null;
   releases = new Map<string, StoredRelease>();
@@ -202,11 +221,22 @@ class MemoryContentStore implements ContentStore {
   initialized = false;
   closed = false;
 
-  async initialize() { this.initialized = true; }
-  async getActiveId() { return this.activeId; }
-  async getRelease(id: string) { const value = this.releases.get(id); return value ? structuredClone(value) : undefined; }
-  async listReleases() { return [...this.releases.values()].map((value) => structuredClone(value)); }
-  async putRelease(release: StoredRelease) { this.releases.set(release.id, structuredClone(release)); }
+  async initialize() {
+    this.initialized = true;
+  }
+  async getActiveId() {
+    return this.activeId;
+  }
+  async getRelease(id: string) {
+    const value = this.releases.get(id);
+    return value ? structuredClone(value) : undefined;
+  }
+  async listReleases() {
+    return [...this.releases.values()].map((value) => structuredClone(value));
+  }
+  async putRelease(release: StoredRelease) {
+    this.releases.set(release.id, structuredClone(release));
+  }
   async activateRelease(id: string, expectedActiveId: string | null) {
     this.beforeActivation?.(id, expectedActiveId);
     if (this.activeId !== expectedActiveId) throw new Error("Content release activation compare-and-swap failed");
@@ -223,10 +253,10 @@ class MemoryContentStore implements ContentStore {
   }
   async hasFile(hash: string, expectedSize: number) {
     const bytes = this.files.get(hash);
-    return !!bytes && bytes.byteLength === expectedSize && await sha256Hex(bytes) === hash;
+    return !!bytes && bytes.byteLength === expectedSize && (await sha256Hex(bytes)) === hash;
   }
   async putFile(hash: string, bytes: ArrayBuffer) {
-    if (await sha256Hex(bytes) !== hash) throw new Error("Content storage rejected a hash mismatch");
+    if ((await sha256Hex(bytes)) !== hash) throw new Error("Content storage rejected a hash mismatch");
     this.files.set(hash, bytes.slice(0));
   }
   async readFile(hash: string, offset = 0, length?: number) {
@@ -234,8 +264,12 @@ class MemoryContentStore implements ContentStore {
     if (!bytes) throw new Error("File is missing");
     return bytes.slice(offset, length === undefined ? undefined : offset + length);
   }
-  async fileUrl(hash: string) { return `content-store://${hash}`; }
-  async listFiles() { return [...this.files.entries()].map(([hash, bytes]) => ({ hash, size: bytes.byteLength })); }
+  async fileUrl(hash: string) {
+    return `content-store://${hash}`;
+  }
+  async listFiles() {
+    return [...this.files.entries()].map(([hash, bytes]) => ({ hash, size: bytes.byteLength }));
+  }
   async deleteFile(hash: string) {
     for (const release of this.releases.values()) {
       if (release.id === this.activeId && release.manifest.files.some((file) => file.sha256 === hash)) throw new Error("File is referenced by active release");
@@ -245,21 +279,43 @@ class MemoryContentStore implements ContentStore {
     this.deletedFiles.push(hash);
     this.files.delete(hash);
   }
-  async getRetainedParks() { return [...this.retained.values()].map((value) => structuredClone(value)); }
-  async retainParks(parks: RetainedPark[]) { for (const entry of parks) this.retained.set(entry.park.id, structuredClone(entry)); }
-  async getArchivedScene(releaseId: string, scene: string) { const value = this.archived.get(`${releaseId}:${scene}`); return value ? structuredClone(value) : undefined; }
-  async retainArchivedScene(scene: ArchivedScene) { this.archived.set(`${scene.releaseId}:${scene.scene}`, structuredClone(scene)); }
-  async listArchivedScenes() { return [...this.archived.values()].map((value) => structuredClone(value)); }
+  async getRetainedParks() {
+    return [...this.retained.values()].map((value) => structuredClone(value));
+  }
+  async retainParks(parks: RetainedPark[]) {
+    for (const entry of parks) this.retained.set(entry.park.id, structuredClone(entry));
+  }
+  async getArchivedScene(releaseId: string, scene: string) {
+    const value = this.archived.get(`${releaseId}:${scene}`);
+    return value ? structuredClone(value) : undefined;
+  }
+  async retainArchivedScene(scene: ArchivedScene) {
+    this.archived.set(`${scene.releaseId}:${scene.scene}`, structuredClone(scene));
+  }
+  async listArchivedScenes() {
+    return [...this.archived.values()].map((value) => structuredClone(value));
+  }
   readerVersions = new Map<ContentEnvironment, number>();
   async getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null> {
     const state = this.sync.get(environment);
     const readerVersion = this.readerVersions.get(environment);
     return state ? { revision: state.revision, sourceId: state.sourceId ?? "", readerVersion: readerVersion ?? CONTENT_READER_VERSION } : null;
   }
-  async getSyncState(environment: ContentEnvironment) { const value = this.sync.get(environment); return value ? structuredClone(value) : null; }
-  async replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor = false) {
+  async getSyncState(environment: ContentEnvironment) {
+    const value = this.sync.get(environment);
+    return value ? structuredClone(value) : null;
+  }
+  async replaceSyncState(
+    environment: ContentEnvironment,
+    expectedRevision: number | null,
+    state: ContentSyncState,
+    sourceId: string,
+    expectedSourceId: string | null,
+    resetCursor = false,
+  ) {
     const current = this.sync.get(environment);
-    if ((current?.revision ?? null) !== expectedRevision || (current?.sourceId ?? null) !== expectedSourceId) throw new Error("Content sync cursor changed before the snapshot could be committed");
+    if ((current?.revision ?? null) !== expectedRevision || (current?.sourceId ?? null) !== expectedSourceId)
+      throw new Error("Content sync cursor changed before the snapshot could be committed");
     if (!resetCursor && current && state.revision < current.revision) throw new Error("Content snapshot cannot move the sync cursor backwards");
     this.sync.set(environment, structuredClone({ ...state, sourceId }));
     this.readerVersions.delete(environment);
@@ -267,7 +323,8 @@ class MemoryContentStore implements ContentStore {
   }
   async applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string) {
     const current = this.sync.get(environment);
-    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId) throw new Error("Content sync cursor changed before the batch could be committed");
+    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId)
+      throw new Error("Content sync cursor changed before the batch could be committed");
     this.sync.set(environment, structuredClone(applyContentChangeBatch(current, batch)));
     if (batch.changes.some((change) => change.entity === "map" && change.op === "upsert" && change.value)) {
       const change = batch.changes.find((entry) => entry.entity === "map" && entry.op === "upsert" && entry.value);
@@ -276,14 +333,28 @@ class MemoryContentStore implements ContentStore {
   }
   async advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string) {
     const current = this.sync.get(environment);
-    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId) throw new Error("Content sync cursor changed before the revision could advance");
+    if (!current || current.revision !== expectedRevision || current.sourceId !== sourceId)
+      throw new Error("Content sync cursor changed before the revision could advance");
     this.sync.set(environment, { ...current, revision });
   }
-  async getMapInventory(version: string) { const value = this.inventories.get(version); return value ? structuredClone(value) : null; }
-  async putMapInventory(inventory: ContentMapInventory) { this.inventories.set(inventory.version, structuredClone(inventory)); }
-  async pruneMapInventories(keepVersions: readonly string[]) { const keep = new Set(keepVersions); for (const version of this.inventories.keys()) if (!keep.has(version)) this.inventories.delete(version); }
-  async getCachedMapPointer(environment: ContentEnvironment) { const value = this.cachedMapPointers.get(environment); return value ? structuredClone(value) : null; }
-  async close() { this.closed = true; }
+  async getMapInventory(version: string) {
+    const value = this.inventories.get(version);
+    return value ? structuredClone(value) : null;
+  }
+  async putMapInventory(inventory: ContentMapInventory) {
+    this.inventories.set(inventory.version, structuredClone(inventory));
+  }
+  async pruneMapInventories(keepVersions: readonly string[]) {
+    const keep = new Set(keepVersions);
+    for (const version of this.inventories.keys()) if (!keep.has(version)) this.inventories.delete(version);
+  }
+  async getCachedMapPointer(environment: ContentEnvironment) {
+    const value = this.cachedMapPointers.get(environment);
+    return value ? structuredClone(value) : null;
+  }
+  async close() {
+    this.closed = true;
+  }
 }
 
 function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
@@ -297,9 +368,7 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
     if (!release) return new Response("missing", { status: 404 });
     const bytes = release.content.get(url);
     if (!bytes) return new Response("missing", { status: 404 });
-    const response = corruptUrls.has(url)
-      ? new Response(new Uint8Array([255, 1, 2]).buffer, { status: 200 })
-      : new Response(bytes.slice(0), { status: 200 });
+    const response = corruptUrls.has(url) ? new Response(new Uint8Array([255, 1, 2]).buffer, { status: 200 }) : new Response(bytes.slice(0), { status: 200 });
     const destination = redirectUrls.get(url);
     if (destination) Object.defineProperty(response, "url", { value: destination });
     return response;
@@ -307,10 +376,18 @@ function contentServer(initial: Awaited<ReturnType<typeof makeRelease>>) {
   const serverReleases = [initial];
   return {
     fetcher,
-    add(release: Awaited<ReturnType<typeof makeRelease>>) { serverReleases.push(release); },
-    setCurrent(channel: ContentChannel) { current = channel; },
-    corrupt(url: string) { corruptUrls.add(url); },
-    redirect(url: string, destination: string) { redirectUrls.set(url, destination); },
+    add(release: Awaited<ReturnType<typeof makeRelease>>) {
+      serverReleases.push(release);
+    },
+    setCurrent(channel: ContentChannel) {
+      current = channel;
+    },
+    corrupt(url: string) {
+      corruptUrls.add(url);
+    },
+    redirect(url: string, destination: string) {
+      redirectUrls.set(url, destination);
+    },
   };
 }
 
@@ -323,11 +400,25 @@ function contentSyncSnapshot(revision: number, park: TestSyncPark, assets: Conte
     parks: [park],
     boundaries: {
       type: "FeatureCollection",
-      features: [{
-        type: "Feature",
-        properties: { id: park.id, biome: park.biome },
-        geometry: { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
-      }],
+      features: [
+        {
+          type: "Feature",
+          properties: { id: park.id, biome: park.biome },
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [
+                [
+                  [0, 0],
+                  [1, 0],
+                  [1, 1],
+                  [0, 0],
+                ],
+              ],
+            ],
+          },
+        },
+      ],
     },
     drive: {
       hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }],
@@ -367,14 +458,16 @@ function contentSyncServer(
     if (url.pathname === "/api/content/changes") {
       const after = Number(url.searchParams.get("after"));
       const explicit = deltas.get(after);
-      return Response.json(explicit ?? {
-        schema: "parkdex.content-sync/v1",
-        fromRevision: after,
-        throughRevision: after,
-        headRevision: after,
-        hasMore: false,
-        batches: [],
-      });
+      return Response.json(
+        explicit ?? {
+          schema: "parkdex.content-sync/v1",
+          fromRevision: after,
+          throughRevision: after,
+          headRevision: after,
+          hasMore: false,
+          batches: [],
+        },
+      );
     }
     if (url.pathname === "/api/content/scene") {
       const releaseId = url.searchParams.get("releaseId") ?? "";
@@ -421,7 +514,10 @@ function createSyncRuntime(
 }
 
 const runtimes: ContentRuntime[] = [];
-function track(runtime: ContentRuntime) { runtimes.push(runtime); return runtime; }
+function track(runtime: ContentRuntime) {
+  runtimes.push(runtime);
+  return runtime;
+}
 
 beforeEach(() => {
   mapMock.calls.length = 0;
@@ -465,7 +561,9 @@ describe("content runtime", () => {
     const server = contentServer(a);
     const store = new MemoryContentStore();
     const runtime = track(createRuntime(store, server.fetcher, { connected: true, wifi: true }));
-    const paused = new Promise<void>((resolve) => { mapMock.onPause = resolve; });
+    const paused = new Promise<void>((resolve) => {
+      mapMock.onPause = resolve;
+    });
     mapMock.pauseNext = true;
 
     const start = runtime.start();
@@ -489,9 +587,13 @@ describe("content runtime", () => {
     const sceneBytes = release.content.get(sceneFile.url)!;
     const store = new MemoryContentStore();
     let storeSceneWriteStarted!: () => void;
-    const storeSceneStarted = new Promise<void>((resolve) => { storeSceneWriteStarted = resolve; });
+    const storeSceneStarted = new Promise<void>((resolve) => {
+      storeSceneWriteStarted = resolve;
+    });
     let releaseSceneWrite!: () => void;
-    const sceneWriteGate = new Promise<void>((resolve) => { releaseSceneWrite = resolve; });
+    const sceneWriteGate = new Promise<void>((resolve) => {
+      releaseSceneWrite = resolve;
+    });
     const originalPutFile = store.putFile.bind(store);
     store.putFile = async (hash, bytes) => {
       if (hash === sceneFile.sha256) {
@@ -502,7 +604,9 @@ describe("content runtime", () => {
     };
     let releaseSceneFetch!: () => void;
     let signalSceneFetchStarted!: () => void;
-    const sceneFetchStarted = new Promise<void>((resolve) => { signalSceneFetchStarted = resolve; });
+    const sceneFetchStarted = new Promise<void>((resolve) => {
+      signalSceneFetchStarted = resolve;
+    });
     const fetcher: typeof fetch = (input, init) => {
       if (String(input) === sceneFile.url) {
         signalSceneFetchStarted();
@@ -533,8 +637,7 @@ describe("content runtime", () => {
     const first = track(createRuntime(store, server.fetcher, { connected: true, wifi: true }));
     await first.start();
     expect(first.getStatus().snapshot?.releaseId).toBe(a.channel.releaseId);
-    const discoveryRequests = () => (server.fetcher as ReturnType<typeof vi.fn>).mock.calls
-      .filter((call) => String(call[0]) === DISCOVERY_URL).length;
+    const discoveryRequests = () => (server.fetcher as ReturnType<typeof vi.fn>).mock.calls.filter((call) => String(call[0]) === DISCOVERY_URL).length;
     const requestsAtLaunch = discoveryRequests();
     const mapPrefetchesAtLaunch = mapMock.calls.length;
     first.setForeground(false);
@@ -818,7 +921,7 @@ describe("content runtime", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(server.calls).not.toContain(secondChunkUrl);
     expect(runtime.getStatus().waitingForWifi).toBe(false);
-  });;
+  });
 });
 
 describe("legacy archived art compatibility", () => {
@@ -842,7 +945,9 @@ describe("legacy archived art compatibility", () => {
     const url = await runtime.ensureArchivedScene(archived.channel.releaseId, "retired-scene");
     expect(url).toBe(`content-store://${archivedFile.sha256}`);
     expect(await store.getArchivedScene(archived.channel.releaseId, "retired-scene")).toEqual({
-      releaseId: archived.channel.releaseId, scene: "retired-scene", file: archivedFile,
+      releaseId: archived.channel.releaseId,
+      scene: "retired-scene",
+      file: archivedFile,
     });
     expect(await store.hasFile(archivedFile.sha256, archivedFile.byte_size)).toBe(true);
     expect(archivedRequests).toContain(archived.channel.manifestUrl);
@@ -890,7 +995,9 @@ describe("legacy archived art compatibility", () => {
     server.add(archived);
     let signal: AbortSignal | undefined;
     let manifestStarted!: () => void;
-    const started = new Promise<void>((resolve) => { manifestStarted = resolve; });
+    const started = new Promise<void>((resolve) => {
+      manifestStarted = resolve;
+    });
     const fetcher: typeof fetch = async (input, init) => {
       const url = input instanceof Request ? input.url : String(input);
       if (url === archived.channel.manifestUrl) {
@@ -914,8 +1021,6 @@ describe("legacy archived art compatibility", () => {
     await expect(pending).rejects.toThrow("Content runtime is stopped");
     expect(signal?.aborted).toBe(true);
   });
-
-
 });
 
 describe("incremental content sync", () => {
@@ -956,8 +1061,12 @@ describe("incremental content sync", () => {
     let sceneCheckStarted = false;
     let chunkCheckStarted = false;
     let fileIndexStarted = false;
-    const sceneGate = new Promise<void>((resolve) => { releaseSceneCheck = resolve; });
-    const chunkGate = new Promise<void>((resolve) => { releaseChunkCheck = resolve; });
+    const sceneGate = new Promise<void>((resolve) => {
+      releaseSceneCheck = resolve;
+    });
+    const chunkGate = new Promise<void>((resolve) => {
+      releaseChunkCheck = resolve;
+    });
     const originalHasFile = store.hasFile.bind(store);
     store.hasFile = async (hash, size) => {
       if (hash === sceneFile.sha256) {
@@ -973,11 +1082,15 @@ describe("incremental content sync", () => {
     };
     store.listFiles = () => {
       fileIndexStarted = true;
-      return new Promise((resolve) => { releaseFileIndex = resolve; });
+      return new Promise((resolve) => {
+        releaseFileIndex = resolve;
+      });
     };
 
     let changesStarted!: () => void;
-    const changesGate = new Promise<void>((resolve) => { changesStarted = resolve; });
+    const changesGate = new Promise<void>((resolve) => {
+      changesStarted = resolve;
+    });
     const fetcher: typeof fetch = (input, init) => {
       if (new URL(String(input)).pathname.endsWith("/changes")) {
         changesStarted();
@@ -992,11 +1105,13 @@ describe("incremental content sync", () => {
       }
       return Promise.reject(new Error(`Unexpected request while rehydrating cached content: ${String(input)}`));
     };
-    const runtime = track(createSyncRuntime(store, fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(store, fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: true,
+      }),
+    );
     const start = runtime.start();
 
     await vi.waitFor(() => expect(sceneCheckStarted).toBe(true));
@@ -1049,8 +1164,12 @@ describe("incremental content sync", () => {
     const originalHasFile = store.hasFile.bind(store);
     let releaseChunkCheck!: () => void;
     let signalChunkCheckStarted!: () => void;
-    const chunkGate = new Promise<void>((resolve) => { releaseChunkCheck = resolve; });
-    const chunkCheckStarted = new Promise<void>((resolve) => { signalChunkCheckStarted = resolve; });
+    const chunkGate = new Promise<void>((resolve) => {
+      releaseChunkCheck = resolve;
+    });
+    const chunkCheckStarted = new Promise<void>((resolve) => {
+      signalChunkCheckStarted = resolve;
+    });
     store.hasFile = async (hash, size) => {
       if (hash === chunkZero.sha256) {
         signalChunkCheckStarted();
@@ -1059,11 +1178,13 @@ describe("incremental content sync", () => {
       return originalHasFile(hash, size);
     };
     const fetcher = vi.fn(async () => new Response("unexpected network request", { status: 500 })) as typeof fetch;
-    const runtime = track(createSyncRuntime(store, fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: false,
-    }));
+    const runtime = track(
+      createSyncRuntime(store, fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: false,
+      }),
+    );
 
     await runtime.start();
     await chunkCheckStarted;
@@ -1099,20 +1220,6 @@ describe("incremental content sync", () => {
         parks: { ...firstParkSnapshot.drive.parks, ...secondParkSnapshot.drive.parks },
       },
     });
-    const delta = {
-      schema: "parkdex.content-sync/v1",
-      fromRevision: 1,
-      throughRevision: 2,
-      headRevision: 2,
-      hasMore: false,
-      batches: [{
-        revision: 2,
-        changes: [
-          { entity: "park", op: "upsert", id: slowPark.id, value: { ...slowPark, scene: null } },
-          { entity: "asset", op: "delete", id: slowAsset.file.path },
-        ],
-      }],
-    };
     const deltas = new Map<number, unknown>();
     const server = contentSyncServer(firstParkSnapshot, deltas);
     const store = new MemoryContentStore();
@@ -1122,8 +1229,12 @@ describe("incremental content sync", () => {
     const originalHasFile = store.hasFile.bind(store);
     let releaseSlowVerification!: () => void;
     let signalSlowVerification!: () => void;
-    const slowVerificationGate = new Promise<void>((resolve) => { releaseSlowVerification = resolve; });
-    const slowVerificationStarted = new Promise<void>((resolve) => { signalSlowVerification = resolve; });
+    const slowVerificationGate = new Promise<void>((resolve) => {
+      releaseSlowVerification = resolve;
+    });
+    const slowVerificationStarted = new Promise<void>((resolve) => {
+      signalSlowVerification = resolve;
+    });
     store.hasFile = async (hash, size) => {
       if (hash === slowAsset.file.sha256) {
         signalSlowVerification();
@@ -1133,7 +1244,9 @@ describe("incremental content sync", () => {
     };
     const originalFileUrl = store.fileUrl.bind(store);
     let signalSlowUrlCreated!: () => void;
-    const slowUrlCreated = new Promise<void>((resolve) => { signalSlowUrlCreated = resolve; });
+    const slowUrlCreated = new Promise<void>((resolve) => {
+      signalSlowUrlCreated = resolve;
+    });
     store.fileUrl = async (hash) => {
       const url = await originalFileUrl(hash);
       if (hash === slowAsset.file.sha256) signalSlowUrlCreated();
@@ -1207,8 +1320,12 @@ describe("incremental content sync", () => {
     const events: string[] = [];
     let releaseFirstArt!: () => void;
     let signalFirstArt!: () => void;
-    const firstArtGate = new Promise<void>((resolve) => { releaseFirstArt = resolve; });
-    const firstArtStarted = new Promise<void>((resolve) => { signalFirstArt = resolve; });
+    const firstArtGate = new Promise<void>((resolve) => {
+      releaseFirstArt = resolve;
+    });
+    const firstArtStarted = new Promise<void>((resolve) => {
+      signalFirstArt = resolve;
+    });
     let artAttempts = 0;
     const fetcher: typeof fetch = async (input, init) => {
       const url = String(input);
@@ -1299,18 +1416,15 @@ describe("incremental content sync", () => {
       throughRevision: 2,
       headRevision: 2,
       hasMore: false,
-      batches: [{
-        revision: 2,
-        changes: [{ entity: "map", op: "upsert", id: "default", value: secondMap.pointer }],
-      }],
+      batches: [
+        {
+          revision: 2,
+          changes: [{ entity: "map", op: "upsert", id: "default", value: secondMap.pointer }],
+        },
+      ],
     };
     const deltas = new Map<number, unknown>();
-    const server = contentSyncServer(
-      { ...contentSyncSnapshot(1, park, []), map: firstMap.pointer },
-      deltas,
-      new Map(),
-      files,
-    );
+    const server = contentSyncServer({ ...contentSyncSnapshot(1, park, []), map: firstMap.pointer }, deltas, new Map(), files);
     const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
     const point: [number, number] = [-123.4, 48.4];
     runtime.setLocation(point);
@@ -1347,11 +1461,15 @@ describe("incremental content sync", () => {
     store.files.set(assetA.file.sha256, assetA.bytes.slice(0));
     store.files.set(assetB.file.sha256, assetB.bytes.slice(0));
 
-    let claimedIds = [retiredA.id];
+    const claimedIds = [retiredA.id];
     let releaseOwnerBCheck!: () => void;
     let signalOwnerBCheckStarted!: () => void;
-    const ownerBGate = new Promise<void>((resolve) => { releaseOwnerBCheck = resolve; });
-    const ownerBCheckStarted = new Promise<void>((resolve) => { signalOwnerBCheckStarted = resolve; });
+    const ownerBGate = new Promise<void>((resolve) => {
+      releaseOwnerBCheck = resolve;
+    });
+    const ownerBCheckStarted = new Promise<void>((resolve) => {
+      signalOwnerBCheckStarted = resolve;
+    });
     const originalHasFile = store.hasFile.bind(store);
     store.hasFile = async (hash, size) => {
       if (hash === assetB.file.sha256) {
@@ -1361,11 +1479,18 @@ describe("incremental content sync", () => {
       return originalHasFile(hash, size);
     };
     const fetcher = vi.fn(async () => new Response("unexpected network request", { status: 500 })) as typeof fetch;
-    const runtime = track(createSyncRuntime(store, fetcher, {
-      connected: false,
-      wifi: false,
-      contentDownloadAllowed: false,
-    }, claimedIds));
+    const runtime = track(
+      createSyncRuntime(
+        store,
+        fetcher,
+        {
+          connected: false,
+          wifi: false,
+          contentDownloadAllowed: false,
+        },
+        claimedIds,
+      ),
+    );
 
     await runtime.start();
     await vi.waitFor(() => {
@@ -1405,8 +1530,12 @@ describe("incremental content sync", () => {
 
     let releaseOldOwnerCheck!: () => void;
     let signalOldOwnerCheckStarted!: () => void;
-    const oldOwnerGate = new Promise<void>((resolve) => { releaseOldOwnerCheck = resolve; });
-    const oldOwnerCheckStarted = new Promise<void>((resolve) => { signalOldOwnerCheckStarted = resolve; });
+    const oldOwnerGate = new Promise<void>((resolve) => {
+      releaseOldOwnerCheck = resolve;
+    });
+    const oldOwnerCheckStarted = new Promise<void>((resolve) => {
+      signalOldOwnerCheckStarted = resolve;
+    });
     const originalHasFile = store.hasFile.bind(store);
     store.hasFile = async (hash, size) => {
       if (hash === assetA.file.sha256) {
@@ -1418,11 +1547,18 @@ describe("incremental content sync", () => {
 
     const claimedIds = [retiredA.id];
     const server = contentSyncServer(contentSyncSnapshot(8, currentPark, []));
-    const runtime = track(createSyncRuntime(store, server.fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }, claimedIds));
+    const runtime = track(
+      createSyncRuntime(
+        store,
+        server.fetcher,
+        {
+          connected: true,
+          wifi: false,
+          contentDownloadAllowed: true,
+        },
+        claimedIds,
+      ),
+    );
     const start = runtime.start();
 
     await oldOwnerCheckStarted;
@@ -1448,8 +1584,12 @@ describe("incremental content sync", () => {
 
     let releaseArtCheck!: () => void;
     let artCheckStarted!: () => void;
-    const artGate = new Promise<void>((resolve) => { releaseArtCheck = resolve; });
-    const artStarted = new Promise<void>((resolve) => { artCheckStarted = resolve; });
+    const artGate = new Promise<void>((resolve) => {
+      releaseArtCheck = resolve;
+    });
+    const artStarted = new Promise<void>((resolve) => {
+      artCheckStarted = resolve;
+    });
     const originalHasFile = store.hasFile.bind(store);
     store.hasFile = async (hash, size) => {
       if (hash === sceneFile.sha256) {
@@ -1466,20 +1606,24 @@ describe("incremental content sync", () => {
       throughRevision: 25,
       headRevision: 25,
       hasMore: false,
-      batches: [{
-        revision: 25,
-        changes: [
-          { entity: "park", op: "upsert", id: nextPark.id, value: nextPark },
-          { entity: "asset", op: "delete", id: sceneFile.path },
-        ],
-      }],
+      batches: [
+        {
+          revision: 25,
+          changes: [
+            { entity: "park", op: "upsert", id: nextPark.id, value: nextPark },
+            { entity: "asset", op: "delete", id: sceneFile.path },
+          ],
+        },
+      ],
     };
     const server = contentSyncServer(contentSyncSnapshot(25, nextPark, []), new Map([[24, delta]]));
-    const runtime = track(createSyncRuntime(store, server.fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(store, server.fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: true,
+      }),
+    );
     const start = runtime.start();
 
     await artStarted;
@@ -1522,8 +1666,12 @@ describe("incremental content sync", () => {
     const server = contentSyncServer(contentSyncSnapshot(31, { ...release.park, scene: null }, []), new Map(), new Map(), remoteFiles);
     let releaseInventoryRequest!: () => void;
     let inventoryRequestStarted!: () => void;
-    const inventoryGate = new Promise<void>((resolve) => { releaseInventoryRequest = resolve; });
-    const inventoryStarted = new Promise<void>((resolve) => { inventoryRequestStarted = resolve; });
+    const inventoryGate = new Promise<void>((resolve) => {
+      releaseInventoryRequest = resolve;
+    });
+    const inventoryStarted = new Promise<void>((resolve) => {
+      inventoryRequestStarted = resolve;
+    });
     const fetcher: typeof fetch = async (input, init) => {
       if (String(input) === pointer.manifestUrl) {
         inventoryRequestStarted();
@@ -1531,11 +1679,13 @@ describe("incremental content sync", () => {
       }
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(store, fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(store, fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: true,
+      }),
+    );
     const start = runtime.start();
 
     await inventoryStarted;
@@ -1557,11 +1707,13 @@ describe("incremental content sync", () => {
     const release = await makeRelease("a".repeat(64), 1, "municipal-browser-park", "scene-browser");
     const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
     const server = contentSyncServer(snapshot);
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(new MemoryContentStore(), server.fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: true,
+      }),
+    );
 
     await runtime.start();
 
@@ -1576,7 +1728,9 @@ describe("incremental content sync", () => {
     const server = contentSyncServer(snapshot);
     let blockFirstSnapshot = true;
     let resolveFirstSnapshot!: () => void;
-    const firstSnapshotStarted = new Promise<void>((resolve) => { resolveFirstSnapshot = resolve; });
+    const firstSnapshotStarted = new Promise<void>((resolve) => {
+      resolveFirstSnapshot = resolve;
+    });
     let snapshotRequests = 0;
     const fetcher: typeof fetch = (input, init) => {
       const url = new URL(String(input));
@@ -1596,11 +1750,13 @@ describe("incremental content sync", () => {
       }
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
-      connected: true,
-      wifi: false,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(new MemoryContentStore(), fetcher, {
+        connected: true,
+        wifi: false,
+        contentDownloadAllowed: true,
+      }),
+    );
     const firstStart = runtime.start();
 
     await firstSnapshotStarted;
@@ -1628,11 +1784,13 @@ describe("incremental content sync", () => {
       if (transportPaused) throw contentTransportPausedError();
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
-      connected: true,
-      wifi: true,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(new MemoryContentStore(), fetcher, {
+        connected: true,
+        wifi: true,
+        contentDownloadAllowed: true,
+      }),
+    );
 
     await runtime.start();
 
@@ -1662,11 +1820,13 @@ describe("incremental content sync", () => {
       }
       return server.fetcher(input, init);
     };
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), fetcher, {
-      connected: true,
-      wifi: true,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(new MemoryContentStore(), fetcher, {
+        connected: true,
+        wifi: true,
+        contentDownloadAllowed: true,
+      }),
+    );
 
     await runtime.start();
     expect(runtime.getStatus().error).toBeNull();
@@ -1679,11 +1839,13 @@ describe("incremental content sync", () => {
     const release = await makeRelease("6".repeat(64), 1, "municipal-quiet-park", "scene-quiet");
     const snapshot = contentSyncSnapshot(7, { ...release.park, scene: null }, []);
     const server = contentSyncServer(snapshot);
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, {
-      connected: true,
-      wifi: true,
-      contentDownloadAllowed: true,
-    }));
+    const runtime = track(
+      createSyncRuntime(new MemoryContentStore(), server.fetcher, {
+        connected: true,
+        wifi: true,
+        contentDownloadAllowed: true,
+      }),
+    );
     await runtime.start();
     const requests = server.calls.length;
 
@@ -1694,9 +1856,15 @@ describe("incremental content sync", () => {
   });
 
   it("still reports a real sync failure as an error", async () => {
-    const runtime = track(createSyncRuntime(new MemoryContentStore(), async () => {
-      throw new Error("Content snapshot returned HTTP 500");
-    }, { connected: true, wifi: true, contentDownloadAllowed: true }));
+    const runtime = track(
+      createSyncRuntime(
+        new MemoryContentStore(),
+        async () => {
+          throw new Error("Content snapshot returned HTTP 500");
+        },
+        { connected: true, wifi: true, contentDownloadAllowed: true },
+      ),
+    );
 
     await runtime.start();
 
@@ -1831,8 +1999,12 @@ describe("incremental content sync", () => {
     store.files.set(oldAsset.sha256, oldRelease.content.get(oldAsset.url)!.slice(0));
     let signalAssetStarted!: () => void;
     let releaseAsset!: () => void;
-    const assetStarted = new Promise<void>((resolve) => { signalAssetStarted = resolve; });
-    const assetGate = new Promise<void>((resolve) => { releaseAsset = resolve; });
+    const assetStarted = new Promise<void>((resolve) => {
+      signalAssetStarted = resolve;
+    });
+    const assetGate = new Promise<void>((resolve) => {
+      releaseAsset = resolve;
+    });
     const fetcher: typeof fetch = (input, init) => {
       if (String(input) === finalAsset.file.url) {
         signalAssetStarted();
@@ -1875,14 +2047,19 @@ describe("incremental content sync", () => {
         { entity: "asset", op: "upsert", id: currentAsset.file.path, value: currentAsset.file },
       ],
     };
-    const deltas = new Map<number, unknown>([[1, {
-      schema: "parkdex.content-sync/v1",
-      fromRevision: 1,
-      throughRevision: 2,
-      headRevision: 2,
-      hasMore: false,
-      batches: [batch],
-    }]]);
+    const deltas = new Map<number, unknown>([
+      [
+        1,
+        {
+          schema: "parkdex.content-sync/v1",
+          fromRevision: 1,
+          throughRevision: 2,
+          headRevision: 2,
+          hasMore: false,
+          batches: [batch],
+        },
+      ],
+    ]);
     const server = contentSyncServer(initial, deltas, new Map(), new Map([[currentAsset.file.url, currentAsset.bytes]]));
     const store = new MemoryContentStore();
     store.sync.set("staging", { ...parseContentSnapshot(initial), sourceId: "staging|https://parkdex.example.test/api/content" });
@@ -1955,7 +2132,12 @@ describe("incremental content sync", () => {
   it("shows far, unclaimed badges from the CDN without downloading their art", async () => {
     const release = await makeRelease("c".repeat(64), 1, "municipal-far-art-park", "scene-far-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-far-art.webp")!;
-    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const server = contentSyncServer(
+      contentSyncSnapshot(5, release.park, [sceneFile]),
+      new Map(),
+      new Map(),
+      new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]),
+    );
     const requested: string[] = [];
     const fetcher: typeof fetch = async (input, init) => {
       requested.push(String(input));
@@ -1977,7 +2159,12 @@ describe("incremental content sync", () => {
   it("downloads art for parks near the visitor and switches their badges to the saved copy", async () => {
     const release = await makeRelease("d".repeat(64), 1, "municipal-near-art-park", "scene-near-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-near-art.webp")!;
-    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const server = contentSyncServer(
+      contentSyncSnapshot(5, release.park, [sceneFile]),
+      new Map(),
+      new Map(),
+      new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]),
+    );
     const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
     await runtime.start();
     expect(runtime.getStatus().snapshot?.assetUrls.has(sceneFile.path)).toBe(false);
@@ -1992,38 +2179,82 @@ describe("incremental content sync", () => {
     const features = parks.map((park, index) => ({
       type: "Feature",
       properties: { id: park.id, biome: park.biome },
-      geometry: { type: "MultiPolygon", coordinates: [[[[index, 0], [index + 1, 0], [index + 1, 1], [index, 0]]]] },
+      geometry: {
+        type: "MultiPolygon",
+        coordinates: [
+          [
+            [
+              [index, 0],
+              [index + 1, 0],
+              [index + 1, 1],
+              [index, 0],
+            ],
+          ],
+        ],
+      },
     }));
-    const chunkBytes = [json({ schema: "parkdex.content-boundaries/v1", features: features.slice(0, 1) }), json({ schema: "parkdex.content-boundaries/v1", features: features.slice(1) })];
-    const boundaryChunks = await Promise.all(chunkBytes.map(async (bytes, index) => ({
-      path: `catalogue/boundaries/00${index}.json`, sha256: await sha256Hex(bytes), byte_size: bytes.byteLength,
-      parkIds: (index === 0 ? parks.slice(0, 1) : parks.slice(1)).map((park) => park.id), bbox: [0, 0, 1, 1],
-    })));
+    const chunkBytes = [
+      json({ schema: "parkdex.content-boundaries/v1", features: features.slice(0, 1) }),
+      json({ schema: "parkdex.content-boundaries/v1", features: features.slice(1) }),
+    ];
+    const boundaryChunks = await Promise.all(
+      chunkBytes.map(async (bytes, index) => ({
+        path: `catalogue/boundaries/00${index}.json`,
+        sha256: await sha256Hex(bytes),
+        byte_size: bytes.byteLength,
+        parkIds: (index === 0 ? parks.slice(0, 1) : parks.slice(1)).map((park) => park.id),
+        bbox: [0, 0, 1, 1],
+      })),
+    );
     const indexBytes = json({
-      schema: "parkdex.content-catalogue/v1", revision, parks,
+      schema: "parkdex.content-catalogue/v1",
+      revision,
+      parks,
       drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: Object.fromEntries(parks.map((park) => [park.id, { drive: [null], walkM: 0 }])) },
-      assets: [], map: null, boundaryChunks,
+      assets: [],
+      map: null,
+      boundaryChunks,
     });
     const version = await sha256Hex(indexBytes);
     const base = `https://kip-assets.parkdex.app/releases/${version}/`;
     const files = new Map<string, ArrayBuffer>([[`${base}catalogue/index.json`, indexBytes]]);
     boundaryChunks.forEach((chunk, index) => files.set(`${base}${chunk.path}`, chunkBytes[index]!));
     const pointer = {
-      schema: "parkdex.content-sync/v1", revision,
-      catalogue: { schema: "parkdex.content-catalogue/v1", version, indexUrl: `${base}catalogue/index.json`, indexSha256: version, indexBytes: indexBytes.byteLength, parkCount: parks.length },
+      schema: "parkdex.content-sync/v1",
+      revision,
+      catalogue: {
+        schema: "parkdex.content-catalogue/v1",
+        version,
+        indexUrl: `${base}catalogue/index.json`,
+        indexSha256: version,
+        indexBytes: indexBytes.byteLength,
+        parkCount: parks.length,
+      },
     };
     return { pointer, files, base, boundaryChunks };
   }
 
   it("loads the whole catalogue from a CDN release when the snapshot API names one, then applies later changes", async () => {
     const first = await makeRelease("a".repeat(64), 1, "municipal-cdn-one", "scene-cdn-one");
-    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-two", name: "Two", short: "Two", scene: null }];
+    const parks: TestSyncPark[] = [
+      { ...first.park, scene: null },
+      { ...first.park, id: "provincial-cdn-two", name: "Two", short: "Two", scene: null },
+    ];
     const { pointer, files } = await catalogueRelease(7, parks);
     const renamed = { ...parks[1]!, name: "Two renamed" };
-    const deltas = new Map<number, unknown>([[7, {
-      schema: "parkdex.content-sync/v1", fromRevision: 7, throughRevision: 8, headRevision: 8, hasMore: false,
-      batches: [{ revision: 8, changes: [{ entity: "park", op: "upsert", id: renamed.id, value: renamed }] }],
-    }]]);
+    const deltas = new Map<number, unknown>([
+      [
+        7,
+        {
+          schema: "parkdex.content-sync/v1",
+          fromRevision: 7,
+          throughRevision: 8,
+          headRevision: 8,
+          hasMore: false,
+          batches: [{ revision: 8, changes: [{ entity: "park", op: "upsert", id: renamed.id, value: renamed }] }],
+        },
+      ],
+    ]);
     const server = contentSyncServer(pointer as unknown as ReturnType<typeof contentSyncSnapshot>, deltas, new Map(), files);
     const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: false }));
     await runtime.start();
@@ -2038,7 +2269,10 @@ describe("incremental content sync", () => {
 
   it("does not commit a CDN catalogue whose chunk fails its hash", async () => {
     const first = await makeRelease("b".repeat(64), 1, "municipal-cdn-bad", "scene-cdn-bad");
-    const parks: TestSyncPark[] = [{ ...first.park, scene: null }, { ...first.park, id: "provincial-cdn-bad-two", scene: null }];
+    const parks: TestSyncPark[] = [
+      { ...first.park, scene: null },
+      { ...first.park, id: "provincial-cdn-bad-two", scene: null },
+    ];
     const { pointer, files, base, boundaryChunks } = await catalogueRelease(3, parks);
     files.set(`${base}${boundaryChunks[1]!.path}`, toBytes("tampered"));
     const store = new MemoryContentStore();
@@ -2054,16 +2288,23 @@ describe("incremental content sync", () => {
   it("fetches no badge art near the visitor or for claims when the build does not show it", async () => {
     const release = await makeRelease("f".repeat(64), 1, "municipal-hidden-art-park", "scene-hidden-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-hidden-art.webp")!;
-    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
-    const runtime = track(createContentRuntime({
-      store: new MemoryContentStore(),
-      fetch: server.fetcher,
-      apiUrl: "https://parkdex.example.test/api/content/current",
-      environment: "staging",
-      claimedParkIds: () => [release.park.id],
-      connectivity: { connected: true, wifi: true },
-      badgeArt: false,
-    }));
+    const server = contentSyncServer(
+      contentSyncSnapshot(5, release.park, [sceneFile]),
+      new Map(),
+      new Map(),
+      new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]),
+    );
+    const runtime = track(
+      createContentRuntime({
+        store: new MemoryContentStore(),
+        fetch: server.fetcher,
+        apiUrl: "https://parkdex.example.test/api/content/current",
+        environment: "staging",
+        claimedParkIds: () => [release.park.id],
+        connectivity: { connected: true, wifi: true },
+        badgeArt: false,
+      }),
+    );
     await runtime.start();
     runtime.setLocation([release.park.lng + 0.01, release.park.lat]);
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -2076,7 +2317,12 @@ describe("incremental content sync", () => {
   it("saves one park's art on request for a claim", async () => {
     const release = await makeRelease("e".repeat(64), 1, "municipal-claim-art-park", "scene-claim-art");
     const sceneFile = release.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-claim-art.webp")!;
-    const server = contentSyncServer(contentSyncSnapshot(5, release.park, [sceneFile]), new Map(), new Map(), new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]));
+    const server = contentSyncServer(
+      contentSyncSnapshot(5, release.park, [sceneFile]),
+      new Map(),
+      new Map(),
+      new Map([[sceneFile.url, release.content.get(sceneFile.url)!]]),
+    );
     const runtime = track(createSyncRuntime(new MemoryContentStore(), server.fetcher, { connected: true, wifi: true }));
     await runtime.start();
 
@@ -2108,10 +2354,16 @@ describe("incremental content sync", () => {
     const url = await runtime.ensureArchivedScene("2".repeat(64), "scene-archived");
 
     expect(url).toBe(`content-store://${archivedAsset.file.sha256}`);
-    expect(await store.getArchivedScene("2".repeat(64), "scene-archived")).toEqual({ releaseId: "2".repeat(64), scene: "scene-archived", file: archivedAsset.file });
+    expect(await store.getArchivedScene("2".repeat(64), "scene-archived")).toEqual({
+      releaseId: "2".repeat(64),
+      scene: "scene-archived",
+      file: archivedAsset.file,
+    });
     expect(await store.hasFile(archivedAsset.file.sha256, archivedAsset.file.byte_size)).toBe(true);
     expect(runtime.getStatus().snapshot?.retainedSceneUrls.get(`${"2".repeat(64)}:scene-archived`)).toBe(url);
-    expect(server.calls.some((entry) => new URL(entry).pathname.endsWith("/scene") && new URL(entry).searchParams.get("releaseId") === "2".repeat(64))).toBe(true);
+    expect(server.calls.some((entry) => new URL(entry).pathname.endsWith("/scene") && new URL(entry).searchParams.get("releaseId") === "2".repeat(64))).toBe(
+      true,
+    );
 
     runtime.setConnectivity({ connected: false, wifi: false });
     await expect(runtime.ensureArchivedScene("2".repeat(64), "scene-archived")).resolves.toBe(url);
@@ -2125,14 +2377,15 @@ describe("incremental content sync", () => {
     await runtime.start();
     runtime.setForeground(false);
 
-    await expect(runtime.ensureArchivedScene("3".repeat(64), "scene-background"))
-      .rejects.toBeInstanceOf(ArchivedSceneRestoreDeferredError);
+    await expect(runtime.ensureArchivedScene("3".repeat(64), "scene-background")).rejects.toBeInstanceOf(ArchivedSceneRestoreDeferredError);
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("normalizes an in-flight archive restore aborted by runtime stop", async () => {
     const currentRelease = await makeRelease("4".repeat(64), 1, "municipal-current-park", "scene-current");
-    const snapshot = contentSyncSnapshot(1, currentRelease.park, [currentRelease.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-current.webp")!]);
+    const snapshot = contentSyncSnapshot(1, currentRelease.park, [
+      currentRelease.rawManifest.files.find((file) => file.path === "art/badges/scenes/scene-current.webp")!,
+    ]);
     const archivedAsset = await makeSceneAsset("5".repeat(64), "scene-stopping", "stopped badge bytes");
     const server = contentSyncServer(
       snapshot,
@@ -2141,7 +2394,9 @@ describe("incremental content sync", () => {
       new Map([[archivedAsset.file.url, archivedAsset.bytes]]),
     );
     let resolveStarted!: () => void;
-    const started = new Promise<void>((resolve) => { resolveStarted = resolve; });
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
     let requestSignal: AbortSignal | undefined;
     const fetcher: typeof fetch = (input, init) => {
       const url = new URL(String(input));
@@ -2176,27 +2431,63 @@ describe("lean device cache", () => {
 
   async function leanRelease(revision: number, parks: TestSyncPark[]) {
     const json = (value: unknown) => toBytes(JSON.stringify(value));
-    const chunkBytes = parks.map((park) => json({ schema: "parkdex.content-boundaries/v1", features: [{
-      type: "Feature",
-      properties: { id: park.id, biome: park.biome },
-      geometry: { type: "MultiPolygon", coordinates: [[[[park.lng, park.lat], [park.lng + 0.01, park.lat], [park.lng + 0.01, park.lat + 0.01], [park.lng, park.lat]]]] },
-    }] }));
-    const boundaryChunks = await Promise.all(chunkBytes.map(async (bytes, index) => ({
-      path: `catalogue/boundaries/00${index}.json`, sha256: await sha256Hex(bytes), byte_size: bytes.byteLength,
-      parkIds: [parks[index]!.id], bbox: [parks[index]!.lng, parks[index]!.lat, parks[index]!.lng + 0.01, parks[index]!.lat + 0.01],
-    })));
+    const chunkBytes = parks.map((park) =>
+      json({
+        schema: "parkdex.content-boundaries/v1",
+        features: [
+          {
+            type: "Feature",
+            properties: { id: park.id, biome: park.biome },
+            geometry: {
+              type: "MultiPolygon",
+              coordinates: [
+                [
+                  [
+                    [park.lng, park.lat],
+                    [park.lng + 0.01, park.lat],
+                    [park.lng + 0.01, park.lat + 0.01],
+                    [park.lng, park.lat],
+                  ],
+                ],
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const boundaryChunks = await Promise.all(
+      chunkBytes.map(async (bytes, index) => ({
+        path: `catalogue/boundaries/00${index}.json`,
+        sha256: await sha256Hex(bytes),
+        byte_size: bytes.byteLength,
+        parkIds: [parks[index]!.id],
+        bbox: [parks[index]!.lng, parks[index]!.lat, parks[index]!.lng + 0.01, parks[index]!.lat + 0.01],
+      })),
+    );
     const indexBytes = json({
-      schema: "parkdex.content-catalogue/v1", revision, parks,
+      schema: "parkdex.content-catalogue/v1",
+      revision,
+      parks,
       drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: Object.fromEntries(parks.map((park) => [park.id, { drive: [null], walkM: 0 }])) },
-      assets: [], map: null, boundaryChunks,
+      assets: [],
+      map: null,
+      boundaryChunks,
     });
     const version = await sha256Hex(indexBytes);
     const base = `https://kip-assets.parkdex.app/releases/${version}/`;
     const files = new Map<string, ArrayBuffer>([[`${base}catalogue/index.json`, indexBytes]]);
     boundaryChunks.forEach((chunk, index) => files.set(`${base}${chunk.path}`, chunkBytes[index]!));
     const pointer = {
-      schema: "parkdex.content-sync/v1", revision,
-      catalogue: { schema: "parkdex.content-catalogue/v1", version, indexUrl: `${base}catalogue/index.json`, indexSha256: version, indexBytes: indexBytes.byteLength, parkCount: parks.length },
+      schema: "parkdex.content-sync/v1",
+      revision,
+      catalogue: {
+        schema: "parkdex.content-catalogue/v1",
+        version,
+        indexUrl: `${base}catalogue/index.json`,
+        indexSha256: version,
+        indexBytes: indexBytes.byteLength,
+        parkCount: parks.length,
+      },
     };
     return { pointer: pointer as unknown as ReturnType<typeof contentSyncSnapshot>, files };
   }
@@ -2210,7 +2501,13 @@ describe("lean device cache", () => {
   }
 
   function memoryMarker(initial: string | null = null) {
-    const marker = { value: initial, read: () => marker.value, write: (next: string) => { marker.value = next; } };
+    const marker = {
+      value: initial,
+      read: () => marker.value,
+      write: (next: string) => {
+        marker.value = next;
+      },
+    };
     return marker;
   }
   const boundaryIds = (runtime: ContentRuntime) => runtime.getStatus().snapshot?.boundaries.features.map((feature) => feature.properties.id);
@@ -2273,12 +2570,20 @@ describe("lean device cache", () => {
     store.files.set(retainedArt.file.sha256, retainedArt.bytes.slice(0));
     // The release of the first content format, still active, and an older map with a saved chunk.
     const legacy = await makeRelease("d".repeat(64), 1, "municipal-legacy", "legacy-scene");
-    store.releases.set(legacy.channel.releaseId, { id: legacy.channel.releaseId, channel: legacy.channel, manifest: legacy.rawManifest, readiness: "complete", healthy: true });
+    store.releases.set(legacy.channel.releaseId, {
+      id: legacy.channel.releaseId,
+      channel: legacy.channel,
+      manifest: legacy.rawManifest,
+      readiness: "complete",
+      healthy: true,
+    });
     store.activeId = legacy.channel.releaseId;
     const oldChunk = legacy.rawManifest.files.find((file) => file.path === "map/island/001.bin")!;
     store.files.set(oldChunk.sha256, legacy.content.get(oldChunk.url)!.slice(0));
     store.inventories.set("e".repeat(64), {
-      schema: "parkdex.content-map/v1", version: "e".repeat(64), mapManifest: legacy.rawManifest.mapManifest,
+      schema: "parkdex.content-map/v1",
+      version: "e".repeat(64),
+      mapManifest: legacy.rawManifest.mapManifest,
       files: legacy.rawManifest.files.filter((file) => file.path.startsWith("map/")),
     });
     const values = new Map([["parkdex-map-squares-v1", JSON.stringify({ version: "f".repeat(64), keys: ["80/177"] })]]);
@@ -2289,9 +2594,15 @@ describe("lean device cache", () => {
     });
     const marker = memoryMarker("v1|build-1|none");
     const options = {
-      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
-      claimedParkIds: () => ["municipal-retired"], connectivity: { connected: true, wifi: true }, badgeArt: false,
-      appBuild: "build-2", cacheMarker: marker,
+      store,
+      fetch: server.fetcher,
+      apiUrl: "https://parkdex.example.test/api/content/current",
+      environment: "staging" as const,
+      claimedParkIds: () => ["municipal-retired"],
+      connectivity: { connected: true, wifi: true },
+      badgeArt: false,
+      appBuild: "build-2",
+      cacheMarker: marker,
     };
     try {
       const runtime = track(createContentRuntime(options));
@@ -2336,8 +2647,15 @@ describe("lean device cache", () => {
     }
     const marker = memoryMarker();
     const options = {
-      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
-      claimedParkIds: () => [], connectivity: { connected: true, wifi: true }, badgeArt: false, appBuild: "build-3", cacheMarker: marker,
+      store,
+      fetch: server.fetcher,
+      apiUrl: "https://parkdex.example.test/api/content/current",
+      environment: "staging" as const,
+      claimedParkIds: () => [],
+      connectivity: { connected: true, wifi: true },
+      badgeArt: false,
+      appBuild: "build-3",
+      cacheMarker: marker,
     };
     const first = track(createContentRuntime(options));
     const deleteFile = store.deleteFile.bind(store);
@@ -2369,10 +2687,26 @@ describe("lean device cache", () => {
     const whole = parseContentSnapshot({
       ...contentSyncSnapshot(7, near, []),
       parks: [near, far],
-      boundaries: { type: "FeatureCollection", features: [near, far].map((park) => ({
-        type: "Feature", properties: { id: park.id, biome: park.biome },
-        geometry: { type: "MultiPolygon", coordinates: [[[[park.lng, park.lat], [park.lng + 0.01, park.lat], [park.lng + 0.01, park.lat + 0.01], [park.lng, park.lat]]]] },
-      })) },
+      boundaries: {
+        type: "FeatureCollection",
+        features: [near, far].map((park) => ({
+          type: "Feature",
+          properties: { id: park.id, biome: park.biome },
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [
+                [
+                  [park.lng, park.lat],
+                  [park.lng + 0.01, park.lat],
+                  [park.lng + 0.01, park.lat + 0.01],
+                  [park.lng, park.lat],
+                ],
+              ],
+            ],
+          },
+        })),
+      },
       drive: { hubs: [{ name: "Victoria", lng: -123.3, lat: 48.4 }], parks: { [near.id]: { drive: [null], walkM: 0 }, [far.id]: { drive: [null], walkM: 0 } } },
     } as ReturnType<typeof contentSyncSnapshot>);
     store.sync.set("staging", { ...whole, sourceId: SOURCE });
@@ -2380,14 +2714,23 @@ describe("lean device cache", () => {
     const oldGlyph = oldMap.rawManifest.files.find((file) => file.path.startsWith("map/fonts/"))!;
     store.files.set(oldGlyph.sha256, oldMap.content.get(oldGlyph.url)!.slice(0));
     store.inventories.set("e".repeat(64), {
-      schema: "parkdex.content-map/v1", version: "e".repeat(64), mapManifest: oldMap.rawManifest.mapManifest,
+      schema: "parkdex.content-map/v1",
+      version: "e".repeat(64),
+      mapManifest: oldMap.rawManifest.mapManifest,
       files: oldMap.rawManifest.files.filter((file) => file.path.startsWith("map/")),
     });
     const marker = memoryMarker("v1|build-1|none");
     const options = {
-      store, fetch: server.fetcher, apiUrl: "https://parkdex.example.test/api/content/current", environment: "staging" as const,
-      claimedParkIds: () => [], connectivity: { connected: true, wifi: true }, badgeArt: false,
-      appBuild: "build-2", cacheMarker: marker, lastLocation: [near.lng, near.lat] as [number, number],
+      store,
+      fetch: server.fetcher,
+      apiUrl: "https://parkdex.example.test/api/content/current",
+      environment: "staging" as const,
+      claimedParkIds: () => [],
+      connectivity: { connected: true, wifi: true },
+      badgeArt: false,
+      appBuild: "build-2",
+      cacheMarker: marker,
+      lastLocation: [near.lng, near.lat] as [number, number],
     };
 
     // A hidden tab, a background start or no network: no sync runs.

@@ -22,5 +22,11 @@ export function deletesOn(archivedAt: string): string {
 
 export function shortDate(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Unknown" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric" }).format(date);
+  return Number.isNaN(date.getTime())
+    ? "Unknown"
+    : new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+      }).format(date);
 }

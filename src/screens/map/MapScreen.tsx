@@ -90,14 +90,20 @@ export function MapScreen() {
   const flags = game.flags?.byPark ?? null;
   // Flag ages are counted against the server's clock as of the last flag read.
   const flagsNow = useMemo(() => game.serverNow(), [game.flags]);
-  const flagDays = useCallback((parkId: string) => {
-    const flag = flags?.get(parkId);
-    return flag ? flagAgeDays(flag.since, flagsNow) : 0;
-  }, [flags, flagsNow]);
-  const flagAge = useCallback((parkId: string) => {
-    const flag = flags?.get(parkId);
-    return flag ? flagAgeMs(flag.since, flagsNow) : 0;
-  }, [flags, flagsNow]);
+  const flagDays = useCallback(
+    (parkId: string) => {
+      const flag = flags?.get(parkId);
+      return flag ? flagAgeDays(flag.since, flagsNow) : 0;
+    },
+    [flags, flagsNow],
+  );
+  const flagAge = useCallback(
+    (parkId: string) => {
+      const flag = flags?.get(parkId);
+      return flag ? flagAgeMs(flag.since, flagsNow) : 0;
+    },
+    [flags, flagsNow],
+  );
   const visibleFc = useMemo(() => {
     if (!bounds) return undefined;
     const ids = new Set(parks.map((park) => park.id));
@@ -106,7 +112,10 @@ export function MapScreen() {
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
-  const here = useMemo(() => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? state.accuracy ?? 0 : 0), [user, parks, bounds, state.accuracy, hasUsableGpsFix]);
+  const here = useMemo(
+    () => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? (state.accuracy ?? 0) : 0),
+    [user, parks, bounds, state.accuracy, hasUsableGpsFix],
+  );
   const arrivedId = here ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
   const player = game.me?.player ?? null;
@@ -114,7 +123,7 @@ export function MapScreen() {
   const lastScore = useRef<number | null>(null);
   const [scoreBump, setScoreBump] = useState<{ key: number; delta: number } | null>(null);
   useEffect(() => {
-    const score = player ? game.me?.score ?? null : null;
+    const score = player ? (game.me?.score ?? null) : null;
     if (score === null) {
       lastScore.current = null;
       return;
@@ -124,7 +133,16 @@ export function MapScreen() {
   }, [player, game.me?.score]);
 
   // Straight-line distance ranks every park, including ones without a drive estimate.
-  const listItem = useCallback((p: (typeof parks)[number]) => ({ park: p, km: distanceKm(user, [p.lng, p.lat]), holder: visit.holderOf(p.id), days: flagDays(p.id), ageMs: flagAge(p.id) }), [user, visit.holderOf, flagDays, flagAge]);
+  const listItem = useCallback(
+    (p: (typeof parks)[number]) => ({
+      park: p,
+      km: distanceKm(user, [p.lng, p.lat]),
+      holder: visit.holderOf(p.id),
+      days: flagDays(p.id),
+      ageMs: flagAge(p.id),
+    }),
+    [user, visit.holderOf, flagDays, flagAge],
+  );
   // "Parks near you" stays within NEARBY_LIST_KM of the player; search still covers every park.
   const nearby = useMemo(() => nearestParks(parks, user, { limit: NEARBY_LIST_SIZE, maxKm: NEARBY_LIST_KM }), [parks, user]);
   const nearbyItems = useMemo(() => nearby.map(({ p }) => listItem(p)), [nearby, listItem]);
@@ -141,7 +159,12 @@ export function MapScreen() {
       const b = bounds?.byId.get(arrivedId);
       // Keep the boundary above the arrival card and Kip, which take more of a short screen.
       const height = mapRef.current?.getContainer().clientHeight ?? 844;
-      if (b) mapRef.current?.fitBounds(ringBounds(b), { padding: { top: 110, bottom: Math.min(500, height * 0.6), left: 50, right: 50 }, maxZoom: 15, duration: 1400 });
+      if (b)
+        mapRef.current?.fitBounds(ringBounds(b), {
+          padding: { top: 110, bottom: Math.min(500, height * 0.6), left: 50, right: 50 },
+          maxZoom: 15,
+          duration: 1400,
+        });
       setRoute(null);
     }
     lastArrived.current = arrivedId;
@@ -251,9 +274,13 @@ export function MapScreen() {
     // From a zoomed-out view, frame the whole park instead of stopping at town level.
     if (map && boundary && map.getZoom() < FAR_ZOOM) {
       const height = map.getContainer().clientHeight;
-      map.fitBounds(ringBounds(boundary), { padding: { ...SHEET_PAD, bottom: Math.min(SHEET_PAD.bottom, height * 0.55) }, maxZoom: 15, duration: 1100, essential: true });
-    }
-    else map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
+      map.fitBounds(ringBounds(boundary), {
+        padding: { ...SHEET_PAD, bottom: Math.min(SHEET_PAD.bottom, height * 0.55) },
+        maxZoom: 15,
+        duration: 1100,
+        essential: true,
+      });
+    } else map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
   function startTrip() {
@@ -264,12 +291,19 @@ export function MapScreen() {
       setRoute(null);
       sfx.pop();
       // No road route to draw, so frame the park itself for the trip panel.
-      mapRef.current?.flyTo({ center: [selected.lng, selected.lat], zoom: Math.max(mapRef.current.getZoom(), 14), padding: TRIP_PAD, duration: 1100, essential: true });
+      mapRef.current?.flyTo({
+        center: [selected.lng, selected.lat],
+        zoom: Math.max(mapRef.current.getZoom(), 14),
+        padding: TRIP_PAD,
+        duration: 1100,
+        essential: true,
+      });
     } else {
       if (!bounds) return;
-      const target: LngLat = selected.trailheadLat != null && selected.trailheadLng != null
-        ? [selected.trailheadLng, selected.trailheadLat]
-        : arrivalPoint(bounds.byId.get(selected.id)!, user);
+      const target: LngLat =
+        selected.trailheadLat != null && selected.trailheadLng != null
+          ? [selected.trailheadLng, selected.trailheadLat]
+          : arrivalPoint(bounds.byId.get(selected.id)!, user);
       const path = arcPath(user, target);
       tripStart.current = { from: user, total: tripEstimate.km };
       setRoute(path);
@@ -429,7 +463,7 @@ export function MapScreen() {
   }
 
   if (founding) {
-    const target = founding.parkId ? content.parkById.get(founding.parkId) ?? null : null;
+    const target = founding.parkId ? (content.parkById.get(founding.parkId) ?? null) : null;
     return (
       <div className="screen map-screen">
         {mapView}
@@ -465,16 +499,18 @@ export function MapScreen() {
       {mapView}
 
       <div className="map-top">
-        <motion.div
-          className="counter card"
-          initial={{ y: -80 }}
-          animate={{ y: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}
-        >
+        <motion.div className="counter card" initial={{ y: -80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 22, delay: 0.3 }}>
           {/* Your flag opens big; the rest of the chip opens My Dex. */}
           {player && (
-            <motion.button className="counter__kip counter__kip--flag viewer-open" onClick={() => setViewingFlag(true)} whileTap={{ scale: 0.92 }} aria-label={`Show the flag of @${player.handle} full screen`}>
-              <span className="score-chip__flag"><Flag seed={player.flagSeed} size={46} patches={game.me?.flagPatches} className="is-waving" /></span>
+            <motion.button
+              className="counter__kip counter__kip--flag viewer-open"
+              onClick={() => setViewingFlag(true)}
+              whileTap={{ scale: 0.92 }}
+              aria-label={`Show the flag of @${player.handle} full screen`}
+            >
+              <span className="score-chip__flag">
+                <Flag seed={player.flagSeed} size={46} patches={game.me?.flagPatches} className="is-waving" />
+              </span>
             </motion.button>
           )}
           <motion.button
@@ -487,7 +523,11 @@ export function MapScreen() {
             whileTap={{ scale: 0.95 }}
             aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your flags in My Dex` : "My Dex"}
           >
-            {!player && <span className="counter__kip"><Kip pose="avatar" size={48} /></span>}
+            {!player && (
+              <span className="counter__kip">
+                <Kip pose="avatar" size={48} />
+              </span>
+            )}
             <span className="counter__text">
               {player && game.me ? (
                 <>
@@ -495,7 +535,9 @@ export function MapScreen() {
                     <RollingNumber value={game.me.score} />
                     <em> {game.me.score === 1 ? "point" : "points"}</em>
                   </strong>
-                  <span>@{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}</span>
+                  <span>
+                    @{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}
+                  </span>
                 </>
               ) : (
                 <>
@@ -568,16 +610,34 @@ export function MapScreen() {
             exit={{ opacity: 0, scale: 0.7, y: -10 }}
             transition={{ type: "spring", stiffness: 500, damping: 30 }}
           >
-            <button role="menuitem" onClick={() => { setMenuOpen(false); dispatch({ type: "feedback", open: true }); }}>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                dispatch({ type: "feedback", open: true });
+              }}
+            >
               <Icon name="feedback" size={20} /> Send feedback
             </button>
             {parkProposals && (
-              <button role="menuitem" onClick={() => { select(null); startFounding(null); }}>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  select(null);
+                  startFounding(null);
+                }}
+              >
                 <Icon name="flagPlus" size={20} /> Become a founder
               </button>
             )}
             {DEMO_TOOLS && (
-              <button role="menuitem" onClick={() => { setMenuOpen(false); setDemoOpen(true); }}>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setDemoOpen(true);
+                }}
+              >
                 <Icon name="wand" size={20} /> Demo controls
               </button>
             )}
@@ -722,7 +782,14 @@ export function MapScreen() {
       <AnimatePresence>
         {selected && (
           <>
-            <motion.div key="scrim" className="sheet-scrim sheet-scrim--light" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => select(null)} />
+            <motion.div
+              key="scrim"
+              className="sheet-scrim sheet-scrim--light"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => select(null)}
+            />
             <ParkSheet
               key={selected.id}
               park={selected}
@@ -734,7 +801,7 @@ export function MapScreen() {
               flagDays={flagDays(selected.id)}
               visitLabel={visit.labelFor(selected.id)}
               signedIn={visit.signedIn}
-              insideForFounding={insidePark(user, bounds?.byId.get(selected.id), hasUsableGpsFix ? state.accuracy ?? 0 : 0)}
+              insideForFounding={insidePark(user, bounds?.byId.get(selected.id), hasUsableGpsFix ? (state.accuracy ?? 0) : 0)}
               canFound={parkProposals}
               onFound={() => startFounding(selected.id)}
               onClose={() => select(null)}

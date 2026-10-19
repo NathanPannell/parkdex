@@ -84,7 +84,10 @@ beforeEach(() => {
     url: `${API_ORIGIN}/api/claims`,
   }));
   mocks.abort.mockClear();
-  vi.stubGlobal("fetch", vi.fn(async () => new Response("ok", { headers: { "content-type": "text/plain" } })));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("ok", { headers: { "content-type": "text/plain" } })),
+  );
   vi.stubGlobal("document", undefined);
 });
 
@@ -93,10 +96,16 @@ describe("account backup transport", () => {
     mocks.connectivity = { connected: true, wifi: false };
     const fetchMock = vi.mocked(globalThis.fetch);
 
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-      method: "GET",
-      headers: scopedHeaders(),
-    }, API_ORIGIN)).resolves.toMatchObject({ status: 200 });
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims`,
+        {
+          method: "GET",
+          headers: scopedHeaders(),
+        },
+        API_ORIGIN,
+      ),
+    ).resolves.toMatchObject({ status: 200 });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.subscribe).toHaveBeenCalledTimes(1);
@@ -149,7 +158,9 @@ describe("account backup transport", () => {
 
   it("honors cancellation after a Firefox Request.arrayBuffer body read finishes", async () => {
     let resolveBody: ((bytes: ArrayBuffer) => void) | undefined;
-    const bodyRead = new Promise<ArrayBuffer>((resolve) => { resolveBody = resolve; });
+    const bodyRead = new Promise<ArrayBuffer>((resolve) => {
+      resolveBody = resolve;
+    });
     const restoreRequest = stubMissingRequestBodyGetter(() => bodyRead);
     const controller = new AbortController();
     try {
@@ -174,10 +185,16 @@ describe("account backup transport", () => {
     mocks.connectivity = { connected: false, wifi: false };
     const fetchMock = vi.mocked(globalThis.fetch);
 
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-      method: "GET",
-      headers: scopedHeaders(),
-    }, API_ORIGIN)).rejects.toMatchObject({ name: "AccountBackupUnavailableError" });
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims`,
+        {
+          method: "GET",
+          headers: scopedHeaders(),
+        },
+        API_ORIGIN,
+      ),
+    ).rejects.toMatchObject({ name: "AccountBackupUnavailableError" });
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.subscribe).not.toHaveBeenCalled();
@@ -185,15 +202,22 @@ describe("account backup transport", () => {
 
   it("uses same-origin cookie credentials for browser backup and aborts when offline", async () => {
     let requestSignal: AbortSignal | undefined;
-    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
-      requestSignal = init?.signal ?? undefined;
-      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-    }));
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          requestSignal = init?.signal ?? undefined;
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
-    const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-      method: "GET",
-      headers: scopedHeaders(),
-    }, API_ORIGIN);
+    const pending = accountBackupFetch(
+      `${API_ORIGIN}/api/claims`,
+      {
+        method: "GET",
+        headers: scopedHeaders(),
+      },
+      API_ORIGIN,
+    );
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, requestInit] = fetchMock.mock.calls[0] ?? [];
@@ -208,16 +232,23 @@ describe("account backup transport", () => {
   it("keeps an in-flight browser backup when Wi-Fi changes to cellular while online", async () => {
     let resolveFetch: ((response: Response) => void) | undefined;
     let requestSignal: AbortSignal | undefined;
-    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
-      resolveFetch = resolve;
-      requestSignal = init?.signal ?? undefined;
-      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-    }));
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          resolveFetch = resolve;
+          requestSignal = init?.signal ?? undefined;
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        }),
+    );
     vi.stubGlobal("fetch", fetchMock);
-    const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-      method: "GET",
-      headers: scopedHeaders(),
-    }, API_ORIGIN);
+    const pending = accountBackupFetch(
+      `${API_ORIGIN}/api/claims`,
+      {
+        method: "GET",
+        headers: scopedHeaders(),
+      },
+      API_ORIGIN,
+    );
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     mocks.connectivityHandler?.({ connected: true, wifi: false });
@@ -228,18 +259,28 @@ describe("account backup transport", () => {
   });
 
   it("forwards caller cancellation to an in-flight browser request", async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-      },
-    }), { headers: { "content-type": "application/json" } }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const controller = new AbortController();
-    const pending = accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
-      method: "GET",
-      headers: scopedHeaders(),
-      signal: controller.signal,
-    }, API_ORIGIN);
+    const pending = accountBackupFetch(
+      `${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`,
+      {
+        method: "GET",
+        headers: scopedHeaders(),
+        signal: controller.signal,
+      },
+      API_ORIGIN,
+    );
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     controller.abort(new DOMException("Account changed", "AbortError"));
@@ -250,14 +291,21 @@ describe("account backup transport", () => {
   it("aborts browser backup when the request times out", async () => {
     vi.useFakeTimers();
     try {
-      const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-      }));
+      const fetchMock = vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+          }),
+      );
       vi.stubGlobal("fetch", fetchMock);
-      const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-        method: "GET",
-        headers: scopedHeaders(),
-      }, API_ORIGIN);
+      const pending = accountBackupFetch(
+        `${API_ORIGIN}/api/claims`,
+        {
+          method: "GET",
+          headers: scopedHeaders(),
+        },
+        API_ORIGIN,
+      );
       const timedOut = expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
       for (let attempt = 0; attempt < 12 && fetchMock.mock.calls.length === 0; attempt += 1) await Promise.resolve();
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -280,11 +328,17 @@ describe("account backup transport", () => {
       removeEventListener: vi.fn(),
     };
     vi.stubGlobal("document", browserDocument);
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(new ReadableStream({
-      start(controller) {
-        init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
-      },
-    }), { headers: { "content-type": "application/json" } }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => controller.error(init.signal?.reason), { once: true });
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const pending = accountBackupFetch(`${API_ORIGIN}/api/claims`, { method: "GET", headers: scopedHeaders() }, API_ORIGIN);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -298,33 +352,52 @@ describe("account backup transport", () => {
 
   it("blocks oversized photo uploads and oversized responses", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
-      method: "PUT",
-      headers: scopedHeaders({ "Content-Type": "image/jpeg" }),
-      body: new Blob([new Uint8Array(2_621_441)], { type: "image/jpeg" }),
-    }, API_ORIGIN)).rejects.toThrow("exceeds its byte limit");
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`,
+        {
+          method: "PUT",
+          headers: scopedHeaders({ "Content-Type": "image/jpeg" }),
+          body: new Blob([new Uint8Array(2_621_441)], { type: "image/jpeg" }),
+        },
+        API_ORIGIN,
+      ),
+    ).rejects.toThrow("exceeds its byte limit");
     expect(fetchMock).not.toHaveBeenCalled();
 
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(2_621_441))));
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
-      method: "GET",
-      headers: scopedHeaders(),
-    }, API_ORIGIN)).rejects.toThrow("response exceeds its byte limit");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Uint8Array(2_621_441))),
+    );
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`,
+        {
+          method: "GET",
+          headers: scopedHeaders(),
+        },
+        API_ORIGIN,
+      ),
+    ).rejects.toThrow("response exceeds its byte limit");
   });
 
   it("routes native writes through accountRequest with scoped bearer auth and bounded bytes", async () => {
     mocks.native = true;
     const body = new Blob(["private-photo"], { type: "image/jpeg" });
-    await accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
-      method: "PUT",
-      headers: scopedHeaders({
-        Authorization: "Bearer native-session-token",
-        "X-Kip-Auth-Transport": "native",
-        Cookie: "must-not-cross-native-bridge",
-        "Content-Type": "image/jpeg",
-      }),
-      body,
-    }, API_ORIGIN);
+    await accountBackupFetch(
+      `${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`,
+      {
+        method: "PUT",
+        headers: scopedHeaders({
+          Authorization: "Bearer native-session-token",
+          "X-Kip-Auth-Transport": "native",
+          Cookie: "must-not-cross-native-bridge",
+          "Content-Type": "image/jpeg",
+        }),
+        body,
+      },
+      API_ORIGIN,
+    );
 
     expect(mocks.accountRequest).toHaveBeenCalledTimes(1);
     const request = mocks.accountRequest.mock.calls[0]?.[0];
@@ -349,13 +422,17 @@ describe("account backup transport", () => {
     mocks.connectivity = { connected: true, wifi: false };
     mocks.getConnectivity.mockClear();
 
-    await accountBackupFetch(`${API_ORIGIN}/api/claims`, {
-      method: "GET",
-      headers: scopedHeaders({
-        Authorization: "Bearer native-session-token",
-        "X-Kip-Auth-Transport": "native",
-      }),
-    }, API_ORIGIN);
+    await accountBackupFetch(
+      `${API_ORIGIN}/api/claims`,
+      {
+        method: "GET",
+        headers: scopedHeaders({
+          Authorization: "Bearer native-session-token",
+          "X-Kip-Auth-Transport": "native",
+        }),
+      },
+      API_ORIGIN,
+    );
 
     expect(mocks.accountRequest).toHaveBeenCalledTimes(1);
     expect(mocks.getConnectivity).not.toHaveBeenCalled();
@@ -370,14 +447,18 @@ describe("account backup transport", () => {
       return new Promise(() => {});
     });
     const controller = new AbortController();
-    const pending = accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`, {
-      method: "GET",
-      headers: scopedHeaders({
-        Authorization: "Bearer native-session-token",
-        "X-Kip-Auth-Transport": "native",
-      }),
-      signal: controller.signal,
-    }, API_ORIGIN);
+    const pending = accountBackupFetch(
+      `${API_ORIGIN}/api/claims/${CLAIM_ID}/photo`,
+      {
+        method: "GET",
+        headers: scopedHeaders({
+          Authorization: "Bearer native-session-token",
+          "X-Kip-Auth-Transport": "native",
+        }),
+        signal: controller.signal,
+      },
+      API_ORIGIN,
+    );
     await vi.waitFor(() => expect(mocks.accountRequest).toHaveBeenCalledTimes(1));
 
     controller.abort(new DOMException("Account changed", "AbortError"));
@@ -399,11 +480,22 @@ describe("account backup transport", () => {
     expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/display?all=1`), "GET", API_ORIGIN)).toThrow();
     expect(() => assertAccountBackupRequest(new URL(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`), "GET", API_ORIGIN)).toThrow();
     const body = JSON.stringify({ crop: null, coverAt: null, removed: true });
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders(), body }, API_ORIGIN))
-      .resolves.toMatchObject({ status: 200 });
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders({ "Content-Type": "image/jpeg" }), body }, API_ORIGIN))
-      .rejects.toThrow("content type");
-    await expect(accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders(), body: "x".repeat(16 * 1024 + 1) }, API_ORIGIN))
-      .rejects.toThrow("byte limit");
+    await expect(
+      accountBackupFetch(`${API_ORIGIN}/api/claims/${CLAIM_ID}/display`, { method: "PUT", headers: scopedHeaders(), body }, API_ORIGIN),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims/${CLAIM_ID}/display`,
+        { method: "PUT", headers: scopedHeaders({ "Content-Type": "image/jpeg" }), body },
+        API_ORIGIN,
+      ),
+    ).rejects.toThrow("content type");
+    await expect(
+      accountBackupFetch(
+        `${API_ORIGIN}/api/claims/${CLAIM_ID}/display`,
+        { method: "PUT", headers: scopedHeaders(), body: "x".repeat(16 * 1024 + 1) },
+        API_ORIGIN,
+      ),
+    ).rejects.toThrow("byte limit");
   });
 });

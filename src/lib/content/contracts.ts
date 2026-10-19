@@ -153,7 +153,14 @@ export interface ContentStore {
   listArchivedScenes(): Promise<ArchivedScene[]>;
   getSyncCursor(environment: ContentEnvironment): Promise<ContentSyncCursor | null>;
   getSyncState(environment: ContentEnvironment): Promise<ContentSyncState | null>;
-  replaceSyncState(environment: ContentEnvironment, expectedRevision: number | null, state: ContentSyncState, sourceId: string, expectedSourceId: string | null, resetCursor?: boolean): Promise<void>;
+  replaceSyncState(
+    environment: ContentEnvironment,
+    expectedRevision: number | null,
+    state: ContentSyncState,
+    sourceId: string,
+    expectedSourceId: string | null,
+    resetCursor?: boolean,
+  ): Promise<void>;
   applySyncBatch(environment: ContentEnvironment, expectedRevision: number, batch: ContentChangeBatch, sourceId: string): Promise<void>;
   advanceSyncRevision(environment: ContentEnvironment, expectedRevision: number, revision: number, sourceId: string): Promise<void>;
   getMapInventory(version: string): Promise<ContentMapInventory | null>;
@@ -242,7 +249,11 @@ export function requiresContentWifiFor(purpose: DownloadPurpose, path: string): 
 /** Detailed map chunks require confirmed physical Wi-Fi unless a request allows any network. */
 export function requiresContentWifi(path: string): boolean {
   let decoded = path;
-  try { decoded = decodeURIComponent(path); } catch { /* Keep malformed paths for URL validation. */ }
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    /* Keep malformed paths for URL validation. */
+  }
   const match = /(?:^|\/)map\/([^/]+)\/[^/]+\.bin$/.exec(decoded);
   return !!match && match[1] !== "fonts";
 }
@@ -421,8 +432,9 @@ export function nearestContentArea(point: MapPoint, areas: readonly ContentArea[
 
 export function isPointInsideContentBounds(point: MapPoint, bounds: readonly MapBox[] = CONTENT_BOUNDS): boolean {
   const [lng, lat] = point;
-  return Number.isFinite(lng) && Number.isFinite(lat) &&
-    bounds.some(([west, south, east, north]) => lng >= west && lng <= east && lat >= south && lat <= north);
+  return (
+    Number.isFinite(lng) && Number.isFinite(lat) && bounds.some(([west, south, east, north]) => lng >= west && lng <= east && lat >= south && lat <= north)
+  );
 }
 
 /** One box around every area, for consumers that take a single box. */
@@ -471,8 +483,13 @@ export const BUILD_MAP_ARCHIVE = {
 export const CONTENT_CDN_ORIGIN = "https://kip-assets.parkdex.app";
 
 export function isRemoteContentPath(path: string): boolean {
-  return path === "data/parks.json" || path === "data/drive.json" || path === "boundaries.geojson" ||
-    path.startsWith("art/badges/scenes/") || path.startsWith("map/");
+  return (
+    path === "data/parks.json" ||
+    path === "data/drive.json" ||
+    path === "boundaries.geojson" ||
+    path.startsWith("art/badges/scenes/") ||
+    path.startsWith("map/")
+  );
 }
 export function isCoreContentPath(path: string): boolean {
   return isRemoteContentPath(path) && !isMapChunkPath(path);

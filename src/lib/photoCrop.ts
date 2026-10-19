@@ -91,7 +91,14 @@ export function clampCrop(crop: PhotoCrop, imageWidth: number, imageHeight: numb
  * Zooms by `factor` (above 1 zooms in) around `focus`, a point in the crop frame given as 0–1 of
  * its width and height, so the part of the photo under the fingers stays under them.
  */
-export function zoomCrop(crop: PhotoCrop, factor: number, focus: { x: number; y: number }, imageWidth: number, imageHeight: number, aspect = CROP_ASPECT): PhotoCrop {
+export function zoomCrop(
+  crop: PhotoCrop,
+  factor: number,
+  focus: { x: number; y: number },
+  imageWidth: number,
+  imageHeight: number,
+  aspect = CROP_ASPECT,
+): PhotoCrop {
   if (!(factor > 0) || !Number.isFinite(factor)) return clampCrop(crop, imageWidth, imageHeight, aspect);
   const pointX = crop.x + focus.x * crop.width;
   const pointY = crop.y + focus.y * crop.height;
@@ -142,8 +149,7 @@ export function isPhotoCrop(value: unknown): value is PhotoCrop {
   const { x, y, width, height } = value as Record<string, unknown>;
   if (![x, y, width, height].every((part) => typeof part === "number" && Number.isFinite(part))) return false;
   const crop = value as PhotoCrop;
-  return crop.x >= 0 && crop.y >= 0 && crop.width > 0 && crop.height > 0 &&
-    crop.x + crop.width <= 1 + EPSILON && crop.y + crop.height <= 1 + EPSILON;
+  return crop.x >= 0 && crop.y >= 0 && crop.width > 0 && crop.height > 0 && crop.x + crop.width <= 1 + EPSILON && crop.y + crop.height <= 1 + EPSILON;
 }
 
 /** Rounds a crop for storage: six decimals is well under a pixel on any photo we keep. */

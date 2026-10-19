@@ -1,19 +1,20 @@
-# Previews do not apply a PR's new migrations
+# A PR's new migrations are tested from its own inventory
 
-Recorded: 2026-10-08. Applies to: PR previews (`scripts/kip-delivery.py preview`) for PRs that add a migration.
+Recorded: 2026-10-08. Applies to: PRs that add a migration.
 
 ## What went wrong
 
-The preview for the flag game server PR returned 503 on every new route. The harness reads the migration inventory from the trusted staging checkout, not from the candidate, so a migration that the PR adds to `deployment.json` is never applied to its own preview database. Applying it to the branch's `parkdex_kip` database did not help either: the preview app uses its own database `kip_preview_<pr>_<id>`, owned by role `kip_pr_<pr>_<id>`.
+The preview for the flag game server PR returned 503 on every new route. The preview harness read the migration inventory from the trusted staging checkout, not from the candidate, so a migration that the PR added to `deployment.json` was never applied to its own preview database.
 
 ## Rule
 
-When a PR adds a migration, apply that migration by hand to the preview database, as the preview role, before preview QA. Say in the PR that you did. Never apply candidate SQL to staging or production by hand; the merged inventory does that.
+PR previews are retired (2026-10-19). CI now applies the PR's own `deployment.json` inventory from scratch to a fresh Postgres 18 database in the release checks (content sync SQL QA) and in the e2e API server. When a PR adds a migration, list it in `deployment.json` in the same PR, so CI applies it. Never apply candidate SQL to staging or production by hand; the merged inventory does that.
 
 ## How to check
 
-Run a new route on the preview and confirm it does not return 503. Check that the new schema exists in `kip_preview_<pr>_<id>`, not only in `parkdex_kip`.
+The release checks job shows the content sync SQL QA passing, and a test that calls a new route against the e2e API (or a SQL QA script) passes in the same run.
 
 ## History
 
-- 2026-10-08: created.
+- 2026-10-08: created for PR previews.
+- 2026-10-19: previews retired; CI applies each PR's own inventory.

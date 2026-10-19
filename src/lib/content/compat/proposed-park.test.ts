@@ -10,26 +10,48 @@ import snapshotFixture from "./fixtures/snapshot.json";
 
 // A park published straight from a player's proposal must load in every supported build and
 // survive a claim backup (docs/learnings/catalogue-cutover-validation.md).
-const ring = (lng: number, lat: number, size: number): [number, number][] =>
-  [[lng, lat], [lng + size, lat], [lng + size, lat + size], [lng, lat + size], [lng, lat]];
+const ring = (lng: number, lat: number, size: number): [number, number][] => [
+  [lng, lat],
+  [lng + size, lat],
+  [lng + size, lat + size],
+  [lng, lat + size],
+  [lng, lat],
+];
 const FEATURES: OsmFeature[] = [
   {
-    type: "relation", id: 9_876_543, name: "Swan Lake Christmas Hill Nature Sanctuary", kind: "leisure=nature_reserve",
-    tags: { leisure: "nature_reserve" }, areaM2: 400_000,
+    type: "relation",
+    id: 9_876_543,
+    name: "Swan Lake Christmas Hill Nature Sanctuary",
+    kind: "leisure=nature_reserve",
+    tags: { leisure: "nature_reserve" },
+    areaM2: 400_000,
     geometry: { type: "MultiPolygon", coordinates: [[ring(-123.38, 48.46, 0.01), ring(-123.376, 48.464, 0.002)], [ring(-123.36, 48.47, 0.002)]] },
   },
   {
-    type: "way", id: 12, name: null, kind: "leisure=park", tags: { leisure: "park" }, areaM2: 2_000,
+    type: "way",
+    id: 12,
+    name: null,
+    kind: "leisure=park",
+    tags: { leisure: "park" },
+    areaM2: 2_000,
     geometry: { type: "MultiPolygon", coordinates: [[ring(-123.35, 48.44, 0.001)]] },
   },
 ];
 
-const proposed = FEATURES.map((feature, index) => parkFromProposal(
-  feature,
-  { id: `00000000-0000-4000-8000-00000000000${index}`, name: "The pond trail", note: "", point: feature.geometry.coordinates[0][0][0], createdAt: "2026-10-07T12:00:00.000Z" },
-  index === 0 ? "Capital Region" : "",
-  [feature.geometry.coordinates[0][0][0][0] + 0.0005, feature.geometry.coordinates[0][0][0][1] + 0.0005],
-));
+const proposed = FEATURES.map((feature, index) =>
+  parkFromProposal(
+    feature,
+    {
+      id: `00000000-0000-4000-8000-00000000000${index}`,
+      name: "The pond trail",
+      note: "",
+      point: feature.geometry.coordinates[0][0][0],
+      createdAt: "2026-10-07T12:00:00.000Z",
+    },
+    index === 0 ? "Capital Region" : "",
+    [feature.geometry.coordinates[0][0][0][0] + 0.0005, feature.geometry.coordinates[0][0][0][1] + 0.0005],
+  ),
+);
 
 function publicPark(park: (typeof proposed)[number]) {
   const { id, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb } = park;
@@ -59,7 +81,18 @@ function snapshotWithProposals() {
 async function served(): Promise<unknown> {
   let body = "";
   let status = 0;
-  const res = { get statusCode() { return status; }, set statusCode(value: number) { status = value; }, setHeader() {}, end(value?: string) { body = value ?? ""; } };
+  const res = {
+    get statusCode() {
+      return status;
+    },
+    set statusCode(value: number) {
+      status = value;
+    },
+    setHeader() {},
+    end(value?: string) {
+      body = value ?? "";
+    },
+  };
   const repository = { snapshot: async () => snapshotWithProposals(), changes: async () => ({}), scene: async () => null };
   await createSnapshotHandler({ repository: repository as never })({ method: "GET", query: {}, headers: {} } as never, res as never);
   expect(status).toBe(200);

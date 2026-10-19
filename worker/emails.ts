@@ -63,7 +63,10 @@ function kindLabel(kind: FeedbackEmailReport["kind"]): string {
 }
 
 function referenceFor(id: string): string {
-  const compact = id.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+  const compact = id
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10);
   return compact ? `PD-${compact}` : "PD-UNKNOWN";
 }
 
@@ -248,11 +251,12 @@ function reportRows(report: FeedbackEmailReport, reviewUrl: string): string {
   const context = report.context;
   const buildValue = context.build ? `${textValue(context.version)} / build ${context.build}` : textValue(context.version);
   const parkValue = [context.parkName, context.parkId].filter((part) => typeof part === "string" && part.trim()).join(" / ");
-  const contactText = report.contact && report.email
-    ? `Follow-up permitted. <span style="display:block;margin-top:3px;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(report.email)}</span>`
-    : report.contact
-      ? "Follow-up permitted, but no email address was included."
-      : "Follow-up not permitted.";
+  const contactText =
+    report.contact && report.email
+      ? `Follow-up permitted. <span style="display:block;margin-top:3px;overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(report.email)}</span>`
+      : report.contact
+        ? "Follow-up permitted, but no email address was included."
+        : "Follow-up not permitted.";
   const screenshotText = report.hasScreenshot
     ? `<a href="${escapeHtml(reviewUrl)}" style="color:${INK};font-weight:700;text-decoration:underline;text-decoration-color:${ORANGE};text-underline-offset:3px;">View protected screenshot in private report</a>`
     : "No screenshot attached.";
@@ -320,13 +324,23 @@ ${closeDocument()}`;
     "",
     "Details from the app",
     textDetail("Received", formatTimestamp(report.createdAt)),
-    textDetail("App version", report.context.build ? `${textValue(report.context.version)} / build ${report.context.build}` : textValue(report.context.version)),
+    textDetail(
+      "App version",
+      report.context.build ? `${textValue(report.context.version)} / build ${report.context.build}` : textValue(report.context.version),
+    ),
     textDetail("Device", textValue(report.context.platform)),
     textDetail("Screen", textValue(report.context.screen)),
     ...(report.context.parkName || report.context.parkId
       ? [textDetail("Park", [report.context.parkName, report.context.parkId].filter(Boolean).join(" / "))]
       : []),
-    textDetail("Contact", report.contact && report.email ? `Follow-up permitted at ${report.email}` : report.contact ? "Follow-up permitted, but no email address was included" : "Follow-up not permitted"),
+    textDetail(
+      "Contact",
+      report.contact && report.email
+        ? `Follow-up permitted at ${report.email}`
+        : report.contact
+          ? "Follow-up permitted, but no email address was included"
+          : "Follow-up not permitted",
+    ),
     textDetail("Screenshot", report.hasScreenshot ? `View protected screenshot in private report: ${screenshotUrl}` : "No screenshot attached"),
   ];
 
@@ -342,11 +356,12 @@ export function renderReceiptEmail(report: FeedbackEmailReport, options: Feedbac
   const appUrl = appLink(base, "").toString();
   const label = kindLabel(report.kind);
   const reference = referenceFor(report.id);
-  const followup = report.contact && report.email
-    ? "You gave permission for a follow-up. If a conversation would help, the Parkdex team may use the address you shared."
-    : report.contact
-      ? "You gave permission for a follow-up, but no email address was included with the report."
-      : "You did not give permission for a follow-up. This message simply confirms that your feedback was saved.";
+  const followup =
+    report.contact && report.email
+      ? "You gave permission for a follow-up. If a conversation would help, the Parkdex team may use the address you shared."
+      : report.contact
+        ? "You gave permission for a follow-up, but no email address was included with the report."
+        : "You did not give permission for a follow-up. This message simply confirms that your feedback was saved.";
   const safeAppUrl = escapeHtml(appUrl);
 
   const html = `${documentStart("Thanks for your Parkdex feedback", "Your feedback has been saved. Thanks for helping shape Parkdex.")}

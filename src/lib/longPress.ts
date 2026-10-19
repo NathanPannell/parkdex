@@ -80,8 +80,6 @@ export function pressMenuPosition(
   const left = Math.min(Math.max(point.x - menu.width / 2, EDGE), maxLeft);
   const above = point.y - GAP - menu.height;
   const below = above < topInset + EDGE;
-  const top = below
-    ? Math.min(point.y + GAP, Math.max(EDGE, viewport.height - menu.height - EDGE))
-    : above;
+  const top = below ? Math.min(point.y + GAP, Math.max(EDGE, viewport.height - menu.height - EDGE)) : above;
   return { left, top, below };
 }
