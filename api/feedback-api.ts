@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '../worker/vercel-node-types.js';
 import { waitUntil } from '@vercel/functions';
 import worker from '../worker/index.js';
 
