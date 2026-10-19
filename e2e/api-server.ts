@@ -28,6 +28,10 @@ if (!admin.user || !admin.password) throw new Error("Set PGUSER and PGPASSWORD f
 const database = `kip_qa_e2e_${randomBytes(6).toString("hex")}`;
 const control = new pg.Client({ ...admin, database: "postgres" });
 await control.connect();
+// A run that was killed (Windows has no SIGTERM) leaves its database behind. Drop earlier e2e
+// databases here; DROP without FORCE refuses one that a concurrent run is still using.
+const stale = await control.query<{ datname: string }>("SELECT datname FROM pg_database WHERE datname ~ '^kip_qa_e2e_[0-9a-f]{12}$'");
+for (const { datname } of stale.rows) await control.query(`DROP DATABASE "${datname}"`).catch(() => undefined);
 await control.query(`CREATE DATABASE "${database}"`);
 await control.end();
 process.env.PGDATABASE = database;

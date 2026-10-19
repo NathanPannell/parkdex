@@ -25,11 +25,13 @@ export default defineConfig({
   webServer: [
     {
       // Needs a loopback PostgreSQL server in PGHOST, PGPORT, PGUSER and PGPASSWORD.
-      command: "npx tsx e2e/api-server.ts",
+      command: "node --import tsx e2e/api-server.ts",
       url: "http://127.0.0.1:8788/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       stdout: "pipe",
+      // SIGTERM lets the server drop its database; the default is to kill it.
+      gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     },
     {
       command: "npx vite preview --port 5190 --strictPort",

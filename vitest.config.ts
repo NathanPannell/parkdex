@@ -5,7 +5,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "api/**/*.test.ts"],
     environment: "node",
     coverage: {
-      enabled: true,
+      // On for `npm test` (`--coverage`), so running one test file does not fail the floor.
+      enabled: false,
       provider: "v8",
       include: ["src/**/*.{ts,tsx}", "api/**/*.ts"],
       exclude: ["**/*.test.ts"],
