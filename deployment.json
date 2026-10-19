@@ -3,6 +3,7 @@
   "repository": "NathanPannell/parkdex-kip",
   "stagingBranch": "staging",
   "productionBranch": "main",
+  "vercelProjectName": "parkdex-kip",
   "vercelProjectIdEnvironment": "VERCEL_STAGING_PROJECT_ID",
   "productionVercelProjectIdEnvironment": "VERCEL_PRODUCTION_PROJECT_ID",
   "vercelTeamIdEnvironment": "VERCEL_ORG_ID",
@@ -17,6 +18,7 @@
   "neonProductionBranchId": "br-shy-hat-akg1paip",
   "neonStagingBranchId": "br-odd-paper-aktgtidp",
   "neonDatabaseName": "parkdex_kip",
+  "neonRoleName": "parkdex_kip_owner",
   "migrationPath": "database/migrations/feedback_001_init.sql",
   "optionalMigrationPaths": [
     "database/migrations/accounts_001_init.sql",
