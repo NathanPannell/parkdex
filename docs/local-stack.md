@@ -9,7 +9,7 @@ Only use it with a loopback cluster you own. The script refuses any host other t
 Let the script create or reuse a throwaway cluster (first run runs `initdb`; later runs start it again):
 
 ```bash
-npm run local:api -- --pgdata C:/repo/parkdex-workspace/.codex/tmp/<piece>/local-pg --pg-port 55510
+npm run local:api -- --pgdata C:/repo/parkdex-workspace/.claude/tmp/<task>/local-pg --pg-port 55510
 ```
 
 Or point it at a cluster you already started, with `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD` and `PGDATABASE` (`kip_qa_*`) set.
