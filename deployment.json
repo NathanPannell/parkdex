@@ -3,7 +3,7 @@
   "repository": "NathanPannell/parkdex-kip",
   "stagingBranch": "staging",
   "productionBranch": "main",
-  "vercelProjectName": "parkdex-kip",
+  "vercelProjectName": "parkdex",
   "vercelProjectIdEnvironment": "VERCEL_STAGING_PROJECT_ID",
   "productionVercelProjectIdEnvironment": "VERCEL_PRODUCTION_PROJECT_ID",
   "vercelTeamIdEnvironment": "VERCEL_ORG_ID",

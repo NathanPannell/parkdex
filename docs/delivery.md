@@ -33,7 +33,7 @@ Run the same commands locally before pushing. `ci-checks` needs the PostgreSQL s
 
 ## One-time release setup
 
-Disable Vercel Git deployments for the parkdex-kip project. The repository push workflows own staging and production deployment requests; no pull request or feature branch event creates a provider deployment. Keep Vercel project Preview variables empty. Staging deploys use Vercel's Preview target, and their runtime values are sent with each exact deployment instead of being saved as project Preview variables.
+Disable Vercel Git deployments for the `parkdex` Vercel project (`web.parkdex.app` and `staging.web.parkdex.app`). The repository push workflows own staging and production deployment requests; no pull request or feature branch event creates a provider deployment. Keep Vercel project Preview variables empty. Staging deploys use Vercel's Preview target, and their runtime values are sent with each exact deployment instead of being saved as project Preview variables.
 
 Configure the GitHub staging environment with:
 
