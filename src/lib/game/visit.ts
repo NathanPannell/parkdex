@@ -48,7 +48,8 @@ export const VISITED_TODAY_LABEL = "Visited today, back tomorrow";
 
 /** `crew` is the player's crew phase at the park; it is `none` unless the `crews` flag is on (#171). */
 export function visitLabel(signedIn: boolean, holder: ParkHolder, visited = false, crew: CrewPhase = { kind: "none" }): string {
-  if (!signedIn) return "Sign in to plant your flag";
+  // During someone's protected hour a visit can only be logged (#170), so don't promise a flag.
+  if (!signedIn) return crew.kind === "outsider" ? "Sign in to log your visit" : "Sign in to plant your flag";
   if (visited) return VISITED_TODAY_LABEL;
   if (crew.kind === "outsider") return crew.logged ? `Logged, take it after ${formatClockTime(crew.until)}` : "Log your visit · +1";
   if (holder.kind === "mine") return holder.member ? "Visit your crew's flag" : "Visit your flag";

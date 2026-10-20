@@ -50,25 +50,33 @@ Signed in, with CSRF for cookie sessions. Body `{ "visitId": "<uuid>", "code": "
 ```json
 {
   "status": "joined",
-  "visit": { "visitId": "…", "parkId": "…", "outcome": "joined", "pointsEarned": 2, "pointsBreakdown": { "base": 2, "days": 0 },
-             "previousHolder": null, "flagSince": "…", "protected": null },
+  "visit": {
+    "visitId": "…",
+    "parkId": "…",
+    "outcome": "joined",
+    "pointsEarned": 2,
+    "pointsBreakdown": { "base": 2, "days": 0 },
+    "previousHolder": null,
+    "flagSince": "…",
+    "protected": null
+  },
   "crew": { "…": "see Crew below" }
 }
 ```
 
 `status` is `already_member` (with `visit: null`) when the account is already in this crew.
 
-| Status | `code` | When |
-| --- | --- | --- |
-| 400 | `invalid_request`, `invalid_code` | Bad body, or a code that is not 6 characters of the alphabet |
-| 404 | `code_not_found` | No crew has ever had this code |
-| 410 | `code_expired` | The hour is over, or the flag was taken |
-| 409 | `crew_full` | 8 people already |
-| 409 | `already_today` | A flag action at this park today already |
-| 409 | `handle_required` | No handle yet |
-| 404 | `park_not_found` | The park was hidden |
-| 410 | `account_deleting` | The account is being deleted |
-| 409 | `visit_id_reused` | The visit ID was used for something else |
+| Status | `code`                            | When                                                         |
+| ------ | --------------------------------- | ------------------------------------------------------------ |
+| 400    | `invalid_request`, `invalid_code` | Bad body, or a code that is not 6 characters of the alphabet |
+| 404    | `code_not_found`                  | No crew has ever had this code                               |
+| 410    | `code_expired`                    | The hour is over, or the flag was taken                      |
+| 409    | `crew_full`                       | 8 people already                                             |
+| 409    | `already_today`                   | A flag action at this park today already                     |
+| 409    | `handle_required`                 | No handle yet                                                |
+| 404    | `park_not_found`                  | The park was hidden                                          |
+| 410    | `account_deleting`                | The account is being deleted                                 |
+| 409    | `visit_id_reused`                 | The visit ID was used for something else                     |
 
 ### `GET /api/game/parks/:parkId/crew`
 
@@ -116,12 +124,12 @@ Every build reads `logged` and `joined`, and the `protected` details, whatever t
   - outsider: "@tom's crew flag is protected · 42 min", "Ask the crew for their code to join", and inside the park **Scan crew code** with **Log visit**. After logging: "Visit logged · +1. Come back after 3:42 pm to take this park."
   - after the hour: the usual states, with the crew list and "Crew window closed" under the holder row
 - The park page reads `GET /api/game/parks/:parkId/crew` once when it opens, for leaders, members and closed crews only, and the code sheet reads it once when it opens. Map refreshes never call it.
-- **Bottom bar:** "Log" for outsiders during the hour, "Later" once logged, and "Join" while a scanned code waits for the park you stand in.
+- **Bottom bar:** "Join" for signed-in outsiders during the hour (it opens the scanner) and while a scanned code waits for the park you stand in; "Tomorrow" once today's visit is spent. Logging a visit is on the arrival card and the park page.
 - **Crew code sheet** (`CrewSheets.tsx`): the QR of `https://<web host>/crew/CODE?park=<parkId>`, the code in large letters, the countdown and "Anyone in the crew can show this code". It keeps the screen on through the Screen Wake Lock API where the browser or WebView has it.
-- **Joining:** the in-app scanner (`QrScanner.tsx`, with "Type code instead"), or the `/crew/` App Link (`AndroidManifest.xml`) and web path (`vercel.json`, no-store and noindex), open the join card: "Join @tom's crew at Beacon Hill · +2", the crew, Join and Cancel. The link's `park` names the park; a code typed on a park page is for that park; otherwise it is the park you stand in. Join goes through sign-in, the handle sheet and the in-park check ("Get inside Beacon Hill Park to join").
-- **Result:** the plant scene hoists the player's pennant up the leader's pole, counts +2 and lists the crew. With the `friends` flag on, it offers "Add @sara as a friend?" for members who aren't friends yet; the friends API adds by code only, so the button opens the player's own friend code to scan.
+- **Joining:** a friend who scans the code with the in-app scanner (`QrScanner.tsx`, with "Type code instead") while signed in and standing in the park joins straight away: no join card and no second confirm. During someone's protected hour the bottom bar's button reads "Join" and opens the scanner. The `/crew/` App Link (`AndroidManifest.xml`) and web path (`vercel.json`, no-store and noindex), and any scan that can't join yet (signed out, somewhere else), open the join card instead: "Join @tom's crew at Beacon Hill · +2", the crew, Join and Cancel. The link's `park` names the park; a code typed on a park page is for that park; otherwise it is the park you stand in. "Sign in to join" comes back to the join after signing in, through the handle sheet if needed, and the in-park check still applies ("Get inside Beacon Hill Park to join").
+- **Result:** the plant scene hoists the player's pennant up the leader's pole, counts +2 and shows the crew size. A leader's own plant or take result shows the crew code's QR and the code at once ("Friends with you?"), so nobody has to open the code sheet.
 - **Map pins** (`mapPins.ts`): the leader's flag with up to 3 pennants in members' colours below it, a "+N" tag for bigger crews, and a gold shield during the hour. The image ID adds `crew:<size>:<p|o>:<member seeds>` to the flag's own ID. `flag.ts` is unchanged.
-- **Kip's Tips:** `crew-leader`, `crew-outsider` and `crew-joined`.
+- **Kip's Tips:** none. The crew panel, the arrival card and the result say what the protected hour and the crew mean inline (`crew-leader`, `crew-outsider` and `crew-joined` stay in `src/lib/kipTips.ts` for the demo tools).
 
 ## Analytics
 

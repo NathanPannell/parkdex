@@ -44,7 +44,10 @@ const readyState: StoreState = {
   tripId: park.id,
   pendingPhoto: "data:image/jpeg;base64,photo",
   focusId: null,
+  focusOpen: true,
   feedback: null,
+  resume: null,
+  accountFrom: null,
 };
 
 afterEach(() => {
@@ -362,5 +365,28 @@ describe("flag visits", () => {
     const next = reducer(planting, { type: "progressLoading", ownerKey: "account:new-owner" });
     expect(next.screen).toBe("map");
     expect(next.tripId).toBeNull();
+  });
+});
+
+describe("signing in for an action", () => {
+  it("remembers what the player was doing and where Account was opened from", () => {
+    const onMap = { ...readyState, screen: "map" as const, selectedId: "a-park" };
+    const signingIn = reducer(onMap, { type: "signInFor", resume: { kind: "join", parkId: "a-park", code: "K7QX2M" } });
+    expect(signingIn.screen).toBe("account");
+    expect(signingIn.accountFrom).toBe("map");
+    expect(signingIn.selectedId).toBeNull();
+    expect(signingIn.resume).toEqual({ kind: "join", parkId: "a-park", code: "K7QX2M" });
+    expect(reducer(signingIn, { type: "resume", resume: null }).resume).toBeNull();
+  });
+
+  it("keeps the screen Account was first opened from", () => {
+    const fromSettings = reducer({ ...readyState, screen: "settings" }, { type: "go", screen: "account" });
+    expect(fromSettings.accountFrom).toBe("settings");
+    expect(reducer(fromSettings, { type: "go", screen: "account" }).accountFrom).toBe("settings");
+  });
+
+  it("settles on a park without opening its page when asked", () => {
+    expect(reducer(readyState, { type: "focus", id: "a-park", open: false })).toMatchObject({ focusId: "a-park", focusOpen: false });
+    expect(reducer(readyState, { type: "focus", id: "a-park" })).toMatchObject({ focusId: "a-park", focusOpen: true });
   });
 });

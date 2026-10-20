@@ -1,15 +1,13 @@
-import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/react";
+import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Flag, FlagPin } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
-import { RollingNumber } from "../components/Motion";
 import { useToast } from "../components/Toast";
-import { useAuth } from "../lib/accounts/AuthProvider";
 import { buzz, sfx } from "../lib/feedback";
-import { useGame } from "../lib/game/GameProvider";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
+import { useFeatureFlag } from "../lib/appConfig";
 import { saveLastLocation } from "../lib/lastLocation";
 import { rememberWebLocation, WEB_CAN_TRACK } from "../lib/liveLocation";
 import { onboardingStart } from "../lib/provinces";
@@ -19,51 +17,35 @@ import "../game.css";
 import "../onboarding.css";
 
 /**
- * Six short slides that teach the flag game, with Kip as the guide: plant a flag by going to a
- * park, earn a point an hour while it flies, take other players' parks for their flag's age, get
- * your own @handle and flag, and become the founder of parks that have none yet. How flags
- * eventually fall is left for players to discover.
+ * Three short slides that teach the flag game, with Kip as the guide: go to a park and plant
+ * your flag, earn a point an hour and take other players' parks, and hold parks with friends
+ * (only while crews are on). Handles and founding are explained where they first come up, and
+ * how flags eventually fall is left for players to discover.
  */
-const SLIDES = [
+type SlideVisual = "go" | "take" | "crew";
+const SLIDES: { visual: SlideVisual; eyebrow: string; title: [string, string]; body: string; tint: string }[] = [
   {
+    visual: "go",
     eyebrow: "Parkdex",
     title: ["Plant your flag", "in real parks."],
-    body: "Like capture the flag, for every park around you. Play with your friends.",
-    tint: "#FFE2C2",
-  },
-  {
-    eyebrow: "Step 1 · Go",
-    title: ["Go to a park.", "Up goes your flag."],
-    body: "Head to any park on the map. Once you're inside the boundary, hold the button and plant your flag.",
+    body: "Walk into any park on the map and tap Plant. Like capture the flag, for every park around you.",
     tint: "#D6F0DF",
   },
   {
-    eyebrow: "Step 2 · Hold",
-    title: ["A point an hour", "while it flies."],
-    body: "Your flag earns 1 point for every hour it stays up. The longer it flies, the more it's worth.",
-    tint: "#FFF1B8",
-  },
-  {
-    eyebrow: "Step 3 · Take",
+    visual: "take",
+    eyebrow: "Points",
     title: ["Take parks.", "Win their days."],
-    body: "Plant on someone else's park and it's yours: 4 points, plus a point for every day their flag was up. They keep what they earned.",
+    body: "Your flag earns a point every hour it flies. Plant on someone else's park to take it, plus a point for every day their flag was up.",
     tint: "#FFD6DE",
   },
   {
-    eyebrow: "Step 4 · You",
-    title: ["Your @handle.", "Your flag."],
-    body: "Every player gets a one-of-a-kind flag. Everyone sees it, and your handle, on the parks you hold.",
-    tint: "#DCEBFF",
-  },
-  {
-    eyebrow: "Bonus · Founder",
-    title: ["Be the founder.", "Snap its cover."],
-    body: "Standing in a park with no founder yet? Take its first photo to become the founder, +24 points.",
-    tint: "#E6F4C8",
+    visual: "crew",
+    eyebrow: "Friends",
+    title: ["Bring friends.", "Hold it together."],
+    body: "Plant a flag and your friends scan your crew code to join. The park is yours together, and everyone earns its hours.",
+    tint: "#FFE2C2",
   },
 ];
-// The handle slide: signing in and picking a handle are offered here.
-const YOU_SLIDE = 4;
 
 const SAMPLE_SEEDS = ["onboard-fern", "onboard-tide", "onboard-moss"];
 const RIVAL_SEED = "onboard-rival";
@@ -174,46 +156,6 @@ function GoThere() {
   );
 }
 
-function PointsPerDay() {
-  const reduce = useReducedMotion();
-  const [day, setDay] = useState(reduce ? 3 : 1);
-  useEffect(() => {
-    if (reduce) return;
-    // Days tick by, the score climbs, and the flag weathers as it would over a month.
-    const timer = window.setInterval(() => setDay((current) => (current >= 9 ? 1 : current + 1)), 750);
-    return () => window.clearInterval(timer);
-  }, [reduce]);
-  const days = day === 1 ? 0 : day * 3;
-  return (
-    <div className="ob-days">
-      <motion.span
-        key={day}
-        className="ob-days__chip"
-        initial={{ y: -14, opacity: 0, rotate: -8 }}
-        animate={{ y: 0, opacity: 1, rotate: -4 }}
-        transition={{ type: "spring", stiffness: 500, damping: 18 }}
-      >
-        Day {day}
-      </motion.span>
-      <div className="ob-days__flag">
-        <PlantedFlag seed={YOU_SEED} size={118} days={days} />
-      </div>
-      <div className="ob-days__score card">
-        <strong>
-          <RollingNumber value={(day - 1) * 24} />
-        </strong>
-        <span>points</span>
-      </div>
-      <div className="ob-guide ob-guide--right">
-        <Bubble side="to-right" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
-          Tick, tick, points!
-        </Bubble>
-        <Kip pose="cheer" size={76} flip />
-      </div>
-    </div>
-  );
-}
-
 function TakeOver() {
   const loop = { duration: 4.6, repeat: Infinity, repeatDelay: 0.4 };
   return (
@@ -261,121 +203,19 @@ function TakeOver() {
   );
 }
 
-function YourFlag() {
-  const reduce = useReducedMotion();
-  const auth = useAuth();
-  const game = useGame();
-  const signedIn = auth.phase === "authenticated";
-  const player = game.me?.player ?? null;
-  const ownSeed = player?.flagSeed ?? game.me?.flagSeed ?? null;
-  const finalSeed = ownSeed ?? YOU_SEED;
-  const [shuffle, setShuffle] = useState(reduce ? -1 : 0);
-  useEffect(() => {
-    if (reduce) return;
-    // A quick shuffle through flags, landing on yours.
-    let step = 0;
-    const timer = window.setInterval(() => {
-      step += 1;
-      if (step > 9) {
-        window.clearInterval(timer);
-        setShuffle(-1);
-        sfx.pop();
-        buzz(15);
-      } else {
-        setShuffle(step);
-      }
-    }, 140);
-    return () => window.clearInterval(timer);
-  }, [reduce]);
-  const seed = shuffle < 0 ? finalSeed : `onboard-shuffle-${shuffle}`;
-  return (
-    <div className="ob-you">
-      <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-      <motion.div
-        key={shuffle < 0 ? "final" : "shuffle"}
-        className="ob-you__flag"
-        initial={shuffle < 0 ? { scale: 0.6, rotate: -10 } : false}
-        animate={{ scale: 1, rotate: -3 }}
-        transition={{ type: "spring", stiffness: 320, damping: 12 }}
-      >
-        <Flag seed={seed} size={170} label={shuffle < 0 ? "Your flag" : undefined} />
-      </motion.div>
-      <AnimatePresence>
-        {shuffle < 0 && (
-          <motion.span
-            className="ob-you__handle"
-            initial={{ y: 16, opacity: 0, scale: 0.8 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 420, damping: 18, delay: 0.1 }}
-          >
-            @{player?.handle ?? "you"}
-          </motion.span>
-        )}
-      </AnimatePresence>
-      <div className="ob-guide ob-guide--right">
-        <Bubble side="to-right" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
-          {player ? "Looking sharp!" : signedIn ? "Pick a handle!" : "Yours is waiting!"}
-        </Bubble>
-        <Kip pose="celebrate" size={76} flip />
-      </div>
-    </div>
-  );
-}
-
-/** A park photo drops onto the ground like a planted flag, and the founder bonus pops. */
-function FoundIt() {
-  const loop = { duration: 4.4, repeat: Infinity, repeatDelay: 0.3 };
-  return (
-    <div className="ob-found">
-      <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-      <div className="ob-found__ground">
-        <Mound width={210} />
-      </div>
-      <motion.div
-        className="ob-found__photo"
-        // The drop starts at the top of this illustration, never above it, so the photo stays on
-        // the card at every screen height and is only seen falling onto the mound or resting there.
-        animate={{ y: [-60, 0, 0, 0], scale: [1.18, 1, 1, 1], rotate: [-14, -4, -4, -4], opacity: [0, 1, 1, 0] }}
-        transition={{ ...loop, times: [0, 0.14, 0.92, 1], ease: "easeIn" }}
-      >
-        <svg viewBox="0 0 160 120" aria-hidden="true">
-          <rect width="160" height="120" fill="#9FD8FF" />
-          <circle cx="126" cy="26" r="13" fill="#FFC93C" />
-          <path d="M0 86 C 30 62, 62 64, 88 78 C 112 64, 140 62, 160 74 L160 120 L0 120 Z" fill="#5E9A3A" />
-          <path d="M0 100 C 40 88, 110 90, 160 98 L160 120 L0 120 Z" fill="#2F9E6B" />
-          <path d="M34 92 l10 -34 l10 34 Z M60 90 l8 -26 l8 26 Z M112 88 l11 -38 l11 38 Z" fill="#1C5B43" />
-        </svg>
-        <span className="ob-found__caption">Founder: @you</span>
-      </motion.div>
-      <motion.span
-        className="ob-found__points"
-        animate={{ scale: [0, 0, 1.3, 1, 1, 0], opacity: [0, 0, 1, 1, 1, 0], y: [10, 10, -6, 0, 0, 0] }}
-        transition={{ ...loop, times: [0, 0.14, 0.2, 0.26, 0.92, 1] }}
-      >
-        +24
-      </motion.span>
-      <div className="ob-guide ob-guide--left">
-        <Kip pose="camera" size={80} />
-        <Bubble side="to-left" style={{ position: "relative", marginBottom: 22, whiteSpace: "nowrap" }}>
-          Say cheese, park!
-        </Bubble>
-      </div>
-    </div>
-  );
-}
-
 export function Onboarding() {
   const { dispatch } = useStore();
   const toast = useToast();
-  const auth = useAuth();
-  const game = useGame();
   const [index, setIndex] = useState(0);
   const [dir, setDir] = useState(1);
   const [asking, setAsking] = useState(false);
-  const slide = SLIDES[index];
-  const last = index === SLIDES.length - 1;
-  const onYouSlide = index === YOU_SLIDE;
-  const canPickHandle = auth.phase === "authenticated" && game.status === "ready" && !game.me?.player;
+  // The friends slide teaches crews, so it shows only while they are on.
+  const crews = useFeatureFlag("crews");
+  const slides = crews ? SLIDES : SLIDES.filter((candidate) => candidate.visual !== "crew");
+  // The flag can change while onboarding is open; stay on the last slide that still exists.
+  const at = Math.min(index, slides.length - 1);
+  const slide = slides[at];
+  const last = at === slides.length - 1;
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -387,16 +227,16 @@ export function Onboarding() {
     return () => ro.disconnect();
   }, []);
   const goTo = (i: number) => {
-    if (i < 0 || i >= SLIDES.length) return;
+    if (i < 0 || i >= slides.length) return;
     sfx.tap();
     buzz(8);
-    setDir(i > index ? 1 : -1);
+    setDir(i > at ? 1 : -1);
     setIndex(i);
   };
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < -60 || info.velocity.x < -400) goTo(index + 1);
-    else if (info.offset.x > 60 || info.velocity.x > 400) goTo(index - 1);
+    if (info.offset.x < -60 || info.velocity.x < -400) goTo(at + 1);
+    else if (info.offset.x > 60 || info.velocity.x > 400) goTo(at - 1);
   };
 
   const finish = (useGps: boolean) => {
@@ -449,7 +289,7 @@ export function Onboarding() {
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
         {!last && (
-          <button className="onboarding__skip" onClick={() => goTo(SLIDES.length - 1)}>
+          <button className="onboarding__skip" onClick={() => goTo(slides.length - 1)}>
             Skip
           </button>
         )}
@@ -458,7 +298,7 @@ export function Onboarding() {
         <div className="onboarding__visual" ref={visualRef}>
           <AnimatePresence mode="popLayout" custom={dir} initial={false}>
             <motion.div
-              key={index}
+              key={at}
               custom={dir}
               className="onboarding__visual-inner"
               variants={{
@@ -471,27 +311,13 @@ export function Onboarding() {
               exit="exit"
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
-              <div style={{ transform: `scale(${fit})` }}>
-                {index === 0 ? (
-                  <FlagHills />
-                ) : index === 1 ? (
-                  <GoThere />
-                ) : index === 2 ? (
-                  <PointsPerDay />
-                ) : index === 3 ? (
-                  <TakeOver />
-                ) : index === YOU_SLIDE ? (
-                  <YourFlag />
-                ) : (
-                  <FoundIt />
-                )}
-              </div>
+              <div style={{ transform: `scale(${fit})` }}>{slide.visual === "go" ? <GoThere /> : slide.visual === "take" ? <TakeOver /> : <FlagHills />}</div>
             </motion.div>
           </AnimatePresence>
         </div>
         <div className="onboarding__copy">
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={index} initial="hidden" animate="show" exit="hidden" variants={{ show: { transition: { staggerChildren: 0.06 } } }}>
+            <motion.div key={at} initial="hidden" animate="show" exit="hidden" variants={{ show: { transition: { staggerChildren: 0.06 } } }}>
               <motion.p className="eyebrow" variants={rise}>
                 {slide.eyebrow}
               </motion.p>
@@ -503,34 +329,21 @@ export function Onboarding() {
                 ))}
               </h1>
               <motion.p className="onboarding__body" variants={rise}>
-                {onYouSlide && !game.me?.player && auth.phase !== "authenticated" ? `${slide.body} Sign in when you plant your first one.` : slide.body}
+                {slide.body}
               </motion.p>
             </motion.div>
           </AnimatePresence>
         </div>
       </motion.div>
-      <AnimatePresence>
-        {onYouSlide && canPickHandle && (
-          <motion.button
-            className="btn btn--paper btn--block ob-handle-btn"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 20, opacity: 0 }}
-            onClick={() => game.openHandleSheet()}
-          >
-            <Icon name="flag" /> Pick your handle
-          </motion.button>
-        )}
-      </AnimatePresence>
       <div className="onboarding__foot">
         <div className="dots">
-          {SLIDES.map((_, i) => (
+          {slides.map((_, i) => (
             <motion.button
               key={i}
               className="dot"
               aria-label={`Slide ${i + 1}`}
               onClick={() => goTo(i)}
-              animate={{ width: i === index ? 28 : 10, backgroundColor: i === index ? "#14231C" : "#14231C33" }}
+              animate={{ width: i === at ? 28 : 10, backgroundColor: i === at ? "#14231C" : "#14231C33" }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
             />
           ))}
@@ -538,7 +351,7 @@ export function Onboarding() {
         <motion.button
           className="btn"
           layout
-          onClick={() => (!last ? goTo(index + 1) : setAsking(true))}
+          onClick={() => (!last ? goTo(at + 1) : setAsking(true))}
           whileTap={{ scale: 0.96 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
         >
