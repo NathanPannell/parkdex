@@ -12,7 +12,7 @@ import type { GameAuth } from "./game.js";
  * - `GET /api/friends`: the player's code (created on first use), this week's bounds and the board
  * - `POST /api/friends` `{ code }`: add a friend. Replays answer `already_friends`, so the app can
  *   resend codes typed or scanned offline.
- * - `POST /api/friends/crewmate` `{ handle }`: add a player who was in a crew with you, no code
+ * - `POST /api/friends/crewmate` `{ handle }`: add a player who was in a crew with you in the last day, no code
  * - `DELETE /api/friends/:handle`: end a friendship for both players
  * - `POST /api/friends/code`: replace the player's code; the old QR and links stop working
  */
@@ -113,7 +113,7 @@ async function postCrewmate(request: Request, env: FriendsEnv, auth: GameAuth, d
     case "already_friends":
       return json({ status: result.status, friend: result.friend });
     case "not_crewmates":
-      throw new HttpError(404, "crewmate_not_found", "You haven't been in a crew with that player.");
+      throw new HttpError(404, "crewmate_not_found", "Add crewmates here within a day of your crew. After that, use their friend code.");
     case "own_handle":
       throw new HttpError(409, "own_handle", "That's your own handle.");
     case "too_many_friends":

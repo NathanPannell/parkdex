@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 
 // Crewmates become friends by handle (social_002_crewmates.sql) against real PostgreSQL: only
-// players who were in the same crew, mutual, replay-safe, within the friend limit, and gone with
-// account deletion. Runs the migrations it needs in inventory order in its own throwaway kip_qa_
+// players who were in the same crew in the last 24 hours (social_003_recent_crewmates.sql),
+// mutual, replay-safe, within the friend limit, and gone with account deletion. Runs the migrations it needs in inventory order in its own throwaway kip_qa_
 // database, like qa-game-sql, because crews need the game's later migrations.
 const shared = process.env.PGDATABASE;
 assert.ok(shared?.startsWith("kip_qa_") || shared === "kip_accounts_qa", "SQL QA requires a dedicated kip_qa_ database");
@@ -26,6 +26,7 @@ const { createNeonFriendsStore } = await import("../worker/friends-store.ts");
 
 const root = new URL("../", import.meta.url);
 const CREWMATES_MIGRATION = "database/migrations/social_002_crewmates.sql";
+const RECENT_MIGRATION = "database/migrations/social_003_recent_crewmates.sql";
 const MIGRATIONS = new Set([
   "database/migrations/accounts_001_init.sql",
   "database/migrations/progress_001_init.sql",
@@ -39,14 +40,16 @@ const MIGRATIONS = new Set([
   "database/migrations/social_001_friends.sql",
   "database/migrations/game_003_crews.sql",
   CREWMATES_MIGRATION,
+  RECENT_MIGRATION,
 ]);
 const suffix = randomUUID().replaceAll("-", "").slice(0, 6);
 const store = createNeonFriendsStore(dbUrl);
 const log = (name) => process.stdout.write(`${name}: PASS\n`);
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-// 10:00 in Victoria (PDT).
-const T0 = Date.parse("2026-06-01T17:00:00.000Z");
+// Three hours ago, so every visit here is in the past and inside the 24-hour crewmate window,
+// which add_crewmate measures from the database's now().
+const T0 = Date.now() - 3 * HOUR;
 const at = (offsetMs) => new Date(T0 + offsetMs).toISOString();
 const handle = (name) => `qc${suffix}_${name}`;
 
@@ -118,9 +121,12 @@ try {
       position(CREWMATES_MIGRATION) > position("database/migrations/game_003_crews.sql"),
     "social_002 replays after the friends and crews it reads",
   );
+  assert.ok(position(RECENT_MIGRATION) > position(CREWMATES_MIGRATION), "social_003 replays after social_002, whose were_crewmates it redefines");
   for (const path of inventory) await applyMigration(fileURLToPath(new URL(path, root)));
+  // Every deploy replays both in order: social_002 briefly restores its version, social_003 wins.
   await applyMigration(fileURLToPath(new URL(CREWMATES_MIGRATION, root)));
-  log("the migration replays after friends and crews");
+  await applyMigration(fileURLToPath(new URL(RECENT_MIGRATION, root)));
+  log("the migrations replay after friends and crews");
 
   const beach = await park("beach");
   const lead = await account("lead");
@@ -165,6 +171,25 @@ try {
   assert.equal(await visit(taker, old, 2 * HOUR), "took");
   assert.deepEqual(await add(taker, handle("holder")), { status: "not_crewmates" });
   log("ended crews count, and taking a flag does not make crewmates");
+
+  // Only crews from the last 24 hours count, measured from when their flag went up.
+  const yesterday = await park("yesterday");
+  const oldLead = await account("oldlead");
+  const oldMate = await account("oldmate");
+  assert.equal(await visit(oldLead, yesterday, -22 * HOUR), "planted", "25 hours ago");
+  await join(oldMate, yesterday, -22 * HOUR + 10 * MINUTE);
+  assert.deepEqual(await add(oldMate, handle("oldlead")), { status: "not_crewmates" }, "a crew from more than a day ago no longer counts");
+  assert.deepEqual(await add(oldLead, handle("oldmate")), { status: "not_crewmates" });
+  const since = async (a, b, offsetMs) => (await pool.query("SELECT kip_social.were_crewmates_since($1, $2, $3) AS ok", [a, b, at(offsetMs)])).rows[0].ok;
+  assert.equal(await since(oldMate, oldLead, -23 * HOUR), true, "it was a crew");
+  assert.equal(await since(oldMate, oldLead, -22 * HOUR + MINUTE), false, "measured from the flag going up, not the join");
+  const lastNight = await park("lastnight");
+  const nightLead = await account("nightlead");
+  const nightMate = await account("nightmate");
+  assert.equal(await visit(nightLead, lastNight, -20 * HOUR), "planted", "23 hours ago");
+  await join(nightMate, lastNight, -20 * HOUR + 10 * MINUTE);
+  assert.equal((await add(nightMate, handle("nightlead"))).status, "added", "a crew from 23 hours ago still counts");
+  log("crewmates can add each other for 24 hours after their flag went up");
 
   const field = await park("field");
   const host = await account("host");
