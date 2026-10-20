@@ -74,10 +74,22 @@ describe("park page crew states", () => {
     ).toMatchObject({ logged: false });
   });
 
-  it("shows nothing of crews with the flag off", () => {
-    for (const handle of ["tom", "sara", "bee"]) {
-      expect(crewPhase({ enabled: false, flag: flag(), myHandle: handle, me: me(handle), now: start + MIN })).toEqual({ kind: "none" });
-    }
+  it("hides the crew from its own members with the flag off", () => {
+    const sara = me("sara", { parks: [{ parkId: "beacon-hill", since: flag().since, days: 0, hours: 0 }] });
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: "tom", me: me("tom"), now: start + MIN })).toEqual({ kind: "none" });
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: "sara", me: sara, now: start + MIN })).toEqual({ kind: "none" });
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: "tom", me: me("tom"), now: start + 61 * MIN })).toEqual({ kind: "none" });
+  });
+
+  it("still reports the protected hour to outsiders with the flag off, because the server enforces it", () => {
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: "bee", me: me("bee"), now: start + MIN })).toEqual({
+      kind: "outsider",
+      until,
+      leader: "tom",
+      logged: false,
+    });
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: null, me: null, now: start + MIN })).toMatchObject({ kind: "outsider" });
+    expect(crewPhase({ enabled: false, flag: flag(), myHandle: "bee", me: me("bee"), now: start + 61 * MIN })).toEqual({ kind: "none" });
   });
 
   it("ignores a crew read for an earlier flag at the same park", () => {

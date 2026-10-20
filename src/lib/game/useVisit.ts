@@ -24,9 +24,10 @@ export function useVisit() {
   const holderOf = useCallback((parkId: string): ParkHolder => parkHolder(parkId, flags, myHandle, heldParks), [flags, myHandle, heldParks]);
   // One visit per park counts each day, so a second one is never offered.
   const visitedToday = useCallback((parkId: string) => signedIn && hasVisitedToday(game.me, parkId, game.serverNow()), [game, signedIn]);
-  // Crews (#171): where the player stands with the park's protected hour, from the map's flags.
+  // Where the player stands with the park's protected hour (#170, every build), from the map's flags.
   const crewOf = useCallback(
-    (parkId: string): CrewPhase => crewPhase({ enabled: crew.enabled && signedIn, flag: flags?.get(parkId), myHandle, me: game.me, now: game.serverNow() }),
+    (parkId: string): CrewPhase =>
+      crewPhase({ enabled: crew.enabled && signedIn, flag: flags?.get(parkId), myHandle, me: signedIn ? game.me : null, now: game.serverNow() }),
     [crew.enabled, flags, game, myHandle, signedIn],
   );
   // A scanned code waits on the join card; standing in its park, the big button joins.

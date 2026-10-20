@@ -23,7 +23,6 @@ import { useGame } from "../lib/game/GameProvider";
 import { countStepMs, dirtClods, flagConfetti, plantPlan, standingRival, startsPlanted } from "../lib/game/plantScene";
 import { parkHolder, plantCheer, visitHeadline } from "../lib/game/visit";
 import { handleFit } from "../lib/game/handleFit";
-import { useKipTip } from "../lib/kipTips";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
@@ -449,9 +448,6 @@ export function Plant() {
   }
 
   const won = !!result && (result.outcome === "planted" || result.outcome === "took" || result.outcome === "joined");
-  // Kip explains hourly points (#169) on the first visit result that earned any.
-  useKipTip("points", phase === "done" && !!result && result.pointsEarned > 0 && result.outcome !== "joined");
-  useKipTip("crew-joined", phase === "done" && result?.outcome === "joined");
   const headline = alreadyMember
     ? { title: "Already in this crew", detail: `You hold ${parkName} with this crew already.` }
     : result?.outcome === "joined" && joinedCrew

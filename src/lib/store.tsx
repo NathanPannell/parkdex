@@ -7,6 +7,7 @@ import { getNativeInstallIdentity, isNative } from "./native";
 import { onboardingMatchesInstall } from "./onboardingIdentity";
 import { isOverTheAirBundle } from "./ota";
 import { readLastLocation } from "./lastLocation";
+import { webLocationAllowed } from "./liveLocation";
 import { isPointInsideContentBounds } from "./content/contracts";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
@@ -32,6 +33,8 @@ type State = {
   // (teleports, simulated trips) never change it. Null when Parkdex has never had one.
   located: LngLat | null;
   locationError: string | null;
+  // The hosted web app follows the player only after they allow location (src/lib/liveLocation.ts).
+  webLocation: boolean;
   muted: boolean;
   screen: Screen;
   startupReady: boolean;
@@ -54,6 +57,7 @@ export type Action =
   | { type: "trip"; id: string | null }
   | { type: "move"; user: LngLat; accuracy?: number | null }
   | { type: "locationError"; error: string | null }
+  | { type: "webLocation"; allowed: boolean }
   | { type: "photo"; photo: string | null }
   | { type: "claim"; ownerKey: string; id: string; claimId: string; at: string; photo: string; parkSnapshot: Park; contentReleaseId: string | null }
   | { type: "focus"; id: string | null }
@@ -81,6 +85,7 @@ const initial: State = {
   accuracy: null,
   located: null,
   locationError: null,
+  webLocation: false,
   muted: false,
   screen: "splash",
   startupReady: false,
@@ -104,6 +109,7 @@ export function load(): State {
     return {
       ...initial,
       ...savedLocation(),
+      webLocation: webLocationAllowed(),
       onboarded: !!saved.onboarded,
       muted: !!saved.muted,
       onboardingBuildId: typeof saved.onboardingBuildId === "string" ? saved.onboardingBuildId : null,
@@ -180,6 +186,8 @@ export function reducer(state: State, action: Action): State {
       };
     case "locationError":
       return { ...state, locationError: action.error };
+    case "webLocation":
+      return { ...state, webLocation: action.allowed, locationError: action.allowed ? state.locationError : null };
     case "photo":
       return { ...state, pendingPhoto: action.photo };
     case "claim": {

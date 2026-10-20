@@ -3,7 +3,7 @@ import { AnimatePresence as Presence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { KipTipHost } from "./components/KipTip";
-import { ToastProvider } from "./components/Toast";
+import { ToastProvider, useToast } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
 import { handleBack } from "./lib/backStack";
@@ -21,14 +21,14 @@ import "./game-ui.css";
 import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
-import { FIELD, isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
+import { isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
+import { rememberWebLocation, tracksLocation, WEB_CAN_TRACK } from "./lib/liveLocation";
 import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
 import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
 import { UpdateGate } from "./components/UpdateGate";
 import { PortraitOnly } from "./components/PortraitOnly";
-import { installOffer, usePortraitPanel, useWebApp } from "./lib/webApp";
-import { useKipTip } from "./lib/kipTips";
+import { usePortraitPanel } from "./lib/webApp";
 import { currentUpdateStatus, subscribeUpdateStatus } from "./lib/appConfig";
 import { notifyOverTheAirReady } from "./lib/ota";
 import { Account } from "./screens/Account";
@@ -147,6 +147,9 @@ function ClaimSnapshotRestorer() {
 
 function Screens() {
   const { state, dispatch } = useStore();
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const auth = useAuth();
   const game = useGame();
   const friends = useFriends();
@@ -214,15 +217,26 @@ function Screens() {
     if (screen === "claim" || screen === "camera") dispatch({ type: "go", screen: "map" });
   }, [dispatch, screen]);
 
-  // Real GPS drives check-ins in field builds and on-device; the web demo keeps its demo spot.
-  const tracking = state.startupReady && onboarded && (FIELD || isNative);
+  // Real GPS drives check-ins on phones, in field builds and, once allowed, in the hosted web app.
+  // Dev builds keep their demo spot (src/lib/liveLocation.ts).
+  const tracking = state.startupReady && onboarded && tracksLocation(state.webLocation);
   useEffect(() => {
     if (!tracking) return;
     let stop = () => {};
     let live = true;
     void watchLocation(
       (fix) => dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy }),
-      (error) => dispatch({ type: "locationError", error }),
+      (error) => {
+        // A web player who turned location off for the site goes back to browsing from the demo
+        // spot; "Center on me" asks again. Phones keep the banner, which points to settings.
+        if (WEB_CAN_TRACK && error === "denied") {
+          rememberWebLocation(false);
+          dispatch({ type: "webLocation", allowed: false });
+          toastRef.current("Location is off for Parkdex. Tap Center on me to turn it on again.", "kip");
+          return;
+        }
+        dispatch({ type: "locationError", error });
+      },
     ).then((s) => (live ? (stop = s) : s()));
     return () => {
       live = false;
@@ -265,11 +279,6 @@ function Screens() {
   const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
   const decisions = useFoundingDecisions(messagesAllowed);
 
-  // On a phone's browser, Kip suggests the home screen version once it can be installed.
-  // Settings keeps the Install Parkdex row for later.
-  const webApp = useWebApp();
-  useKipTip("install-web", state.startupReady && onboarded && screen === "map" && installOffer(webApp) !== null);
-
   return (
     <>
       {showMap && (
@@ -297,7 +306,7 @@ function Screens() {
         {tracking && state.locationError === "denied" && screen === "map" && (
           <motion.div key="loc" className="loc-off card" initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -40, opacity: 0 }}>
             <strong>Location is off</strong>
-            <span>Parkdex needs your location to check you in at parks. Turn it on in Settings, then try again.</span>
+            <span>Parkdex needs your location to check you in at parks. Turn it on in your {isNative ? "phone" : "browser"} settings, then try again.</span>
             <button className="btn btn--sm" onClick={() => setLocationRetry((n) => n + 1)}>
               Try again
             </button>

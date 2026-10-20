@@ -11,6 +11,7 @@ import { useGame } from "../lib/game/GameProvider";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
 import { saveLastLocation } from "../lib/lastLocation";
+import { rememberWebLocation, WEB_CAN_TRACK } from "../lib/liveLocation";
 import { onboardingStart } from "../lib/provinces";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
@@ -407,9 +408,17 @@ export function Onboarding() {
     }
     // A real position anywhere in a supported province is used as is; the demo spot is
     // only for players outside them all or without a location.
+    // The hosted web app follows the player from here on, as phones do, but only inside the
+    // provinces Parkdex covers: elsewhere it stays on the demo spot it just announced.
+    const followOnWeb = () => {
+      if (!WEB_CAN_TRACK) return;
+      rememberWebLocation(true);
+      dispatch({ type: "webLocation", allowed: true });
+    };
     const start = (fix: [number, number] | null, accuracy: number | null) => {
       const decision = onboardingStart(fix);
       if (decision.kind === "located") {
+        followOnWeb();
         dispatch({ type: "move", user: decision.point, accuracy });
         // Builds without live GPS have no other way to remember it across a reload.
         saveLastLocation(decision.point);
@@ -421,7 +430,11 @@ export function Onboarding() {
     };
     navigator.geolocation.getCurrentPosition(
       (pos) => start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy),
-      () => start(null, null),
+      (error) => {
+        // Allowed, but the first fix was slow: keep following, so the position arrives later.
+        if (error.code !== error.PERMISSION_DENIED) followOnWeb();
+        start(null, null);
+      },
       { timeout: 6000 },
     );
   };

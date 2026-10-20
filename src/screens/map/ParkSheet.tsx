@@ -25,7 +25,6 @@ import { hasPendingReview } from "../../lib/foundingReviews";
 import { crewMatchesFlag, crewPhase, isProtectedPhase } from "../../lib/game/crew";
 import { useCrew } from "../../lib/game/CrewProvider";
 import { useParkCrew, useServerClock } from "../../lib/game/useParkCrew";
-import { useKipTip } from "../../lib/kipTips";
 import { buzz } from "../../lib/feedback";
 import { startPhotoCapture } from "../../lib/captureMode";
 import { PARK_COVER_ASPECT } from "../../lib/photoCrop";
@@ -136,8 +135,6 @@ export function ParkSheet({
   const crew = crewMatchesFlag(parkCrew.crew, flag) ? parkCrew.crew : null;
   const now = useServerClock(isProtectedPhase(firstPhase));
   const phase = crewPhase({ ...crewInput, crew, now });
-  useKipTip("crew-leader", phase.kind === "leader");
-  useKipTip("crew-outsider", phase.kind === "outsider" && !phase.logged);
   const holderLine = flagStatus(holder, flagDays, phase.kind === "outsider");
   // The button reads "Visited today, back tomorrow" exactly when today's visit is spent.
   const restingToday = visitLabel === VISITED_TODAY_LABEL;
@@ -284,7 +281,9 @@ export function ParkSheet({
                 </motion.span>
               )}
             </div>
-            {flag && phase.kind !== "none" && <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />}
+            {crewUi.enabled && signedIn && flag && phase.kind !== "none" && (
+              <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />
+            )}
           </motion.section>
 
           <motion.section
@@ -383,7 +382,7 @@ export function ParkSheet({
       </div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
-        {inside && phase.kind === "outsider" ? (
+        {inside && !restingToday && phase.kind === "outsider" && crewUi.enabled && signedIn ? (
           // Outsiders during the protected hour: joining is the main way in, logging the visit the second.
           <>
             <button className="btn btn--block btn--glow" onClick={() => crewUi.openScanner(park.id)}>
@@ -393,6 +392,11 @@ export function ParkSheet({
               {phase.logged ? "Logged" : "Log visit"}
             </button>
           </>
+        ) : inside && !restingToday && phase.kind === "outsider" ? (
+          // Without crews the protected hour still holds: logging the visit is all there is to do.
+          <button className="btn btn--block btn--glow" onClick={onCheckIn} disabled={phase.logged}>
+            <Icon name="flag" /> {visitLabel}
+          </button>
         ) : inside && restingToday ? (
           // Today's visit is spent: a quiet, clearly disabled button. A tap only nudges it.
           <button
