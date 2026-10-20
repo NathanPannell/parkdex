@@ -36,7 +36,7 @@ function Podium({ players, myHandle, onPick }: { players: LeaderboardRow[]; myHa
               key={row.handle}
               className={`game-podium__spot ${place === 0 ? "is-first" : ""} ${mine ? "is-me" : ""}`}
               onClick={() => onPick(row)}
-              aria-label={`Rank ${place + 1}, @${row.handle}${mine ? " (you)" : ""}, ${formatScore(row.score)} ${row.score === 1 ? "point" : "points"}`}
+              aria-label={`Rank ${row.rank || place + 1}, @${row.handle}${mine ? " (you)" : ""}, ${formatScore(row.score)} ${row.score === 1 ? "point" : "points"}`}
               initial={{ y: 60, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ ...bouncy, delay: 0.1 + column * 0.08 + (place === 0 ? 0.15 : 0) }}
