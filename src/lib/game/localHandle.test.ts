@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GameMe, GamePlayer } from "./client";
+import { GameError, type GameMe, type GamePlayer } from "./client";
 import { claimLocalHandle, clearLocalHandle, readLocalHandle, saveLocalHandle } from "./localHandle";
 
 function memoryStorage() {
@@ -73,6 +73,14 @@ describe("claiming the local handle at sign-in", () => {
     const next = await claimLocalHandle(me, () => Promise.reject(new Error("handle_taken")), storage);
     expect(next.player).toBeNull();
     expect(readLocalHandle(storage)).toBe("fern_walker");
+  });
+
+  it("forgets a handle the server refused, so it isn't sent on every launch", async () => {
+    const storage = memoryStorage();
+    saveLocalHandle("fern_walker", storage);
+    const next = await claimLocalHandle(me, () => Promise.reject(new GameError("handle_rejected", 422, "Refused.")), storage);
+    expect(next.player).toBeNull();
+    expect(readLocalHandle(storage)).toBeNull();
   });
 
   it("leaves a player who already has a handle alone", async () => {

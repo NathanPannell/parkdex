@@ -155,15 +155,6 @@
   filter: drop-shadow(0 10px 0 rgba(20, 35, 28, 0.14));
 }
 
-.ob-rays {
-  position: absolute;
-  width: 440px;
-  height: 440px;
-  border-radius: 50%;
-  background: repeating-conic-gradient(from 0deg, rgba(255, 255, 255, 0.7) 0deg 8deg, transparent 8deg 20deg);
-  mask-image: radial-gradient(circle, #000 10%, transparent 62%);
-}
-
 .ob-fan__kip {
   position: absolute;
   left: 4px;

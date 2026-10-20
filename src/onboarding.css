@@ -5,9 +5,7 @@
   overflow: visible;
 }
 
-.ob-days,
-.ob-take,
-.ob-you {
+.ob-take {
   position: relative;
   width: 320px;
   height: 340px;
@@ -37,48 +35,6 @@
   top: 89px;
   transform-origin: 11px 100%;
   filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.2));
-}
-
-.ob-days__flag {
-  margin-top: -40px;
-}
-
-.ob-days__chip {
-  position: absolute;
-  top: 6px;
-  left: 18px;
-  padding: 6px 14px;
-  border: 2.5px solid var(--ink);
-  border-radius: 99px;
-  background: var(--paper);
-  box-shadow: 0 3px 0 var(--ink);
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.ob-days__score {
-  position: absolute;
-  top: 0;
-  right: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 16px;
-  background: var(--sun);
-}
-
-.ob-days__score strong {
-  display: flex;
-  font-family: var(--display);
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.ob-days__score > span {
-  font-size: 13px;
-  font-weight: 800;
 }
 
 .ob-take__ground {
@@ -139,27 +95,6 @@
   color: var(--kip);
   -webkit-text-stroke: 2px var(--ink);
   text-shadow: 0 4px 0 var(--ink);
-}
-
-.ob-you__flag {
-  position: relative;
-  z-index: 1;
-  margin-top: -40px;
-  filter: drop-shadow(0 8px 0 rgba(20, 35, 28, 0.18));
-}
-
-.ob-you__handle {
-  position: absolute;
-  z-index: 2;
-  top: 214px;
-  padding: 6px 16px;
-  border: 2.5px solid var(--ink);
-  border-radius: 99px;
-  background: var(--paper);
-  box-shadow: 0 3px 0 var(--ink);
-  font-family: var(--display);
-  font-size: 22px;
-  font-weight: 800;
 }
 
 .ob-handle-btn {

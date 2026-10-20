@@ -7,7 +7,7 @@ import { useToast } from "../components/Toast";
 import { buzz, sfx } from "../lib/feedback";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
-import { handleProblem, normalizeHandle } from "../lib/game/client";
+import { GameError, handleProblem, normalizeHandle } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
 import { readLocalHandle, saveLocalHandle } from "../lib/game/localHandle";
 import { shake } from "../lib/motion";
@@ -146,18 +146,22 @@ function TakeOver() {
 export function Onboarding() {
   const { dispatch } = useStore();
   const game = useGame();
-  // Onboarding replays after an update: a player who already has a handle isn't asked again.
+  // Onboarding replays after an update: a player who already has a handle isn't asked again,
+  // and a signed-in player whose game hasn't loaded isn't asked either, or a save could rename them.
   const named = game.me?.player?.handle ?? null;
+  const asksHandle = !game.accountId || (game.status === "ready" && !named);
   const toast = useToast();
   const [at, setAt] = useState(0);
   const [locating, setLocating] = useState(false);
+  // Not now stays available while the browser's prompt is open; a late answer then only moves the map.
+  const waiting = useRef(false);
   const [value, setValue] = useState(() => readLocalHandle() ?? "");
   const [touched, setTouched] = useState(false);
   const field = useAnimationControls();
   const slide = SLIDES[at];
   const handle = normalizeHandle(value);
   // The handle is optional here: an empty field just means it's asked for at sign-in.
-  const problem = handle ? handleProblem(handle) : null;
+  const problem = handle && asksHandle ? handleProblem(handle) : null;
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -176,12 +180,15 @@ export function Onboarding() {
   };
 
   const locate = (useGps: boolean) => {
-    if (locating) return;
+    if (useGps && locating) return;
     // Field builds hand location to the app-wide watcher, which asks for permission itself.
     if (FIELD || !useGps || !navigator.geolocation) {
+      waiting.current = false;
+      setLocating(false);
       next();
       return;
     }
+    waiting.current = true;
     setLocating(true);
     // A real position anywhere in a supported province is used as is; the demo spot is
     // only for players outside them all or without a location.
@@ -203,6 +210,8 @@ export function Onboarding() {
         toast(decision.message, "kip");
         dispatch({ type: "move", user: DEMO_START, accuracy: null });
       }
+      if (!waiting.current) return;
+      waiting.current = false;
       setLocating(false);
       next();
     };
@@ -225,9 +234,15 @@ export function Onboarding() {
       buzz([20, 30, 20]);
       return;
     }
-    if (handle && !named) {
+    if (handle && asksHandle) {
       // Signed in without a handle yet: save it now. Signed out, it waits on this device.
-      if (game.accountId) void game.saveHandle(handle).catch(() => saveLocalHandle(handle));
+      if (game.accountId)
+        void game.saveHandle(handle).catch((error: unknown) => {
+          const taken = error instanceof GameError && error.code === "handle_taken";
+          toast(taken ? `Someone already has @${handle}. Pick another when you plant.` : `@${handle} couldn't be saved. Pick one when you plant.`, "kip");
+          // A taken handle fills in the sheet later; a refused one shouldn't come back.
+          if (taken) saveLocalHandle(handle);
+        });
       else saveLocalHandle(handle);
     }
     sfx.chirp();
@@ -295,7 +310,7 @@ export function Onboarding() {
           {!FIELD && (
             <>
               <p className="onboarding__note">Only used to check you're in a park.</p>
-              <button className="permission__alt" onClick={() => locate(false)} disabled={locating}>
+              <button className="permission__alt" onClick={() => locate(false)}>
                 {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
               </button>
             </>
@@ -305,7 +320,7 @@ export function Onboarding() {
         <form className="onboarding__ask" onSubmit={finish} noValidate>
           {named ? (
             <p className="onboarding__note">Playing as @{named}</p>
-          ) : (
+          ) : asksHandle ? (
             <>
               <label className="fb-label" htmlFor="onboarding-handle">
                 Pick your handle
@@ -329,10 +344,10 @@ export function Onboarding() {
                 />
               </motion.div>
               <p id="onboarding-handle-help" className={`handle-sheet__help ${touched && problem ? "is-error" : ""}`}>
-                {touched && problem ? problem : "Kept on this phone until you sign in."}
+                {touched && problem ? problem : game.accountId ? "Friends see it on the map and the leaderboard." : "Kept on this phone until you sign in."}
               </p>
             </>
-          )}
+          ) : null}
           <motion.button className="btn btn--block" type="submit" whileTap={{ scale: 0.96 }}>
             Let's go! <Icon name="next" />
           </motion.button>

@@ -1,4 +1,4 @@
-import { handleProblem, normalizeHandle, type GameMe, type GamePlayer } from "./client";
+import { GameError, handleProblem, normalizeHandle, type GameMe, type GamePlayer } from "./client";
 
 const KEY = "parkdex-local-handle-v1";
 
@@ -53,7 +53,9 @@ export async function claimLocalHandle(
     const player = await save(local);
     clearLocalHandle(storage);
     return { ...me, player, flagSeed: player.flagSeed };
-  } catch {
+  } catch (error) {
+    // A refused handle would only be refused again, and each try costs a moderation check.
+    if (error instanceof GameError && (error.code === "handle_rejected" || error.code === "invalid_handle")) clearLocalHandle(storage);
     return me;
   }
 }
