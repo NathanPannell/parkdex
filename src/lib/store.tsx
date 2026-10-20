@@ -50,6 +50,7 @@ type State = {
   currentBuildId: string | null;
   currentPackageIdentity: string | null;
   selectedId: string | null;
+  /** The park the plant screen is for. The in-app trip UI is gone; directions open Google Maps. */
   tripId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;

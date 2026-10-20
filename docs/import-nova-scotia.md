@@ -66,7 +66,7 @@ Neither BC outline that the refresh removes (`relation/7119801` North Hoy Creek 
 
 ### Not checked here
 
-Hosted builds have no location override: demo tools (teleport, simulated trips) exist only in dev builds (`src/lib/demo.ts`), and there is no `?at=` parameter. So these need the operator with a phone, or a local dev build:
+Hosted builds have no location override: demo tools (teleport) exist only in dev builds (`src/lib/demo.ts`), and there is no `?at=` parameter. So these need the operator with a phone, or a local dev build:
 
 - planting a flag at a Nova Scotia park
 - My Dex grouping it under Nova Scotia (#174)

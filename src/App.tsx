@@ -335,7 +335,8 @@ function Screens() {
       {crew.enabled && <CrewSheets />}
       {friends.enabled && <AddFriendSheet />}
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
-      <KipTipHost paused={!state.startupReady || !onboarded || screen === "onboarding" || screen === "splash"} />
+      {/* Tips wait while a park's page is open, so nothing sits on top of its buttons. */}
+      <KipTipHost paused={!state.startupReady || !onboarded || screen === "onboarding" || screen === "splash" || !!state.selectedId} />
       <AnimatePresence>{screen === "onboarding" && <Onboarding key="onboarding" />}</AnimatePresence>
       <AnimatePresence>{screen === "splash" && <Splash key="splash" />}</AnimatePresence>
     </>
