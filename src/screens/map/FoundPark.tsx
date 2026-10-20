@@ -19,6 +19,7 @@ import {
   founderCapture,
   founderLine,
   foundPark,
+  dexCropFromCover,
   FounderError,
   isFreshFix,
   MAX_FOUND_ACCURACY_M,
@@ -45,6 +46,7 @@ import type { Park } from "../../lib/parks";
 import type { CapturedPhoto, EncodedPhoto } from "../../lib/photoEncode";
 import { useContent } from "../../lib/content/provider";
 import { useSaveDexPhoto } from "../../lib/dex/useDex";
+import { useToast } from "../../components/Toast";
 import { captureProductEvent } from "../../lib/productAnalytics";
 import { FoundCelebration } from "./FoundCelebration";
 import "../../found-park.css";
@@ -144,6 +146,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   const game = useGame();
   const content = useContent();
   const saveDexPhoto = useSaveDexPhoto();
+  const toast = useToast();
   // The photo the player took, so an approved founder photo also goes in their Dex: one photo, two jobs.
   const captured = useRef<CapturedPhoto | null>(null);
   const [accountId] = useState(() => auth.ownerAccountId);
@@ -410,7 +413,12 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         onFounded(result.park.id);
         // A park that was new a moment ago may not be in the catalogue yet; then only the cover is kept.
         const dexPark = content?.parkById.get(result.park.id);
-        if (dexPark && captured.current) void saveDexPhoto(dexPark, captured.current).catch(() => {});
+        const shot = captured.current;
+        if (dexPark && shot) {
+          // The Dex shows photos at 3:4, so its copy is re-framed from the cover's wide crop.
+          const crop = dexCropFromCover(shot.crop, shot.original.width, shot.original.height);
+          void saveDexPhoto(dexPark, { ...shot, crop }).catch(() => toast("Your photo couldn't be added to your Dex. Add it from the park page.", "kip"));
+        }
         return;
       }
       const flags = checkFlags(result);

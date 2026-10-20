@@ -32,7 +32,7 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 - "Become a founder" in the map menu, for any park the player stands in.
 - The visit result: in a park with no founder (and no photo waiting for review), the photo button reads "First photo · +24" instead of "Add a photo". It closes the result and starts founding for that park.
 
-An approved founder photo also goes into the player's Dex for that park, so one photo does both jobs. A refused one stays on the device until the player retakes it or closes the flow.
+A founder photo approved straight away also goes into the player's Dex for that park, re-framed to the Dex's 3:4 shape, so one photo does both jobs. A photo that goes to a person for review, is refused, or loses to another founder is not saved to the Dex; the park page's "Add another photo" still works.
 
 ## Player copy
 

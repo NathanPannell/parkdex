@@ -30,7 +30,7 @@ import { handleFit } from "../lib/game/handleFit";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
-import { FOUNDER_POINTS } from "../lib/founders";
+import { FOUNDER_POINTS, offersFirstPhoto } from "../lib/founders";
 import { hasPendingReview } from "../lib/foundingReviews";
 import "../game.css";
 
@@ -464,14 +464,13 @@ export function Plant() {
   const badgesOn = useFeatureFlag("badges");
   // Founding (#153): a park with no founder and no photo waiting for review offers its first photo instead of a Dex photo.
   const parkProposals = useFeatureFlag("parkProposals");
-  const founderOpen =
-    parkProposals &&
-    !!park &&
-    !!game.flags &&
-    !game.flags.founders.has(park.id) &&
-    !hasPendingReview(game.me, park.id) &&
-    !!result &&
-    result.outcome !== "logged";
+  const founderOpen = offersFirstPhoto({
+    parkProposals,
+    founders: game.flags?.founders,
+    parkId: park?.id ?? parkId,
+    pendingReview: hasPendingReview(game.me, park?.id ?? parkId),
+    outcome: result?.outcome,
+  });
   const unlockShown = badgesOn && (result?.newBadges ?? []).some((unlock) => badgeById(unlock.id));
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
   const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
