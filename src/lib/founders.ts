@@ -1,7 +1,7 @@
 import { accountApiUrl, fetchAccountApi, fetchAuthenticated } from "./accounts/authClient";
 import { parseBadgeUnlocks, parseVisit, type BadgeUnlock, type VisitResult } from "./game/client";
 import type { LngLat } from "./geo";
-import { PARK_COVER_ASPECT } from "./photoCrop";
+import { clampCrop, CROP_ASPECT, PARK_COVER_ASPECT, type PhotoCrop } from "./photoCrop";
 
 /**
  * Client for founding parks (issue #126): scan the device position for park outlines that
@@ -581,4 +581,32 @@ export async function markFoundingReviewsSeen(accountId: string, requestIds: rea
     SUMMARY_TIMEOUT_MS,
   );
   if (!response.ok) throw await errorFrom(response);
+}
+
+/**
+ * The Dex frames photos at 3:4 and a founder photo is cropped to the cover's wide shape, so its Dex
+ * copy gets the largest 3:4 crop centred on the founder's framing (#153).
+ */
+export function dexCropFromCover(cover: PhotoCrop, imageWidth: number, imageHeight: number): PhotoCrop {
+  const centreX = cover.x + cover.width / 2;
+  const centreY = cover.y + cover.height / 2;
+  // A whole-photo rectangle around that centre comes back as the largest 3:4 fit, kept inside the photo.
+  return clampCrop({ x: centreX - 0.5, y: centreY - 0.5, width: 1, height: 1 }, imageWidth, imageHeight, CROP_ASPECT);
+}
+
+/**
+ * Whether a visit result offers the park's first photo (founding) instead of a Dex photo: founding is
+ * on, the flags board is loaded and shows no founder, no photo of the player's waits for review, and
+ * the visit put or kept a flag up (a logged visit during someone's protected hour does not).
+ */
+export function offersFirstPhoto(input: {
+  parkProposals: boolean;
+  founders: ReadonlyMap<string, unknown> | null | undefined;
+  parkId: string;
+  pendingReview: boolean;
+  outcome: string | null | undefined;
+}): boolean {
+  if (!input.parkProposals || !input.founders || input.pendingReview || !input.outcome) return false;
+  if (input.outcome === "logged") return false;
+  return !input.founders.has(input.parkId);
 }

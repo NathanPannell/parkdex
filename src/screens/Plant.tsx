@@ -30,6 +30,8 @@ import { handleFit } from "../lib/game/handleFit";
 import { canLeavePlant, leavePlant, reportPlantPhase, type PlantPhase } from "../lib/game/plantExit";
 import { openDexOn } from "../lib/dex/prefs";
 import { useStore } from "../lib/store";
+import { FOUNDER_POINTS, offersFirstPhoto } from "../lib/founders";
+import { hasPendingReview } from "../lib/foundingReviews";
 import "../game.css";
 
 // How long the flag rises before the visit goes out.
@@ -460,6 +462,15 @@ export function Plant() {
         : null;
   // Badges this visit unlocked (#175), shown only with the `badges` flag on.
   const badgesOn = useFeatureFlag("badges");
+  // Founding (#153): a park with no founder and no photo waiting for review offers its first photo instead of a Dex photo.
+  const parkProposals = useFeatureFlag("parkProposals");
+  const founderOpen = offersFirstPhoto({
+    parkProposals,
+    founders: game.flags?.founders,
+    parkId: park?.id ?? parkId,
+    pendingReview: hasPendingReview(game.me, park?.id ?? parkId),
+    outcome: result?.outcome,
+  });
   const unlockShown = badgesOn && (result?.newBadges ?? []).some((unlock) => badgeById(unlock.id));
   const flagDays = result?.outcome === "held" && result.flagSince ? flagAgeDays(result.flagSince, game.serverNow()) : mineFirst ? ownDays : 0;
   const clods = impact && !reduce ? dirtClods(impact.power >= 1 ? 30 : 12, impact.key, impact.power) : [];
@@ -697,17 +708,31 @@ export function Plant() {
                 </motion.div>
               )}
               <motion.div variants={pop} className="claim__row">
-                {park && (
+                {park && founderOpen ? (
+                  // A park with no founder yet: its first photo makes the player its founder and goes in their Dex too.
                   <button
                     className="btn btn--sm btn--sun"
                     onClick={() => {
                       sfx.pop();
-                      startPhotoCapture();
-                      setAdding(true);
+                      leave("map");
+                      dispatch({ type: "resume", resume: { kind: "found", parkId: park.id } });
                     }}
                   >
-                    <Icon name="camera" size={18} /> Add a photo
+                    <Icon name="camera" size={18} /> First photo · +{FOUNDER_POINTS}
                   </button>
+                ) : (
+                  park && (
+                    <button
+                      className="btn btn--sm btn--sun"
+                      onClick={() => {
+                        sfx.pop();
+                        startPhotoCapture();
+                        setAdding(true);
+                      }}
+                    >
+                      <Icon name="camera" size={18} /> Add a photo
+                    </button>
+                  )
                 )}
                 <button className="btn btn--sm btn--paper" onClick={() => leave("map")}>
                   <Icon name="map" size={18} /> Back to map

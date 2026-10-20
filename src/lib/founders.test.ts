@@ -10,6 +10,8 @@ vi.mock("./accounts/authClient", () => ({
 
 const {
   FounderError,
+  dexCropFromCover,
+  offersFirstPhoto,
   checkFlags,
   foundBackAction,
   founderCapture,
@@ -501,5 +503,35 @@ describe("founder copy", () => {
       REVIEW_HINT,
     ];
     for (const text of texts) expect(text).not.toMatch(VERB);
+  });
+});
+
+describe("one photo for the founder and the Dex", () => {
+  it("re-frames a wide cover crop as the largest 3:4 crop around the same centre", () => {
+    // A 4000 × 3000 landscape photo with a 16:9 cover crop centred a little left of the middle.
+    const crop = dexCropFromCover({ x: 0.1, y: 0.2, width: 0.6, height: 0.45 }, 4000, 3000);
+    expect((crop.width * 4000) / (crop.height * 3000)).toBeCloseTo(3 / 4, 5);
+    expect(crop.height).toBeCloseTo(1, 5);
+    expect(crop.x + crop.width / 2).toBeCloseTo(0.4, 5);
+    expect(crop.x).toBeGreaterThanOrEqual(0);
+    expect(crop.x + crop.width).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps the crop inside the photo when the cover sits at an edge", () => {
+    const crop = dexCropFromCover({ x: 0.7, y: 0, width: 0.3, height: 0.3 }, 3000, 4000);
+    expect(crop.x + crop.width).toBeLessThanOrEqual(1 + 1e-9);
+    expect(crop.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it("offers the first photo only in a park with no founder and nothing waiting for review", () => {
+    const base = { parkProposals: true, founders: new Map<string, unknown>(), parkId: "beacon-hill", pendingReview: false, outcome: "planted" };
+    expect(offersFirstPhoto(base)).toBe(true);
+    expect(offersFirstPhoto({ ...base, outcome: "took" })).toBe(true);
+    expect(offersFirstPhoto({ ...base, parkProposals: false })).toBe(false);
+    expect(offersFirstPhoto({ ...base, founders: null })).toBe(false);
+    expect(offersFirstPhoto({ ...base, founders: new Map([["beacon-hill", {}]]) })).toBe(false);
+    expect(offersFirstPhoto({ ...base, pendingReview: true })).toBe(false);
+    expect(offersFirstPhoto({ ...base, outcome: "logged" })).toBe(false);
+    expect(offersFirstPhoto({ ...base, outcome: null })).toBe(false);
   });
 });

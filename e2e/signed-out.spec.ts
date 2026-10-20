@@ -1,5 +1,8 @@
 import { expect, finishOnboarding, test, type Page } from "./fixtures";
 
+/** How long to wait for content that comes from the e2e API, which can answer slowly while it warms up. */
+const API_TIMEOUT = 15_000;
+
 /** Kip's Tips open over a screen the first time it is shown. */
 async function dismissTip(page: Page) {
   const gotIt = page.getByRole("dialog").getByRole("button", { name: "Got it" });
@@ -39,7 +42,8 @@ test("search finds a park and opens its page", async ({ page }) => {
   await expect(page.getByText("Provincial Park · North Island")).toBeVisible();
   await expect(page.getByRole("region", { name: "Flag" })).toContainText("No flag yet");
   // Founding happens inside a park, so a park far away shows only its founder line.
-  await expect(page.getByText("No founder yet")).toBeVisible();
+  // The founder line waits for the park summary from the API, whose first answer can be slow on a cold server.
+  await expect(page.getByText("No founder yet")).toBeVisible({ timeout: API_TIMEOUT });
   await expect(page.getByRole("button", { name: /^Become the founder/ })).toHaveCount(0);
 });
 
@@ -60,7 +64,7 @@ test("the leaderboard loads from the API", async ({ page }) => {
   await openTab(page, "Leaders");
   const board = page.getByRole("main", { name: "Leaderboard" });
   await expect(board.getByRole("heading", { name: "Leaderboard", level: 1 })).toBeVisible();
-  await expect(board.getByRole("heading", { name: "No flags yet" })).toBeVisible();
+  await expect(board.getByRole("heading", { name: "No flags yet" })).toBeVisible({ timeout: API_TIMEOUT });
 });
 
 test("settings offer sign-in to a signed-out visitor", async ({ page }) => {

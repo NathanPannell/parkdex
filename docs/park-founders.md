@@ -26,6 +26,14 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 - **Account deletion** removes the founder row, the photo and the bonus. The park stays and can be founded again.
 - **Remove from map** (operator dashboard) takes a park off the map and unfounds it, but keeps its OpenStreetMap outline, so it can be founded again the same day ([below](#remove-from-map)).
 
+## Where players start
+
+- The park sheet's "Become the founder" card, shown only while the player stands inside a park with no founder.
+- "Become a founder" in the map menu, for any park the player stands in.
+- The visit result: in a park with no founder (and no photo waiting for review), the photo button reads "First photo · +24" instead of "Add a photo". It closes the result and starts founding for that park.
+
+A founder photo approved straight away also goes into the player's Dex for that park, re-framed to the Dex's 3:4 shape, so one photo does both jobs. A photo that goes to a person for review, is refused, or loses to another founder is not saved to the Dex; the park page's "Add another photo" still works.
+
 ## Player copy
 
 Player-facing text never uses the verb "found" (found a park, founded, founding): it also reads as "discovered". It uses the noun instead: "Become the founder" on the park sheet, "Become a founder" in the map menu, "You're the founder of Beacon Hill Park" on success, "Founder: @robin" for someone else's park, and "@robin became the founder first" when a review loses the race. Identifiers such as `/api/parks/found`, `already_founded` and `park_founded` keep their names. `src/lib/founders.test.ts` and `src/lib/foundingReviews.test.ts` check the app's own messages for the verb.

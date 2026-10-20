@@ -17,7 +17,7 @@ import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
 import { useCrew } from "../../lib/game/CrewProvider";
 import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
-import { nextVisitStep } from "../../lib/game/visit";
+import { formatPoints, nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { startingMapView, USER_ZOOM } from "../../lib/provinces";
 import { currentFix } from "../../lib/native";
@@ -572,7 +572,7 @@ export function MapScreen() {
               dispatch({ type: "go", screen: "parks" });
             }}
             whileTap={{ scale: 0.95 }}
-            aria-label={player ? `@${player.handle}, ${game.me?.score ?? 0} points. Open your flags in My Dex` : "My Dex"}
+            aria-label={player ? `@${player.handle}, ${formatPoints(game.me?.score ?? 0)}. Open your flags in My Dex` : "My Dex"}
           >
             {!player && (
               <span className="counter__kip">
