@@ -290,9 +290,11 @@ function Screens() {
   // My Dex, the leaderboard and settings are tabs, so the bar stays on them.
   const showNav = showMap && (screen === "map" || screen === "parks" || screen === "leaderboard" || screen === "settings");
 
-  // Messages on open: review decisions first, then parks taken while away.
+  // Messages on open: review decisions first, then parks taken while away. On the map, one not
+  // yet open waits for the arrival card, so the player sees one sheet at a time.
   const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
-  const decisions = useFoundingDecisions(messagesAllowed);
+  const messagesHeld = screen === "map" && !!state.arrivalId;
+  const decisions = useFoundingDecisions(messagesAllowed, messagesHeld);
 
   return (
     <>
@@ -329,7 +331,7 @@ function Screens() {
       <AnimatePresence>{screen === "plant" && <Plant key="plant" />}</AnimatePresence>
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
-      <TakeoverMessages allowed={messagesAllowed && !decisions.current} />
+      <TakeoverMessages allowed={messagesAllowed && !decisions.current} held={messagesHeld} />
       {crew.enabled && <CrewSheets />}
       {friends.enabled && <AddFriendSheet />}
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>

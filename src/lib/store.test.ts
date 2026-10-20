@@ -48,6 +48,7 @@ const readyState: StoreState = {
   feedback: null,
   resume: null,
   accountFrom: null,
+  arrivalId: null,
 };
 
 afterEach(() => {
@@ -388,5 +389,14 @@ describe("signing in for an action", () => {
   it("settles on a park without opening its page when asked", () => {
     expect(reducer(readyState, { type: "focus", id: "a-park", open: false })).toMatchObject({ focusId: "a-park", focusOpen: false });
     expect(reducer(readyState, { type: "focus", id: "a-park" })).toMatchObject({ focusId: "a-park", focusOpen: true });
+  });
+});
+
+describe("arrival card", () => {
+  it("records which park's arrival card is up and keeps the same state when nothing changes", () => {
+    const up = reducer(readyState, { type: "arrival", id: park.id });
+    expect(up.arrivalId).toBe(park.id);
+    expect(reducer(up, { type: "arrival", id: park.id })).toBe(up);
+    expect(reducer(up, { type: "arrival", id: null }).arrivalId).toBeNull();
   });
 });
