@@ -7,6 +7,7 @@ import { Icon } from "../../components/Icon";
 import { Kip } from "../../components/Kip";
 import { RollingNumber } from "../../components/Motion";
 import { Flag } from "../../components/Flag";
+import { readLocalFlagSeed, readLocalHandle } from "../../lib/game/localHandle";
 import { MyFlagViewer } from "../../components/FlagViewer";
 import { insidePark, parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
@@ -129,6 +130,9 @@ export function MapScreen() {
   const webApp = useWebApp();
   useKipTip("install-web", state.screen === "map" && !selected && !showArrival && !founding && installOffer(webApp) !== null);
   const player = game.me?.player ?? null;
+  // Signed out, the handle and flag picked during onboarding head the map until sign-in claims them.
+  const localName = !player && !visit.signedIn ? readLocalHandle() : null;
+  const localSeed = localName ? readLocalFlagSeed() : null;
   // A score that went up since the last read floats a "+N" off the score chip.
   const lastScore = useRef<number | null>(null);
   const [scoreBump, setScoreBump] = useState<{ key: number; delta: number } | null>(null);
@@ -503,10 +507,18 @@ export function MapScreen() {
             whileTap={{ scale: 0.95 }}
             aria-label={player ? `@${player.handle}, ${formatPoints(game.me?.score ?? 0)}. Open your flags in My Dex` : "My Dex"}
           >
-            {!player && (
-              <span className="counter__kip">
-                <Kip pose="avatar" size={48} />
+            {!player && localName && localSeed ? (
+              <span className="counter__kip counter__kip--flag">
+                <span className="score-chip__flag">
+                  <Flag seed={localSeed} size={46} className="is-waving" label={`Flag of @${localName}`} />
+                </span>
               </span>
+            ) : (
+              !player && (
+                <span className="counter__kip">
+                  <Kip pose="avatar" size={48} />
+                </span>
+              )
             )}
             <span className="counter__text">
               {player && game.me ? (
@@ -518,6 +530,11 @@ export function MapScreen() {
                   <span>
                     @{player.handle} · {game.me.parks.length} {game.me.parks.length === 1 ? "park" : "parks"}
                   </span>
+                </>
+              ) : localName ? (
+                <>
+                  <strong>@{localName}</strong>
+                  <span>Sign in to play</span>
                 </>
               ) : (
                 <>

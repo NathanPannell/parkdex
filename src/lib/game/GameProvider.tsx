@@ -14,7 +14,7 @@ import {
   type ParkFlag,
   type ParkFounder,
 } from "./client";
-import { claimLocalHandle } from "./localHandle";
+import { claimLocalHandle, readLocalFlagSeed } from "./localHandle";
 
 /**
  * The signed-in player's game state from `/api/game/me`. V1 is online only, so this lives
@@ -127,7 +127,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         // The handle picked during onboarding becomes the account's, tried once per account.
         if (!claimTried.current.has(owner)) {
           claimTried.current.add(owner);
-          next = await claimLocalHandle(next, (handle) => sendHandle(owner, handle));
+          next = await claimLocalHandle(next, (handle) => sendHandle(owner, handle, readLocalFlagSeed()));
           if (currentAccount.current !== owner) return null;
         }
         setMe(next);
@@ -186,7 +186,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const saveHandle = useCallback(async (handle: string) => {
     const owner = currentAccount.current;
     if (!owner) throw new Error("Sign in to pick a handle.");
-    const player = await sendHandle(owner, handle);
+    const player = await sendHandle(owner, handle, readLocalFlagSeed());
     if (currentAccount.current === owner) {
       setMe((current) => ({
         ...(current ?? { score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null }),

@@ -257,6 +257,16 @@ try {
   assert.equal(await count("SELECT count(*) FROM kip_game.visits WHERE account_id = $1", [noHandle]), 0);
   log("visits need a handle and a catalogue park");
 
+  const seeded = await account("s", { handle: false });
+  const created = await store.setHandle(seeded, `qa_s_${suffix}`.slice(0, 20), "0123456789abcdef");
+  assert.equal(created.player.flagSeed, "0123456789abcdef");
+  const renamed = await store.setHandle(seeded, `qa_t_${suffix}`.slice(0, 20), "fedcba9876543210");
+  assert.equal(renamed.player.flagSeed, "0123456789abcdef");
+  const defaulted = await store.setHandle(noHandle, `qa_n_${suffix}`.slice(0, 20));
+  assert.equal(defaulted.player.flagSeed, await flagSeedFor(noHandle));
+  await pool.query("DELETE FROM kip_game.players WHERE account_id = $1", [noHandle]);
+  log("a new player keeps the flag the app showed them; renames and older apps keep the derived one");
+
   for (const [from, to, hours] of [
     [0, 59 * MINUTE, 0],
     [0, 60 * MINUTE, 1],

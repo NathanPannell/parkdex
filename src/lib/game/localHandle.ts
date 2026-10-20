@@ -1,6 +1,8 @@
 import { GameError, handleProblem, normalizeHandle, type GameMe, type GamePlayer } from "./client";
 
 const KEY = "parkdex-local-handle-v1";
+const FLAG_KEY = "parkdex-local-flag-v1";
+const FLAG_SEED = /^[0-9a-f]{16}$/;
 
 /**
  * The @handle picked during onboarding, kept on this device until the player signs in. The
@@ -16,19 +18,36 @@ export function readLocalHandle(storage: Pick<Storage, "getItem"> | undefined = 
   }
 }
 
-export function saveLocalHandle(handle: string, storage: Pick<Storage, "setItem"> | undefined = safeStorage()): void {
+export function saveLocalHandle(handle: string, storage: Pick<Storage, "getItem" | "setItem"> | undefined = safeStorage()): void {
   const value = normalizeHandle(handle);
   if (!value || handleProblem(value)) return;
   try {
     storage?.setItem(KEY, value);
+    // The flag that goes with it, shown on the map until sign-in and kept by the account after.
+    if (!readLocalFlagSeed(storage)) storage?.setItem(FLAG_KEY, newFlagSeed());
   } catch {
     // Private windows and full storage only mean the handle is asked for again at sign-in.
   }
 }
 
+/** The flag picked with the local handle, or null before onboarding saved one. */
+export function readLocalFlagSeed(storage: Pick<Storage, "getItem"> | undefined = safeStorage()): string | null {
+  try {
+    const value = storage?.getItem(FLAG_KEY) ?? null;
+    return value && FLAG_SEED.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function newFlagSeed(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(8)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function clearLocalHandle(storage: Pick<Storage, "removeItem"> | undefined = safeStorage()): void {
   try {
     storage?.removeItem(KEY);
+    storage?.removeItem(FLAG_KEY);
   } catch {
     // Nothing to clear.
   }

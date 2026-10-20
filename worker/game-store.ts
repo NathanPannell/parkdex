@@ -212,7 +212,8 @@ export interface LeaderboardRow {
 export interface GameStore {
   getPlayer(accountId: string): Promise<PlayerRecord | null>;
   handleOwner(handle: string, accountId: string): Promise<"none" | "self" | "other">;
-  setHandle(accountId: string, handle: string): Promise<SetHandleResult>;
+  /** `flagSeed` is used only when the player is created; an existing player keeps their flag. */
+  setHandle(accountId: string, handle: string, flagSeed?: string | null): Promise<SetHandleResult>;
   recordVisit(accountId: string, visitId: string, parkId: string, visitedAt: string): Promise<RecordVisitResult>;
   summary(accountId: string, now: string): Promise<PlayerSummary>;
   markTakeoversSeen(accountId: string, at: string): Promise<PlayerRecord | null>;
@@ -418,17 +419,17 @@ export function createNeonGameStore(databaseUrl: string): GameStore {
       return found[0].mine === true || found[0].mine === "t" ? "self" : "other";
     },
 
-    async setHandle(accountId, handle) {
+    async setHandle(accountId, handle, flagSeed = null) {
       try {
         const saved = await rows(
           `
           INSERT INTO kip_game.players (account_id, handle, flag_seed)
-          SELECT a.id, $2, kip_game.flag_seed(a.id) FROM kip_account.accounts a
+          SELECT a.id, $2, COALESCE($3::text, kip_game.flag_seed(a.id)) FROM kip_account.accounts a
           WHERE a.id = $1::uuid AND a.deletion_state = 'active'
           ON CONFLICT (account_id) DO UPDATE SET handle = EXCLUDED.handle,
             updated_at = CASE WHEN kip_game.players.handle = EXCLUDED.handle THEN kip_game.players.updated_at ELSE now() END
           RETURNING ${playerColumns}`,
-          [accountId, handle],
+          [accountId, handle, flagSeed],
         );
         return saved[0] ? { status: "saved", player: playerFromRow(saved[0]) } : { status: "account_unavailable" };
       } catch (error) {

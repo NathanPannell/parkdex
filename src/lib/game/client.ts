@@ -525,8 +525,10 @@ export async function fetchGameMe(accountId: string): Promise<GameMe> {
   return parseMe(await request(authenticated(accountId), "/api/game/me"));
 }
 
-export async function saveHandle(accountId: string, handle: string): Promise<GamePlayer> {
-  const body = record(await request(authenticated(accountId), "/api/game/handle", { method: "PUT", body: JSON.stringify({ handle }) }));
+/** `flagSeed` is the flag a signed-out player was already shown; the server uses it only for a new player. */
+export async function saveHandle(accountId: string, handle: string, flagSeed?: string | null): Promise<GamePlayer> {
+  const payload = flagSeed ? { handle, flagSeed } : { handle };
+  const body = record(await request(authenticated(accountId), "/api/game/handle", { method: "PUT", body: JSON.stringify(payload) }));
   const player = parsePlayer(body?.player) ?? parsePlayer(body);
   if (!player) throw new GameError("unavailable", 200, MESSAGES.unavailable);
   return player;

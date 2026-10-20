@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameError, type GameMe, type GamePlayer } from "./client";
-import { claimLocalHandle, clearLocalHandle, readLocalHandle, saveLocalHandle } from "./localHandle";
+import { claimLocalHandle, clearLocalHandle, readLocalFlagSeed, readLocalHandle, saveLocalHandle } from "./localHandle";
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -95,5 +95,19 @@ describe("claiming the local handle at sign-in", () => {
   it("does nothing without a local handle", async () => {
     const next = await claimLocalHandle(me, () => Promise.reject(new Error("not called")), memoryStorage());
     expect(next).toBe(me);
+  });
+});
+
+describe("the local flag", () => {
+  it("comes with the first saved handle, stays through a rename and goes with the handle", () => {
+    const storage = memoryStorage();
+    expect(readLocalFlagSeed(storage)).toBeNull();
+    saveLocalHandle("fern_walker", storage);
+    const seed = readLocalFlagSeed(storage);
+    expect(seed).toMatch(/^[0-9a-f]{16}$/);
+    saveLocalHandle("fern_two", storage);
+    expect(readLocalFlagSeed(storage)).toBe(seed);
+    clearLocalHandle(storage);
+    expect(readLocalFlagSeed(storage)).toBeNull();
   });
 });
