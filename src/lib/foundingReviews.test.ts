@@ -39,7 +39,7 @@ describe("decisionMessage", () => {
   it("celebrates an approval with the bonus", () => {
     expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({
       title: "You're the founder of Paterson Park!",
-      text: "Your photo was approved. You're the founder of Paterson Park! +24",
+      text: "Your photo was approved and is the park's cover now. +24 points.",
       kip: "cheer",
     });
   });

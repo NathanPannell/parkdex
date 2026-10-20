@@ -33,7 +33,7 @@ export function decisionMessage(decision: FoundingDecision): DecisionMessage {
       return {
         eyebrow: "Photo review",
         title: `You're the founder of ${park}!`,
-        text: `Your photo was approved. You're the founder of ${park}! +${FOUNDER_POINTS}`,
+        text: `Your photo was approved and is the park's cover now. +${FOUNDER_POINTS} points.`,
         kip: "cheer",
       };
     case "superseded":

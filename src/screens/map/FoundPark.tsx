@@ -42,7 +42,9 @@ import { useGame } from "../../lib/game/GameProvider";
 import type { Boundary, LngLat } from "../../lib/geo";
 import { currentFix } from "../../lib/native";
 import type { Park } from "../../lib/parks";
-import type { EncodedPhoto } from "../../lib/photoEncode";
+import type { CapturedPhoto, EncodedPhoto } from "../../lib/photoEncode";
+import { useContent } from "../../lib/content/provider";
+import { useSaveDexPhoto } from "../../lib/dex/useDex";
 import { captureProductEvent } from "../../lib/productAnalytics";
 import { FoundCelebration } from "./FoundCelebration";
 import "../../found-park.css";
@@ -140,6 +142,10 @@ function AboveNav({ children }: { children: ReactNode }) {
 export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onSignIn, onClose, onFounded }: Props) {
   const auth = useAuth();
   const game = useGame();
+  const content = useContent();
+  const saveDexPhoto = useSaveDexPhoto();
+  // The photo the player took, so an approved founder photo also goes in their Dex: one photo, two jobs.
+  const captured = useRef<CapturedPhoto | null>(null);
   const [accountId] = useState(() => auth.ownerAccountId);
   const [step, setStep] = useState<Step>({ kind: "locating" });
   const [fix, setFix] = useState<DeviceFix | null>(null);
@@ -402,6 +408,9 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         captureProductEvent("found_park_completed", { source: "osm" in target ? "osm" : "catalogue", visit: result.visit?.outcome ?? null });
         setStep({ kind: "founded", result });
         onFounded(result.park.id);
+        // A park that was new a moment ago may not be in the catalogue yet; then only the cover is kept.
+        const dexPark = content?.parkById.get(result.park.id);
+        if (dexPark && captured.current) void saveDexPhoto(dexPark, captured.current).catch(() => {});
         return;
       }
       const flags = checkFlags(result);
@@ -499,7 +508,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
           : step.kind === "checking"
             ? "Checking your photo…"
             : step.kind === "review_sent"
-              ? "We'll let you know in Parkdex."
+              ? "Your photo is with a person now."
               : step.kind === "taken"
                 ? "This park has a founder now."
                 : "Stand in a park to be its founder.";
@@ -638,6 +647,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               onClose={() => setStep({ kind: "results" })}
               onUse={(picture) => {
                 // Moderation and the public cover use the player's crop, not the whole photo.
+                captured.current = picture;
                 setPhoto(picture.cropped);
                 void check(picture.cropped, choice.target);
               }}
