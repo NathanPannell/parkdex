@@ -19,6 +19,8 @@ export type FriendsErrorCode =
   | "too_many_friends"
   | "invalid_friend_code"
   | "friend_not_found"
+  | "crewmate_not_found"
+  | "own_handle"
   | "handle_required"
   | "account_deleting"
   | "invalid_request"
@@ -32,6 +34,8 @@ const KNOWN_CODES = new Set<FriendsErrorCode>([
   "too_many_friends",
   "invalid_friend_code",
   "friend_not_found",
+  "crewmate_not_found",
+  "own_handle",
   "handle_required",
   "account_deleting",
   "invalid_request",
@@ -56,6 +60,8 @@ const MESSAGES: Record<FriendsErrorCode, string> = {
   too_many_friends: "You or your friend already have 200 friends.",
   invalid_friend_code: "Friend codes are 8 letters and numbers.",
   friend_not_found: "You aren't friends with that player anymore.",
+  crewmate_not_found: "You haven't been in a crew with that player.",
+  own_handle: "That's your own handle.",
   handle_required: "Pick a handle before you add friends.",
   account_deleting: "This account is being deleted.",
   invalid_request: "Parkdex couldn't use that request.",
@@ -176,6 +182,11 @@ export async function fetchFriendsBoard(accountId: string): Promise<FriendsBoard
 
 export async function sendFriendCode(accountId: string, code: string): Promise<AddFriendResponse> {
   return parseAddFriend(await request(accountId, "/api/friends", { method: "POST", body: JSON.stringify({ code }) }));
+}
+
+/** Adds a player who was in a crew with this one, by handle (`POST /api/friends/crewmate`). */
+export async function sendCrewmate(accountId: string, handle: string): Promise<AddFriendResponse> {
+  return parseAddFriend(await request(accountId, "/api/friends/crewmate", { method: "POST", body: JSON.stringify({ handle }) }));
 }
 
 export async function removeFriend(accountId: string, handle: string): Promise<void> {

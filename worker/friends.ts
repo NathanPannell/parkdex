@@ -12,6 +12,7 @@ import type { GameAuth } from "./game.js";
  * - `GET /api/friends`: the player's code (created on first use), this week's bounds and the board
  * - `POST /api/friends` `{ code }`: add a friend. Replays answer `already_friends`, so the app can
  *   resend codes typed or scanned offline.
+ * - `POST /api/friends/crewmate` `{ handle }`: add a player who was in a crew with you, no code
  * - `DELETE /api/friends/:handle`: end a friendship for both players
  * - `POST /api/friends/code`: replace the player's code; the old QR and links stop working
  */
@@ -62,6 +63,16 @@ export function validateAddFriendBody(body: unknown): string {
   return code;
 }
 
+export function validateAddCrewmateBody(body: unknown): string {
+  const value = typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  if (!value || Object.keys(value).length !== 1 || typeof value.handle !== "string") {
+    throw new HttpError(400, "invalid_request", "Invalid request.");
+  }
+  const handle = normalizeHandle(value.handle);
+  if (!HANDLE_PATTERN.test(handle)) throw new HttpError(400, "invalid_request", "Invalid handle.");
+  return handle;
+}
+
 async function getFriends(env: FriendsEnv, auth: GameAuth, dependencies: FriendsDependencies, now: number): Promise<Response> {
   const { accountId } = await auth.account();
   const store = getStore(env, dependencies);
@@ -84,6 +95,27 @@ async function postFriend(request: Request, env: FriendsEnv, auth: GameAuth, dep
       throw new HttpError(404, "friend_code_not_found", "No player has that friend code.");
     case "own_code":
       throw new HttpError(409, "own_friend_code", "That's your own friend code.");
+    case "too_many_friends":
+      throw new HttpError(409, "too_many_friends", `Players can have up to ${FRIEND_LIMIT} friends.`);
+    case "handle_required":
+      throw handleRequired();
+    case "account_unavailable":
+      throw new HttpError(410, "account_deleting", "This account is being deleted.");
+  }
+}
+
+async function postCrewmate(request: Request, env: FriendsEnv, auth: GameAuth, dependencies: FriendsDependencies): Promise<Response> {
+  const { accountId } = await auth.mutation();
+  const handle = validateAddCrewmateBody(await readJsonBody(request, MAX_BODY_BYTES));
+  const result = await getStore(env, dependencies).addCrewmate(accountId, handle, FRIEND_LIMIT);
+  switch (result.status) {
+    case "added":
+    case "already_friends":
+      return json({ status: result.status, friend: result.friend });
+    case "not_crewmates":
+      throw new HttpError(404, "crewmate_not_found", "You haven't been in a crew with that player.");
+    case "own_handle":
+      throw new HttpError(409, "own_handle", "That's your own handle.");
     case "too_many_friends":
       throw new HttpError(409, "too_many_friends", `Players can have up to ${FRIEND_LIMIT} friends.`);
     case "handle_required":
@@ -133,6 +165,8 @@ export async function handleFriendsRequest(
     requireMethod(request, "POST");
     return postCode(env, auth, dependencies);
   }
+  // Only POST: DELETE /api/friends/crewmate still removes a friend whose handle is "crewmate".
+  if (path === "/api/friends/crewmate" && request.method === "POST") return postCrewmate(request, env, auth, dependencies);
   const friend = /^\/api\/friends\/([^/]{1,64})$/.exec(path);
   if (friend) {
     requireMethod(request, "DELETE");

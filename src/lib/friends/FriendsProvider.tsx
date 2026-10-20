@@ -7,6 +7,7 @@ import {
   friendsErrorMessage,
   removeFriend as sendRemoval,
   resetFriendCode as sendReset,
+  sendCrewmate,
   sendFriendCode,
   type FriendsBoard,
   type FriendsErrorCode,
@@ -62,6 +63,8 @@ type FriendsContextValue = {
   clearNotices: () => void;
   refresh: () => Promise<void>;
   add: (code: string, source: PendingSource) => Promise<AddResult>;
+  /** Adds a crewmate by handle, online only: it follows a crew join, which needed a connection. */
+  addCrewmate: (handle: string) => Promise<AddResult>;
   remove: (handle: string) => Promise<void>;
   resetCode: () => Promise<void>;
 };
@@ -188,6 +191,22 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
     [flush],
   );
 
+  const addCrewmate = useCallback(
+    async (handle: string): Promise<AddResult> => {
+      const id = onlineOwner.current;
+      if (!id) return { kind: "rejected", code: "offline", message: friendsErrorMessage(new FriendsError("offline", 0)) };
+      try {
+        const { status, friend } = await sendCrewmate(id, handle);
+        if (status === "added" && onlineOwner.current === id) void refresh();
+        return { kind: status, friend };
+      } catch (caught) {
+        const error = caught instanceof FriendsError ? caught : new FriendsError("unavailable", 0);
+        return { kind: "rejected", code: error.code, message: error.message };
+      }
+    },
+    [refresh],
+  );
+
   const remove = useCallback(
     async (handle: string) => {
       const id = onlineOwner.current;
@@ -235,10 +254,11 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
       clearNotices: () => setNotices([]),
       refresh,
       add,
+      addCrewmate,
       remove,
       resetCode,
     }),
-    [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, remove, resetCode],
+    [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, addCrewmate, remove, resetCode],
   );
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;

@@ -47,12 +47,11 @@
     "database/migrations/game_003_crews.sql",
     "database/migrations/game_004_badges.sql",
     "database/migrations/game_005_dex.sql",
-    "database/migrations/founders_004_boundary_boxes.sql"
+    "database/migrations/founders_004_boundary_boxes.sql",
+    "database/migrations/social_002_crewmates.sql"
   ],
   "contentSync": {
-    "supportingMigrationPaths": [
-      "database/001_cloud_content.sql"
-    ],
+    "supportingMigrationPaths": ["database/001_cloud_content.sql"],
     "migrationPaths": [
       "database/migrations/content_001_sync.sql",
       "database/migrations/content_002_authoring.sql",
@@ -60,11 +59,7 @@
       "database/migrations/content_004_catalogue_release.sql",
       "database/migrations/content_005_park_visibility.sql"
     ],
-    "apiPaths": [
-      "api/content/snapshot.ts",
-      "api/content/changes.ts",
-      "api/content/scene.ts"
-    ],
+    "apiPaths": ["api/content/snapshot.ts", "api/content/changes.ts", "api/content/scene.ts"],
     "bootstrapPath": "scripts/bootstrap-content.py",
     "qaSqlPath": "scripts/qa-content-sync.sql",
     "pythonTestPaths": [
@@ -88,11 +83,22 @@
     "pythonRequirementsPath": "database/delivery-test-requirements.txt"
   },
   "runtimeOptionalKeys": [
-    "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
-    "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID", "GOOGLE_NATIVE_CLIENT_ID",
-    "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET",
-    "OPERATOR_DASHBOARD_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODERATION_MODEL",
-    "POSTHOG_PROJECT_KEY", "POSTHOG_HOST"
+    "PARK_PROPOSAL_APPROVE_THRESHOLD",
+    "OVERPASS_URLS",
+    "OVERPASS_URL",
+    "NOMINATIM_URL",
+    "AUTH_SESSION_SECRET",
+    "AUTH_EMAIL_FROM",
+    "GOOGLE_WEB_CLIENT_ID",
+    "GOOGLE_NATIVE_CLIENT_ID",
+    "KIP_PHOTO_SERVICE_URL",
+    "KIP_PHOTO_SERVICE_TOKEN",
+    "KIP_RETENTION_SECRET",
+    "OPERATOR_DASHBOARD_URL",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODERATION_MODEL",
+    "POSTHOG_PROJECT_KEY",
+    "POSTHOG_HOST"
   ],
   "privatePhotos": {
     "accountId": "6f0eb57971124f41fadc7897ace74dac",
@@ -114,14 +120,6 @@
   "productionRuntimeSecretBundleEnvironment": "KIP_PRODUCTION_RUNTIME_JSON",
   "runtimeExtraBundleEnvironment": "KIP_STAGING_EXTRA_RUNTIME_JSON",
   "productionRuntimeExtraBundleEnvironment": "KIP_PRODUCTION_EXTRA_RUNTIME_JSON",
-  "runtimeSecretBundleKeys": [
-    "DATABASE_URL",
-    "RESEND_API_KEY",
-    "EMAIL_FROM",
-    "EMAIL_REPLY_TO",
-    "OPERATOR_EMAIL",
-    "OPERATOR_PASSWORD_HASH",
-    "SESSION_SECRET"
-  ],
+  "runtimeSecretBundleKeys": ["DATABASE_URL", "RESEND_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO", "OPERATOR_EMAIL", "OPERATOR_PASSWORD_HASH", "SESSION_SECRET"],
   "vercelCliVersion": "50.1.3"
 }

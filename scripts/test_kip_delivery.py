@@ -115,6 +115,7 @@ class AccountReleaseGates(unittest.TestCase):
                 "game_004_badges.sql",
                 "game_005_dex.sql",
                 "founders_004_boundary_boxes.sql",
+                "social_002_crewmates.sql",
             ],
         )
 

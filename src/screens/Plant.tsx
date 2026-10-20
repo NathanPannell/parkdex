@@ -14,13 +14,14 @@ import { useFeatureFlag } from "../lib/appConfig";
 import { useContent } from "../lib/content/provider";
 import { createVisitId, GameError, gameErrorMessage, joinCrew, sendVisit, type Crew, type GameErrorCode, type VisitResult } from "../lib/game/client";
 import { Pennant } from "../components/CrewList";
-import { CREW_POINTS, crewLink } from "../lib/game/crew";
+import { CREW_POINTS, crewLink, friendOffers } from "../lib/game/crew";
 import { useParkCrew } from "../lib/game/useParkCrew";
 import { QrCode } from "../components/QrCode";
 import { useToast } from "../components/Toast";
 import { shareLink } from "../lib/native";
 import { formatSocialCode } from "../lib/social/codes";
 import { useCrew } from "../lib/game/CrewProvider";
+import { useFriends } from "../lib/friends/FriendsProvider";
 import { badgeById } from "../lib/game/badges";
 import { flagAgeDays } from "../lib/game/flag";
 import { useGame } from "../lib/game/GameProvider";
@@ -705,6 +706,7 @@ export function Plant() {
                       <Icon name="flag" size={16} /> Crew of {joinedCrew.size}
                     </span>
                   )}
+                  {joinedCrew && <CrewFriendsChip crew={joinedCrew} myHandle={me?.handle ?? null} />}
                 </motion.div>
               )}
               <motion.div variants={pop} className="claim__row">
@@ -795,6 +797,56 @@ const pop = {
   hidden: { y: 30, opacity: 0, scale: 0.9 },
   show: { y: 0, opacity: 1, scale: 1, transition: { type: "spring" as const, stiffness: 420, damping: 22 } },
 };
+
+/**
+ * Friends (#64): after joining a crew, one tap makes the crewmates who aren't friends yet into
+ * friends, by handle (`POST /api/friends/crewmate`). Only with the `friends` flag on.
+ */
+function CrewFriendsChip({ crew, myHandle }: { crew: Crew; myHandle: string | null }) {
+  const friends = useFriends();
+  const toast = useToast();
+  const [sending, setSending] = useState(false);
+  // Who this chip made friends, kept after the board refreshes and stops offering them.
+  const [added, setAdded] = useState<string[] | null>(null);
+  const board = friends.enabled ? friends.board : null;
+  const refresh = useRef(friends.refresh);
+  refresh.current = friends.refresh;
+  useEffect(() => {
+    if (friends.enabled && friends.online && !board) void refresh.current();
+  }, [friends.enabled, friends.online, board]);
+  if (!friends.enabled || !myHandle) return null;
+  if (added) {
+    return (
+      <span className="plant__chip" role="status">
+        <Icon name="check" size={16} /> {added.length === 1 ? `Friends with @${added[0]}` : `${added.length} new friends`}
+      </span>
+    );
+  }
+  if (!board || !friends.online) return null;
+  const offers = friendOffers(crew, myHandle, new Set(board.players.map((player) => player.handle)));
+  if (offers.length === 0) return null;
+  const addAll = async () => {
+    setSending(true);
+    const done: string[] = [];
+    let failure: string | null = null;
+    for (const offer of offers) {
+      const result = await friends.addCrewmate(offer.handle);
+      if (result.kind === "added" || result.kind === "already_friends") done.push(result.friend.handle);
+      else if (result.kind === "rejected") failure ??= result.message;
+    }
+    setSending(false);
+    if (done.length) {
+      sfx.pop();
+      setAdded(done);
+    }
+    if (failure) toast(failure, "kip");
+  };
+  return (
+    <button className="plant__chip plant__chip--button" onClick={() => void addAll()} disabled={sending}>
+      <Icon name="sparkle" size={16} /> {offers.length === 1 ? `Add @${offers[0].handle} as a friend` : `Add ${offers.length} crewmates as friends`}
+    </button>
+  );
+}
 
 /** The leader's crew code on the result screen: friends at the park scan it to join, no extra taps. */
 function CrewCodeInline({ parkId, parkName }: { parkId: string; parkName: string }) {
