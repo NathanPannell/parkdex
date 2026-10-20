@@ -29,7 +29,8 @@ const GAME_CREWS = "database/migrations/game_003_crews.sql";
 const GAME_BADGES = "database/migrations/game_004_badges.sql";
 // Adding crewmates as friends reads crews' crew_members, so it cannot apply without crews either.
 const CREWMATES = "database/migrations/social_002_crewmates.sql";
-const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES, CREWMATES]);
+const RECENT_CREWMATES = "database/migrations/social_003_recent_crewmates.sql";
+const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES, CREWMATES, RECENT_CREWMATES]);
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
