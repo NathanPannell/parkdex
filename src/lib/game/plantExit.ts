@@ -25,7 +25,7 @@ export function backCanLeavePlant(): boolean {
 }
 
 /**
- * Leaving ends the trip. Back on the map the camera settles on the park with the map clear:
+ * Leaving clears the plant screen's target. Back on the map the camera settles on the park with the map clear:
  * no park page and no arrival card for a visit the player just made.
  */
 export function leavePlant(parkId: string | null, to: "map" | "parks" = "map"): Action[] {

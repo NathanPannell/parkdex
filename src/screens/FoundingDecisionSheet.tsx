@@ -16,9 +16,10 @@ import "../found-park.css";
 
 /**
  * The next manual review decision to show, one at a time and once each, whenever the player's
- * state loads or refreshes. The queue starts over for another account.
+ * state loads or refreshes. The queue starts over for another account. While `held`, a decision
+ * that is not showing yet waits; one already on screen stays.
  */
-export function useFoundingDecisions(allowed: boolean): { current: FoundingDecision | null; dismiss: () => void } {
+export function useFoundingDecisions(allowed: boolean, held = false): { current: FoundingDecision | null; dismiss: () => void } {
   const game = useGame();
   const accountId = game.accountId;
   const queue = useRef<{ accountId: string | null; queue: DecisionQueue } | null>(null);
@@ -30,7 +31,10 @@ export function useFoundingDecisions(allowed: boolean): { current: FoundingDecis
   }
   const [, setDismissed] = useState(0);
   const decided = game.me?.foundingReviews?.decided ?? [];
-  const current = allowed && accountId ? queue.current.queue.next(decided) : null;
+  const next = allowed && accountId ? queue.current.queue.next(decided) : null;
+  const showing = useRef<string | null>(null);
+  const current = next && (!held || showing.current === next.requestId) ? next : null;
+  showing.current = current?.requestId ?? null;
   const runtime = useContentRuntime();
   const refreshFlags = game.refreshFlags;
 

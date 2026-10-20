@@ -50,6 +50,7 @@ type State = {
   currentBuildId: string | null;
   currentPackageIdentity: string | null;
   selectedId: string | null;
+  /** The park the plant screen is for. The in-app trip UI is gone; directions open Google Maps. */
   tripId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;
@@ -59,6 +60,8 @@ type State = {
   resume: Resume | null;
   // The screen Account & backup was opened from, so Back returns there.
   accountFrom: Screen | null;
+  // The park whose arrival card is up on the map. Messages wait for it, so only one shows at a time.
+  arrivalId: string | null;
 };
 
 export type Action =
@@ -73,6 +76,7 @@ export type Action =
   | { type: "photo"; photo: string | null }
   | { type: "claim"; ownerKey: string; id: string; claimId: string; at: string; photo: string; parkSnapshot: Park; contentReleaseId: string | null }
   | { type: "focus"; id: string | null; open?: boolean }
+  | { type: "arrival"; id: string | null }
   | { type: "signInFor"; resume: Resume }
   | { type: "resume"; resume: Resume | null }
   | { type: "mute" }
@@ -115,6 +119,7 @@ const initial: State = {
   feedback: null,
   resume: null,
   accountFrom: null,
+  arrivalId: null,
 };
 
 export function load(): State {
@@ -241,6 +246,8 @@ export function reducer(state: State, action: Action): State {
     }
     case "focus":
       return { ...state, focusId: action.id, focusOpen: action.open ?? true };
+    case "arrival":
+      return state.arrivalId === action.id ? state : { ...state, arrivalId: action.id };
     case "mute":
       return { ...state, muted: !state.muted };
     case "feedback":

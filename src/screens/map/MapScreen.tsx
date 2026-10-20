@@ -11,8 +11,7 @@ import { MyFlagViewer } from "../../components/FlagViewer";
 import { insidePark, parkContaining, useBoundaries } from "../../lib/boundaries";
 import { burst } from "../../lib/confetti";
 import { buzz, sfx } from "../../lib/feedback";
-import { estimateTrip } from "../../lib/drive";
-import { arcPath, arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
+import { arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
 import { useCrew } from "../../lib/game/CrewProvider";
@@ -40,14 +39,11 @@ import { useFeatureFlag } from "../../lib/appConfig";
 import { ParkSheet } from "./ParkSheet";
 import { NearbyPanel } from "./NearbyPanel";
 import { NEARBY_LIST_KM, NEARBY_LIST_SIZE, nearestParks } from "../../lib/nearbyParks";
-import { ArrivalCard, TripPanel } from "./TripPanel";
+import { ArrivalCard } from "./ArrivalCard";
 
 const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
 // Below this zoom the map shows parks as dots (see tierOf in MapView).
 const FAR_ZOOM = 10.5;
-const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
-
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 export function MapScreen() {
   const { state, dispatch } = useStore();
@@ -59,8 +55,6 @@ export function MapScreen() {
   const contentStatus = useContentStatus();
   const mapRef = useRef<MLMap | null>(null);
   const bounds = useBoundaries();
-  const [route, setRoute] = useState<LngLat[] | null>(null);
-  const [simulating, setSimulating] = useState(false);
   const [dismissedArrival, setDismissedArrival] = useState<string | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
   const [demoTip, setDemoTip] = useState(0);
@@ -79,7 +73,6 @@ export function MapScreen() {
     padding: { top: number; right: number; bottom: number; left: number };
   } | null>(null);
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
-  const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
   // Without a location inside a province, frame the province nearest the last one, or BC.
   const [initialView] = useState(() => startingMapView(tracksRealLocation, state.user, readLastLocation()));
 
@@ -87,7 +80,7 @@ export function MapScreen() {
   const visit = useVisit();
   const crew = useCrew();
   const runtime = useContentRuntime();
-  const { user, selectedId, tripId, located } = state;
+  const { user, selectedId, located } = state;
   // Every park in the catalogue can carry a flag, with or without badge art.
   const parks = useMemo(() => content?.parks ?? [], [content?.parks]);
   const flags = game.flags?.byPark ?? null;
@@ -113,7 +106,6 @@ export function MapScreen() {
     return { ...bounds.fc, features: bounds.fc.features.filter((feature) => ids.has(feature.properties.id)) };
   }, [bounds, parks]);
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
-  const trip = tripId ? content?.parkById.get(tripId) : undefined;
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
   // Desktop browsers often only know roughly where they are (Wi-Fi or IP, a kilometre or more).
   // Show that position on the web rather than "Finding you…" forever; check-ins still need a usable fix.
@@ -124,12 +116,18 @@ export function MapScreen() {
   );
   const arrivedId = here ? here.id : null;
   // The arrival card is for a park with something to do; one already visited today stays quiet.
-  const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating && !visit.visitedToday(arrivedId);
+  const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !visit.visitedToday(arrivedId);
+  // App holds the takeover and founding messages while the card is up, so they never stack.
+  const arrivalUp = showArrival ? arrivedId : null;
+  useEffect(() => {
+    dispatch({ type: "arrival", id: arrivalUp });
+  }, [arrivalUp]);
+  useEffect(() => () => dispatch({ type: "arrival", id: null }), []);
   // On a phone's browser, Kip suggests the home screen version once it can be installed, but
-  // only on a clear map: never over a park, a trip, the arrival card or founding.
+  // only on a clear map: never over a park, the arrival card or founding.
   // Settings keeps the Install Parkdex row for later.
   const webApp = useWebApp();
-  useKipTip("install-web", state.screen === "map" && !selected && !trip && !showArrival && !founding && installOffer(webApp) !== null);
+  useKipTip("install-web", state.screen === "map" && !selected && !showArrival && !founding && installOffer(webApp) !== null);
   const player = game.me?.player ?? null;
   // A score that went up since the last read floats a "+N" off the score chip.
   const lastScore = useRef<number | null>(null);
@@ -177,7 +175,6 @@ export function MapScreen() {
           maxZoom: 15,
           duration: 1400,
         });
-      setRoute(null);
     }
     lastArrived.current = arrivedId;
   }, [arrivedId, state.screen]);
@@ -269,7 +266,6 @@ export function MapScreen() {
   }, [state.focusId, content]);
 
   function select(id: string | null, entryPoint: "map" | "nearby" | "collection" = "map") {
-    if (simulating) return;
     if (id && !content?.parkById.has(id)) return;
     dispatch({ type: "select", id });
     if (!id) return;
@@ -295,81 +291,18 @@ export function MapScreen() {
     } else map?.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 11.5), padding: SHEET_PAD, duration: 900, essential: true });
   }
 
-  function startTrip() {
-    if (!selected) return;
-    const tripEstimate = estimateTrip(user, selected, content?.drive);
-    if (tripEstimate.mode === "unknown") {
-      tripStart.current = null;
-      setRoute(null);
-      sfx.pop();
-      // No road route to draw, so frame the park itself for the trip panel.
-      mapRef.current?.flyTo({
-        center: [selected.lng, selected.lat],
-        zoom: Math.max(mapRef.current.getZoom(), 14),
-        padding: TRIP_PAD,
-        duration: 1100,
-        essential: true,
-      });
-    } else {
-      if (!bounds) return;
-      const target: LngLat =
-        selected.trailheadLat != null && selected.trailheadLng != null
-          ? [selected.trailheadLng, selected.trailheadLat]
-          : arrivalPoint(bounds.byId.get(selected.id)!, user);
-      const path = arcPath(user, target);
-      tripStart.current = { from: user, total: tripEstimate.km };
-      setRoute(path);
-      sfx.whoosh();
-      const lngs = path.map((p) => p[0]);
-      const lats = path.map((p) => p[1]);
-      mapRef.current?.fitBounds(
-        [
-          [Math.min(...lngs), Math.min(...lats)],
-          [Math.max(...lngs), Math.max(...lats)],
-        ],
-        { padding: TRIP_PAD, duration: 1200, maxZoom: 14 },
-      );
-    }
-    buzz(15);
-    dispatch({ type: "trip", id: selected.id });
+  // Demo tools: put the player just inside a park, the nearest one or the one whose page is open.
+  function teleportInto(target: { id: string } | undefined) {
+    if (!DEMO_TOOLS || !bounds || !target) return;
+    const boundary = bounds.byId.get(target.id);
+    if (!boundary) return;
+    setDemoOpen(false);
     dispatch({ type: "select", id: null });
-  }
-
-  function endTrip() {
-    dispatch({ type: "trip", id: null });
-    setRoute(null);
-    tripStart.current = null;
-  }
-
-  function simulate() {
-    if (!DEMO_TOOLS || !route || simulating) return;
-    setSimulating(true);
-    const km = tripStart.current?.total ?? 5;
-    const duration = Math.min(5200, 2600 + km * 90);
-    const t0 = performance.now();
-    let lastStep = -1;
-    const step = (now: number) => {
-      const t = Math.min(1, (now - t0) / duration);
-      const idx = Math.round(ease(t) * (route.length - 1));
-      if (idx !== lastStep) {
-        lastStep = idx;
-        dispatch({ type: "move", user: route[idx], accuracy: null });
-      }
-      if (t < 1) requestAnimationFrame(step);
-      else setSimulating(false);
-    };
-    requestAnimationFrame(step);
+    dispatch({ type: "move", user: arrivalPoint(boundary, user), accuracy: null });
   }
 
   function teleportNearest() {
-    if (!DEMO_TOOLS || !bounds) return;
-    const target = nearestParks(parks, user, { limit: 1 })[0]?.p;
-    if (!target) return;
-    const point = arrivalPoint(bounds.byId.get(target.id)!, user);
-    setDemoOpen(false);
-    dispatch({ type: "select", id: null });
-    dispatch({ type: "trip", id: target.id });
-    dispatch({ type: "move", user: point, accuracy: null });
+    teleportInto(nearestParks(parks, user, { limit: 1 })[0]?.p);
   }
 
   // Checking in inside a boundary is now a flag visit: plant, take or visit. Older claim
@@ -456,8 +389,6 @@ export function MapScreen() {
     flyToUser(center);
   }
 
-  const remaining = trip ? estimateTrip(user, trip, content?.drive) : null;
-
   const mapView = (
     <MapView
       mapRef={mapRef}
@@ -469,11 +400,9 @@ export function MapScreen() {
       flags={flags}
       flagsNow={flagsNow}
       selectedId={content ? selectedId : null}
-      tripId={content ? tripId : null}
       arrivedId={content ? arrivedId : null}
-      route={content ? route : null}
       onSelect={content && !founding && !downloadingMaps ? select : () => {}}
-      onLongPress={content && !founding && !downloadingMaps && !selected && !simulating ? openPressMenu : undefined}
+      onLongPress={content && !founding && !downloadingMaps && !selected ? openPressMenu : undefined}
       visible={state.screen === "map"}
     />
   );
@@ -728,7 +657,6 @@ export function MapScreen() {
               <button
                 onClick={() => {
                   setDemoOpen(false);
-                  endTrip();
                   dispatch({ type: "move", user: located, accuracy: null });
                   recenter(located);
                 }}
@@ -772,14 +700,14 @@ export function MapScreen() {
         onContextMenu={(event) => event.preventDefault()}
         aria-label="Center on me"
         style={{ pointerEvents: selected || showArrival ? "none" : "auto" }}
-        animate={{ y: selected ? 80 : trip ? -250 : showArrival ? 80 : 0, opacity: selected || showArrival ? 0 : 1 }}
+        animate={{ y: selected ? 80 : showArrival ? 80 : 0, opacity: selected || showArrival ? 0 : 1 }}
         transition={{ type: "spring", stiffness: 300, damping: 28 }}
       >
         <Icon name="locate" size={22} />
       </motion.button>
 
       <AnimatePresence>
-        {!selected && !trip && !showArrival && (
+        {!selected && !showArrival && (
           <motion.div
             className="nearby"
             initial={{ y: 200, opacity: 0 }}
@@ -789,26 +717,6 @@ export function MapScreen() {
           >
             <NearbyPanel nearby={nearbyItems} all={searchItems} onSelect={(id) => select(id, "nearby")} />
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {trip && !showArrival && !selected && (
-          <TripPanel
-            key="trip"
-            park={trip}
-            holder={visit.holderOf(trip.id)}
-            flagDays={flagDays(trip.id)}
-            flagAgeMs={flagAge(trip.id)}
-            remaining={here?.id === trip.id ? { mode: "walk", km: 0, minutes: 0 } : remaining!}
-            totalKm={tripStart.current?.total ?? remaining!.km}
-            simulating={simulating}
-            onSimulate={simulate}
-            onEnd={endTrip}
-            onOpen={() => select(trip.id)}
-            entryPoint={selectedEntryPoint}
-            contentReleaseId={content.releaseId}
-          />
         )}
       </AnimatePresence>
 
@@ -856,7 +764,7 @@ export function MapScreen() {
               canFound={parkProposals}
               onFound={() => startFounding(selected.id)}
               onClose={() => select(null)}
-              onGo={startTrip}
+              onDemoTeleport={DEMO_TOOLS ? () => teleportInto(selected) : undefined}
               onCheckIn={() => checkIn(selected.id)}
               onFeedback={() => dispatch({ type: "feedback", open: true, parkId: selected.id })}
             />

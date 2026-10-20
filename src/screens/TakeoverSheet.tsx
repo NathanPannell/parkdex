@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
@@ -24,8 +24,11 @@ function timeAgo(at: string, now: number): string {
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
 
-/** "@sam took Blueberry" for each park lost since the player last looked. */
-export function TakeoverMessages({ allowed }: { allowed: boolean }) {
+/**
+ * "@sam took Blueberry" for each park lost since the player last looked. While `held`, the sheet
+ * waits to open; once it is on screen it stays until dismissed.
+ */
+export function TakeoverMessages({ allowed, held = false }: { allowed: boolean; held?: boolean }) {
   const game = useGame();
   const content = useContent();
   const { dispatch } = useStore();
@@ -33,7 +36,10 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
   const latest = latestTakeoverAt(takeovers);
   // Hidden locally at once; the server catches up when the seen call lands.
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
-  const open = allowed && !!game.accountId && !!latest && latest !== dismissedAt;
+  const waiting = allowed && !!game.accountId && !!latest && latest !== dismissedAt;
+  const shownFor = useRef<string | null>(null);
+  const open = waiting && (!held || shownFor.current === latest);
+  shownFor.current = open ? latest : null;
 
   const dismiss = () => {
     if (!latest || !game.accountId) return;
