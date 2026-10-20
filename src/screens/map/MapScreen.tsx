@@ -125,6 +125,12 @@ export function MapScreen() {
   const arrivedId = here ? here.id : null;
   // The arrival card is for a park with something to do; one already visited today stays quiet.
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating && !visit.visitedToday(arrivedId);
+  // App holds the takeover and founding messages while the card is up, so they never stack.
+  const arrivalUp = showArrival ? arrivedId : null;
+  useEffect(() => {
+    dispatch({ type: "arrival", id: arrivalUp });
+  }, [arrivalUp]);
+  useEffect(() => () => dispatch({ type: "arrival", id: null }), []);
   // On a phone's browser, Kip suggests the home screen version once it can be installed, but
   // only on a clear map: never over a park, a trip, the arrival card or founding.
   // Settings keeps the Install Parkdex row for later.

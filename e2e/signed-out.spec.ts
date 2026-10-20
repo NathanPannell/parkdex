@@ -62,9 +62,36 @@ test("My Dex shows the whole catalogue before the first visit", async ({ page })
 test("the leaderboard loads from the API", async ({ page }) => {
   await finishOnboarding(page);
   await openTab(page, "Leaders");
-  const board = page.getByRole("main", { name: "Leaderboard" });
-  await expect(board.getByRole("heading", { name: "Leaderboard", level: 1 })).toBeVisible();
+  const board = page.getByRole("main", { name: "Leaders" });
+  await expect(board.getByRole("heading", { name: "Leaders", level: 1 })).toBeVisible();
   await expect(board.getByRole("heading", { name: "No flags yet" })).toBeVisible({ timeout: API_TIMEOUT });
+});
+
+test("tapping a player on the leaderboard opens their sheet", async ({ page }) => {
+  const players = ["sam", "riley", "jo", "kai"].map((handle, index) => ({
+    rank: index + 1,
+    handle,
+    flagSeed: `seed-${handle}`,
+    score: 40 - index * 10,
+    parksHeld: 4 - index,
+  }));
+  // Registered after the fixture's route, so it answers the leaderboard before the e2e API does.
+  await page.route("**/api/game/leaderboard", (route) => route.fulfill({ json: { players, serverTime: new Date().toISOString() } }));
+  await finishOnboarding(page);
+  await openTab(page, "Leaders");
+  const board = page.getByRole("main", { name: "Leaders" });
+
+  await board.getByRole("button", { name: /@kai/ }).click();
+  const sheet = page.getByRole("dialog", { name: "@kai" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toContainText("Rank 4");
+  await expect(sheet).toContainText(/Points\s*10/);
+  await expect(sheet).toContainText(/Park held\s*1/);
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toHaveCount(0);
+
+  await board.getByRole("button", { name: /^Rank 1, @sam/ }).click();
+  await expect(page.getByRole("dialog", { name: "@sam" })).toContainText(/Parks held\s*4/);
 });
 
 test("settings offer sign-in to a signed-out visitor", async ({ page }) => {

@@ -290,8 +290,10 @@ function Screens() {
   // My Dex, the leaderboard and settings are tabs, so the bar stays on them.
   const showNav = showMap && (screen === "map" || screen === "parks" || screen === "leaderboard" || screen === "settings");
 
-  // Messages on open: review decisions first, then parks taken while away.
-  const messagesAllowed = state.startupReady && onboarded && !game.handleRequest && (screen === "map" || screen === "parks" || screen === "leaderboard");
+  // Messages on open: review decisions first, then parks taken while away. On the map they wait
+  // for the arrival card, so the player sees one sheet at a time.
+  const messagesAllowed =
+    state.startupReady && onboarded && !game.handleRequest && (screen === "parks" || screen === "leaderboard" || (screen === "map" && !state.arrivalId));
   const decisions = useFoundingDecisions(messagesAllowed);
 
   return (
