@@ -6,7 +6,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { GameError, handleProblem, normalizeHandle, type GamePlayer } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
 import { handleFit } from "../lib/game/handleFit";
-import { clearLocalHandle, readLocalHandle } from "../lib/game/localHandle";
+import { clearLocalHandle, readLocalFlagSeed, readLocalHandle } from "../lib/game/localHandle";
 import { press, shake } from "../lib/motion";
 import "../game.css";
 import "../game-ui.css";
@@ -35,7 +35,8 @@ export function HandleSheet() {
   const request = game.handleRequest;
   const existing = game.me?.player ?? null;
   // The server sends the account's flag seed before a handle exists, so the flag can show now.
-  const previewSeed = existing?.flagSeed ?? game.me?.flagSeed ?? null;
+  // A flag already shown on the map before sign-in is the one the account keeps.
+  const previewSeed = existing?.flagSeed ?? readLocalFlagSeed() ?? game.me?.flagSeed ?? null;
   const [value, setValue] = useState(existing?.handle ?? readLocalHandle() ?? "");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);

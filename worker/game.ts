@@ -125,13 +125,21 @@ export function validateJoinBody(body: unknown): { visitId: string; code: string
   return { visitId: value.visitId.toLowerCase(), code };
 }
 
-export function validateHandleBody(body: unknown): string {
-  const value = exactKeys(body, ["handle"]);
+const FLAG_SEED_PATTERN = /^[0-9a-f]{16}$/;
+
+/**
+ * `PUT /api/game/handle`: the handle, and optionally the flag the app already showed a signed-out
+ * player (#onboarding). The flag is used only when the player is created; it never changes after.
+ */
+export function validateHandleBody(body: unknown): { handle: string; flagSeed: string | null } {
+  const value = exactKeys(body, record(body) && Object.hasOwn(body, "flagSeed") ? ["handle", "flagSeed"] : ["handle"]);
   if (typeof value.handle !== "string" || value.handle.length > 64)
     throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
   const handle = normalizeHandle(value.handle);
   if (!HANDLE_PATTERN.test(handle)) throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
-  return handle;
+  if (value.flagSeed !== undefined && (typeof value.flagSeed !== "string" || !FLAG_SEED_PATTERN.test(value.flagSeed)))
+    throw new HttpError(400, "invalid_request", "Invalid request.");
+  return { handle, flagSeed: (value.flagSeed as string | undefined) ?? null };
 }
 
 /** `PUT /api/game/me/patches`: up to 3 different badge IDs, in the order they are sewn on. */
@@ -248,7 +256,7 @@ function requireMethod(request: Request, method: string): void {
 
 async function putHandle(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies): Promise<Response> {
   const { accountId } = await auth.mutation();
-  const handle = validateHandleBody(await readJsonBody(request, MAX_BODY_BYTES));
+  const { handle, flagSeed } = validateHandleBody(await readJsonBody(request, MAX_BODY_BYTES));
   const store = getStore(env, dependencies);
   const owner = await store.handleOwner(handle, accountId);
   if (owner === "other") throw new HttpError(409, "handle_taken", "That handle is taken.");
@@ -256,7 +264,7 @@ async function putHandle(request: Request, env: GameEnv, auth: GameAuth, depende
     const verdict = await (dependencies.checkHandle?.(handle, env) ?? checkHandle(handle, env, dependencies.fetch));
     if (!verdict.allowed) throw new HttpError(422, "handle_rejected", "Choose a different handle.");
   }
-  const saved = await store.setHandle(accountId, handle);
+  const saved = await store.setHandle(accountId, handle, flagSeed);
   if (saved.status !== "saved") {
     if (saved.status === "taken") throw new HttpError(409, "handle_taken", "That handle is taken.");
     throw new HttpError(410, "account_deleting", "This account is being deleted.");

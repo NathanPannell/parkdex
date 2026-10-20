@@ -131,8 +131,9 @@ class MemoryGameStore implements GameStore {
     const owner = this.owners.get(handle);
     return owner === undefined ? ("none" as const) : owner === accountId ? ("self" as const) : ("other" as const);
   }
-  async setHandle(accountId: string, handle: string) {
-    const saved = { ...player, handle };
+  async setHandle(accountId: string, handle: string, flagSeed: string | null = null) {
+    const existing = this.players.get(accountId);
+    const saved = { ...(existing ?? player), handle, ...(existing || !flagSeed ? {} : { flagSeed }) };
     this.players.set(accountId, saved);
     this.owners.set(handle, accountId);
     return { status: "saved" as const, player: saved };
@@ -405,12 +406,26 @@ test("handles are normalised, validated, checked against the blocklist and uniqu
     assert.equal(await code(response), "invalid_handle");
   }
   assert.equal((await call("PUT", "/api/game/handle", { handle: "x", extra: true })).status, 400);
+  assert.equal((await call("PUT", "/api/game/handle", { handle: "trail_runner", flagSeed: "not-a-seed" })).status, 400);
   const blocked = await call("PUT", "/api/game/handle", { handle: "Parkdex_Admin" });
   assert.equal(blocked.status, 422);
   assert.equal(await code(blocked), "handle_rejected");
   const taken = await call("PUT", "/api/game/handle", { handle: "taken_one" });
   assert.equal(taken.status, 409);
   assert.equal(await code(taken), "handle_taken");
+});
+
+test("a new player keeps the flag the app already showed them; an existing player keeps theirs", async () => {
+  const fresh = setup();
+  const created = await fresh.call("PUT", "/api/game/handle", { handle: "fern_walker", flagSeed: "0123456789abcdef" });
+  assert.equal(created.status, 200);
+  assert.deepEqual(await created.json(), { player: { handle: "fern_walker", flagSeed: "0123456789abcdef" } });
+  const renamed = await fresh.call("PUT", "/api/game/handle", { handle: "fern_two", flagSeed: "fedcba9876543210" });
+  assert.deepEqual(await renamed.json(), { player: { handle: "fern_two", flagSeed: "0123456789abcdef" } });
+  for (const flagSeed of ["0123", "0123456789ABCDEF", 42, null]) {
+    const response = await fresh.call("PUT", "/api/game/handle", { handle: "fern_walker", flagSeed });
+    assert.equal(response.status, 400, String(flagSeed));
+  }
 });
 
 test("handle moderation asks OpenRouter when the key is set and falls back when it fails", async () => {
