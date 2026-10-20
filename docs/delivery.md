@@ -23,7 +23,7 @@ Every job must pass on the PR's head commit. Nothing in PR CI talks to Neon, Ver
 | Release checks | `python scripts/kip-delivery.py ci-checks` against a Postgres 18 service container: `npm ci`, typecheck, tests with coverage floors, the production build, delivery tests, content sync SQL QA (every migration applied from scratch to a fresh `kip_qa_*` database, then the public content bootstrap), content Python tests, legacy import QA, the account SQL tests and the private photo Worker bundle. The staging and production deploys run the same command. |
 | Format and lint | `npm run format:check` (Prettier), `npm run lint` (ESLint, zero warnings), `ruff format --check .` and `ruff check .` (Ruff from `scripts/requirements-lint.txt`). |
 | E2E | Playwright, headless, against the production web build (`vite preview`) and the real API on a fresh Postgres 18 database (`e2e/api-server.ts`): onboarding, the map's nearby parks, search and a park page, My Dex, the leaderboard and settings, all signed out. The trace and report upload on failure. |
-| Operator dashboard | Its typecheck, tests (five PostgreSQL suites on fresh databases) and build. |
+| Operator dashboard | Its typecheck, tests (six PostgreSQL suites on fresh databases) and build. |
 | Android debug build | `npm run android:sync` and `gradlew assembleDebug`. It needs no signing secrets. |
 | Security | `npm audit --audit-level=high` for the app and the dashboard, gitleaks over the whole history and the working tree (`.gitleaks.toml`), and a check that the only committed env files are the two Vite mode files with `VITE_` keys. |
 

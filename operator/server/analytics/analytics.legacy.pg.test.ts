@@ -10,9 +10,9 @@ import { createSqlAnalyticsStore } from "./store.ts";
 import type { AccountRow, AnalyticsStore } from "./types.ts";
 
 // Production can run a release behind staging. This database gets every deploy migration except
-// founders_001 to founders_003 (so no kip_founders schema), like production before the founders release, and
-// the analytics pages must still load. Point OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL at a
-// fresh loopback database named kip_qa_*.
+// founders_001 to founders_003 (so no kip_founders schema) and the game migrations that build on
+// them, like production before the founders release, and the analytics pages must still load.
+// Point OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL at a fresh loopback database named kip_qa_*.
 const DSN = process.env.OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL;
 const ROOT = new URL("../../../", import.meta.url);
 const ORIGIN = "https://operator.example.test";
@@ -23,6 +23,11 @@ const FOUNDER_REVIEWS = "database/migrations/founders_002_reviews.sql";
 const PARK_REMOVED = "database/migrations/founders_003_park_removed.sql";
 // Hourly points (#169) build on founders_001, so a database without founders predates them too.
 const GAME_POINTS = "database/migrations/game_002_points.sql";
+// Crews (#170) read game_002's day_bonus, and badges (#175) call crews' kip_game.holdings, so neither
+// can apply without hourly points either.
+const GAME_CREWS = "database/migrations/game_003_crews.sql";
+const GAME_BADGES = "database/migrations/game_004_badges.sql";
+const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES]);
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
@@ -53,7 +58,7 @@ async function account(id: string, email: string, createdAt: string, handle: str
 
 before(async () => {
   if (!DSN) return;
-  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS && file !== PARK_REMOVED && file !== GAME_POINTS);
+  const migrations = (await inventory()).filter((file) => !NOT_YET_DEPLOYED.has(file));
   const opened = await openTestDatabase(DSN, migrations);
   pool = opened.pool;
   runner = opened.runner;
