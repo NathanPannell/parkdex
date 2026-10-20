@@ -46,11 +46,28 @@ export function CrewSheets() {
 
 function CrewScanner({ parkId }: { parkId: string | null }) {
   const crew = useCrew();
+  const visit = useVisit();
+  const { state } = useStore();
+  const content = useContent();
+  const bounds = useBoundaries();
   const onCode = (text: string, source: QrScannerSource): string | null => {
     const target = crewCodeFromText(text);
     if (!target) return source === "scan" ? "That isn't a Parkdex crew code." : `Crew codes are ${CREW_CODE_LENGTH} letters and numbers.`;
-    // A code scanned from a park's page is for that park unless its link names another.
-    crew.offerJoin({ code: target.code, parkId: target.parkId ?? parkId, source });
+    // A code scanned from a park's page is for that park unless its link names another;
+    // otherwise it is for the park the player stands in.
+    const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? (state.accuracy ?? 0) : 0;
+    const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
+    const forPark = target.parkId ?? parkId ?? here?.id ?? null;
+    const park = forPark ? content?.parkById.get(forPark) : undefined;
+    // Scanning is the decision to join: a signed-in player standing in the park joins straight
+    // away. Anything else (signed out, elsewhere, an unknown park) gets the join card to explain.
+    if (visit.signedIn && park && insidePark(state.user, bounds?.byId.get(park.id), accuracy)) {
+      // Close the camera first, so a handle sheet that comes up isn't reopened by the next read.
+      crew.closeScanner();
+      visit.startJoin(park.id, target.code);
+      return null;
+    }
+    crew.offerJoin({ code: target.code, parkId: forPark, source });
     return null;
   };
   return (
@@ -191,8 +208,8 @@ function CrewJoinCard({ target }: { target: CrewJoinTarget }) {
 
   const onJoin = () => {
     if (!signedIn) {
-      dispatch({ type: "select", id: null });
-      dispatch({ type: "go", screen: "account" });
+      if (park) dispatch({ type: "signInFor", resume: { kind: "join", parkId: park.id, code: target.code } });
+      else dispatch({ type: "go", screen: "account" });
       return;
     }
     if (park) visit.startJoin(park.id, target.code);

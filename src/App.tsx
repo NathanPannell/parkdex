@@ -207,6 +207,11 @@ function Screens() {
     if (state.startupReady && auth.pendingAction) dispatch({ type: "go", screen: "account" });
   }, [auth.pendingAction, dispatch, state.startupReady]);
 
+  // Signed in for a visit, a crew join or founding: go straight back to the map, which carries on (MapScreen).
+  useEffect(() => {
+    if (state.resume && screen === "account" && auth.phase === "authenticated" && onboarded) dispatch({ type: "go", screen: "map" });
+  }, [auth.phase, dispatch, onboarded, screen, state.resume]);
+
   useEffect(() => setMuted(state.muted), [state.muted]);
   useEffect(() => {
     if (screen !== "plant") clearConfetti();
@@ -259,13 +264,23 @@ function Screens() {
         else if (s.selectedId) dispatch({ type: "select", id: null });
         else if (s.screen === "plant") {
           if (backCanLeavePlant()) for (const action of leavePlant(s.tripId)) dispatch(action);
-        } else if (s.screen === "account") dispatch({ type: "go", screen: s.onboarded ? "map" : "onboarding" });
+        } else if (s.screen === "account") leaveAccountRef.current();
         else if (s.screen === "downloads") dispatch({ type: "go", screen: "settings" });
         else if (s.screen !== "map" && s.screen !== "onboarding" && s.screen !== "splash") dispatch({ type: "go", screen: "map" });
         else minimizeApp();
       }),
     [],
   );
+
+  // Back from Account & backup returns to the screen it was opened from, and drops a sign-in
+  // the player gave up on.
+  const leaveAccount = () => {
+    dispatch({ type: "resume", resume: null });
+    const from = state.accountFrom;
+    dispatch({ type: "go", screen: !onboarded ? "onboarding" : from && from !== "splash" && from !== "plant" && from !== "account" ? from : "map" });
+  };
+  const leaveAccountRef = useRef(leaveAccount);
+  leaveAccountRef.current = leaveAccount;
 
   // Mount the map behind the splash so saved pins and tiles can warm while the
   // opening animation plays. Keep the same map instance when the splash leaves.
@@ -296,9 +311,7 @@ function Screens() {
       )}
       <AnimatePresence>{screen === "parks" && <MyDex key="parks" />}</AnimatePresence>
       <AnimatePresence>{screen === "leaderboard" && <Leaderboard key="leaderboard" />}</AnimatePresence>
-      <AnimatePresence>
-        {screen === "account" && <Account key="account" onBack={() => dispatch({ type: "go", screen: onboarded ? "map" : "onboarding" })} />}
-      </AnimatePresence>
+      <AnimatePresence>{screen === "account" && <Account key="account" onBack={leaveAccount} />}</AnimatePresence>
       <AnimatePresence>{screen === "settings" && <Settings key="settings" tabbed />}</AnimatePresence>
       <AnimatePresence>{screen === "downloads" && <ManageDownloads key="downloads" />}</AnimatePresence>
       <AnimatePresence>{showNav && <BottomNav key="nav" />}</AnimatePresence>

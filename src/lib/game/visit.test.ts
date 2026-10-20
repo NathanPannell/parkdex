@@ -34,6 +34,9 @@ describe("park holder", () => {
 
   it("labels the visit button for each case", () => {
     expect(visitLabel(false, { kind: "empty" })).toBe("Sign in to plant your flag");
+    expect(visitLabel(false, { kind: "empty" }, false, { kind: "outsider", until: "2026-10-13T18:00:00.000Z", leader: "tom", logged: false })).toBe(
+      "Sign in to log your visit",
+    );
     expect(visitLabel(true, { kind: "empty" })).toBe("Plant your flag");
     expect(visitLabel(true, { kind: "unknown" })).toBe("Plant your flag");
     expect(visitLabel(true, parkHolder("blueberry", flags, "robin"))).toBe("Take it from @sam");

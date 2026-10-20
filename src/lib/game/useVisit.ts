@@ -51,8 +51,8 @@ export function useVisit() {
       };
       const step = nextVisitStep(signedIn, game.me);
       if (step === "sign-in") {
-        dispatch({ type: "select", id: null });
-        dispatch({ type: "go", screen: "account" });
+        // After signing in, the map picks the join up again.
+        dispatch({ type: "signInFor", resume: { kind: "join", parkId, code } });
       } else if (step === "pick-handle") {
         game.openHandleSheet({ onDone: join });
       } else {
@@ -81,8 +81,8 @@ export function useVisit() {
       }
       const step = nextVisitStep(signedIn, game.me);
       if (step === "sign-in") {
-        dispatch({ type: "select", id: null });
-        dispatch({ type: "go", screen: "account" });
+        // After signing in, the map picks the visit up again.
+        dispatch({ type: "signInFor", resume: { kind: "visit", parkId } });
       } else if (step === "pick-handle") {
         game.openHandleSheet({ onDone: () => goPlant(parkId) });
       } else {
@@ -92,15 +92,33 @@ export function useVisit() {
     [crew.join, crewOf, dispatch, game, goPlant, joinReady, signedIn, startJoin, toast, visitedToday],
   );
 
+  // During someone's protected hour, joining their crew is the way in, so the bottom bar's big
+  // button opens the scanner. The "Log visit" buttons on the arrival card and park page use `start`.
+  const joinsByScanning = useCallback(
+    (parkId: string) => crew.enabled && signedIn && crewOf(parkId).kind === "outsider" && !visitedToday(parkId),
+    [crew.enabled, crewOf, signedIn, visitedToday],
+  );
+  const primary = useCallback(
+    (parkId: string) => {
+      if (!crew.join && joinsByScanning(parkId)) crew.openScanner(parkId);
+      else start(parkId);
+    },
+    [crew, joinsByScanning, start],
+  );
+
   const labelFor = useCallback(
     (parkId: string) => visitLabel(signedIn, holderOf(parkId), visitedToday(parkId), crewOf(parkId)),
     [crewOf, holderOf, signedIn, visitedToday],
   );
   const shortLabelFor = useCallback(
     (parkId: string) =>
-      signedIn ? visitShortLabel(holderOf(parkId), visitedToday(parkId), crewOf(parkId), joinReady(parkId)) : joinReady(parkId) ? "Join" : "Plant!",
-    [crewOf, holderOf, joinReady, signedIn, visitedToday],
+      signedIn
+        ? visitShortLabel(holderOf(parkId), visitedToday(parkId), crewOf(parkId), joinReady(parkId) || joinsByScanning(parkId))
+        : joinReady(parkId)
+          ? "Join"
+          : "Plant!",
+    [crewOf, holderOf, joinReady, joinsByScanning, signedIn, visitedToday],
   );
 
-  return { signedIn, holderOf, visitedToday, crewOf, start, startJoin, labelFor, shortLabelFor };
+  return { signedIn, holderOf, visitedToday, crewOf, start, primary, startJoin, labelFor, shortLabelFor };
 }

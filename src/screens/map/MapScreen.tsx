@@ -123,7 +123,8 @@ export function MapScreen() {
     [user, parks, bounds, state.accuracy, hasUsableGpsFix],
   );
   const arrivedId = here ? here.id : null;
-  const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
+  // The arrival card is for a park with something to do; one already visited today stays quiet.
+  const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating && !visit.visitedToday(arrivedId);
   // On a phone's browser, Kip suggests the home screen version once it can be installed, but
   // only on a clear map: never over a park, a trip, the arrival card or founding.
   // Settings keeps the Install Parkdex row for later.
@@ -262,7 +263,7 @@ export function MapScreen() {
     if (state.focusId && content) {
       // A park opened from elsewhere, such as after a visit, does not need the arrival card again.
       setDismissedArrival(state.focusId);
-      select(state.focusId, "collection");
+      if (state.focusOpen) select(state.focusId, "collection");
       dispatch({ type: "focus", id: null });
     }
   }, [state.focusId, content]);
@@ -388,14 +389,31 @@ export function MapScreen() {
     };
     const step = nextVisitStep(visit.signedIn, game.me);
     if (step === "sign-in") {
-      dispatch({ type: "select", id: null });
-      dispatch({ type: "go", screen: "account" });
+      dispatch({ type: "signInFor", resume: { kind: "found", parkId } });
     } else if (step === "pick-handle") {
       game.openHandleSheet({ onDone: open });
     } else {
       open();
     }
   }
+
+  // Back from signing in for a visit, a crew join or founding: carry on where the player was.
+  // Wait for the player's game state, so a missing handle opens the handle sheet first.
+  const resume = state.resume;
+  const resumeReady = !!resume && state.screen === "map" && visit.signedIn && !!content && (!!game.me || game.status === "offline" || game.status === "error");
+  useEffect(() => {
+    if (!resumeReady || !resume) return;
+    dispatch({ type: "resume", resume: null });
+    // Visits and joins only go ahead from inside their park: the server doesn't check location.
+    // A join from elsewhere goes back to its card, which says to get inside first.
+    if (resume.kind === "visit") {
+      if (here?.id === resume.parkId) checkIn(resume.parkId);
+    } else if (resume.kind === "join") {
+      if (here?.id === resume.parkId) visit.startJoin(resume.parkId, resume.code);
+      else crew.offerJoin({ code: resume.code, parkId: resume.parkId, source: "link" });
+    } else startFounding(resume.parkId);
+    // Runs once per resume; the handlers read the latest state themselves.
+  }, [resumeReady]);
 
   function finishFounding(showParkId?: string) {
     setFounding(null);
@@ -510,8 +528,9 @@ export function MapScreen() {
             if (!tracksRealLocation) dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy });
           }}
           onSignIn={() => {
+            const parkId = founding?.parkId ?? null;
             setFounding(null);
-            dispatch({ type: "go", screen: "account" });
+            dispatch({ type: "signInFor", resume: { kind: "found", parkId } });
           }}
           onFounded={() => {
             // The new park, its founder and today's flag arrive through the normal refreshes.

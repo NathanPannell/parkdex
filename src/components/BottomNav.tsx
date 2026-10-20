@@ -47,7 +47,7 @@ export function BottomNav() {
     sfx.pop();
     buzz(12);
     if (live && here) {
-      visit.start(here.id);
+      visit.primary(here.id);
       return;
     }
     dispatch({ type: "go", screen: "map" });

@@ -73,8 +73,9 @@ export function HandleSheet() {
       const player = await game.saveHandle(handle);
       sfx.pop();
       buzz([20, 40, 20]);
-      // A first handle reveals the flag; a renamed player already knows theirs.
-      if (existing) finish(player);
+      // A first handle reveals the flag, unless the player is on their way to plant it: the
+      // plant screen shows it going up. A renamed player already knows theirs.
+      if (existing || request?.onDone) finish(player);
       else setRevealed(player);
     } catch (caught) {
       setError(saveErrorMessage(caught, handle));
@@ -125,7 +126,7 @@ export function HandleSheet() {
               </motion.div>
               <p className="handle-sheet__help">It's yours for good. Everyone sees it on the parks you hold.</p>
               <button className="btn btn--sun btn--block" onClick={() => finish(revealed)}>
-                {request?.onDone ? "Plant your flag" : "Done"}
+                Done
               </button>
             </motion.div>
           ) : (

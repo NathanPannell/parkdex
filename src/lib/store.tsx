@@ -15,6 +15,13 @@ export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: 
 // "claim" is retired; App sends it back to the map. The old camera check-in still names it.
 export type Screen = "splash" | "onboarding" | "map" | "camera" | "claim" | "account" | "settings" | "downloads" | "plant" | "parks" | "leaderboard";
 
+/**
+ * What a signed-out player was doing when the app sent them to sign in. Once they are signed
+ * in, the map picks it up again: the handle sheet if they need one, then the visit, the crew
+ * join or founding they asked for.
+ */
+export type Resume = { kind: "visit"; parkId: string } | { kind: "join"; parkId: string; code: string } | { kind: "found"; parkId: string | null };
+
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };
 
@@ -46,7 +53,12 @@ type State = {
   tripId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;
+  // Whether a focus request opens the park's page, or only settles the map on it.
+  focusOpen: boolean;
   feedback: FeedbackOrigin | null;
+  resume: Resume | null;
+  // The screen Account & backup was opened from, so Back returns there.
+  accountFrom: Screen | null;
 };
 
 export type Action =
@@ -60,7 +72,9 @@ export type Action =
   | { type: "webLocation"; allowed: boolean }
   | { type: "photo"; photo: string | null }
   | { type: "claim"; ownerKey: string; id: string; claimId: string; at: string; photo: string; parkSnapshot: Park; contentReleaseId: string | null }
-  | { type: "focus"; id: string | null }
+  | { type: "focus"; id: string | null; open?: boolean }
+  | { type: "signInFor"; resume: Resume }
+  | { type: "resume"; resume: Resume | null }
   | { type: "mute" }
   | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "progressLoading"; ownerKey: string | null }
@@ -97,7 +111,10 @@ const initial: State = {
   tripId: null,
   pendingPhoto: null,
   focusId: null,
+  focusOpen: true,
   feedback: null,
+  resume: null,
+  accountFrom: null,
 };
 
 export function load(): State {
@@ -148,7 +165,18 @@ export function persistOnboardingPreferences(
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "go":
+      if (action.screen === "account" && state.screen !== "account") return { ...state, screen: action.screen, accountFrom: state.screen };
       return { ...state, screen: action.screen };
+    case "signInFor":
+      return {
+        ...state,
+        resume: action.resume,
+        selectedId: null,
+        screen: "account",
+        accountFrom: state.screen === "account" ? state.accountFrom : state.screen,
+      };
+    case "resume":
+      return { ...state, resume: action.resume };
     case "installReady": {
       const packageInstallIdentity = action.packageInstallIdentity;
       const onboarded = onboardingMatchesInstall(
@@ -212,7 +240,7 @@ export function reducer(state: State, action: Action): State {
       };
     }
     case "focus":
-      return { ...state, focusId: action.id };
+      return { ...state, focusId: action.id, focusOpen: action.open ?? true };
     case "mute":
       return { ...state, muted: !state.muted };
     case "feedback":
