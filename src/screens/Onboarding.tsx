@@ -1,5 +1,5 @@
-import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useAnimationControls } from "motion/react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Flag, FlagPin } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
@@ -7,7 +7,10 @@ import { useToast } from "../components/Toast";
 import { buzz, sfx } from "../lib/feedback";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
-import { useFeatureFlag } from "../lib/appConfig";
+import { GameError, handleProblem, normalizeHandle } from "../lib/game/client";
+import { useGame } from "../lib/game/GameProvider";
+import { readLocalHandle, saveLocalHandle } from "../lib/game/localHandle";
+import { shake } from "../lib/motion";
 import { saveLastLocation } from "../lib/lastLocation";
 import { rememberWebLocation, WEB_CAN_TRACK } from "../lib/liveLocation";
 import { onboardingStart } from "../lib/provinces";
@@ -17,37 +20,27 @@ import "../game.css";
 import "../onboarding.css";
 
 /**
- * Three short slides that teach the flag game, with Kip as the guide: go to a park and plant
- * your flag, earn a point an hour and take other players' parks, and hold parks with friends
- * (only while crews are on). Handles and founding are explained where they first come up, and
- * how flags eventually fall is left for players to discover.
+ * Two slides, each with one job. The first says what Parkdex is and asks for location, the
+ * second says what you play for and takes a @handle. The handle stays on this device until the
+ * player signs in, then becomes the account's (`lib/game/localHandle.ts`). Founding, crews and
+ * how flags fall are explained where they first come up.
  */
-type SlideVisual = "go" | "take" | "crew";
-const SLIDES: { visual: SlideVisual; eyebrow: string; title: [string, string]; body: string; tint: string }[] = [
+type SlideVisual = "go" | "take";
+const SLIDES: { visual: SlideVisual; title: [string, string]; line: string; tint: string }[] = [
   {
     visual: "go",
-    eyebrow: "Parkdex",
     title: ["Plant your flag", "in real parks."],
-    body: "Walk into any park on the map and tap Plant. Like capture the flag, for every park around you.",
+    line: "From the one down the street to the one you've meant to visit for five years.",
     tint: "#D6F0DF",
   },
   {
     visual: "take",
-    eyebrow: "Points",
-    title: ["Take parks.", "Win their days."],
-    body: "Your flag earns a point every hour it flies. Plant on someone else's park to take it, plus a point for every day their flag was up.",
+    title: ["Climb the leaderboard", "with friends."],
+    line: "Earn points. Take parks back.",
     tint: "#FFD6DE",
-  },
-  {
-    visual: "crew",
-    eyebrow: "Friends",
-    title: ["Bring friends.", "Hold it together."],
-    body: "Plant a flag and your friends scan your crew code to join. The park is yours together, and everyone earns its hours.",
-    tint: "#FFE2C2",
   },
 ];
 
-const SAMPLE_SEEDS = ["onboard-fern", "onboard-tide", "onboard-moss"];
 const RIVAL_SEED = "onboard-rival";
 const YOU_SEED = "onboard-you";
 
@@ -59,59 +52,6 @@ function Mound({ width = 150 }: { width?: number }) {
       <path d="M22 30 C 40 14, 60 10, 75 10 C 92 10, 112 14, 128 30 C 104 24, 46 24, 22 30 Z" fill="#A0703F" />
       <path d="M68 6 l3 -7 l2 7 M80 7 l4 -6 l1 7" stroke="#5E9A3A" strokeWidth="2.5" strokeLinecap="round" fill="none" />
     </svg>
-  );
-}
-
-/** A flag on a pole standing in a mound, for the slides. */
-function PlantedFlag({ seed, size = 92, days = 0, wave = true }: { seed: string | null; size?: number; days?: number; wave?: boolean }) {
-  const width = size * 1.5;
-  const poleHeight = size * 1.25;
-  const moundHeight = (width * 46) / 150;
-  const poleLeft = width * 0.32;
-  return (
-    <div className="ob-planted" style={{ width, height: poleHeight + moundHeight - 12 }}>
-      <span className="ob-planted__pole" style={{ left: poleLeft, height: poleHeight }} />
-      <span className={`ob-planted__cloth ${wave ? "plant-flag__cloth--wave" : ""}`} style={{ left: poleLeft + 5 }}>
-        <Flag seed={seed} size={size} days={days} />
-      </span>
-      <Mound width={width} />
-    </div>
-  );
-}
-
-function FlagHills() {
-  const spots = [
-    { x: -104, y: 34, s: 0.7, d: 0.25 },
-    { x: 0, y: -8, s: 1, d: 0 },
-    { x: 104, y: 34, s: 0.7, d: 0.4 },
-  ];
-  return (
-    <div className="ob-hills">
-      <motion.div className="ob-rays" animate={{ rotate: 360 }} transition={{ duration: 30, repeat: Infinity, ease: "linear" }} />
-      {SAMPLE_SEEDS.map((seed, index) => (
-        <motion.div
-          key={seed}
-          className="ob-hills__flag"
-          style={{ zIndex: index === 1 ? 2 : 1 }}
-          initial={{ x: spots[index].x, y: -260, scale: spots[index].s, opacity: 0 }}
-          animate={{ x: spots[index].x, y: spots[index].y, scale: spots[index].s, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.15 + spots[index].d }}
-        >
-          <PlantedFlag seed={seed} size={96} />
-        </motion.div>
-      ))}
-      <motion.div
-        className="ob-guide ob-guide--left"
-        initial={{ x: -120, rotate: -20 }}
-        animate={{ x: 0, rotate: 0 }}
-        transition={{ type: "spring", delay: 0.7, stiffness: 200, damping: 14 }}
-      >
-        <Kip pose="wave" size={84} />
-        <Bubble side="to-left" style={{ position: "relative", marginBottom: 24, whiteSpace: "nowrap" }}>
-          Hi! I'm Kip.
-        </Bubble>
-      </motion.div>
-    </div>
   );
 }
 
@@ -205,17 +145,23 @@ function TakeOver() {
 
 export function Onboarding() {
   const { dispatch } = useStore();
+  const game = useGame();
+  // Onboarding replays after an update: a player who already has a handle isn't asked again,
+  // and a signed-in player whose game hasn't loaded isn't asked either, or a save could rename them.
+  const named = game.me?.player?.handle ?? null;
+  const asksHandle = !game.accountId || (game.status === "ready" && !named);
   const toast = useToast();
-  const [index, setIndex] = useState(0);
-  const [dir, setDir] = useState(1);
-  const [asking, setAsking] = useState(false);
-  // The friends slide teaches crews, so it shows only while they are on.
-  const crews = useFeatureFlag("crews");
-  const slides = crews ? SLIDES : SLIDES.filter((candidate) => candidate.visual !== "crew");
-  // The flag can change while onboarding is open; stay on the last slide that still exists.
-  const at = Math.min(index, slides.length - 1);
-  const slide = slides[at];
-  const last = at === slides.length - 1;
+  const [at, setAt] = useState(0);
+  const [locating, setLocating] = useState(false);
+  // Not now stays available while the browser's prompt is open; a late answer then only moves the map.
+  const waiting = useRef(false);
+  const [value, setValue] = useState(() => readLocalHandle() ?? "");
+  const [touched, setTouched] = useState(false);
+  const field = useAnimationControls();
+  const slide = SLIDES[at];
+  const handle = normalizeHandle(value);
+  // The handle is optional here: an empty field just means it's asked for at sign-in.
+  const problem = handle && asksHandle ? handleProblem(handle) : null;
   // The illustrations are drawn at 320px; shrink them to fit shorter phones.
   const visualRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
@@ -226,26 +172,24 @@ export function Onboarding() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const goTo = (i: number) => {
-    if (i < 0 || i >= slides.length) return;
+
+  const next = () => {
     sfx.tap();
     buzz(8);
-    setDir(i > at ? 1 : -1);
-    setIndex(i);
+    setAt(1);
   };
 
-  const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < -60 || info.velocity.x < -400) goTo(at + 1);
-    else if (info.offset.x > 60 || info.velocity.x > 400) goTo(at - 1);
-  };
-
-  const finish = (useGps: boolean) => {
-    sfx.chirp();
+  const locate = (useGps: boolean) => {
+    if (useGps && locating) return;
     // Field builds hand location to the app-wide watcher, which asks for permission itself.
     if (FIELD || !useGps || !navigator.geolocation) {
-      dispatch({ type: "onboarded" });
+      waiting.current = false;
+      setLocating(false);
+      next();
       return;
     }
+    waiting.current = true;
+    setLocating(true);
     // A real position anywhere in a supported province is used as is; the demo spot is
     // only for players outside them all or without a location.
     // The hosted web app follows the player from here on, as phones do, but only inside the
@@ -266,7 +210,10 @@ export function Onboarding() {
         toast(decision.message, "kip");
         dispatch({ type: "move", user: DEMO_START, accuracy: null });
       }
-      dispatch({ type: "onboarded" });
+      if (!waiting.current) return;
+      waiting.current = false;
+      setLocating(false);
+      next();
     };
     navigator.geolocation.getCurrentPosition(
       (pos) => start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy),
@@ -279,6 +226,29 @@ export function Onboarding() {
     );
   };
 
+  const finish = (event: FormEvent) => {
+    event.preventDefault();
+    setTouched(true);
+    if (problem) {
+      void field.start(shake);
+      buzz([20, 30, 20]);
+      return;
+    }
+    if (handle && asksHandle) {
+      // Signed in without a handle yet: save it now. Signed out, it waits on this device.
+      if (game.accountId)
+        void game.saveHandle(handle).catch((error: unknown) => {
+          const taken = error instanceof GameError && error.code === "handle_taken";
+          toast(taken ? `Someone already has @${handle}. Pick another when you plant.` : `@${handle} couldn't be saved. Pick one when you plant.`, "kip");
+          // A taken handle fills in the sheet later; a refused one shouldn't come back.
+          if (taken) saveLocalHandle(handle);
+        });
+      else saveLocalHandle(handle);
+    }
+    sfx.chirp();
+    dispatch({ type: "onboarded" });
+  };
+
   return (
     <motion.div
       className="screen onboarding"
@@ -288,110 +258,101 @@ export function Onboarding() {
     >
       <div className="onboarding__top">
         <div className="onboarding__logo">parkdex</div>
-        {!last && (
-          <button className="onboarding__skip" onClick={() => goTo(slides.length - 1)}>
-            Skip
+        {at > 0 && (
+          <button className="onboarding__skip" onClick={() => setAt(0)}>
+            Back
           </button>
         )}
       </div>
-      <motion.div className="onboarding__drag" drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.25} onDragEnd={onDragEnd}>
-        <div className="onboarding__visual" ref={visualRef}>
-          <AnimatePresence mode="popLayout" custom={dir} initial={false}>
-            <motion.div
-              key={at}
-              custom={dir}
-              className="onboarding__visual-inner"
-              variants={{
-                enter: (d: number) => ({ x: d * 320, rotate: d * 8, opacity: 0 }),
-                center: { x: 0, rotate: 0, opacity: 1 },
-                exit: (d: number) => ({ x: d * -320, rotate: d * -8, opacity: 0 }),
-              }}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: "spring", stiffness: 260, damping: 26 }}
-            >
-              <div style={{ transform: `scale(${fit})` }}>{slide.visual === "go" ? <GoThere /> : slide.visual === "take" ? <TakeOver /> : <FlagHills />}</div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-        <div className="onboarding__copy">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={at} initial="hidden" animate="show" exit="hidden" variants={{ show: { transition: { staggerChildren: 0.06 } } }}>
-              <motion.p className="eyebrow" variants={rise}>
-                {slide.eyebrow}
-              </motion.p>
-              <h1 className="onboarding__title">
-                {slide.title.map((line) => (
-                  <motion.span key={line} variants={rise}>
-                    {line}
-                  </motion.span>
-                ))}
-              </h1>
-              <motion.p className="onboarding__body" variants={rise}>
-                {slide.body}
-              </motion.p>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </motion.div>
-      <div className="onboarding__foot">
-        <div className="dots">
-          {slides.map((_, i) => (
-            <motion.button
-              key={i}
-              className="dot"
-              aria-label={`Slide ${i + 1}`}
-              onClick={() => goTo(i)}
-              animate={{ width: i === at ? 28 : 10, backgroundColor: i === at ? "#14231C" : "#14231C33" }}
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            />
-          ))}
-        </div>
-        <motion.button
-          className="btn"
-          layout
-          onClick={() => (!last ? goTo(at + 1) : setAsking(true))}
-          whileTap={{ scale: 0.96 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-        >
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={!last ? "next" : "go"} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}>
-              {!last ? "Next" : "Let's go!"}
-            </motion.span>
-          </AnimatePresence>
-          <Icon name="next" />
-        </motion.button>
-      </div>
-
-      <AnimatePresence>
-        {asking && (
-          <motion.div className="sheet-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAsking(false)}>
-            <motion.div
-              className="permission"
-              onClick={(e) => e.stopPropagation()}
-              initial={{ y: 400 }}
-              animate={{ y: 0 }}
-              exit={{ y: 400 }}
-              transition={{ type: "spring", stiffness: 320, damping: 30 }}
-            >
-              <div className="permission__kip">
-                <Kip pose="talk" size={110} />
-              </div>
-              <h2>Kip needs to know when you're in a park.</h2>
-              <p>Kip uses your location to check you're inside a park. It's never shown to other players.</p>
-              <button className="btn btn--block" onClick={() => finish(true)}>
-                <Icon name="locate" /> Allow location
-              </button>
-              {!FIELD && (
-                <button className="permission__alt" onClick={() => finish(false)}>
-                  {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
-                </button>
-              )}
-            </motion.div>
+      <div className="onboarding__visual" ref={visualRef}>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={at}
+            className="onboarding__visual-inner"
+            initial={{ x: 320, rotate: 8, opacity: 0 }}
+            animate={{ x: 0, rotate: 0, opacity: 1 }}
+            exit={{ x: -320, rotate: -8, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+          >
+            <div style={{ transform: `scale(${fit})` }}>{slide.visual === "go" ? <GoThere /> : <TakeOver />}</div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
+      <div className="onboarding__copy">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div key={at} initial="hidden" animate="show" exit="hidden" variants={{ show: { transition: { staggerChildren: 0.06 } } }}>
+            <h1 className="onboarding__title">
+              {slide.title.map((line) => (
+                <motion.span key={line} variants={rise}>
+                  {line}
+                </motion.span>
+              ))}
+            </h1>
+            <motion.p className="onboarding__body" variants={rise}>
+              {slide.line}
+            </motion.p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      {at === 0 ? (
+        <div className="onboarding__ask">
+          <motion.button className="btn btn--block" whileTap={{ scale: 0.96 }} onClick={() => locate(true)} disabled={locating}>
+            {FIELD ? (
+              <>
+                Next <Icon name="next" />
+              </>
+            ) : (
+              <>
+                <Icon name="locate" /> {locating ? "Finding you…" : "Allow location"}
+              </>
+            )}
+          </motion.button>
+          {!FIELD && (
+            <>
+              <p className="onboarding__note">Only used to check you're in a park.</p>
+              <button className="permission__alt" onClick={() => locate(false)}>
+                {DEMO_TOOLS ? "Use a demo spot in Victoria" : "Not now"}
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <form className="onboarding__ask" onSubmit={finish} noValidate>
+          {named ? (
+            <p className="onboarding__note">Playing as @{named}</p>
+          ) : asksHandle ? (
+            <>
+              <label className="fb-label" htmlFor="onboarding-handle">
+                Pick your handle
+              </label>
+              <motion.div className="handle-input" animate={field}>
+                <span aria-hidden="true">@</span>
+                <input
+                  id="onboarding-handle"
+                  className="fb-input"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  onBlur={() => setTouched(true)}
+                  maxLength={21}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="yourname"
+                  aria-invalid={touched && !!problem}
+                  aria-describedby="onboarding-handle-help"
+                />
+              </motion.div>
+              <p id="onboarding-handle-help" className={`handle-sheet__help ${touched && problem ? "is-error" : ""}`}>
+                {touched && problem ? problem : game.accountId ? "Friends see it on the map and the leaderboard." : "Kept on this phone until you sign in."}
+              </p>
+            </>
+          ) : null}
+          <motion.button className="btn btn--block" type="submit" whileTap={{ scale: 0.96 }}>
+            Let's go! <Icon name="next" />
+          </motion.button>
+        </form>
+      )}
     </motion.div>
   );
 }

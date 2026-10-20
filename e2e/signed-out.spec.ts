@@ -30,7 +30,7 @@ test("a returning visitor goes straight to the map", async ({ page }) => {
   await expect(page.getByText("Parks near you")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Parks near you")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Skip" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Not now" })).toHaveCount(0);
 });
 
 test("search finds a park and opens its page", async ({ page }) => {

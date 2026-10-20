@@ -14,6 +14,7 @@ import {
   type ParkFlag,
   type ParkFounder,
 } from "./client";
+import { claimLocalHandle } from "./localHandle";
 
 /**
  * The signed-in player's game state from `/api/game/me`. V1 is online only, so this lives
@@ -68,6 +69,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentAccount = useRef(accountId);
   currentAccount.current = accountId;
   const inFlight = useRef<Promise<GameMe | null> | null>(null);
+  const claimTried = useRef(new Set<string>());
   const [flags, setFlags] = useState<FlagBoard | null>(null);
   const [flagsStatus, setFlagsStatus] = useState<FlagsStatus>("loading");
   const flagsInFlight = useRef<Promise<void> | null>(null);
@@ -120,8 +122,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (inFlight.current) return inFlight.current;
     const work = (async () => {
       try {
-        const next = await fetchGameMe(owner);
+        let next = await fetchGameMe(owner);
         if (currentAccount.current !== owner) return null;
+        // The handle picked during onboarding becomes the account's, tried once per account.
+        if (!claimTried.current.has(owner)) {
+          claimTried.current.add(owner);
+          next = await claimLocalHandle(next, (handle) => sendHandle(owner, handle));
+          if (currentAccount.current !== owner) return null;
+        }
         setMe(next);
         setStatus("ready");
         setError(null);

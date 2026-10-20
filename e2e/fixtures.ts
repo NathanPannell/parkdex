@@ -51,10 +51,9 @@ export const test = base.extend<Fixtures>({
 export { expect };
 export type { Page };
 
-/** First launch: skip the intro, finish onboarding and decline location for now. */
+/** First launch: decline location for now, leave the handle for sign-in and start. */
 export async function finishOnboarding(page: Page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Skip" }).click();
-  await page.getByText("Let's go!").click();
   await page.getByRole("button", { name: "Not now" }).click();
+  await page.getByRole("button", { name: "Let's go!" }).click();
 }
