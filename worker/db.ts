@@ -36,6 +36,7 @@ export const WRITE_FUNCTIONS = new Set([
   "kip_social.reset_friend_code",
   "kip_social.add_friend",
   "kip_social.remove_friend",
+  "kip_social.add_crewmate",
   // Badges (#175): the visit and join wrappers, unlocks on read, and flag patches.
   "kip_game.record_visit_with_badges",
   "kip_game.join_crew_with_badges",

@@ -47,7 +47,8 @@
     "database/migrations/game_003_crews.sql",
     "database/migrations/game_004_badges.sql",
     "database/migrations/game_005_dex.sql",
-    "database/migrations/founders_004_boundary_boxes.sql"
+    "database/migrations/founders_004_boundary_boxes.sql",
+    "database/migrations/social_002_crewmates.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [

@@ -56,6 +56,8 @@ test("routes keep their shape but never identifiers", () => {
   assert.equal(normalizeRoute("GET", "/api/content/snapshot"), "GET /api/content/snapshot");
   assert.equal(normalizeRoute("DELETE", "/api/friends/sara_k"), "DELETE /api/friends/:handle");
   assert.equal(normalizeRoute("POST", "/api/friends/code"), "POST /api/friends/code");
+  assert.equal(normalizeRoute("POST", "/api/friends/crewmate"), "POST /api/friends/crewmate");
+  assert.equal(normalizeRoute("DELETE", "/api/friends/crewmate"), "DELETE /api/friends/:handle", "a friend whose handle is crewmate");
   assert.equal(normalizeRoute("GET", `/api/recovery/${"a".repeat(64)}/12`), "GET /api/recovery/:hash/:n");
   assert.equal(normalizeRoute("GET", "/api/Some%20Thing/a@b.test"), "GET /api/:x/:x");
   assert.equal(normalizeRoute("BREW", "/"), "OTHER /");

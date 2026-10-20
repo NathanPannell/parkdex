@@ -7,6 +7,7 @@ import {
   friendsErrorMessage,
   removeFriend as sendRemoval,
   resetFriendCode as sendReset,
+  sendCrewmate,
   sendFriendCode,
   type FriendsBoard,
   type FriendsErrorCode,
@@ -62,6 +63,11 @@ type FriendsContextValue = {
   clearNotices: () => void;
   refresh: () => Promise<void>;
   add: (code: string, source: PendingSource) => Promise<AddResult>;
+  /**
+   * Adds crewmates by handle, one after another, then refreshes the board once. Online only: it
+   * follows a crew join, which needed a connection. Returns who is now a friend and the first refusal.
+   */
+  addCrewmates: (handles: string[]) => Promise<{ friends: FriendSummary[]; failure: string | null }>;
   remove: (handle: string) => Promise<void>;
   resetCode: () => Promise<void>;
 };
@@ -188,6 +194,28 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
     [flush],
   );
 
+  const addCrewmates = useCallback(
+    async (handles: string[]) => {
+      const id = onlineOwner.current;
+      if (!id) return { friends: [], failure: friendsErrorMessage(new FriendsError("offline", 0)) };
+      const friends: FriendSummary[] = [];
+      let failure: string | null = null;
+      let added = false;
+      for (const handle of handles) {
+        try {
+          const { status, friend } = await sendCrewmate(id, handle);
+          friends.push(friend);
+          added ||= status === "added";
+        } catch (caught) {
+          failure ??= friendsErrorMessage(caught);
+        }
+      }
+      if (added && onlineOwner.current === id) void refresh();
+      return { friends, failure };
+    },
+    [refresh],
+  );
+
   const remove = useCallback(
     async (handle: string) => {
       const id = onlineOwner.current;
@@ -235,10 +263,11 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
       clearNotices: () => setNotices([]),
       refresh,
       add,
+      addCrewmates,
       remove,
       resetCode,
     }),
-    [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, remove, resetCode],
+    [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, addCrewmates, remove, resetCode],
   );
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;

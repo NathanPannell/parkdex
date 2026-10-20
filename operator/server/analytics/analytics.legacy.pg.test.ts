@@ -27,7 +27,9 @@ const GAME_POINTS = "database/migrations/game_002_points.sql";
 // can apply without hourly points either.
 const GAME_CREWS = "database/migrations/game_003_crews.sql";
 const GAME_BADGES = "database/migrations/game_004_badges.sql";
-const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES]);
+// Adding crewmates as friends reads crews' crew_members, so it cannot apply without crews either.
+const CREWMATES = "database/migrations/social_002_crewmates.sql";
+const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES, CREWMATES]);
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
