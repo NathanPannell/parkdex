@@ -118,11 +118,11 @@ Each flag gains `crew: { size, memberSeeds, protectedUntil }`. The leader is the
 
 Every build reads `logged` and `joined`, and the `protected` details, whatever the `crews` flag says (`src/lib/game/client.ts`). With the flag off, a logged visit shows "Visit logged" and "This flag was just planted. Come back after 3:42 pm to take it." The flag only shows the crew UI:
 
-- **Park page** (`ParkSheet.tsx`, `CrewPanel.tsx`), from `crewPhase()` in `src/lib/game/crew.ts`:
-  - leader during the hour: "Your flag is protected · 58 min", **Show crew code** and the crew list
-  - member: "You're in @tom's crew · protected 42 min", the same button and list
-  - outsider: "@tom's crew flag is protected · 42 min", "Ask the crew for their code to join", and inside the park **Scan crew code** with **Log visit**. After logging: "Visit logged · +1. Come back after 3:42 pm to take this park."
-  - after the hour: the usual states, with the crew list and "Crew window closed" under the holder row
+- **Park page** (`ParkSheet.tsx`, `CrewPanel.tsx`), from `crewPhase()` in `src/lib/game/crew.ts`. The crew sits inside the flag card, with the crew list there once there are two or more:
+  - leader during the hour: "Your flag is protected · 58 min" and "Just you so far." or "Crew of 3.". Inside the park after today's visit, the page's main button is **Show crew code**; elsewhere a small **Crew code** button sits in the card.
+  - member: "You're in @tom's crew · protected 42 min", with the same buttons
+  - outsider: "@tom's crew flag is protected · 42 min" and "Join with the crew's code, or log your visit." Inside the park the main button is **Join crew** (it opens the scanner) with **Log visit** beside it. After logging: "Visit logged · +1. Come back after 3:42 pm to take this park."
+  - after the hour: the usual states, with "Crew window closed" and the crew list in the flag card
 - The park page reads `GET /api/game/parks/:parkId/crew` once when it opens, for leaders, members and closed crews only, and the code sheet reads it once when it opens. Map refreshes never call it.
 - **Bottom bar:** "Join" for signed-in outsiders during the hour (it opens the scanner) and while a scanned code waits for the park you stand in; "Tomorrow" once today's visit is spent. Logging a visit is on the arrival card and the park page.
 - **Crew code sheet** (`CrewSheets.tsx`): the QR of `https://<web host>/crew/CODE?park=<parkId>`, the code in large letters, the countdown and "Anyone in the crew can show this code". It keeps the screen on through the Screen Wake Lock API where the browser or WebView has it.

@@ -94,3 +94,17 @@ export function useParkSummary(parkId: string, accountId: string | null): Summar
   }, [parkId, accountId]);
   return state;
 }
+
+/**
+ * The park page's one line of visit counts: "12 visits · 3 in the last 30 days · 2 yours".
+ * A count the app doesn't know yet, or a zero of your own, is left out; with nothing known it is null.
+ */
+export function visitsLine(stats: Pick<SummaryStats, "total" | "last30Days" | "mine">, signedIn: boolean): string | null {
+  const known = (value: string) => /^\d+$/.test(value);
+  if (!known(stats.total)) return null;
+  const total = Number(stats.total);
+  const parts = [`${total} ${total === 1 ? "visit" : "visits"}`];
+  if (known(stats.last30Days) && total > 0) parts.push(`${stats.last30Days} in the last 30 days`);
+  if (signedIn && known(stats.mine) && Number(stats.mine) > 0) parts.push(`${stats.mine} yours`);
+  return parts.join(" · ");
+}

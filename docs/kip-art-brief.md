@@ -46,7 +46,7 @@ Generate `kip-reference.png` first. Then upload it with each pose request and sa
 | `kip-celebrate.png` | Proudly holding up a round shiny badge medallion over its head with both wings, big grin. | Claim ceremony after the badge is claimed |
 | `kip-camera.png` | Holding a small retro camera up to its eye, about to snap a photo. | Camera / check-in screen |
 | `kip-map.png` | Holding an unfolded paper trail map, looking at it excitedly. | Onboarding slide 1 or nearby-parks rail |
-| `kip-walk.png` | Walking mid-stride with a tiny green backpack, determined and happy. | Trip panel while travelling |
+| `kip-walk.png` | Walking mid-stride with a tiny green backpack, determined and happy. | Unused (the in-app trip panel was removed; directions open Google Maps) |
 | `kip-think.png` | Head tilted, one wing on chin, curious and puzzled. | "Get inside a park first" hint, empty states |
 | `kip-sleep.png` | Sitting fluffed up, eyes closed peacefully, bill tucked slightly down. | Empty collection ("waiting for badge #1") |
 | `kip-peek.png` | Only the head and one wing peeking in from the left edge of the frame, curious. Cropped at the left edge on purpose. | Toasts and edge peeks |
