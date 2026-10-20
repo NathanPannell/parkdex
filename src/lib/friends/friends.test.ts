@@ -91,7 +91,10 @@ describe("friends client", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ handle: "sam" });
     fetchAuthenticated.mockResolvedValueOnce(reply(404, { error: { code: "crewmate_not_found", message: "x" }, code: "crewmate_not_found" }));
-    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({ code: "crewmate_not_found", message: "You haven't been in a crew with that player." });
+    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({
+      code: "crewmate_not_found",
+      message: "Add crewmates here within a day of your crew. After that, use their friend code.",
+    });
     fetchAuthenticated.mockResolvedValueOnce(reply(409, { code: "own_handle" }));
     await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({ code: "own_handle" });
   });
