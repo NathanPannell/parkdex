@@ -50,7 +50,7 @@ npm run dev
 ```
 
 Opens at http://localhost:5190. The dev build keeps demo tools: Demo controls in the map menu
-teleport you into the nearest park, and a trip can be simulated. Hosted builds (`npm run build`)
+teleport you into the nearest park, or into the park whose page is open. Hosted builds (`npm run build`)
 leave them out, because the server does not check where a visit came from. A local non-dev build
 can opt in with `VITE_DEMO_TOOLS=1`; a Vercel build refuses that setting.
 

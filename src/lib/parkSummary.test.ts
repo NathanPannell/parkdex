@@ -6,7 +6,7 @@ vi.mock("./accounts/authClient", () => ({
   accountApiUrl: (path: string) => new URL(path, "https://api.example.test/").href,
 }));
 
-const { FOUNDER_HINT, REVIEW_PENDING_TEXT, founderCta, summaryCover, summaryStats } = await import("./parkSummary");
+const { FOUNDER_HINT, REVIEW_PENDING_TEXT, founderCta, summaryCover, summaryStats, visitsLine } = await import("./parkSummary");
 type ParkSummary = import("./founders").ParkSummary;
 
 const open: ParkSummary = { parkId: "p", founder: null, coverUrl: null, visits: { total: 4, last30Days: 2, mine: 1 } };
@@ -86,5 +86,19 @@ describe("summaryCover", () => {
     expect(summaryCover({ status: "loading", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
     expect(summaryCover({ status: "error", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
     expect(summaryCover({ status: "ready", summary: open }, "/api/parks/p/cover/def.jpg")).toBeNull();
+  });
+});
+
+describe("the park page's visit line", () => {
+  it("puts every known count on one line", () => {
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "2" }, true)).toBe("12 visits · 3 in the last 30 days · 2 yours");
+    expect(visitsLine({ total: "1", last30Days: "1", mine: "1" }, true)).toBe("1 visit · 1 in the last 30 days · 1 yours");
+  });
+
+  it("leaves out what is unknown or doesn't apply", () => {
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "Sign in" }, false)).toBe("12 visits · 3 in the last 30 days");
+    expect(visitsLine({ total: "0", last30Days: "0", mine: "0" }, true)).toBe("0 visits");
+    expect(visitsLine({ total: "4", last30Days: "1", mine: "0" }, true)).toBe("4 visits · 1 in the last 30 days");
+    expect(visitsLine({ total: "–", last30Days: "–", mine: "–" }, true)).toBeNull();
   });
 });

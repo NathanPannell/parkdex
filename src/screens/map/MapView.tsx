@@ -56,9 +56,7 @@ type Props = {
   /** The server's clock when the flags were read, for flag ages. */
   flagsNow: number;
   selectedId: string | null;
-  tripId: string | null;
   arrivedId: string | null;
-  route: LngLat[] | null;
   onSelect: (id: string | null) => void;
   /** A press and hold on the map outside any pinned park. */
   onLongPress?: (press: MapLongPress) => void;
@@ -90,23 +88,7 @@ const BIOME_FILL = [
   "#3FA66F",
 ] as unknown as string;
 
-export function MapView({
-  mapRef,
-  user,
-  showUser,
-  initialView,
-  fc,
-  parks,
-  flags,
-  flagsNow,
-  selectedId,
-  tripId,
-  arrivedId,
-  route,
-  onSelect,
-  onLongPress,
-  visible,
-}: Props) {
+export function MapView({ mapRef, user, showUser, initialView, fc, parks, flags, flagsNow, selectedId, arrivedId, onSelect, onLongPress, visible }: Props) {
   const content = useContent();
   const runtime = useContentRuntime();
   const container = useRef<HTMLDivElement>(null);
@@ -124,7 +106,7 @@ export function MapView({
   longPressRef.current = onLongPress;
   const pinnedIds = useRef(new Set<string>());
   pinnedIds.current = useMemo(() => new Set(parks.map((park) => park.id)), [parks]);
-  const focusedId = tripId ?? selectedId ?? null;
+  const focusedId = selectedId ?? null;
   const focusRef = useRef(focusedId);
   focusRef.current = focusedId;
   const hasReadyMapContent = !!content?.releaseId;
@@ -243,14 +225,13 @@ export function MapView({
     userMarker.current?.setLngLat(user);
   }, [user]);
 
-  // Park and route overlays are restored after a content style transition.
+  // Park overlays are restored after a content style transition.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded || !fc) return;
     const parksSource = map.getSource("parks") as GeoJSONSource | undefined;
     if (parksSource) parksSource.setData(fc);
     else map.addSource("parks", { type: "geojson", data: fc });
-    if (!map.getSource("route")) map.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     const before = map.getLayer("water_waterway_label") ? "water_waterway_label" : undefined;
     const addLayer = (layer: Parameters<MLMap["addLayer"]>[0]) => {
       if (!map.getLayer(layer.id)) map.addLayer(layer, before);
@@ -281,20 +262,6 @@ export function MapView({
       source: "parks",
       filter: ["==", ["get", "id"], ""],
       paint: { "line-color": "#14231C", "line-width": 3, "line-dasharray": [1.5, 1.2] },
-    });
-    addLayer({
-      id: "route-casing",
-      type: "line",
-      source: "route",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#FFF8EC", "line-width": 10 },
-    });
-    addLayer({
-      id: "route-line",
-      type: "line",
-      source: "route",
-      layout: { "line-cap": "round", "line-join": "round" },
-      paint: { "line-color": "#FF5A1F", "line-width": 5, "line-dasharray": [0.1, 2] },
     });
   }, [loaded, fc]);
 
@@ -388,17 +355,10 @@ export function MapView({
     return () => cancelAnimationFrame(raf);
   }, [arrivedId, visible]);
 
-  useEffect(() => {
-    const src = mapRef.current?.getSource("route") as GeoJSONSource | undefined;
-    src?.setData(
-      route ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: route } } : { type: "FeatureCollection", features: [] },
-    );
-  }, [route, loaded, fc]);
-
   return (
-    <div className={`mapview tier-${tier} ${selectedId || tripId ? "has-focus" : ""}`}>
+    <div className={`mapview tier-${tier} ${selectedId ? "has-focus" : ""}`}>
       <div ref={container} className="mapview__canvas" />
-      {userHost && showUser && createPortal(<UserDot moving={!!tripId} />, userHost)}
+      {userHost && showUser && createPortal(<UserDot />, userHost)}
     </div>
   );
 }
@@ -543,9 +503,9 @@ function listenForLongPress(map: MLMap, onPress: (point: ScreenPoint) => void): 
   };
 }
 
-function UserDot({ moving }: { moving: boolean }) {
+function UserDot() {
   return (
-    <div className={`user-dot ${moving ? "user-dot--moving" : ""}`}>
+    <div className="user-dot">
       <span className="user-dot__pulse" />
       <span className="user-dot__pulse user-dot__pulse--2" />
       <span className="user-dot__core" />

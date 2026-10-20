@@ -1161,18 +1161,6 @@
   padding: 16px 18px 24px;
 }
 
-.park-sheet__pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.park-sheet__art-pill {
-  background: #f2ead9;
-  color: var(--ink-2);
-}
-
 .park-sheet__name {
   font-size: 30px;
   font-weight: 800;
@@ -1183,18 +1171,6 @@
   color: var(--ink-soft);
   font-weight: 700;
   font-size: 14px;
-}
-
-.park-sheet__blurb {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--ink-2);
-}
-
-/* Stats chips, the founder and the visit counts: one quiet card under the status block. */
-.park-summary.park-facts {
-  margin: 12px 0 0;
 }
 
 .park-facts__chips {
@@ -1226,50 +1202,121 @@
   color: inherit;
 }
 
-/* The crew list, the photo button and the report link, behind one row. */
-.park-sheet__more {
-  margin-top: 12px;
-  border-top: 2px dashed rgba(20, 35, 28, 0.15);
+/*
+ * The park page's levels of action: one main button pinned at the bottom (.park-sheet__cta),
+ * secondary actions as cards with an icon, a title, one hint and a reward tag (.park-action),
+ * and plain info lines and text links for everything else.
+ */
+.park-sheet__chips {
+  margin: 10px 0 0;
 }
 
-.park-sheet__more > summary {
+.park-action {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 4px 4px;
-  list-style: none;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px 10px 10px;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-md);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  box-shadow: var(--pop);
   cursor: pointer;
-  font-weight: 800;
-  font-size: 15px;
+}
+
+/* translate, not transform: Motion owns the inline transform while the card animates in. */
+button.park-action:active {
+  translate: 0 3px;
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.park-action--status {
+  border-style: dashed;
+  box-shadow: none;
+  cursor: default;
+}
+
+.park-action__icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--kip);
+  color: var(--paper);
+}
+
+.park-action--status .park-action__icon {
+  background: var(--paper-2);
   color: var(--ink-soft);
 }
 
-.park-sheet__more > summary::-webkit-details-marker {
-  display: none;
+.park-action__text {
+  display: grid;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
-.park-sheet__more > summary svg {
-  transition: rotate 0.2s;
+.park-action__text strong {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 800;
 }
 
-.park-sheet__more[open] > summary svg {
-  rotate: 90deg;
+.park-action__text em {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
 }
 
-.park-sheet__more-body {
+.park-action__points {
+  flex: none;
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  background: var(--sun);
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* Plain facts under the flag card: the founder and the visit counts, one line each. */
+.park-sheet__line {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 10px;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-2);
 }
 
-.park-sheet__more-body .park-sheet__photo,
-.park-sheet__more-body .park-sheet__report {
+.park-sheet__line svg {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.park-sheet__line.is-pending {
+  color: var(--ink-soft);
+}
+
+.park-sheet__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 16px;
+}
+
+.park-sheet__links .park-sheet__report {
   margin: 0;
-}
-
-.park-sheet__more-body .park-sheet__report {
-  align-self: flex-start;
 }
 
 .park-sheet__cta {
@@ -1352,129 +1399,6 @@
       0 5px 0 var(--ink),
       0 0 0 10px rgba(255, 90, 31, 0);
   }
-}
-
-/* ================= Trip ================= */
-
-.trip {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--safe-bottom) + 92px);
-  z-index: 12;
-  padding: 14px;
-  border-radius: 26px;
-}
-
-.trip__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.trip__text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.trip__text strong {
-  font-family: var(--display);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.trip__end {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 2px solid var(--ink);
-}
-
-.trip__meter {
-  margin: 12px 0;
-}
-
-.trip__big span {
-  display: inline-block;
-  font-family: var(--display);
-  font-size: 36px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.trip__big small {
-  display: block;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.trip__bar {
-  position: relative;
-  height: 12px;
-  margin: 14px 14px 6px 4px;
-  background: var(--paper-2);
-  border: 2px solid var(--ink);
-  border-radius: 99px;
-}
-
-.trip__fill {
-  height: 100%;
-  background: repeating-linear-gradient(-45deg, var(--kip), var(--kip) 6px, var(--kip-2) 6px, var(--kip-2) 12px);
-  border-radius: 99px;
-  animation: stripes 0.6s linear infinite;
-  background-size: 17px 17px;
-}
-
-@keyframes stripes {
-  to {
-    background-position: 17px 0;
-  }
-}
-
-.trip__car,
-.trip__flag {
-  position: absolute;
-  top: 50%;
-  width: 30px;
-  height: 30px;
-  margin: -15px 0 0 -15px;
-  display: grid;
-  place-items: center;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-}
-
-.trip__flag {
-  left: 100%;
-  background: var(--moss);
-  color: var(--paper);
-}
-
-.trip__car {
-  z-index: 2;
-  background: var(--sun);
-}
-
-.trip__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.trip__actions > * {
-  flex: 1;
-  padding: 0 10px;
-  font-size: 14.5px;
-  text-decoration: none;
-}
-
-.trip__sim:disabled {
-  opacity: 0.8;
 }
 
 /* ================= Arrival ================= */
