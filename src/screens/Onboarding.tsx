@@ -11,6 +11,7 @@ import { useGame } from "../lib/game/GameProvider";
 import { FIELD } from "../lib/native";
 import { DEMO_TOOLS } from "../lib/demo";
 import { saveLastLocation } from "../lib/lastLocation";
+import { rememberWebLocation, WEB_CAN_TRACK } from "../lib/liveLocation";
 import { onboardingStart } from "../lib/provinces";
 import { DEMO_START, useStore } from "../lib/store";
 import goMap from "../assets/onboarding-go-map.webp";
@@ -420,7 +421,14 @@ export function Onboarding() {
       dispatch({ type: "onboarded" });
     };
     navigator.geolocation.getCurrentPosition(
-      (pos) => start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy),
+      (pos) => {
+        // The hosted web app follows the player from here on, as phones do.
+        if (WEB_CAN_TRACK) {
+          rememberWebLocation(true);
+          dispatch({ type: "webLocation", allowed: true });
+        }
+        start([pos.coords.longitude, pos.coords.latitude], pos.coords.accuracy);
+      },
       () => start(null, null),
       { timeout: 6000 },
     );

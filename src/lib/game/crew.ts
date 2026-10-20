@@ -43,7 +43,11 @@ export function crewLinkPark(url: URL): string | null {
  * Where the player stands with a park's crew right now.
  * - `leader`, `member` and `outsider` while the protected hour runs
  * - `closed` after the hour, for a crew of two or more
- * - `none` otherwise: no flag, a solo flag after its hour, or the `crews` flag is off
+ * - `none` otherwise: no flag, or a solo flag after its hour
+ *
+ * The server protects every new flag for an hour on every build (#170), so `outsider` is
+ * reported whatever the `crews` flag says: a take would only log a visit. `enabled` (the crews
+ * UI) only decides whether `leader`, `member` and `closed` show.
  */
 export type CrewPhase =
   | { kind: "none" }
@@ -81,16 +85,17 @@ export function hasLoggedToday(me: GameMe | null | undefined, parkId: string, no
 }
 
 export function crewPhase({ enabled, flag, myHandle, me, crew, now }: CrewPhaseInput): CrewPhase {
-  if (!enabled || !flag) return { kind: "none" };
+  if (!flag) return { kind: "none" };
   const known = crewMatchesFlag(crew, flag) ? crew : null;
   const held = me?.parks.find((park) => park.parkId === flag.parkId)?.crew;
   const until = known?.protectedUntil ?? flag.crew?.protectedUntil ?? held?.protectedUntil ?? null;
   const ends = until ? Date.parse(until) : Number.NaN;
   if (until && Number.isFinite(ends) && now < ends) {
-    if (myHandle && flag.handle === myHandle) return { kind: "leader", until };
-    if (known?.member || isCrewMember(me, flag, myHandle)) return { kind: "member", until, leader: flag.handle };
+    if (myHandle && flag.handle === myHandle) return enabled ? { kind: "leader", until } : { kind: "none" };
+    if (known?.member || isCrewMember(me, flag, myHandle)) return enabled ? { kind: "member", until, leader: flag.handle } : { kind: "none" };
     return { kind: "outsider", until, leader: flag.handle, logged: hasLoggedToday(me, flag.parkId, now) };
   }
+  if (!enabled) return { kind: "none" };
   const size = Math.max(known?.size ?? 0, flag.crew?.size ?? 0, held?.size ?? 0, 1);
   return size > 1 ? { kind: "closed", size } : { kind: "none" };
 }

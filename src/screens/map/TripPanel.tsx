@@ -7,7 +7,7 @@ import { formatTrip, type Trip } from "../../lib/drive";
 import { formatDistance } from "../../lib/geo";
 import type { Park } from "../../lib/parks";
 import { takeLabel, type ParkHolder } from "../../lib/game/visit";
-import { formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
+import { formatClockTime, formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
 import { handleFit } from "../../lib/game/handleFit";
 import { DEMO_TOOLS } from "../../lib/demo";
 import { directionsUrl, parkLocationUrl } from "./ParkSheet";
@@ -151,7 +151,9 @@ export function ArrivalCard({
   const message = outsider
     ? outsider.logged
       ? loggedVisitLine(outsider.until)
-      : `@${outsider.leader}'s crew flag is protected for ${formatMinutesLeft(outsider.until, now)}. Log your visit, or ask the crew for their code to join.`
+      : onScanCrew
+        ? `@${outsider.leader}'s crew flag is protected for ${formatMinutesLeft(outsider.until, now)}. Scan their crew code to join, or log your visit.`
+        : `@${outsider.leader}'s flag is protected for ${formatMinutesLeft(outsider.until, now)}. Log your visit now, and take it after ${formatClockTime(outsider.until)}.`
     : visited
       ? holder.kind === "mine"
         ? "Your flag is flying here. You visited today, so come back tomorrow to check in again."

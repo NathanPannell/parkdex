@@ -32,6 +32,7 @@ const readyState: StoreState = {
   accuracy: null,
   located: null,
   locationError: null,
+  webLocation: false,
   muted: false,
   screen: "claim",
   startupReady: true,

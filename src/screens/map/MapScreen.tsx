@@ -20,9 +20,12 @@ import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
 import { nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
 import { startingMapView, USER_ZOOM } from "../../lib/provinces";
-import { FIELD, isNative } from "../../lib/native";
+import { currentFix } from "../../lib/native";
+import { rememberWebLocation, tracksLocation, WEB_CAN_TRACK } from "../../lib/liveLocation";
+import { useToast } from "../../components/Toast";
+import { installOffer, useWebApp } from "../../lib/webApp";
 import { DEMO_TOOLS } from "../../lib/demo";
-import { KIP_TIP_IDS, requestKipTip } from "../../lib/kipTips";
+import { KIP_TIP_IDS, requestKipTip, useKipTip } from "../../lib/kipTips";
 import { openDexOn } from "../../lib/dex/prefs";
 import { useStore, type Screen } from "../../lib/store";
 import { useContent, useContentRuntime, useContentStatus } from "../../lib/content/provider";
@@ -44,13 +47,13 @@ const SHEET_PAD = { top: 80, bottom: 460, left: 40, right: 40 };
 const FAR_ZOOM = 10.5;
 const TRIP_PAD = { top: 120, bottom: 300, left: 60, right: 60 };
 
-// Devices with real GPS never open on the demo starting point.
-const TRACKS_REAL_LOCATION = FIELD || isNative;
-
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 export function MapScreen() {
   const { state, dispatch } = useStore();
+  // Phones, field builds and the hosted web app (once allowed) follow real GPS; they never open on the demo spot.
+  const tracksRealLocation = tracksLocation(state.webLocation);
+  const toast = useToast();
   const parkProposals = useFeatureFlag("parkProposals");
   const content = useContent();
   const contentStatus = useContentStatus();
@@ -78,7 +81,7 @@ export function MapScreen() {
   const [selectedEntryPoint, setSelectedEntryPoint] = useState<"map" | "nearby" | "collection">("map");
   const tripStart = useRef<{ from: LngLat; total: number } | null>(null);
   // Without a location inside a province, frame the province nearest the last one, or BC.
-  const [initialView] = useState(() => startingMapView(TRACKS_REAL_LOCATION, state.user, readLastLocation()));
+  const [initialView] = useState(() => startingMapView(tracksRealLocation, state.user, readLastLocation()));
 
   const game = useGame();
   const visit = useVisit();
@@ -118,6 +121,11 @@ export function MapScreen() {
   );
   const arrivedId = here ? here.id : null;
   const showArrival = !!arrivedId && arrivedId !== dismissedArrival && !selected && !simulating;
+  // On a phone's browser, Kip suggests the home screen version once it can be installed, but
+  // only on a clear map: never over a park, a trip, the arrival card or founding.
+  // Settings keeps the Install Parkdex row for later.
+  const webApp = useWebApp();
+  useKipTip("install-web", state.screen === "map" && !selected && !trip && !showArrival && !founding && installOffer(webApp) !== null);
   const player = game.me?.player ?? null;
   // A score that went up since the last read floats a "+N" off the score chip.
   const lastScore = useRef<number | null>(null);
@@ -401,9 +409,30 @@ export function MapScreen() {
     buzz(20);
   }
 
+  function flyToUser(center: LngLat) {
+    mapRef.current?.flyTo({ center, zoom: USER_ZOOM, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+  }
+
   function recenter(center: LngLat = user) {
     sfx.tap();
-    mapRef.current?.flyTo({ center, zoom: USER_ZOOM, duration: 900, padding: { top: 0, bottom: 200, left: 0, right: 0 } });
+    // On the web, "Center on me" is also how a player who skipped location turns it on.
+    if (WEB_CAN_TRACK && !state.webLocation) {
+      rememberWebLocation(true);
+      dispatch({ type: "webLocation", allowed: true });
+      void currentFix(10_000)
+        .then((fix) => {
+          dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy });
+          flyToUser(fix.point);
+        })
+        .catch((error: Error) => {
+          if (error.message !== "denied") return;
+          rememberWebLocation(false);
+          dispatch({ type: "webLocation", allowed: false });
+          toast("Turn on location for this site in your browser to find parks around you.", "kip");
+        });
+      return;
+    }
+    flyToUser(center);
   }
 
   const remaining = trip ? estimateTrip(user, trip, content?.drive) : null;
@@ -412,7 +441,7 @@ export function MapScreen() {
     <MapView
       mapRef={mapRef}
       user={user}
-      showUser={!TRACKS_REAL_LOCATION || hasUsableGpsFix}
+      showUser={!tracksRealLocation || hasUsableGpsFix}
       initialView={initialView}
       fc={content ? visibleFc : undefined}
       parks={content ? parks : []}
@@ -475,7 +504,7 @@ export function MapScreen() {
           hasFix={hasUsableGpsFix}
           onLocated={(fix) => {
             // Builds without live tracking still show the dot where the scan happened.
-            if (!TRACKS_REAL_LOCATION) dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy });
+            if (!tracksRealLocation) dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy });
           }}
           onSignIn={() => {
             setFounding(null);
@@ -813,7 +842,7 @@ export function MapScreen() {
         )}
       </AnimatePresence>
 
-      {FIELD && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
+      {tracksRealLocation && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
       <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </div>
   );

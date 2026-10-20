@@ -10,7 +10,6 @@ import { useContent } from "../lib/content/provider";
 import { buildCollection, tileImage, visitCountLabel, visitedLabel, type DexRegion, type DexTile } from "../lib/dex/collection";
 import { dexStartSegment, openDexOn, readCollapsed, readOnlyMine, writeCollapsed, writeOnlyMine, type DexSegment } from "../lib/dex/prefs";
 import { useDex } from "../lib/dex/useDex";
-import { useKipTip } from "../lib/kipTips";
 import { press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
 import { DexParkSheet } from "./DexParkSheet";
@@ -78,7 +77,6 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
   );
   const loading = dex.status === "loading" && dex.visits.size === 0;
   // The first time My Dex opens, Kip explains it (#172).
-  useKipTip("dex", !loading && !!content);
 
   const toggleOnlyMine = () => {
     sfx.tap();
