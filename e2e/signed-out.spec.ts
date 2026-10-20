@@ -38,16 +38,21 @@ test("search finds a park and opens its page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Elk Falls Park", level: 2 })).toBeVisible();
   await expect(page.getByText("Provincial Park · North Island")).toBeVisible();
   await expect(page.getByRole("region", { name: "Flag" })).toContainText("No flag yet");
-  await expect(page.getByRole("button", { name: "Visit the park to become its founder" })).toBeDisabled();
+  // Founding happens inside a park, so a park far away shows only its founder line.
+  await expect(page.getByText("No founder yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Become the founder/ })).toHaveCount(0);
 });
 
-test("My Dex shows an empty collection out of the whole catalogue", async ({ page }) => {
+test("My Dex shows the whole catalogue before the first visit", async ({ page }) => {
   await finishOnboarding(page);
   await openTab(page, "My Dex");
   const dex = page.getByRole("main", { name: "My Dex" });
   await expect(dex.getByRole("heading", { name: "My Dex", level: 1 })).toBeVisible();
   await expect(dex).toContainText(/0 visits\s*of 122 parks/);
-  await expect(dex.getByText("Your Dex is empty. Go visit a park!")).toBeVisible();
+  // With no visits yet there is nothing to filter to, so every park shows, still to find.
+  await expect(dex.getByRole("switch")).not.toBeChecked();
+  await expect(dex.getByText("Your Dex is empty. Go visit a park!")).toHaveCount(0);
+  await expect(dex.getByText("Not visited").first()).toBeVisible();
 });
 
 test("the leaderboard loads from the API", async ({ page }) => {

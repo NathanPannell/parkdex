@@ -203,7 +203,7 @@ export function ManageDownloads() {
             )}
           </ul>
           <p className="account-help">
-            Parkdex keeps only what is near you and clears old content after updates. Your claimed badges and photos are never removed here.
+            Parkdex keeps only what is near you and clears old content after updates. Your visits and photos are never removed here.
           </p>
         </section>
       </div>

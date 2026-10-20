@@ -162,7 +162,7 @@ export function markKipTipSeen(id: KipTipId): void {
   }
 }
 
-/** "Replay Kip's Tips": forget every seen tip, and switch tips back on. */
+/** Forget every seen tip and switch tips back on (the demo tools and tests; Settings no longer has the row). */
 export function replayKipTips(): void {
   sessionSeen.clear();
   try {

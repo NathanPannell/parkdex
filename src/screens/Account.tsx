@@ -630,12 +630,14 @@ export function Account({ onBack }: { onBack: () => void }) {
                     No reauthentication method is available in this environment. Reconnect or use the provider linked to this account.
                   </p>
                 )}
-                <label className="fb-field account-delete-panel__phrase">
-                  <span className="fb-label">Type DELETE to continue</span>
-                  <input className="fb-input" value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} autoComplete="off" />
-                </label>
                 <div className="account-delete-panel__actions">
-                  <button className="btn btn--paper btn--sm" onClick={() => setDeleteStep("closed")}>
+                  <button
+                    className="btn btn--paper btn--sm"
+                    onClick={() => {
+                      setDeletePhrase("");
+                      setDeleteStep("closed");
+                    }}
+                  >
                     Cancel
                   </button>
                 </div>
@@ -643,13 +645,19 @@ export function Account({ onBack }: { onBack: () => void }) {
             ) : (
               <>
                 <h2>One last check</h2>
-                <p>Account verification is fresh for five minutes. Type DELETE, then continue.</p>
+                <p>Type DELETE to delete this account for good. This works for five minutes after you verify.</p>
                 <label className="fb-field">
                   <span className="fb-label">Type DELETE to confirm</span>
                   <input className="fb-input" value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} autoComplete="off" />
                 </label>
                 <div className="account-delete-panel__actions">
-                  <button className="btn btn--paper btn--sm" onClick={() => setDeleteStep("closed")}>
+                  <button
+                    className="btn btn--paper btn--sm"
+                    onClick={() => {
+                      setDeletePhrase("");
+                      setDeleteStep("closed");
+                    }}
+                  >
                     Cancel
                   </button>
                   <button

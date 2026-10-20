@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Park } from "../parks";
 import { buildCollection, coverPhoto, mergeVisits, tileImage, victoriaDay, visiblePhotos, type DexPhoto, type ServerDexPark } from "./collection";
-import { readCollapsed, readOnlyMine, writeCollapsed, writeOnlyMine } from "./prefs";
+import { readCollapsed, readOnlyMine, storedOnlyMine, writeCollapsed, writeOnlyMine } from "./prefs";
 import { compareProvinces, provinceFor } from "./regions";
 
 function park(id: string, region: string, name = id): Park {
@@ -172,10 +172,14 @@ describe("cover selection", () => {
 });
 
 describe("per-device choices", () => {
-  it("keeps Only my visits on by default and remembers the switch and collapsed regions", () => {
+  it("follows the player's progress until they choose, then remembers the switch and collapsed regions", () => {
     const storage = new MemoryStorage();
+    expect(storedOnlyMine(storage)).toBeNull();
     expect(readOnlyMine(storage)).toBe(true);
+    expect(readOnlyMine(storage, false)).toBe(false);
     expect(readOnlyMine(null)).toBe(true);
+    writeOnlyMine(true, storage);
+    expect(readOnlyMine(storage, false)).toBe(true);
     writeOnlyMine(false, storage);
     expect(readOnlyMine(storage)).toBe(false);
     writeOnlyMine(true, storage);

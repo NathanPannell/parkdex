@@ -494,9 +494,15 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         ? park
           ? `Checking you're inside ${park.name}…`
           : "Looking for mapped parks around you…"
-        : step.kind === "results" && choice
+        : (step.kind === "results" && choice) || step.kind === "camera" || step.kind === "rejected" || step.kind === "retry"
           ? "Take its photo to be the founder."
-          : "Stand in a park to be its founder.";
+          : step.kind === "checking"
+            ? "Checking your photo…"
+            : step.kind === "review_sent"
+              ? "We'll let you know in Parkdex."
+              : step.kind === "taken"
+                ? "This park has a founder now."
+                : "Stand in a park to be its founder.";
   const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken" || step.kind === "review_sent";
   const review = step.kind === "rejected" ? reviewButton(step.review, step.reviewable) : null;
   const sendingReview = step.kind === "rejected" && step.review.kind === "sending";

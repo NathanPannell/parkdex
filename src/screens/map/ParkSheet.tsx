@@ -307,10 +307,13 @@ export function ParkSheet({
               <Icon name="flagPlus" size={18} /> {stats.founder}
             </p>
             <dl className="park-summary__counts">
-              <div>
-                <dt>Your visits</dt>
-                <dd>{stats.mine}</dd>
-              </div>
+              {/* A signed-out player has no visits of their own to count, so the column would only say "Sign in". */}
+              {signedIn && (
+                <div>
+                  <dt>Your visits</dt>
+                  <dd>{stats.mine}</dd>
+                </div>
+              )}
               <div>
                 <dt>All visits</dt>
                 <dd>{stats.total}</dd>
@@ -335,20 +338,20 @@ export function ParkSheet({
             </motion.div>
           )}
 
-          {(founder.kind === "found" || founder.kind === "hint") && (
+          {/* Founding happens inside the park, so the card only shows there; elsewhere the founder line says "No founder yet". */}
+          {founder.kind === "found" && (
             <motion.button
               variants={item}
               className="founder-cta"
               onClick={onFound}
-              disabled={founder.kind !== "found"}
-              aria-label={founder.kind === "found" ? `Become the founder of ${park.name}, plus ${founder.points} points` : founder.text}
+              aria-label={`Become the founder of ${park.name}, plus ${founder.points} points`}
             >
               <span className="founder-cta__icon">
                 <Icon name="camera" size={22} />
               </span>
               <span className="founder-cta__text">
                 <strong>Become the founder</strong>
-                <em>{founder.kind === "found" ? "Take its first photo. It becomes the park's cover." : founder.text}</em>
+                <em>Take its first photo. It becomes the park's cover.</em>
               </span>
               <span className="founder-cta__points">+{founder.points}</span>
             </motion.button>
