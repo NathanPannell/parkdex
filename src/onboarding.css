@@ -5,45 +5,6 @@
   overflow: visible;
 }
 
-.ob-planted {
-  position: relative;
-}
-
-.ob-planted__pole {
-  position: absolute;
-  top: 8px;
-  width: 7px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #f7ead2, #c9b48f);
-  box-shadow: 0 0 0 2px var(--ink);
-}
-
-.ob-planted__pole::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: -9px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--sun);
-  border: 2px solid var(--ink);
-}
-
-.ob-planted__cloth {
-  position: absolute;
-  top: 10px;
-  transform-origin: left center;
-  filter: drop-shadow(0 6px 0 rgba(20, 35, 28, 0.16));
-}
-
-.ob-planted .ob-mound {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-}
-
-.ob-hills,
 .ob-days,
 .ob-take,
 .ob-you {
@@ -52,10 +13,6 @@
   height: 340px;
   display: grid;
   place-items: center;
-}
-
-.ob-hills__flag {
-  position: absolute;
 }
 
 .ob-guide {

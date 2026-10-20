@@ -81,15 +81,6 @@
   padding: 8px 4px;
 }
 
-.onboarding__drag {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  touch-action: pan-y;
-  cursor: grab;
-}
-
 .onboarding__visual {
   position: relative;
   flex: 1;
@@ -129,21 +120,24 @@
   max-width: 330px;
 }
 
-.onboarding__foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 12px;
+/* The one thing each slide asks for: location on the first, a @handle on the second. */
+.onboarding__ask {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
 }
 
-.dots {
-  display: flex;
-  gap: 7px;
+.onboarding__ask .permission__alt {
+  margin-top: 0;
+  justify-self: center;
 }
 
-.dot {
-  height: 10px;
-  border-radius: 999px;
+.onboarding__note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink-soft);
 }
 
 /* Onboarding visuals */
@@ -376,35 +370,6 @@
 .sheet-scrim--light {
   background: rgba(20, 35, 28, 0.12);
   z-index: 30;
-}
-
-.permission {
-  position: relative;
-  width: 100%;
-  background: var(--paper);
-  border-top: 2.5px solid var(--ink);
-  border-radius: 32px 32px 0 0;
-  padding: 70px 24px calc(var(--safe-bottom) + 8px);
-  text-align: center;
-}
-
-.permission__kip {
-  position: absolute;
-  top: -70px;
-  left: 50%;
-  translate: -50% 0;
-}
-
-.permission h2 {
-  font-size: 28px;
-  font-weight: 800;
-  margin-bottom: 10px;
-}
-
-.permission p {
-  color: var(--ink-soft);
-  line-height: 1.45;
-  margin-bottom: 20px;
 }
 
 .permission__alt {
