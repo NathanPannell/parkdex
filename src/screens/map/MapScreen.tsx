@@ -115,6 +115,9 @@ export function MapScreen() {
   const selected = selectedId ? content?.parkById.get(selectedId) : undefined;
   const trip = tripId ? content?.parkById.get(tripId) : undefined;
   const hasUsableGpsFix = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy);
+  // Desktop browsers often only know roughly where they are (Wi-Fi or IP, a kilometre or more).
+  // Show that position on the web rather than "Finding you…" forever; check-ins still need a usable fix.
+  const webHasFix = WEB_CAN_TRACK && state.webLocation && state.accuracy !== null && state.locationError !== "denied";
   const here = useMemo(
     () => parkContaining(user, parks, bounds?.byId, hasUsableGpsFix ? (state.accuracy ?? 0) : 0),
     [user, parks, bounds, state.accuracy, hasUsableGpsFix],
@@ -441,7 +444,7 @@ export function MapScreen() {
     <MapView
       mapRef={mapRef}
       user={user}
-      showUser={!tracksRealLocation || hasUsableGpsFix}
+      showUser={!tracksRealLocation || hasUsableGpsFix || webHasFix}
       initialView={initialView}
       fc={content ? visibleFc : undefined}
       parks={content ? parks : []}
@@ -842,7 +845,7 @@ export function MapScreen() {
         )}
       </AnimatePresence>
 
-      {tracksRealLocation && !hasUsableGpsFix && !state.locationError && <div className="finding card">Finding you…</div>}
+      {tracksRealLocation && !hasUsableGpsFix && !webHasFix && !state.locationError && <div className="finding card">Finding you…</div>}
       <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </div>
   );

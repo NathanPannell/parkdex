@@ -76,7 +76,6 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
     [content?.parks, dex.visits, dex.photos, onlyMine],
   );
   const loading = dex.status === "loading" && dex.visits.size === 0;
-  // The first time My Dex opens, Kip explains it (#172).
 
   const toggleOnlyMine = () => {
     sfx.tap();

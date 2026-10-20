@@ -3,7 +3,7 @@ import { AnimatePresence as Presence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BottomNav } from "./components/BottomNav";
 import { KipTipHost } from "./components/KipTip";
-import { ToastProvider } from "./components/Toast";
+import { ToastProvider, useToast } from "./components/Toast";
 import { clearConfetti } from "./lib/confetti";
 import { AuthProvider, useAuth } from "./lib/accounts/AuthProvider";
 import { handleBack } from "./lib/backStack";
@@ -22,7 +22,7 @@ import "./account.css";
 import { ContentProvider, useContentStatus } from "./lib/content/provider";
 import { setMuted } from "./lib/feedback";
 import { isNative, minimizeApp, onBackButton, watchLocation } from "./lib/native";
-import { tracksLocation } from "./lib/liveLocation";
+import { rememberWebLocation, tracksLocation, WEB_CAN_TRACK } from "./lib/liveLocation";
 import { projectClaims, progressOwnerKey, StoreProvider, useStore } from "./lib/store";
 import { listPersonalClaims, loadPersonalProgress, setLegacyClaimSnapshot, type ProgressOwner } from "./lib/accounts/personalStore";
 import { FeedbackSheet } from "./screens/FeedbackSheet";
@@ -147,6 +147,9 @@ function ClaimSnapshotRestorer() {
 
 function Screens() {
   const { state, dispatch } = useStore();
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   const auth = useAuth();
   const game = useGame();
   const friends = useFriends();
@@ -223,7 +226,17 @@ function Screens() {
     let live = true;
     void watchLocation(
       (fix) => dispatch({ type: "move", user: fix.point, accuracy: fix.accuracy }),
-      (error) => dispatch({ type: "locationError", error }),
+      (error) => {
+        // A web player who turned location off for the site goes back to browsing from the demo
+        // spot; "Center on me" asks again. Phones keep the banner, which points to settings.
+        if (WEB_CAN_TRACK && error === "denied") {
+          rememberWebLocation(false);
+          dispatch({ type: "webLocation", allowed: false });
+          toastRef.current("Location is off for Parkdex. Tap Center on me to turn it on again.", "kip");
+          return;
+        }
+        dispatch({ type: "locationError", error });
+      },
     ).then((s) => (live ? (stop = s) : s()));
     return () => {
       live = false;

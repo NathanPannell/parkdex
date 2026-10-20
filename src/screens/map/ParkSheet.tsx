@@ -281,7 +281,7 @@ export function ParkSheet({
                 </motion.span>
               )}
             </div>
-            {crewUi.enabled && flag && phase.kind !== "none" && (
+            {crewUi.enabled && signedIn && flag && phase.kind !== "none" && (
               <CrewPanel phase={phase} flag={flag} crew={crew} now={now} onShowCode={() => crewUi.openCodeSheet(park.id)} />
             )}
           </motion.section>
@@ -382,7 +382,7 @@ export function ParkSheet({
       </div>
 
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
-        {inside && phase.kind === "outsider" && crewUi.enabled ? (
+        {inside && !restingToday && phase.kind === "outsider" && crewUi.enabled && signedIn ? (
           // Outsiders during the protected hour: joining is the main way in, logging the visit the second.
           <>
             <button className="btn btn--block btn--glow" onClick={() => crewUi.openScanner(park.id)}>
@@ -392,7 +392,7 @@ export function ParkSheet({
               {phase.logged ? "Logged" : "Log visit"}
             </button>
           </>
-        ) : inside && phase.kind === "outsider" ? (
+        ) : inside && !restingToday && phase.kind === "outsider" ? (
           // Without crews the protected hour still holds: logging the visit is all there is to do.
           <button className="btn btn--block btn--glow" onClick={onCheckIn} disabled={phase.logged}>
             <Icon name="flag" /> {visitLabel}

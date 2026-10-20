@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ALWAYS_TRACKS, rememberWebLocation, tracksLocation, WEB_CAN_TRACK, webLocationAllowed } from "./liveLocation";
 
 function memoryStorage() {
@@ -30,6 +30,11 @@ describe("live location", () => {
 });
 
 describe("live location in the hosted web app", () => {
+  afterEach(() => {
+    vi.doUnmock("./demo");
+    vi.doUnmock("./native");
+  });
+
   it("follows the player only after they allow location", async () => {
     vi.resetModules();
     vi.doMock("./demo", () => ({ DEMO_TOOLS: false }));
@@ -41,7 +46,5 @@ describe("live location in the hosted web app", () => {
     const storage = memoryStorage();
     hosted.rememberWebLocation(true, storage);
     expect(hosted.webLocationAllowed(storage)).toBe(true);
-    vi.doUnmock("./demo");
-    vi.doUnmock("./native");
   });
 });
