@@ -167,9 +167,7 @@ jobs:
             test-results/
           retention-days: 7
 
-  # The operator dashboard is its own Vite app. Five of its PostgreSQL suites run against fresh
-  # databases. analytics.legacy.pg.test.ts is not run yet: it models a database without
-  # game_002_points, which game_003_crews now requires, so it cannot set up its schema.
+  # The operator dashboard is its own Vite app. Each of its six PostgreSQL suites gets a fresh database.
   operator:
     name: Operator dashboard (types, tests, build)
     runs-on: ubuntu-latest
@@ -215,7 +213,7 @@ jobs:
         env:
           PGPASSWORD: kip_owned_ci_only
         run: |
-          for name in drafts parks park_manager ota analytics; do
+          for name in drafts parks park_manager ota analytics analytics_legacy; do
             psql -h 127.0.0.1 -U kip_qa -d kip_qa_ci -c "CREATE DATABASE kip_qa_operator_${name}"
           done
 
@@ -226,6 +224,7 @@ jobs:
           OPERATOR_PARK_MANAGER_TEST_DATABASE_URL: postgresql://kip_qa:kip_owned_ci_only@127.0.0.1:5432/kip_qa_operator_park_manager
           OPERATOR_OTA_TEST_DATABASE_URL: postgresql://kip_qa:kip_owned_ci_only@127.0.0.1:5432/kip_qa_operator_ota
           OPERATOR_ANALYTICS_TEST_DATABASE_URL: postgresql://kip_qa:kip_owned_ci_only@127.0.0.1:5432/kip_qa_operator_analytics
+          OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL: postgresql://kip_qa:kip_owned_ci_only@127.0.0.1:5432/kip_qa_operator_analytics_legacy
         run: npm test --prefix operator
 
       - run: npm run build --prefix operator
