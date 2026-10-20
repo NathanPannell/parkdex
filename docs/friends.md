@@ -18,12 +18,12 @@ Friend links are `https://<web host>/friend/CODE`, on the same host as account l
 
 All routes need a signed-in account with a handle (`409 handle_required` otherwise). Writes need the CSRF token on cookie sessions.
 
-| Route                                     | Answer                                                                                                                                                                                                                                                                             |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/friends`                        | `{ code, week: { start, end, resetsAt }, players: [{ rank, handle, flagSeed, uniqueParks, isMe }], serverTime }`. Creates the code on first use.                                                                                                                                   |
-| `POST /api/friends` `{ code }`            | `{ status: "added" \| "already_friends", friend: { handle, flagSeed } }`. Replays answer `already_friends`. Errors: 400 `invalid_friend_code`, 404 `friend_code_not_found`, 409 `own_friend_code`, 409 `too_many_friends`, 410 `account_deleting`.                                 |
+| Route | Answer |
+| --- | --- |
+| `GET /api/friends` | `{ code, week: { start, end, resetsAt }, players: [{ rank, handle, flagSeed, uniqueParks, isMe }], serverTime }`. Creates the code on first use. |
+| `POST /api/friends` `{ code }` | `{ status: "added" \| "already_friends", friend: { handle, flagSeed } }`. Replays answer `already_friends`. Errors: 400 `invalid_friend_code`, 404 `friend_code_not_found`, 409 `own_friend_code`, 409 `too_many_friends`, 410 `account_deleting`. |
 | `POST /api/friends/crewmate` `{ handle }` | The same answer as adding a code, for a player who was in a crew with you. The handle may start with `@`. Errors: 400 `invalid_request`, 404 `crewmate_not_found` (no such player, or never in a crew together), 409 `own_handle`, 409 `too_many_friends`, 410 `account_deleting`. |
-| `DELETE /api/friends/:handle`             | `{ removed: true }`, or 404 `friend_not_found`.                                                                                                                                                                                                                                    |
-| `POST /api/friends/code`                  | `{ code }`, a new code.                                                                                                                                                                                                                                                            |
+| `DELETE /api/friends/:handle` | `{ removed: true }`, or 404 `friend_not_found`. |
+| `POST /api/friends/code` | `{ code }`, a new code. |
 
 Tables and functions are in `database/migrations/social_001_friends.sql` (`kip_social`); adding crewmates (`kip_social.add_crewmate`) is in `social_002_crewmates.sql`. Account deletion cascades through them.
