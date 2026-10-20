@@ -805,8 +805,9 @@ const pop = {
 function CrewFriendsChip({ crew, myHandle }: { crew: Crew; myHandle: string | null }) {
   const friends = useFriends();
   const toast = useToast();
-  const [sending, setSending] = useState(false);
-  // Who this chip made friends, kept after the board refreshes and stops offering them.
+  // The offers being sent, frozen so a board refresh mid-send cannot change the chip.
+  const [sending, setSending] = useState<string[] | null>(null);
+  // Who is now a friend, kept after the board refreshes and stops offering them.
   const [added, setAdded] = useState<string[] | null>(null);
   const board = friends.enabled ? friends.board : null;
   const refresh = useRef(friends.refresh);
@@ -818,32 +819,27 @@ function CrewFriendsChip({ crew, myHandle }: { crew: Crew; myHandle: string | nu
   if (added) {
     return (
       <span className="plant__chip" role="status">
-        <Icon name="check" size={16} /> {added.length === 1 ? `Friends with @${added[0]}` : `${added.length} new friends`}
+        <Icon name="check" size={16} /> {added.length === 1 ? `Friends with @${added[0]}` : `Friends with ${added.length} crewmates`}
       </span>
     );
   }
-  if (!board || !friends.online) return null;
-  const offers = friendOffers(crew, myHandle, new Set(board.players.map((player) => player.handle)));
+  const offers =
+    sending ??
+    (board && friends.online ? friendOffers(crew, myHandle, new Set(board.players.map((player) => player.handle))).map((member) => member.handle) : []);
   if (offers.length === 0) return null;
   const addAll = async () => {
-    setSending(true);
-    const done: string[] = [];
-    let failure: string | null = null;
-    for (const offer of offers) {
-      const result = await friends.addCrewmate(offer.handle);
-      if (result.kind === "added" || result.kind === "already_friends") done.push(result.friend.handle);
-      else if (result.kind === "rejected") failure ??= result.message;
-    }
-    setSending(false);
+    setSending(offers);
+    const { friends: done, failure } = await friends.addCrewmates(offers);
+    setSending(null);
     if (done.length) {
       sfx.pop();
-      setAdded(done);
+      setAdded(done.map((friend) => friend.handle));
     }
     if (failure) toast(failure, "kip");
   };
   return (
-    <button className="plant__chip plant__chip--button" onClick={() => void addAll()} disabled={sending}>
-      <Icon name="sparkle" size={16} /> {offers.length === 1 ? `Add @${offers[0].handle} as a friend` : `Add ${offers.length} crewmates as friends`}
+    <button className="plant__chip plant__chip--button" onClick={() => void addAll()} disabled={!!sending}>
+      <Icon name="sparkle" size={16} /> {offers.length === 1 ? `Add @${offers[0]} as a friend` : `Add ${offers.length} crewmates as friends`}
     </button>
   );
 }
