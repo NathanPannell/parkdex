@@ -65,7 +65,7 @@ export function TripPanel({
           </motion.div>
         </button>
         <div className="trip__text">
-          <span className="eyebrow">{accessUnknown ? "Park location" : "Heading to"}</span>
+          <span className="eyebrow">Heading to</span>
           <strong>{park.short}</strong>
         </div>
         <button className="trip__end" onClick={onEnd} aria-label="End trip">
@@ -74,9 +74,12 @@ export function TripPanel({
       </div>
       <div className="trip__meter">
         {accessUnknown ? (
+          // No road route is known, but the distance still counts down as the player gets closer.
           <div className="trip__big">
-            <span>Access unknown</span>
-            <small>Check local access before you go</small>
+            <motion.span key={formatDistance(remainingKm)} initial={{ y: 8, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }}>
+              {formatDistance(remainingKm)}
+            </motion.span>
+            <small>in a straight line · check local access before you go</small>
           </div>
         ) : (
           <>

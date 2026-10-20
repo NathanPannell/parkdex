@@ -384,7 +384,14 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
           {status === "sent" && savedReport ? (
             <motion.div key="sent" className="fb-done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
               <Kip pose="cheer" size={150} />
-              <span className="eyebrow">Report {savedReport.id}</span>
+              <span className="eyebrow">
+                Report PD-
+                {savedReport.id
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 10)}
+              </span>
+              {/* The same reference as the receipt email (worker/emails.ts). */}
               <h2>Feedback saved</h2>
               <p>
                 Your {FEEDBACK_KINDS.find((item) => item.id === savedReport.kind)?.label.toLowerCase()} report is saved.
@@ -408,7 +415,6 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <Kip pose="avatar" size={52} />
                 </span>
                 <div>
-                  <span className="eyebrow">Internal testing</span>
                   <h2 id="fb-title">Send feedback</h2>
                 </div>
               </header>

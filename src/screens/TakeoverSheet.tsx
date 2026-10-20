@@ -48,6 +48,11 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
 
   const sorted = [...takeovers].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
+  // The same park can be taken twice while away; it is still one park to take back.
+  const lostParks = [...new Set(sorted.map((takeover) => takeover.parkId))];
+  const singlePark = lostParks.length === 1 ? content?.parkById.get(lostParks[0]) : undefined;
+  const single = singlePark ? { parkId: singlePark.id, name: singlePark.short ?? singlePark.name } : null;
+
   // Seeing a lost park is the nudge to go and take it back, so open it on the map.
   const takeBack = (parkId: string) => {
     dismiss();
@@ -115,10 +120,24 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
               })}
             </motion.ul>
             <div className="takeover-sheet__foot">
-              <p className="account-help">Visit a park again to take it back.</p>
-              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>
-                Got it
-              </motion.button>
+              {/* One lost park: going after it is the obvious next step. Several: each row shows its park. */}
+              {single ? (
+                <>
+                  <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => takeBack(single.parkId)}>
+                    <Icon name="flag" size={18} /> Take back {single.name}
+                  </motion.button>
+                  <button className="arrival__later" onClick={dismiss}>
+                    Not now
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="account-help">Visit a park again to take it back.</p>
+                  <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>
+                    Got it
+                  </motion.button>
+                </>
+              )}
             </div>
           </motion.div>
         </>

@@ -17,13 +17,22 @@ function storage(): StorageLike | null {
   }
 }
 
-/** On unless the player turned it off on this device. */
-export function readOnlyMine(store: StorageLike | null = storage()): boolean {
+/** The player's own choice on this device, or null when they never touched the switch. */
+export function storedOnlyMine(store: StorageLike | null = storage()): boolean | null {
   try {
-    return store?.getItem(ONLY_MINE_KEY) !== "false";
+    const value = store?.getItem(ONLY_MINE_KEY);
+    return value === "true" ? true : value === "false" ? false : null;
   } catch {
-    return true;
+    return null;
   }
+}
+
+/**
+ * Whether My Dex shows only visited parks. Until the player chooses, it follows their progress:
+ * the whole catalogue while they have no visits (an empty page teaches nothing), their own parks after.
+ */
+export function readOnlyMine(store: StorageLike | null = storage(), hasVisits = true): boolean {
+  return storedOnlyMine(store) ?? hasVisits;
 }
 
 export function writeOnlyMine(value: boolean, store: StorageLike | null = storage()): void {

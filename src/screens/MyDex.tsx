@@ -8,7 +8,7 @@ import { Bubble, Kip } from "../components/Kip";
 import { sfx } from "../lib/feedback";
 import { useContent } from "../lib/content/provider";
 import { buildCollection, tileImage, visitCountLabel, visitedLabel, type DexRegion, type DexTile } from "../lib/dex/collection";
-import { dexStartSegment, openDexOn, readCollapsed, readOnlyMine, writeCollapsed, writeOnlyMine, type DexSegment } from "../lib/dex/prefs";
+import { dexStartSegment, openDexOn, readCollapsed, readOnlyMine, storedOnlyMine, writeCollapsed, writeOnlyMine, type DexSegment } from "../lib/dex/prefs";
 import { useDex } from "../lib/dex/useDex";
 import { press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
@@ -67,10 +67,12 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
   const { dispatch } = useStore();
   const content = useContent();
   const dex = useDex(true);
-  const [onlyMine, setOnlyMine] = useState(readOnlyMine);
+  // Null until the player flips the switch; until then it follows whether they have any visits.
+  const [chosenOnlyMine, setChosenOnlyMine] = useState(() => storedOnlyMine());
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [openPark, setOpenPark] = useState<string | null>(null);
 
+  const onlyMine = chosenOnlyMine ?? readOnlyMine(null, dex.visits.size > 0);
   const collection = useMemo(
     () => buildCollection({ parks: content?.parks ?? [], visits: dex.visits, photos: dex.photos, onlyMine }),
     [content?.parks, dex.visits, dex.photos, onlyMine],
@@ -79,10 +81,8 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
 
   const toggleOnlyMine = () => {
     sfx.tap();
-    setOnlyMine((value) => {
-      writeOnlyMine(!value);
-      return !value;
-    });
+    writeOnlyMine(!onlyMine);
+    setChosenOnlyMine(!onlyMine);
   };
   const toggleRegion = (key: string) => {
     sfx.tap();
