@@ -59,6 +59,17 @@ Google challenge requests are `{purpose: 'sign_in' | 'reauth' | 'link'}` and ret
 
 The Google directions go only to the account's own inbox, so they reveal nothing to the requester. A Google-only account never receives a reset token and cannot gain a password through reset. Email goes out through `waitUntil`, so the response never waits on the provider. When email delivery is not configured (`emailDeliveryEnabled` is false in `/api/auth/config`), the route answers `503` and the app hides "Forgot password?".
 
+## Guest accounts
+
+A player who picks a @handle at onboarding plays without signing in, as a guest account (`POST /api/auth/guest`, migration `accounts_002_guests.sql`).
+
+- **What a guest is:** an account with no email and no password (`normalized_email IS NULL`). `/api/auth/me` and session responses carry `guest: true`. The app opens one when a handle is waiting on the device and nobody is signed in (`src/lib/accounts/guestStart.ts`), once per launch and once right after onboarding, then claims the handle and its flag for it. Signing out clears the waiting handle, so leaving an account never opens a new guest.
+- **Limits:** 20 guest accounts per address an hour, and 300 everywhere per 15 minutes.
+- **Sessions:** the session on the phone is the guest's only credential. It slides for 365 days, renews once it is 30 days old, and is capped at 10 years. The phone asks to renew on that schedule (`nativeSessionNeedsRenewal`), and after an upgrade it takes the server's shorter expiry.
+- **Upgrade:** Google upgrades a guest in place through the `link` purpose. It needs no reauthentication, and the account keeps its ID, handle, flag, points and backups. The account takes the verified Google email, and its sessions shorten to an ordinary account's limits (30 days sliding, 90 days total).
+- **Conflicts:** a Google subject or email that already belongs to another account is refused with `account_conflict`, and the guest is left unchanged.
+- **Deletion:** a guest deletes its account without reauthenticating. Leaving a guest account (sign-out) loses it for good, and the Account screen says so.
+
 ## Durable local claims and account boundaries
 
 The existing tester data is `localStorage['parkdex-mockup-v1'].claims[parkId] = {at, photo: ''}` plus IndexedDB `parkdex/photos[parkId]`. Migrate this in place once into a new transactional local claim/photo store. Each existing claim receives a random UUID exactly once, persisted with its original park ID, original claim time, and the corresponding photo before any network request. Retain the old storage until the new transaction commits; repeat migration safely after a crash. Do not use a new Android package or signing identity. New claims also receive a UUID and commit claim metadata and the local photo durably before the UI announces success or emits `park_claimed`. If the local write fails, preserve the capture and show a retryable error. Claims and photos remain separate from downloadable content storage and survive a content release or retired park.

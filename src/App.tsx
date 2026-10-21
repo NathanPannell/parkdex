@@ -43,6 +43,7 @@ import { FoundingDecisionSheet, useFoundingDecisions } from "./screens/FoundingD
 import { TakeoverMessages } from "./screens/TakeoverSheet";
 import { MyDex } from "./screens/MyDex";
 import { Splash } from "./screens/Splash";
+import { startGuestForLocalHandle } from "./lib/accounts/guestStart";
 
 export function App() {
   const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
@@ -163,6 +164,11 @@ function Screens() {
   openIncoming.current = friends.openIncoming;
   const offerJoin = useRef(crew.offerJoin);
   offerJoin.current = crew.offerJoin;
+
+  // A @handle picked at onboarding plays as a guest account until Google upgrades it.
+  useEffect(() => {
+    if (onboarded) void startGuestForLocalHandle(auth);
+  }, [auth, auth.phase, auth.config, onboarded]);
 
   // App Links and web paths into the app (src/lib/social/links.ts): friend links (#64) and crew links (#171).
   useEffect(() => {

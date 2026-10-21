@@ -29,6 +29,7 @@ try {
   assert.equal(batch[1][0].second, 2);
   log("Neon transaction batch adapter", "PASS");
   await applyMigration(fileURLToPath(new URL("../database/migrations/accounts_001_init.sql", import.meta.url)));
+  await applyMigration(fileURLToPath(new URL("../database/migrations/accounts_002_guests.sql", import.meta.url)));
   // This runner is restricted by qa-postgres-adapter to a dedicated loopback QA
   // database. Clear prior runs before asserting exact retention backlog counts.
   // CASCADE also clears progress claims when that optional migration was applied.
@@ -262,6 +263,63 @@ try {
   const remainingOldEvents = await pool.query("SELECT count(*)::int AS count FROM kip_account.security_events WHERE id = ANY($1::uuid[])", [oldEventIds]);
   assert.equal(remainingOldEvents.rows[0].count, 1);
   log("bounded auth retention, backlog and receipt preservation", "PASS");
+
+  // Guest accounts: no email until Google upgrades them in place.
+  const guestId = randomUUID();
+  // 65 days into a 365-day guest session.
+  const guestSession = {
+    ...session("native"),
+    expiresAt: new Date(Date.now() + 300 * 86400e3).toISOString(),
+    absoluteExpiresAt: new Date(Date.now() + 3650 * 86400e3).toISOString(),
+  };
+  const guest = await store.createGuestAccount(guestId, guestSession);
+  assert.equal(guest?.account.guest, true);
+  assert.equal(guest?.account.email, "");
+  assert.deepEqual(guest?.account.providers, []);
+  const secondGuest = await store.createGuestAccount(randomUUID(), session("native"));
+  assert.equal(secondGuest?.account.guest, true, "several guests share the absent email");
+  assert.equal((await store.findSession(guestSession.tokenHash))?.guest, true);
+  const tooEarly = { ...session("native"), expiresAt: new Date(Date.now() + 365 * 86400e3).toISOString() };
+  assert.equal(await store.rotateSession(guestSession.id, guestSession.tokenHash, tooEarly, now()), null, "the default window waits for the last week");
+  const guestRenewal = { ...session("native"), expiresAt: new Date(Date.now() + 365 * 86400e3).toISOString() };
+  assert.ok(await store.rotateSession(guestSession.id, guestSession.tokenHash, guestRenewal, now(), 335 * 86400e3));
+  log("guest account and session renewal", "PASS");
+
+  const takenEmail = await store.completeGoogleLink({
+    subject: `qa-guest-taken-${suffix}`,
+    email,
+    accountId: guestId,
+    sessionId: guestSession.id,
+    tokenHash: guestRenewal.tokenHash,
+    now: now(),
+  });
+  assert.equal(takenEmail, "email_conflict");
+  const guestEmail = `qa-guest-${suffix}@example.test`;
+  const upgraded = await store.completeGoogleLink({
+    subject: `qa-guest-${suffix}`,
+    email: guestEmail,
+    accountId: guestId,
+    sessionId: guestSession.id,
+    tokenHash: guestRenewal.tokenHash,
+    now: now(),
+  });
+  assert.equal(upgraded, "ok", "a guest links Google without reauthenticating");
+  const upgradedAccount = await store.findAccountById(guestId);
+  assert.equal(upgradedAccount?.guest, false);
+  assert.equal(upgradedAccount?.email, guestEmail);
+  assert.equal(upgradedAccount?.emailVerified, true);
+  assert.deepEqual(upgradedAccount?.providers, ["google"]);
+  const shortened = await pool.query("SELECT expires_at, absolute_expires_at FROM kip_account.sessions WHERE id = $1", [guestSession.id]);
+  assert.ok(shortened.rows[0].absolute_expires_at.getTime() <= Date.now() + 91 * 86400e3, "an upgraded guest's session is capped like an account's");
+  assert.ok(shortened.rows[0].expires_at.getTime() <= Date.now() + 31 * 86400e3);
+  log("guest upgraded in place by Google", "PASS");
+
+  const doomedGuestId = randomUUID();
+  const doomedSession = session("native");
+  await store.createGuestAccount(doomedGuestId, doomedSession);
+  const guestReceipt = randomUUID();
+  assert.equal(await store.beginDeletion(doomedGuestId, doomedSession.id, doomedSession.tokenHash, guestReceipt, now()), guestReceipt);
+  log("guest deletion without reauthentication", "PASS");
 } finally {
   await pool.end();
 }

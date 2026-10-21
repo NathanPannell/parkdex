@@ -47,7 +47,7 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
     ]
       .filter(Boolean)
       .join(" · ") || "Maps and park content on this phone";
-  const accountLine = settingsAccountSubtitle(auth.phase, auth.backup.phase, !!(auth.backup.lastSyncedAt ?? auth.backup.updatedAt));
+  const accountLine = settingsAccountSubtitle(auth.phase, auth.backup.phase, !!(auth.backup.lastSyncedAt ?? auth.backup.updatedAt), !!auth.account?.guest);
 
   return (
     <motion.main

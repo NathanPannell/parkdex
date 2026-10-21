@@ -497,7 +497,8 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
       const receipt = receipts[0];
       return {
         ...base,
-        maskedEmail: maskEmail(String(extra[0].normalized_email)),
+        // A guest account has no email until Google upgrades it.
+        maskedEmail: extra[0].normalized_email == null ? "Guest" : maskEmail(String(extra[0].normalized_email)),
         emailVerified: extra[0].email_verified === true,
         activeSessions: num(extra[0].active_sessions),
         lastSignInAt: isoOrNull(accounts[0].last_session_at),
@@ -518,7 +519,7 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
 
     async accountEmail(id) {
       const rows = await readOne("SELECT normalized_email FROM kip_account.accounts WHERE id = $1::uuid", [id]);
-      return rows[0] ? String(rows[0].normalized_email) : null;
+      return rows[0]?.normalized_email != null ? String(rows[0].normalized_email) : null;
     },
 
     async accountIdForHandle(handle) {

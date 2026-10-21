@@ -6,10 +6,13 @@ export type StoredTransport = "web" | "native";
 
 export interface AccountSummary {
   id: string;
+  /** Empty for a guest account until Google upgrades it. */
   email: string;
   emailVerified: boolean;
   displayName: string | null;
   providers: AccountProvider[];
+  /** A device-held account with no email or password yet; Google sign-in upgrades it in place. */
+  guest?: boolean;
 }
 
 export interface AccountCredentials extends AccountSummary {
@@ -88,6 +91,10 @@ export interface AccountAuthStore {
   clearRateLimit(action: string, scopeHash: string): Promise<void>;
   recordSecurityEvent(eventType: string, scopeHash: string | null, outcome: string): Promise<void>;
   createAccount(input: CreateAccountInput): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
+  createGuestAccount(
+    accountId: string,
+    session: SessionInsert,
+  ): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
   findAccountByEmail(email: string): Promise<AccountCredentials | null>;
   findAccountById(accountId: string): Promise<AccountCredentials | null>;
   createSession(
@@ -95,7 +102,8 @@ export interface AccountAuthStore {
     session: SessionInsert,
   ): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
   findSession(tokenHash: string): Promise<StoredSession | null>;
-  rotateSession(sessionId: string, previousTokenHash: string, session: SessionInsert, now: string): Promise<string | null>;
+  /** `renewWindowMs`: how close to expiry a session must be before it can rotate (7 days unless given). */
+  rotateSession(sessionId: string, previousTokenHash: string, session: SessionInsert, now: string, renewWindowMs?: number): Promise<string | null>;
   revokeSession(sessionId: string, tokenHash: string, now: string): Promise<boolean>;
   issueActionToken(accountId: string, purpose: "verification" | "password_reset", tokenHash: string, expiresAt: string): Promise<boolean>;
   hasValidActionToken(tokenHash: string, purpose: "verification" | "password_reset", now: string): Promise<boolean>;
@@ -127,6 +135,7 @@ const ACCOUNT_COLUMNS = `
   a.normalized_email AS email,
   (a.email_verified_at IS NOT NULL) AS email_verified,
   a.display_name,
+  (a.normalized_email IS NULL) AS guest,
   COALESCE((
     SELECT json_agg(p.provider ORDER BY p.provider)
     FROM (
@@ -161,6 +170,7 @@ function accountSummary(row: Row): AccountSummary {
     emailVerified: row.email_verified === true,
     displayName: nullableString(row.display_name),
     providers: [...new Set(providers)],
+    guest: row.guest === true,
   };
 }
 
@@ -279,6 +289,32 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
       return rows[0] ? createdSession(rows[0]) : null;
     },
 
+    async createGuestAccount(accountId, session) {
+      const rows = await query(
+        `
+        WITH created_account AS (
+          INSERT INTO kip_account.accounts (id, normalized_email, password_hash, display_name)
+          VALUES ($1::uuid, NULL, NULL, NULL)
+          RETURNING id
+        ),
+        created_session AS (
+          INSERT INTO kip_account.sessions (
+            id, account_id, token_hash, csrf_hash, transport, expires_at, absolute_expires_at
+          )
+          SELECT $2::uuid, id, $3, $4, $5, $6::timestamptz, $7::timestamptz
+          FROM created_account
+          RETURNING id AS session_id, account_id, expires_at, absolute_expires_at
+        )
+        SELECT c.id::text AS account_id, NULL AS email, false AS email_verified, NULL AS display_name,
+          true AS guest, json_build_array() AS providers,
+          s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
+        FROM created_account c
+        JOIN created_session s ON s.account_id = c.id`,
+        [accountId, session.id, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, session.absoluteExpiresAt],
+      );
+      return rows[0] ? createdSession(rows[0]) : null;
+    },
+
     async findAccountByEmail(email) {
       const rows = await query(
         `
@@ -352,7 +388,7 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
       };
     },
 
-    async rotateSession(sessionId, previousTokenHash, session, now) {
+    async rotateSession(sessionId, previousTokenHash, session, now, renewWindowMs = 7 * 24 * 60 * 60 * 1000) {
       const rows = await query(
         `
         UPDATE kip_account.sessions s SET
@@ -367,10 +403,10 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           AND s.revoked_at IS NULL
           AND s.expires_at > $7::timestamptz
           AND s.absolute_expires_at > $7::timestamptz
-          AND s.expires_at <= $7::timestamptz + interval '7 days'
+          AND s.expires_at <= $7::timestamptz + ($8::double precision * interval '1 millisecond')
           AND a.deletion_state = 'active'
         RETURNING s.expires_at`,
-        [sessionId, previousTokenHash, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, now],
+        [sessionId, previousTokenHash, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, now, renewWindowMs],
       );
       return rows[0] ? stringValue(rows[0].expires_at) : null;
     },
@@ -643,12 +679,13 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2, 0)) FROM subject_lock
           ),
           target AS MATERIALIZED (
-            SELECT a.id, a.deletion_state FROM kip_account.accounts a
+            SELECT a.id, a.deletion_state, (a.normalized_email IS NULL) AS guest FROM kip_account.accounts a
             JOIN kip_account.sessions s ON s.account_id = a.id
             WHERE a.id = $3::uuid AND s.id = $4::uuid AND s.token_hash = $5
               AND a.deletion_state = 'active' AND s.revoked_at IS NULL
               AND s.expires_at > $6::timestamptz AND s.absolute_expires_at > $6::timestamptz
-              AND s.reauthenticated_at >= $6::timestamptz - interval '5 minutes'
+              -- A guest has nothing to reauthenticate with: its session is its only credential.
+              AND (a.normalized_email IS NULL OR s.reauthenticated_at >= $6::timestamptz - interval '5 minutes')
               AND EXISTS (SELECT 1 FROM email_lock)
           ),
           existing_subject AS MATERIALIZED (
@@ -665,6 +702,21 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
               AND (NOT EXISTS (SELECT 1 FROM email_owner) OR EXISTS (SELECT 1 FROM email_owner WHERE id = t.id))
             ON CONFLICT (provider, subject) DO NOTHING
             RETURNING account_id
+          ),
+          -- Upgrading a guest in place: it takes the Google email, and its long guest sessions
+          -- shorten to an ordinary account's limits.
+          upgraded AS (
+            UPDATE kip_account.accounts a SET normalized_email = $2, email_verified_at = $6::timestamptz, updated_at = $6::timestamptz
+            FROM target t
+            WHERE a.id = t.id AND t.guest AND EXISTS (SELECT 1 FROM inserted)
+            RETURNING a.id
+          ),
+          shortened AS (
+            UPDATE kip_account.sessions s SET
+              absolute_expires_at = LEAST(s.absolute_expires_at, $6::timestamptz + interval '90 days'),
+              expires_at = LEAST(s.expires_at, $6::timestamptz + interval '30 days')
+            WHERE s.account_id IN (SELECT id FROM upgraded) AND s.revoked_at IS NULL
+            RETURNING s.id
           )
           SELECT CASE
             WHEN NOT EXISTS (SELECT 1 FROM target) THEN 'retry'
@@ -705,7 +757,7 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           WHERE a.id = $1::uuid AND current_session.id = $2::uuid AND current_session.token_hash = $3
             AND a.deletion_state = 'active' AND current_session.revoked_at IS NULL
             AND current_session.expires_at > $5::timestamptz AND current_session.absolute_expires_at > $5::timestamptz
-            AND current_session.reauthenticated_at >= $5::timestamptz - interval '5 minutes'
+            AND (a.normalized_email IS NULL OR current_session.reauthenticated_at >= $5::timestamptz - interval '5 minutes')
           FOR UPDATE OF a
         ), marked AS (
           UPDATE kip_account.accounts a SET deletion_state = 'deleting', updated_at = $5::timestamptz
