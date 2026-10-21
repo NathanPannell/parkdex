@@ -16,7 +16,13 @@ class MemoryCache {
     if (!cached) return undefined;
 
     const ifNoneMatch = request.headers.get("If-None-Match");
-    if (ifNoneMatch && ifNoneMatch.split(",").map((tag) => tag.trim().replace(/^W\//, "")).includes(cached.headers.get("ETag"))) {
+    if (
+      ifNoneMatch &&
+      ifNoneMatch
+        .split(",")
+        .map((tag) => tag.trim().replace(/^W\//, ""))
+        .includes(cached.headers.get("ETag"))
+    ) {
       return new Response(null, { status: 304, headers: cached.headers });
     }
     return cached.clone();
@@ -71,7 +77,12 @@ function harness(object = makeObject()) {
         calls.push({ method: "get", key, options });
         if (object === null) return null;
         const ifNoneMatch = options.onlyIf.get("If-None-Match");
-        if (ifNoneMatch?.split(",").map((tag) => tag.trim().replace(/^W\//, "")).includes(ETAG)) {
+        if (
+          ifNoneMatch
+            ?.split(",")
+            .map((tag) => tag.trim().replace(/^W\//, ""))
+            .includes(ETAG)
+        ) {
           const { body, ...metadata } = object;
           return metadata;
         }
@@ -99,7 +110,11 @@ function harness(object = makeObject()) {
     },
   };
   const pending = [];
-  const ctx = { waitUntil(promise) { pending.push(promise); } };
+  const ctx = {
+    waitUntil(promise) {
+      pending.push(promise);
+    },
+  };
   return { env, ctx, calls, pending, cache };
 }
 
@@ -182,7 +197,11 @@ test("app bundle pointers use short cache headers and allow only GET or HEAD", a
 
 test("app bundles are immutable SHA-256 keys and nothing else under app-bundles is served", async () => {
   const sha = "b".repeat(64);
-  const bundle = await request("https://kip-assets.parkdex.app/app-bundles/" + sha + ".zip", {}, harness(makeObject("zip bytes", { "Content-Type": "application/zip" })));
+  const bundle = await request(
+    "https://kip-assets.parkdex.app/app-bundles/" + sha + ".zip",
+    {},
+    harness(makeObject("zip bytes", { "Content-Type": "application/zip" })),
+  );
   assert.equal(bundle.result.status, 200);
   assert.equal(bundle.calls[0].key, "app-bundles/" + sha + ".zip");
   assert.equal(bundle.result.headers.get("Content-Type"), "application/zip");
@@ -203,11 +222,7 @@ test("app bundles are immutable SHA-256 keys and nothing else under app-bundles 
 });
 
 test("preview and malformed channel paths are not R2 keys", async () => {
-  for (const path of [
-    "/channels/preview/current.json",
-    "/channels/staging/other.json",
-    "/channels/staging/current.json/extra",
-  ]) {
+  for (const path of ["/channels/preview/current.json", "/channels/staging/other.json", "/channels/staging/current.json/extra"]) {
     const invalid = await request("https://kip-assets.parkdex.app" + path);
     assert.equal(invalid.result.status, 404, path);
     assert.equal(invalid.calls.length, 0, path);
@@ -278,16 +293,10 @@ test("date validators use the HTTP Last-Modified second", async () => {
   const lastModified = head.result.headers.get("Last-Modified");
   assert.equal(lastModified, "Tue, 01 Sep 2026 12:00:00 GMT");
 
-  const unchanged = await request(
-    CONTENT_URL,
-    { method: "HEAD", headers: { "If-Modified-Since": lastModified } },
-  );
+  const unchanged = await request(CONTENT_URL, { method: "HEAD", headers: { "If-Modified-Since": lastModified } });
   assert.equal(unchanged.result.status, 304);
 
-  const unmodified = await request(
-    CONTENT_URL,
-    { method: "HEAD", headers: { "If-Unmodified-Since": lastModified } },
-  );
+  const unmodified = await request(CONTENT_URL, { method: "HEAD", headers: { "If-Unmodified-Since": lastModified } });
   assert.equal(unmodified.result.status, 200);
 });
 

@@ -98,7 +98,7 @@ class ImportPlanTests(unittest.TestCase):
     def test_windows_source_path_and_selected_only_topology_validation(self):
         with tempfile.TemporaryDirectory() as directory:
             source_path = Path(directory) / "legacy.geojson"
-            source_path.write_text("{\"type\":\"FeatureCollection\",\"features\":[]}", encoding="utf-8")
+            source_path.write_text('{"type":"FeatureCollection","features":[]}', encoding="utf-8")
             raw, reference = importer.read_source(str(source_path.resolve()), "boundary")
             self.assertEqual(reference["kind"], "file")
             self.assertEqual(reference["sha256"], importer.sha256(raw))
@@ -308,20 +308,44 @@ class ImportPlanTests(unittest.TestCase):
         self.assertEqual(importer.read_park_id_file(None), [])
 
     def test_minimum_reader_is_recorded_on_new_parks_only(self):
-        features = importer.parse_boundary_source({"type": "FeatureCollection", "features": [source_feature("regional-new-1"), source_feature("regional-old-1")]})
+        features = importer.parse_boundary_source(
+            {"type": "FeatureCollection", "features": [source_feature("regional-new-1"), source_feature("regional-old-1")]}
+        )
         target = {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"}
         place = {"id": "regional-new-1", "name": "New Park", "category": "regional", "region": "Island", "latitude": 48.42, "longitude": -123.32}
         existing = {"regional-old-1": {"id": "regional-old-1", "biome": "coast", "rarity": "common"}}
         hubs = [{"position": 0, "name": "One", "lng": -123.3, "lat": 48.4}, {"position": 1, "name": "Two", "lng": -123.4, "lat": 48.5}]
         source = {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64}
         plan = importer.build_plan(
-            features, source, ["regional-new-1", "regional-old-1"], {}, target, existing, {},
-            {"regional-new-1": place}, source, {"regional-new-1": review_item()}, source, hubs, minimum_reader=3,
+            features,
+            source,
+            ["regional-new-1", "regional-old-1"],
+            {},
+            target,
+            existing,
+            {},
+            {"regional-new-1": place},
+            source,
+            {"regional-new-1": review_item()},
+            source,
+            hubs,
+            minimum_reader=3,
         )
         self.assertEqual(plan["minimumReader"], 3)
         self.assertEqual([change.get("minimumReader") for change in plan["changes"]], [3, None])
         without = importer.build_plan(
-            features, source, ["regional-new-1"], {}, target, {}, {}, {"regional-new-1": place}, source, {"regional-new-1": review_item()}, source, hubs,
+            features,
+            source,
+            ["regional-new-1"],
+            {},
+            target,
+            {},
+            {},
+            {"regional-new-1": place},
+            source,
+            {"regional-new-1": review_item()},
+            source,
+            hubs,
         )
         self.assertNotIn("minimumReader", without)
         with self.assertRaisesRegex(importer.ParkImportError, "minimum-reader"):
@@ -332,7 +356,9 @@ class ImportPlanTests(unittest.TestCase):
         target = {"host": "127.0.0.1", "port": 55438, "database": "test", "environment": "local-qa", "revision": 0, "declaredHost": "127.0.0.1"}
         for invalid_id in ("park--new", "park-new-"):
             with self.subTest(target_id=invalid_id), self.assertRaisesRegex(importer.ParkImportError, "target park ID is invalid"):
-                importer.build_plan(features, {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64}, ["park-one"], {"park-one": invalid_id}, target, {}, {})
+                importer.build_plan(
+                    features, {"kind": "file", "locator": "fixture.geojson", "sha256": "0" * 64}, ["park-one"], {"park-one": invalid_id}, target, {}, {}
+                )
 
 
 TEST_DSN = os.environ.get("LEGACY_IMPORT_TEST_DATABASE_URL") or os.environ.get("PARKDEX_LEGACY_IMPORT_TEST_DATABASE_URL")
@@ -377,8 +403,7 @@ class PostgreSQLImportTests(unittest.TestCase):
                     "('regional-existing-2', 'Queued Park', 'Queued', 'regional', 'Island', 48.41, -123.31, 'coast', 'circle', 'rare', NULL, 13, 'Keep queued metadata.')"
                 )
                 cursor.execute(
-                    "INSERT INTO public.boundaries (park_id, feature) VALUES "
-                    "('regional-existing-1', %s::jsonb), ('regional-existing-2', %s::jsonb)",
+                    "INSERT INTO public.boundaries (park_id, feature) VALUES ('regional-existing-1', %s::jsonb), ('regional-existing-2', %s::jsonb)",
                     (
                         json.dumps(importer._public_feature("regional-existing-1", "coast", square(-2))),
                         json.dumps(importer._public_feature("regional-existing-2", "coast", square(-4))),
@@ -419,7 +444,16 @@ class PostgreSQLImportTests(unittest.TestCase):
                     (json.dumps(frozen_research), json.dumps(selected_art)),
                 )
 
-    def _plan(self, temp: Path, features: list[dict], ids: list[str], catalogue: dict | None = None, review: dict | None = None, rarity: dict | None = None, minimum_reader: int | None = None) -> tuple[dict, Path]:
+    def _plan(
+        self,
+        temp: Path,
+        features: list[dict],
+        ids: list[str],
+        catalogue: dict | None = None,
+        review: dict | None = None,
+        rarity: dict | None = None,
+        minimum_reader: int | None = None,
+    ) -> tuple[dict, Path]:
         boundary_file = temp / "legacy.geojson"
         boundary_file.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
         catalogue_file = None
@@ -436,31 +470,40 @@ class PostgreSQLImportTests(unittest.TestCase):
             rarity_file.write_text(json.dumps(rarity), encoding="utf-8")
         output_file = temp / "plan.json"
         import psycopg
+
         with psycopg.connect(self.dsn) as conn:
             host = conn.info.host
-        args = type("Args", (), {
-            "source": str(boundary_file),
-            "park_id": ids,
-            "id_map": [],
-            "catalogue_source": str(catalogue_file) if catalogue_file else None,
-            "new_park_review": review_file,
-            "rarity_review": rarity_file,
-            "target_host": host,
-            "target_environment": "local-qa",
-            "out": output_file,
-            "minimum_reader": minimum_reader,
-        })()
+        args = type(
+            "Args",
+            (),
+            {
+                "source": str(boundary_file),
+                "park_id": ids,
+                "id_map": [],
+                "catalogue_source": str(catalogue_file) if catalogue_file else None,
+                "new_park_review": review_file,
+                "rarity_review": rarity_file,
+                "target_host": host,
+                "target_environment": "local-qa",
+                "out": output_file,
+                "minimum_reader": minimum_reader,
+            },
+        )()
         with patch.dict(os.environ, {"DATABASE_URL": self.dsn}):
             importer.run_plan(args)
         return json.loads(output_file.read_text(encoding="utf-8")), output_file
 
     def _apply(self, plan: dict, path: Path) -> dict:
-        args = type("Args", (), {
-            "plan": path,
-            "reviewed_plan_sha": plan["planSha256"],
-            "expected_target_host": plan["target"]["declaredHost"],
-            "target_environment": plan["target"]["environment"],
-        })()
+        args = type(
+            "Args",
+            (),
+            {
+                "plan": path,
+                "reviewed_plan_sha": plan["planSha256"],
+                "expected_target_host": plan["target"]["declaredHost"],
+                "target_environment": plan["target"]["environment"],
+            },
+        )()
         with patch.dict(os.environ, {"DATABASE_URL": self.dsn}):
             return importer.run_apply(args)
 
@@ -472,11 +515,19 @@ class PostgreSQLImportTests(unittest.TestCase):
             temp = Path(directory)
             with psycopg.connect(self.dsn) as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s", (park_id,))
+                    cursor.execute(
+                        "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s",
+                        (park_id,),
+                    )
                     before_park = list(cursor.fetchone())
-                    cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s", ("art/badges/scenes/existing-scene.webp",))
+                    cursor.execute(
+                        "SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s",
+                        ("art/badges/scenes/existing-scene.webp",),
+                    )
                     before_asset = cursor.fetchone()
-                    cursor.execute("SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,))
+                    cursor.execute(
+                        "SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,)
+                    )
                     before_drive = cursor.fetchall()
                     cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
                     before_revision = cursor.fetchone()[0]
@@ -492,11 +543,19 @@ class PostgreSQLImportTests(unittest.TestCase):
             self.assertEqual(result["revision"], before_revision + 1)
             with psycopg.connect(self.dsn) as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s", (park_id,))
+                    cursor.execute(
+                        "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = %s",
+                        (park_id,),
+                    )
                     after_park = list(cursor.fetchone())
-                    cursor.execute("SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s", ("art/badges/scenes/existing-scene.webp",))
+                    cursor.execute(
+                        "SELECT logical_path, object_key, url, sha256, byte_size, content_type FROM public.r2_objects WHERE logical_path = %s",
+                        ("art/badges/scenes/existing-scene.webp",),
+                    )
                     self.assertEqual(cursor.fetchone(), before_asset)
-                    cursor.execute("SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,))
+                    cursor.execute(
+                        "SELECT park_id, hub_position, distance_km, duration_min FROM public.park_drive WHERE park_id = %s ORDER BY hub_position", (park_id,)
+                    )
                     self.assertEqual(cursor.fetchall(), before_drive)
                     cursor.execute("SELECT entity, entity_id FROM public.content_changes WHERE revision = %s ORDER BY entity, entity_id", (result["revision"],))
                     self.assertEqual(
@@ -577,7 +636,9 @@ class PostgreSQLImportTests(unittest.TestCase):
             before_park = None
             with psycopg.connect(self.dsn) as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = 'regional-existing-1'")
+                    cursor.execute(
+                        "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = 'regional-existing-1'"
+                    )
                     before_park = cursor.fetchone()
                     cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
                     before_revision = cursor.fetchone()[0]
@@ -587,7 +648,9 @@ class PostgreSQLImportTests(unittest.TestCase):
             self.assertEqual(result["revision"], before_revision + 1)
             with psycopg.connect(self.dsn) as conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = 'regional-existing-1'")
+                    cursor.execute(
+                        "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = 'regional-existing-1'"
+                    )
                     self.assertEqual(cursor.fetchone(), before_park)
                     cursor.execute("SELECT feature FROM public.boundaries WHERE park_id = 'regional-existing-1'")
                     updated_boundary = importer._jsonb(cursor.fetchone()[0])

@@ -8,7 +8,7 @@ const WORD = "parkdex".split("");
 export function Splash() {
   const { state, dispatch } = useStore();
   // While the splash fades out it still covers the screen underneath; let taps through so
-  // onboarding's Skip and Next work the moment they appear.
+  // onboarding's buttons work the moment they appear.
   const present = useIsPresent();
   const next = () => {
     if (!state.startupReady) return;

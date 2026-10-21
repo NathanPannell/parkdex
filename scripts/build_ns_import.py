@@ -8,6 +8,7 @@ whose hash changed, and writes the same importer inputs as the legacy BC
 bundle (docs/import-legacy-bc-parks.md). Neither step writes to a database,
 R2 or any provider. Every new park gets content reader floor 3.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,20 +59,24 @@ def arcgis(layer: str, **params: str) -> str:
 # Every official source, fetched exactly as listed. Query parameters are part of the pin.
 SOURCES: dict[str, dict[str, str]] = {
     "nsecc-parks.geojson": {
-        "url": arcgis(NSECC_LAYER, where="PROT_TYPE LIKE '%Park%'", outFields="*", returnGeometry="true",
-                      outSR="4326", orderByFields="OBJECTID", f="geojson"),
+        "url": arcgis(NSECC_LAYER, where="PROT_TYPE LIKE '%Park%'", outFields="*", returnGeometry="true", outSR="4326", orderByFields="OBJECTID", f="geojson"),
         "page": NSECC_PAGE,
         "role": "Provincial park outlines (PROT_TYPE 'Provincial Park', designated under the Provincial Parks Act and managed by Natural Resources and Renewables) and the Sable Island National Park Reserve outline, from the province's Parks and Protected Areas System layer.",
     },
     "nsecc-attributes.json": {
-        "url": arcgis(NSECC_LAYER, where="1=1", outFields="OBJECTID,PROT_NAME,PROT_TYPE,PROT_STATUS,LEGISLATION,MGMT_AUTHORITY",
-                      returnGeometry="false", orderByFields="OBJECTID", f="json"),
+        "url": arcgis(
+            NSECC_LAYER,
+            where="1=1",
+            outFields="OBJECTID,PROT_NAME,PROT_TYPE,PROT_STATUS,LEGISLATION,MGMT_AUTHORITY",
+            returnGeometry="false",
+            orderByFields="OBJECTID",
+            f="json",
+        ),
         "page": NSECC_PAGE,
         "role": "Every feature of the same layer without geometry, to count what the provincial park filter leaves out.",
     },
     "clss-national-parks-ns.geojson": {
-        "url": arcgis(CLSS_LAYER, where="jurisdiction='NS'", outFields="*", returnGeometry="true", outSR="4326",
-                      orderByFields="OBJECTID", f="geojson"),
+        "url": arcgis(CLSS_LAYER, where="jurisdiction='NS'", outFields="*", returnGeometry="true", outSR="4326", orderByFields="OBJECTID", f="geojson"),
         "page": CLSS_PAGE,
         "role": "Legislative national park boundaries in Nova Scotia (Cape Breton Highlands, Kejimkujik inland and Seaside).",
     },
@@ -91,9 +96,11 @@ SOURCES: dict[str, dict[str, str]] = {
         "role": "Municipality boundaries with their county, used to place each pin in a county.",
     },
     "nstdb-park-delimiters.json": {
-        "url": "https://data.novascotia.ca/resource/k3u4-5mnw.json?" + urlencode({
-            "$select": "feat_code,feat_desc,name", "$where": "feat_code in ('DLPKPR50','DLPKNA50')",
-            "$order": "name,feat_code", "$limit": "1000"}, quote_via=quote),
+        "url": "https://data.novascotia.ca/resource/k3u4-5mnw.json?"
+        + urlencode(
+            {"$select": "feat_code,feat_desc,name", "$where": "feat_code in ('DLPKPR50','DLPKNA50')", "$order": "name,feat_code", "$limit": "1000"},
+            quote_via=quote,
+        ),
         "page": NSTDB_PAGE,
         "role": "Names of provincial and national park delimiters in the Nova Scotia Topographic Database, as an independent completeness check.",
     },
@@ -130,6 +137,7 @@ def download(url: str) -> bytes:
 
 # Fetch: download every source into the raw folder and pin it.
 
+
 def fetch(raw_dir: Path, bundle_dir: Path) -> dict[str, Any]:
     raw_dir.mkdir(parents=True, exist_ok=True)
     record: dict[str, Any] = {
@@ -149,8 +157,11 @@ def fetch(raw_dir: Path, bundle_dir: Path) -> dict[str, Any]:
             data = download(url)
             (raw_dir / name).write_bytes(data)
             record["sources"][name] = {
-                "url": url, "role": f"Parkdex {environment} content snapshot as reader {reader} receives it",
-                "retrievedAt": now(), "bytes": len(data), "sha256": sha256(data),
+                "url": url,
+                "role": f"Parkdex {environment} content snapshot as reader {reader} receives it",
+                "retrievedAt": now(),
+                "bytes": len(data),
+                "sha256": sha256(data),
             }
         pointer = json.loads((raw_dir / f"{environment}-snapshot-reader3.json").read_bytes())["catalogue"]
         index_raw = download(pointer["indexUrl"])
@@ -168,7 +179,9 @@ def fetch(raw_dir: Path, bundle_dir: Path) -> dict[str, Any]:
         record["sources"][f"{environment}-catalogue/{content_catalogue.INDEX_PATH}"] = {
             "url": pointer["indexUrl"],
             "role": f"Parkdex {environment} CDN catalogue release (revision {index['revision']}, {len(index['parks'])} parks); its boundary chunks are pinned by the hashes inside the index",
-            "retrievedAt": now(), "bytes": len(index_raw), "sha256": sha256(index_raw),
+            "retrievedAt": now(),
+            "bytes": len(index_raw),
+            "sha256": sha256(index_raw),
             "chunks": len(index["boundaryChunks"]),
         }
     (bundle_dir / "sources").mkdir(parents=True, exist_ok=True)
@@ -228,7 +241,9 @@ EASTERN_SHORE_LONGITUDE = -63.45
 # the Halifax Regional Municipality and reached only from Halifax.
 PARK_REGION_OVERRIDES = {
     "national-sable-island-national-park-reserve": {
-        "county": "Halifax", "municipality": "Halifax", "region": "Halifax Metro",
+        "county": "Halifax",
+        "municipality": "Halifax",
+        "region": "Halifax Metro",
         "reason": "Offshore and in no municipality polygon; part of the Halifax Regional Municipality and reached only from Halifax.",
     },
 }
@@ -250,10 +265,13 @@ REGION_PHRASES = {
 NATIONAL_PARKS = {
     "Cape Breton Highlands National Park": {"source": "clss", "adminAreaId": "CBHI"},
     "Kejimkujik National Park and National Historic Site": {"source": "clss", "adminAreaId": "KEJI"},
-    "Sable Island National Park Reserve": {"source": "nsecc", "names": (
-        "Sable Island National Park Reserve Of Canada",
-        "Sable Island National Park Reserve Of Canada/Sable Island Bird Sanctuary",
-    )},
+    "Sable Island National Park Reserve": {
+        "source": "nsecc",
+        "names": (
+            "Sable Island National Park Reserve Of Canada",
+            "Sable Island National Park Reserve Of Canada/Sable Island Bird Sanctuary",
+        ),
+    },
 }
 NSECC_NATIONAL_NAMES = {
     "CBHI": "Cape Breton Highlands National Park Of Canada",
@@ -342,6 +360,7 @@ def read_raw(raw_dir: Path, bundle_dir: Path) -> tuple[dict[str, Any], dict[str,
 # invalid feature is rebuilt with the planar-face even-odd rule over all of its
 # rings: a face is inside when an odd number of rings contain it. The features
 # of one park stay separate parts, or are unioned when they touch or overlap.
+
 
 def rings_of(geometry: dict[str, Any]) -> list[list[list[float]]]:
     return [ring for polygon in bc.polygons_of(geometry) for ring in polygon]
@@ -446,26 +465,34 @@ def assemble(park_id: str, features: list[dict[str, Any]]) -> tuple[dict[str, An
         part_shape = shape(multipolygon(parts))
         shapes.append(part_shape)
         if report:
-            normalizations.append({"parkId": park_id, "sourceFeatureId": source_id, **report,
-                                   "normalizedCounts": bc.counts(multipolygon(parts))})
+            normalizations.append({"parkId": park_id, "sourceFeatureId": source_id, **report, "normalizedCounts": bc.counts(multipolygon(parts))})
             agreements.append({"sourceFeatureId": source_id, **even_odd_agreement(rings_of(feature["geometry"]), multipolygon(parts))})
-        rows.append({
-            "sourceFeatureId": source_id,
-            "objectId": feature["objectId"],
-            "sourceValid": report is None,
-            "sourceCounts": bc.counts(feature["geometry"]),
-            "officialHectares": feature["officialHectares"],
-            "hectares": round(local_hectares(part_shape), 3),
-        })
+        rows.append(
+            {
+                "sourceFeatureId": source_id,
+                "objectId": feature["objectId"],
+                "sourceValid": report is None,
+                "sourceCounts": bc.counts(feature["geometry"]),
+                "officialHectares": feature["officialHectares"],
+                "hectares": round(local_hectares(part_shape), 3),
+            }
+        )
         polygons.extend(parts)
     combined = multipolygon(polygons)
     assembly = "parts"
     if not shape(combined).is_valid:
         combined = multipolygon(shapely_parts(unary_union(shapes)))
         assembly = "source-feature-union"
-        normalizations.append({"parkId": park_id, "method": assembly, "sourceFeatureIds": [f["sourceFeatureId"] for f in features],
-                               "reason": "Source features of one park touch or overlap, so the park is their union.",
-                               "partsBefore": len(polygons), "normalizedCounts": bc.counts(combined)})
+        normalizations.append(
+            {
+                "parkId": park_id,
+                "method": assembly,
+                "sourceFeatureIds": [f["sourceFeatureId"] for f in features],
+                "reason": "Source features of one park touch or overlap, so the park is their union.",
+                "partsBefore": len(polygons),
+                "normalizedCounts": bc.counts(combined),
+            }
+        )
     output = multipolygon(rounded(combined["coordinates"], COORDINATE_DECIMALS))
     if not shape(output).is_valid:
         output = combined
@@ -505,6 +532,7 @@ def interior_point(geometry: dict[str, Any]) -> list[float]:
 
 # Sources to park records.
 
+
 def parse_finder(html: str) -> dict[str, list[float]]:
     pattern = re.compile(r'<tr locationTarget="[^"]+" data-geometry="POINT \(([-0-9.]+) ([-0-9.]+)\)" data-type="wkt">\s*<td>[^<]*</td>\s*<td>([^<]+)</td>')
     return {name.strip(): [float(lng), float(lat)] for lng, lat, name in pattern.findall(html)}
@@ -513,10 +541,20 @@ def parse_finder(html: str) -> dict[str, list[float]]:
 def feature_record(feature: dict[str, Any], source: str) -> dict[str, Any]:
     properties = feature["properties"]
     if source == "clss":
-        return {"sourceFeatureId": properties["NID"], "objectId": properties["OBJECTID"], "geometry": feature["geometry"],
-                "officialHectares": None, "name": properties["adminAreaNameEng"]}
-    return {"sourceFeatureId": properties["GlobalID"], "objectId": properties["OBJECTID"], "geometry": feature["geometry"],
-            "officialHectares": properties.get("HA_OFFICIAL"), "name": properties["PROT_NAME"]}
+        return {
+            "sourceFeatureId": properties["NID"],
+            "objectId": properties["OBJECTID"],
+            "geometry": feature["geometry"],
+            "officialHectares": None,
+            "name": properties["adminAreaNameEng"],
+        }
+    return {
+        "sourceFeatureId": properties["GlobalID"],
+        "objectId": properties["OBJECTID"],
+        "geometry": feature["geometry"],
+        "officialHectares": properties.get("HA_OFFICIAL"),
+        "name": properties["PROT_NAME"],
+    }
 
 
 def collect_parks(raw: dict[str, bytes]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -533,13 +571,28 @@ def collect_parks(raw: dict[str, bytes]) -> tuple[list[dict[str, Any]], dict[str
         if properties["LEGISLATION"] != PROVINCIAL_LEGISLATION or properties["PROT_STATUS"] != "Designated":
             raise importer.ParkImportError(f"Provincial park feature {properties['OBJECTID']} is not designated under the Provincial Parks Act")
         if feature.get("geometry") is None:
-            skipped.append({"objectId": properties["OBJECTID"], "sourceFeatureId": properties["GlobalID"], "name": properties["PROT_NAME"],
-                            "officialHectares": properties["HA_OFFICIAL"], "reason": "The source feature has no geometry."})
+            skipped.append(
+                {
+                    "objectId": properties["OBJECTID"],
+                    "sourceFeatureId": properties["GlobalID"],
+                    "name": properties["PROT_NAME"],
+                    "officialHectares": properties["HA_OFFICIAL"],
+                    "reason": "The source feature has no geometry.",
+                }
+            )
             continue
         groups.setdefault(" ".join(properties["PROT_NAME"].split()), []).append(feature_record(feature, "nsecc"))
     for name in sorted(groups):
-        parks.append({"id": f"provincial-{slugify(name)}", "name": name, "category": "provincial",
-                      "sourceName": NSECC_NAME, "sourceUrl": NSECC_PAGE, "features": groups[name]})
+        parks.append(
+            {
+                "id": f"provincial-{slugify(name)}",
+                "name": name,
+                "category": "provincial",
+                "sourceName": NSECC_NAME,
+                "sourceUrl": NSECC_PAGE,
+                "features": groups[name],
+            }
+        )
     by_admin = {feature["properties"]["adminAreaId"]: feature for feature in clss["features"]}
     nsecc_national: dict[str, list[dict[str, Any]]] = {}
     for feature in nsecc["features"]:
@@ -562,8 +615,17 @@ def collect_parks(raw: dict[str, bytes]) -> tuple[list[dict[str, Any]], dict[str
             if not features:
                 raise importer.ParkImportError(f"The provincial layer has no outline for {name}")
             source_name, source_url = NSECC_NAME, NSECC_PAGE
-        parks.append({"id": park_id, "name": name, "category": "national", "sourceName": source_name, "sourceUrl": source_url,
-                      "features": features, "finderPoint": finder[name]})
+        parks.append(
+            {
+                "id": park_id,
+                "name": name,
+                "category": "national",
+                "sourceName": source_name,
+                "sourceUrl": source_url,
+                "features": features,
+                "finderPoint": finder[name],
+            }
+        )
     unused = sorted(set(by_admin) - {spec.get("adminAreaId") for spec in NATIONAL_PARKS.values()})
     if unused:
         raise importer.ParkImportError(f"CLSS has Nova Scotia national parks this bundle does not handle: {unused}")
@@ -597,8 +659,7 @@ def county_of(point: list[float], municipalities) -> dict[str, Any]:
     distance = nearest[1].distance(location)
     if distance > NEAREST_MUNICIPALITY_DEGREES:
         raise importer.ParkImportError(f"Pin {point} is {distance:.3f} degrees from any municipality")
-    return {"county": nearest[0]["county"], "municipality": nearest[0]["name"], "countyMethod": "nearest-municipality",
-            "distanceDegrees": round(distance, 6)}
+    return {"county": nearest[0]["county"], "municipality": nearest[0]["name"], "countyMethod": "nearest-municipality", "distanceDegrees": round(distance, 6)}
 
 
 def region_of(county: str, municipality: str, point: list[float]) -> tuple[str, str]:
@@ -656,8 +717,13 @@ def choose_pin(park: dict[str, Any], geometry: dict[str, Any], entrances: dict[s
         candidates.append({**entrance, "point": point, "insideOutline": bc.legacy_inside(tuple(point), geometry)})
     for candidate in candidates:
         if candidate["insideOutline"]:
-            return {"point": candidate["point"], "method": "official-entrance-point", "parkType": candidate["parkType"],
-                    "insideOutline": True, "entrancePoints": candidates}
+            return {
+                "point": candidate["point"],
+                "method": "official-entrance-point",
+                "parkType": candidate["parkType"],
+                "insideOutline": True,
+                "entrancePoints": candidates,
+            }
     return {"point": interior_point(geometry), "method": "interior-point-largest-part", "insideOutline": True, "entrancePoints": candidates}
 
 
@@ -687,22 +753,34 @@ def known_ids(raw: dict[str, bytes]) -> dict[str, set[str]]:
 # their snapshots stay as measured. Reader 3 gets a CDN catalogue release,
 # rebuilt here from the live release plus the new parks.
 
+
 def live_snapshot(raw: dict[str, bytes], environment: str) -> dict[str, Any]:
     index = json.loads(raw[f"{environment}-catalogue/{content_catalogue.INDEX_PATH}"])
     features = []
     for chunk in index["boundaryChunks"]:
         features.extend(json.loads(raw[f"{environment}-catalogue/{chunk['path']}"])["features"])
-    return {"schema": content_catalogue.CONTENT_SYNC_SCHEMA, "revision": index["revision"], "parks": index["parks"],
-            "boundaries": {"type": "FeatureCollection", "features": features}, "drive": index["drive"],
-            "assets": index["assets"], "map": index["map"]}
+    return {
+        "schema": content_catalogue.CONTENT_SYNC_SCHEMA,
+        "revision": index["revision"],
+        "parks": index["parks"],
+        "boundaries": {"type": "FeatureCollection", "features": features},
+        "drive": index["drive"],
+        "assets": index["assets"],
+        "map": index["map"],
+    }
 
 
 def release_size(snapshot: dict[str, Any], parks: list[dict[str, Any]], features: list[dict[str, Any]], drive: dict[str, Any]) -> dict[str, Any]:
-    full = {**snapshot,
-            "revision": snapshot["revision"] + (1 if parks else 0),
-            "parks": sorted([*snapshot["parks"], *(bc.access_fields(park) for park in parks)], key=lambda park: park["id"]),
-            "boundaries": {"type": "FeatureCollection", "features": sorted([*snapshot["boundaries"]["features"], *features], key=lambda feature: feature["properties"]["id"])},
-            "drive": {"hubs": snapshot["drive"]["hubs"], "parks": dict(sorted({**snapshot["drive"]["parks"], **drive}.items()))}}
+    full = {
+        **snapshot,
+        "revision": snapshot["revision"] + (1 if parks else 0),
+        "parks": sorted([*snapshot["parks"], *(bc.access_fields(park) for park in parks)], key=lambda park: park["id"]),
+        "boundaries": {
+            "type": "FeatureCollection",
+            "features": sorted([*snapshot["boundaries"]["features"], *features], key=lambda feature: feature["properties"]["id"]),
+        },
+        "drive": {"hubs": snapshot["drive"]["hubs"], "parks": dict(sorted({**snapshot["drive"]["parks"], **drive}.items()))},
+    }
     release = content_catalogue.build_release(full)
     sizes = [item["byte_size"] for item in release["manifest"]["files"][1:]]
     return {
@@ -718,8 +796,12 @@ def release_size(snapshot: dict[str, Any], parks: list[dict[str, Any]], features
 
 def size_projections(raw: dict[str, bytes], parks: list[dict[str, Any]], features: list[dict[str, Any]], hub_count: int) -> dict[str, Any]:
     drive = {park["id"]: {"drive": [None] * hub_count, "walkM": 0} for park in parks}
-    projections: dict[str, Any] = {"limitBytes": MAX_SYNC_RESPONSE_BYTES, "minimumHeadroomBytes": MIN_SNAPSHOT_HEADROOM_BYTES,
-                                   "minimumReader": MINIMUM_READER, "environments": {}}
+    projections: dict[str, Any] = {
+        "limitBytes": MAX_SYNC_RESPONSE_BYTES,
+        "minimumHeadroomBytes": MIN_SNAPSHOT_HEADROOM_BYTES,
+        "minimumReader": MINIMUM_READER,
+        "environments": {},
+    }
     for environment in CATALOGUE_HOSTS:
         snapshot = live_snapshot(raw, environment)
         pointer = json.loads(raw[f"{environment}-snapshot-reader3.json"])["catalogue"]
@@ -744,11 +826,13 @@ def size_projections(raw: dict[str, bytes], parks: list[dict[str, Any]], feature
             "reader3CatalogueNow": {**current, "liveVersion": pointer["version"], "rebuildMatchesLive": current["version"] == pointer["version"]},
             "reader3CatalogueWithNovaScotia": projected,
         }
-    projections["importChangeBatchBytes"] = bc.compact_size([
-        {"entity": kind, "op": "upsert", "id": park["id"], "value": value}
-        for park, feature in zip(parks, features)
-        for kind, value in (("park", park), ("boundary", feature), ("drive", drive[park["id"]]))
-    ])
+    projections["importChangeBatchBytes"] = bc.compact_size(
+        [
+            {"entity": kind, "op": "upsert", "id": park["id"], "value": value}
+            for park, feature in zip(parks, features)
+            for kind, value in (("park", park), ("boundary", feature), ("drive", drive[park["id"]]))
+        ]
+    )
     return projections
 
 
@@ -781,9 +865,16 @@ def overlap_rows(ns_features: dict[str, dict[str, Any]], existing: dict[str, dic
                 continue
             first, second = shared / shapes[i].area, shared / shapes[j].area
             if max(first, second) >= OVERLAP_REPORT_FLOOR:
-                found.append({"newId": park_id, "existingId": ids[j], "shareOfNewPark": round(first, 6),
-                              "shareOfExistingPark": round(second, 6), "duplicate": min(first, second) >= DUPLICATE_OVERLAP,
-                              "against": "Nova Scotia bundle"})
+                found.append(
+                    {
+                        "newId": park_id,
+                        "existingId": ids[j],
+                        "shareOfNewPark": round(first, 6),
+                        "shareOfExistingPark": round(second, 6),
+                        "duplicate": min(first, second) >= DUPLICATE_OVERLAP,
+                        "against": "Nova Scotia bundle",
+                    }
+                )
     return found
 
 
@@ -795,9 +886,9 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
     entrances: dict[str, list[dict[str, Any]]] = {}
     for feature in json.loads(raw["ns-park-entrances.geojson"])["features"]:
         name = feature["properties"]["name_full"]
-        entrances.setdefault(name_key(ENTRANCE_NAME_ALIASES.get(name, name)), []).append({
-            "name": feature["properties"]["name_full"], "parkType": feature["properties"]["park_type"],
-            "point": feature["geometry"]["coordinates"]})
+        entrances.setdefault(name_key(ENTRANCE_NAME_ALIASES.get(name, name)), []).append(
+            {"name": feature["properties"]["name_full"], "parkType": feature["properties"]["park_type"], "point": feature["geometry"]["coordinates"]}
+        )
     municipalities = municipality_index(json.loads(raw["ns-municipalities.geojson"]))
     nstdb = json.loads(raw["nstdb-park-delimiters.json"])
     nstdb_keys = {name_key(item["name"]): item["name"] for item in nstdb}
@@ -826,16 +917,25 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
             where = county_of(pin["point"], municipalities)
             region, rule = region_of(where["county"], where["municipality"], pin["point"])
         places[park_id] = {
-            "id": park_id, "name": park["name"], "category": park["category"],
-            "latitude": pin["point"][1], "longitude": pin["point"][0], "region": region,
+            "id": park_id,
+            "name": park["name"],
+            "category": park["category"],
+            "latitude": pin["point"][1],
+            "longitude": pin["point"][0],
+            "region": region,
             "description": blurb_for(park["category"], park["name"], region),
-            "sourceUrl": park["sourceUrl"], "sourceName": park["sourceName"], "sourceId": park["features"][0]["sourceFeatureId"],
-            "county": where["county"], "pinSource": pin["method"],
+            "sourceUrl": park["sourceUrl"],
+            "sourceName": park["sourceName"],
+            "sourceId": park["features"][0]["sourceFeatureId"],
+            "county": where["county"],
+            "pinSource": pin["method"],
         }
         geometries[park_id] = geometry
         official = [feature["officialHectares"] for feature in park["features"]]
         rows[park_id] = {
-            "id": park_id, "name": park["name"], "category": park["category"],
+            "id": park_id,
+            "name": park["name"],
+            "category": park["category"],
             "sourceName": park["sourceName"],
             "sourceFeatureIds": [feature["sourceFeatureId"] for feature in park["features"]],
             **assembled["evidence"],
@@ -888,13 +988,22 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
     boundary_features = []
     for park_id in selected:
         park = next(item for item in parks if item["id"] == park_id)
-        boundary_features.append({"type": "Feature", "properties": {
-            "id": park_id, "name": park["name"], "category": park["category"],
-            "sourceName": park["sourceName"], "sourceUrl": park["sourceUrl"],
-            "sourceId": park["features"][0]["sourceFeatureId"],
-            "sourceObjectIds": [feature["sourceFeatureId"] for feature in park["features"]],
-            "sourceLayerObjectIds": [feature["objectId"] for feature in park["features"]],
-        }, "geometry": geometries[park_id]})
+        boundary_features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": park_id,
+                    "name": park["name"],
+                    "category": park["category"],
+                    "sourceName": park["sourceName"],
+                    "sourceUrl": park["sourceUrl"],
+                    "sourceId": park["features"][0]["sourceFeatureId"],
+                    "sourceObjectIds": [feature["sourceFeatureId"] for feature in park["features"]],
+                    "sourceLayerObjectIds": [feature["objectId"] for feature in park["features"]],
+                },
+                "geometry": geometries[park_id],
+            }
+        )
     records = importer.parse_boundary_source({"type": "FeatureCollection", "features": boundary_features})
 
     hubs = [{"position": index} for index in range(hub_count)]
@@ -934,9 +1043,18 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
             "national": sorted(NATIONAL_PARKS),
         },
         "excluded": {
-            "otherProtectedAreaTypes": {"reason": "Wilderness areas, nature reserves, land trust properties and national wildlife areas are out of scope for now.", "featureCounts": dict(sorted(left_out.items()))},
-            "featuresWithoutGeometry": {"reason": "The source feature has no geometry; its park keeps its other features.", "features": notes["skippedFeatures"]},
-            "entrancePointsWithoutOutline": {"reason": "The province lists a day-use or camping entrance but no Provincial Parks Act outline, so there is no boundary to check a visit against.", "names": entrance_only},
+            "otherProtectedAreaTypes": {
+                "reason": "Wilderness areas, nature reserves, land trust properties and national wildlife areas are out of scope for now.",
+                "featureCounts": dict(sorted(left_out.items())),
+            },
+            "featuresWithoutGeometry": {
+                "reason": "The source feature has no geometry; its park keeps its other features.",
+                "features": notes["skippedFeatures"],
+            },
+            "entrancePointsWithoutOutline": {
+                "reason": "The province lists a day-use or camping entrance but no Provincial Parks Act outline, so there is no boundary to check a visit against.",
+                "names": entrance_only,
+            },
             "nationalHistoricSites": {"reason": "National historic sites, such as Louisbourg, are out of scope."},
             "duplicates": {"reason": f"At least {DUPLICATE_OVERLAP:.0%} of both footprints overlap a live catalogue park.", "ids": duplicates},
         },
@@ -949,13 +1067,17 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
         },
         "idClashCheck": {label: len(ids) for label, ids in existing_ids.items()},
     }
-    outputs, boundaries_raw = write_outputs(bundle_dir, places, selected, reviews, records, boundary_features, selection,
-                                            rows, normalization_reports, overlap_report)
+    outputs, boundaries_raw = write_outputs(
+        bundle_dir, places, selected, reviews, records, boundary_features, selection, rows, normalization_reports, overlap_report
+    )
     selected_rows = [rows[park_id] for park_id in selected]
     manifest = {
         "schema": SCHEMA,
-        "fetchRecord": {"file": "sources/fetch-record.json", "fetchedAt": record["fetchedAt"],
-                        "sha256": sha256((bundle_dir / "sources" / "fetch-record.json").read_bytes())},
+        "fetchRecord": {
+            "file": "sources/fetch-record.json",
+            "fetchedAt": record["fetchedAt"],
+            "sha256": sha256((bundle_dir / "sources" / "fetch-record.json").read_bytes()),
+        },
         "sources": {name: {"sha256": entry["sha256"], "bytes": entry["bytes"]} for name, entry in record["sources"].items()},
         "outputs": {name: {"sha256": sha256(data), "bytes": len(data)} for name, data in outputs.items()},
         "boundaries": {"file": BOUNDARIES_FILE, "decompressedSha256": sha256(boundaries_raw), "decompressedBytes": len(boundaries_raw)},
@@ -976,14 +1098,18 @@ def build_bundle(bundle_dir: Path, raw_dir: Path) -> dict[str, Any]:
                 "holes": sum(row["outputCounts"]["holes"] for row in selected_rows),
                 "positions": sum(row["outputCounts"]["positions"] for row in selected_rows),
             },
-            "byCategory": {category: {
-                "parks": counts_by_category[category],
-                "parts": sum(row["outputCounts"]["polygons"] for row in selected_rows if row["category"] == category),
-                "holes": sum(row["outputCounts"]["holes"] for row in selected_rows if row["category"] == category),
-            } for category in ("provincial", "national")},
+            "byCategory": {
+                category: {
+                    "parks": counts_by_category[category],
+                    "parts": sum(row["outputCounts"]["polygons"] for row in selected_rows if row["category"] == category),
+                    "holes": sum(row["outputCounts"]["holes"] for row in selected_rows if row["category"] == category),
+                }
+                for category in ("provincial", "national")
+            },
             "coverageAtLeast99_9Percent": sum(1 for row in selected_rows if row["coverage"]["sourceAreaKept"] >= MIN_AREA_KEPT),
-            "officialAreaWithinTolerance": sum(1 for row in selected_rows if row["officialHectares"] is None
-                                               or abs(row["hectares"] / row["officialHectares"] - 1) <= OFFICIAL_AREA_TOLERANCE),
+            "officialAreaWithinTolerance": sum(
+                1 for row in selected_rows if row["officialHectares"] is None or abs(row["hectares"] / row["officialHectares"] - 1) <= OFFICIAL_AREA_TOLERANCE
+            ),
             "duplicatesExcluded": len(duplicates),
             "overlapsReported": len(overlap_report),
             "entrancePointsWithoutOutline": len(entrance_only),
@@ -1022,16 +1148,22 @@ def _tally(values) -> dict[str, int]:
     return result
 
 
-def write_outputs(bundle_dir, places, selected, reviews, records, boundary_features, selection, rows,
-                  normalization_reports, overlap_report) -> tuple[dict[str, bytes], bytes]:
+def write_outputs(
+    bundle_dir, places, selected, reviews, records, boundary_features, selection, rows, normalization_reports, overlap_report
+) -> tuple[dict[str, bytes], bytes]:
     files: dict[str, bytes] = {
         "selection.json": json_bytes(selection),
         "catalogue.json": json_bytes([places[park_id] for park_id in selected]),
         "comparison-report.json": json_bytes({"schema": "parkdex.ns-boundary-comparison.v1", "parks": [rows[park_id] for park_id in sorted(rows)]}),
-        "normalization.json": json_bytes({"methods": {
-            "planar-face-even-odd-all-rings": "An invalid source feature is rebuilt from the planar faces of all its rings; a face is inside when an odd number of rings contain it.",
-            "source-feature-union": "The source features of one park touch or overlap, so the park is their union.",
-        }, "parks": normalization_reports}),
+        "normalization.json": json_bytes(
+            {
+                "methods": {
+                    "planar-face-even-odd-all-rings": "An invalid source feature is rebuilt from the planar faces of all its rings; a face is inside when an odd number of rings contain it.",
+                    "source-feature-union": "The source features of one park touch or overlap, so the park is their union.",
+                },
+                "parks": normalization_reports,
+            }
+        ),
         "overlaps.json": json_bytes({"duplicateThreshold": DUPLICATE_OVERLAP, "reportFloor": OVERLAP_REPORT_FLOOR, "overlaps": overlap_report}),
         "park-ids.txt": ("\n".join(selected) + "\n").encode("utf-8"),
         "new-park-review.json": json_bytes({"parks": {park_id: reviews[park_id] for park_id in selected}}),

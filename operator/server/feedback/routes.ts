@@ -35,10 +35,16 @@ export function decodeListCursor(value: string, expectedStatus: string): Feedbac
   if (value.length > 512 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new HttpError(400, "invalid_cursor", "Invalid feedback cursor.");
   try {
     const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-    const raw = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+    const raw = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
     const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(raw, (char) => char.charCodeAt(0)))) as Record<string, unknown>;
-    if (Object.keys(parsed).length !== 3 || typeof parsed.id !== "string" || !UUID.test(parsed.id) ||
-      typeof parsed.createdAt !== "string" || !Number.isFinite(Date.parse(parsed.createdAt)) || parsed.status !== expectedStatus) {
+    if (
+      Object.keys(parsed).length !== 3 ||
+      typeof parsed.id !== "string" ||
+      !UUID.test(parsed.id) ||
+      typeof parsed.createdAt !== "string" ||
+      !Number.isFinite(Date.parse(parsed.createdAt)) ||
+      parsed.status !== expectedStatus
+    ) {
       throw new Error("invalid cursor");
     }
     return { id: parsed.id.toLowerCase(), createdAt: new Date(parsed.createdAt).toISOString() };
@@ -58,7 +64,8 @@ const MAX_RESTORE = CLEAR_DONE_LIMIT;
 function archiveSearch(url: URL): string | null {
   if (url.searchParams.getAll("q").length > 1) throw new HttpError(400, "invalid_query", "Invalid archive search.");
   const text = (url.searchParams.get("q") ?? "").trim();
-  if (text.length > ARCHIVE_SEARCH_MAX || /[\u0000-\u001f\u007f]/.test(text)) throw new HttpError(400, "invalid_query", `Search for ${ARCHIVE_SEARCH_MAX} characters or fewer of plain text.`);
+  if (text.length > ARCHIVE_SEARCH_MAX || /[\u0000-\u001f\u007f]/.test(text))
+    throw new HttpError(400, "invalid_query", `Search for ${ARCHIVE_SEARCH_MAX} characters or fewer of plain text.`);
   return text || null;
 }
 
@@ -78,7 +85,11 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
   if (path === "/api/feedback") {
     allowMethods(request, "GET");
     const status = url.searchParams.get("status") ?? "all";
-    if (!(FEEDBACK_FILTERS as readonly string[]).includes(status) || url.searchParams.getAll("status").length > 1 || url.searchParams.getAll("cursor").length > 1) {
+    if (
+      !(FEEDBACK_FILTERS as readonly string[]).includes(status) ||
+      url.searchParams.getAll("status").length > 1 ||
+      url.searchParams.getAll("cursor").length > 1
+    ) {
       throw new HttpError(400, "invalid_query", "Invalid feedback list query.");
     }
     const cursorToken = url.searchParams.get("cursor");
@@ -114,7 +125,10 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
     const cursorToken = url.searchParams.get("cursor");
     const cursor = cursorToken ? decodeListCursor(cursorToken, ARCHIVE_CURSOR) : null;
     const archived = archive();
-    const [reports, total] = await Promise.all([archived.listArchive(PAGE_SIZE + 1, search, cursor), cursor ? Promise.resolve(null) : archived.countArchive(search)]);
+    const [reports, total] = await Promise.all([
+      archived.listArchive(PAGE_SIZE + 1, search, cursor),
+      cursor ? Promise.resolve(null) : archived.countArchive(search),
+    ]);
     const page = reports.slice(0, PAGE_SIZE);
     const last = page[page.length - 1];
     const nextCursor = reports.length > PAGE_SIZE && last?.archivedAt ? encodeListCursor({ id: last.id, createdAt: last.archivedAt }, ARCHIVE_CURSOR) : null;
@@ -170,7 +184,7 @@ export async function feedbackRoutes(request: Request, context: SectionContext):
   allowMethods(request, "GET", "PATCH");
   context.requireSameOrigin();
   const body = plainObject(await readJsonBody(request, 4096), ["status"], "Invalid feedback update.");
-  if (!await store().updateStatus(id, validateStatus(body.status))) throw new HttpError(404, "not_found", "Feedback report not found.");
+  if (!(await store().updateStatus(id, validateStatus(body.status)))) throw new HttpError(404, "not_found", "Feedback report not found.");
   const report = await archive().getReport(id);
   if (!report) throw new HttpError(404, "not_found", "Feedback report not found.");
   return json({ report });

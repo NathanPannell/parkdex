@@ -2,7 +2,19 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "../accounts/AuthProvider";
 import { isNative } from "../native";
-import { fetchFlags, fetchGameMe, gameErrorMessage, isOfflineError, saveHandle as sendHandle, savePatches as sendPatches, type GameMe, type GamePlayer, type ParkFlag, type ParkFounder } from "./client";
+import {
+  fetchFlags,
+  fetchGameMe,
+  gameErrorMessage,
+  isOfflineError,
+  saveHandle as sendHandle,
+  savePatches as sendPatches,
+  type GameMe,
+  type GamePlayer,
+  type ParkFlag,
+  type ParkFounder,
+} from "./client";
+import { claimLocalHandle, readLocalFlagSeed } from "./localHandle";
 
 /**
  * The signed-in player's game state from `/api/game/me`. V1 is online only, so this lives
@@ -49,7 +61,7 @@ const GameContext = createContext<GameContextValue | null>(null);
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const accountId = auth.phase === "authenticated" ? auth.account?.id ?? null : null;
+  const accountId = auth.phase === "authenticated" ? (auth.account?.id ?? null) : null;
   const [me, setMe] = useState<GameMe | null>(null);
   const [status, setStatus] = useState<GameStatus>(accountId ? "loading" : "guest");
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +69,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentAccount = useRef(accountId);
   currentAccount.current = accountId;
   const inFlight = useRef<Promise<GameMe | null> | null>(null);
+  const claimTried = useRef(new Set<string>());
   const [flags, setFlags] = useState<FlagBoard | null>(null);
   const [flagsStatus, setFlagsStatus] = useState<FlagsStatus>("loading");
   const flagsInFlight = useRef<Promise<void> | null>(null);
@@ -109,8 +122,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (inFlight.current) return inFlight.current;
     const work = (async () => {
       try {
-        const next = await fetchGameMe(owner);
+        let next = await fetchGameMe(owner);
         if (currentAccount.current !== owner) return null;
+        // The handle picked during onboarding becomes the account's, tried once per account.
+        if (!claimTried.current.has(owner)) {
+          claimTried.current.add(owner);
+          next = await claimLocalHandle(next, (handle) => sendHandle(owner, handle, readLocalFlagSeed()));
+          if (currentAccount.current !== owner) return null;
+        }
         setMe(next);
         setStatus("ready");
         setError(null);
@@ -152,7 +171,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (isNative) {
       void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
         if (isActive) void refresh();
-      }).then((handle) => { removeNative = () => void handle.remove(); }).catch(() => {});
+      })
+        .then((handle) => {
+          removeNative = () => void handle.remove();
+        })
+        .catch(() => {});
     }
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
@@ -163,40 +186,50 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const saveHandle = useCallback(async (handle: string) => {
     const owner = currentAccount.current;
     if (!owner) throw new Error("Sign in to pick a handle.");
-    const player = await sendHandle(owner, handle);
+    const player = await sendHandle(owner, handle, readLocalFlagSeed());
     if (currentAccount.current === owner) {
-      setMe((current) => ({ ...(current ?? { score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null }), player, flagSeed: player.flagSeed }));
+      setMe((current) => ({
+        ...(current ?? { score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null }),
+        player,
+        flagSeed: player.flagSeed,
+      }));
       setStatus("ready");
     }
     return player;
   }, []);
 
-  const savePatches = useCallback(async (patches: string[]) => {
-    const owner = currentAccount.current;
-    if (!owner) throw new Error("Sign in to wear badges.");
-    const saved = await sendPatches(owner, patches);
-    if (currentAccount.current === owner) setMe((current) => (current ? { ...current, flagPatches: saved } : current));
-    // The player's own pins show the new patches.
-    void refreshFlags();
-    return saved;
-  }, [refreshFlags]);
+  const savePatches = useCallback(
+    async (patches: string[]) => {
+      const owner = currentAccount.current;
+      if (!owner) throw new Error("Sign in to wear badges.");
+      const saved = await sendPatches(owner, patches);
+      if (currentAccount.current === owner) setMe((current) => (current ? { ...current, flagPatches: saved } : current));
+      // The player's own pins show the new patches.
+      void refreshFlags();
+      return saved;
+    },
+    [refreshFlags],
+  );
 
-  const value = useMemo<GameContextValue>(() => ({
-    status,
-    me,
-    error,
-    accountId,
-    refresh,
-    saveHandle,
-    savePatches,
-    flags,
-    flagsStatus,
-    refreshFlags,
-    serverNow: () => Date.now() + (flags?.clockOffset ?? 0),
-    handleRequest,
-    openHandleSheet: (request = {}) => setHandleRequest(request),
-    closeHandleSheet: () => setHandleRequest(null),
-  }), [status, me, error, accountId, refresh, saveHandle, savePatches, flags, flagsStatus, refreshFlags, handleRequest]);
+  const value = useMemo<GameContextValue>(
+    () => ({
+      status,
+      me,
+      error,
+      accountId,
+      refresh,
+      saveHandle,
+      savePatches,
+      flags,
+      flagsStatus,
+      refreshFlags,
+      serverNow: () => Date.now() + (flags?.clockOffset ?? 0),
+      handleRequest,
+      openHandleSheet: (request = {}) => setHandleRequest(request),
+      closeHandleSheet: () => setHandleRequest(null),
+    }),
+    [status, me, error, accountId, refresh, saveHandle, savePatches, flags, flagsStatus, refreshFlags, handleRequest],
+  );
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }

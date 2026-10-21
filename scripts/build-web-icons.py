@@ -8,6 +8,7 @@ The source is a rounded orange tile on cream corners. The web needs three shapes
 
 Usage: python scripts/build-web-icons.py
 """
+
 from pathlib import Path
 
 from PIL import Image, ImageDraw

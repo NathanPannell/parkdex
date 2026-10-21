@@ -46,11 +46,28 @@ export function CrewSheets() {
 
 function CrewScanner({ parkId }: { parkId: string | null }) {
   const crew = useCrew();
+  const visit = useVisit();
+  const { state } = useStore();
+  const content = useContent();
+  const bounds = useBoundaries();
   const onCode = (text: string, source: QrScannerSource): string | null => {
     const target = crewCodeFromText(text);
     if (!target) return source === "scan" ? "That isn't a Parkdex crew code." : `Crew codes are ${CREW_CODE_LENGTH} letters and numbers.`;
-    // A code scanned from a park's page is for that park unless its link names another.
-    crew.offerJoin({ code: target.code, parkId: target.parkId ?? parkId, source });
+    // A code scanned from a park's page is for that park unless its link names another;
+    // otherwise it is for the park the player stands in.
+    const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? (state.accuracy ?? 0) : 0;
+    const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
+    const forPark = target.parkId ?? parkId ?? here?.id ?? null;
+    const park = forPark ? content?.parkById.get(forPark) : undefined;
+    // Scanning is the decision to join: a signed-in player standing in the park joins straight
+    // away. Anything else (signed out, elsewhere, an unknown park) gets the join card to explain.
+    if (visit.signedIn && park && insidePark(state.user, bounds?.byId.get(park.id), accuracy)) {
+      // Close the camera first, so a handle sheet that comes up isn't reopened by the next read.
+      crew.closeScanner();
+      visit.startJoin(park.id, target.code);
+      return null;
+    }
+    crew.offerJoin({ code: target.code, parkId: forPark, source });
     return null;
   };
   return (
@@ -92,7 +109,6 @@ function Sheet({ label, onClose, children }: { label: string; onClose: () => voi
 /** A large QR and the 6-character code, for anyone in the crew to show during the protected hour. */
 export function CrewCodeSheet({ parkId, onClose }: { parkId: string; onClose: () => void }) {
   const content = useContent();
-  const game = useGame();
   const toast = useToast();
   const park = content?.parkById.get(parkId);
   const parkName = park?.short ?? park?.name ?? "this park";
@@ -125,8 +141,12 @@ export function CrewCodeSheet({ parkId, onClose }: { parkId: string; onClose: ()
           <>
             <div className="add-friend__mine crew-code__card">
               <QrCode value={link} size={232} label={`Crew code ${code.split("").join(" ")} as a QR code`} />
-              <span className="crew-code__code" aria-label={`Crew code ${code.split("").join(" ")}`}>{formatSocialCode(code)}</span>
-              <span className="crew-code__timer" role="timer"><Icon name="shield" size={16} /> {formatMinutesLeft(until, now)} left</span>
+              <span className="crew-code__code" aria-label={`Crew code ${code.split("").join(" ")}`}>
+                {formatSocialCode(code)}
+              </span>
+              <span className="crew-code__timer" role="timer">
+                <Icon name="shield" size={16} /> {formatMinutesLeft(until, now)} left
+              </span>
             </div>
             <p className="handle-sheet__help">Anyone in the crew can show this code. Friends scan it with Parkdex or their phone's camera inside {parkName}.</p>
             <motion.button whileTap={press} className="btn btn--paper btn--block" onClick={() => void share()}>
@@ -134,13 +154,17 @@ export function CrewCodeSheet({ parkId, onClose }: { parkId: string; onClose: ()
             </motion.button>
           </>
         ) : status === "loading" || status === "idle" ? (
-          <p className="handle-sheet__help" aria-busy="true">Getting the crew code…</p>
+          <p className="handle-sheet__help" aria-busy="true">
+            Getting the crew code…
+          </p>
         ) : status === "error" ? (
           <p className="handle-sheet__help">The crew code needs a connection. Try again in a moment.</p>
         ) : (
           <p className="handle-sheet__help">The protected hour is over, so this crew can't take new people.</p>
         )}
-        <button type="button" className="add-friend__link" onClick={onClose}>Done</button>
+        <button type="button" className="add-friend__link" onClick={onClose}>
+          Done
+        </button>
       </div>
     </Sheet>
   );
@@ -156,7 +180,7 @@ function CrewJoinCard({ target }: { target: CrewJoinTarget }) {
   const bounds = useBoundaries();
   const visit = useVisit();
   const game = useGame();
-  const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? state.accuracy ?? 0 : 0;
+  const accuracy = state.locationError !== "denied" && isUsableGpsAccuracy(state.accuracy) ? (state.accuracy ?? 0) : 0;
   const here = parkContaining(state.user, content?.parks ?? [], bounds?.byId, accuracy);
   // The link names the park; a bare code from a park's page is for that page; otherwise the park you stand in.
   const parkId = target.parkId ?? here?.id ?? null;
@@ -184,8 +208,8 @@ function CrewJoinCard({ target }: { target: CrewJoinTarget }) {
 
   const onJoin = () => {
     if (!signedIn) {
-      dispatch({ type: "select", id: null });
-      dispatch({ type: "go", screen: "account" });
+      if (park) dispatch({ type: "signInFor", resume: { kind: "join", parkId: park.id, code: target.code } });
+      else dispatch({ type: "go", screen: "account" });
       return;
     }
     if (park) visit.startJoin(park.id, target.code);
@@ -195,19 +219,37 @@ function CrewJoinCard({ target }: { target: CrewJoinTarget }) {
     <Sheet label="crew-join-title" onClose={crewUi.dismissJoin}>
       <div className="handle-sheet__body crew-join">
         <span className="eyebrow">Crew code {formatSocialCode(target.code)}</span>
-        <h2 id="crew-join-title" style={handleFit(leader ? `${leader}'s` : null)}>{title}</h2>
+        <h2 id="crew-join-title" style={handleFit(leader ? `${leader}'s` : null)}>
+          {title}
+        </h2>
         {crew && crew.members.length > 0 ? (
           <CrewList members={crew.members} flagSince={crew.flagSince} myHandle={game.me?.player?.handle} />
         ) : (
           <p className="handle-sheet__help">
-            {signedIn ? (status === "loading" ? "Looking up the crew…" : "You hold the park together, and every one of you earns its hours.") : "Sign in to join. You hold the park together, and every one of you earns its hours."}
+            {signedIn
+              ? status === "loading"
+                ? "Looking up the crew…"
+                : "You hold the park together, and every one of you earns its hours."
+              : "Sign in to join. You hold the park together, and every one of you earns its hours."}
           </p>
         )}
-        {blocker && <p className="crew-join__blocker" role="status"><Icon name="pin" size={16} /> {blocker}</p>}
+        {blocker && (
+          <p className="crew-join__blocker" role="status">
+            <Icon name="pin" size={16} /> {blocker}
+          </p>
+        )}
         <motion.button whileTap={press} className="btn btn--sun btn--block" disabled={!canJoin} onClick={onJoin}>
-          {signedIn ? <><Icon name="flag" size={20} /> Join</> : "Sign in to join"}
+          {signedIn ? (
+            <>
+              <Icon name="flag" size={20} /> Join
+            </>
+          ) : (
+            "Sign in to join"
+          )}
         </motion.button>
-        <button type="button" className="btn btn--paper btn--block" onClick={crewUi.dismissJoin}>Cancel</button>
+        <button type="button" className="btn btn--paper btn--block" onClick={crewUi.dismissJoin}>
+          Cancel
+        </button>
       </div>
     </Sheet>
   );

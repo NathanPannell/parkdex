@@ -20,7 +20,7 @@ export function useLiveCamera(facing: Facing, idealWidth = 1280, enabled = true)
     let stream: MediaStream | null = null;
     let cancelled = false;
     setLive("pending");
-    navigator.mediaDevices
+    const request = navigator.mediaDevices
       ?.getUserMedia({ video: { facingMode: facing, width: { ideal: idealWidth } }, audio: false })
       .then((s) => {
         if (cancelled) return s.getTracks().forEach((t) => t.stop());
@@ -31,7 +31,9 @@ export function useLiveCamera(facing: Facing, idealWidth = 1280, enabled = true)
         }
         setLive("on");
       })
-      .catch(() => setLive("off")) ?? setLive("off");
+      .catch(() => setLive("off"));
+    // Without mediaDevices (an insecure origin or an old WebView) there is no preview at all.
+    if (!request) setLive("off");
     // Some devices grant a stream that never delivers frames; treat that as no preview.
     const watchdog = setTimeout(() => {
       if (!cancelled && !video.current?.videoWidth) setLive("off");

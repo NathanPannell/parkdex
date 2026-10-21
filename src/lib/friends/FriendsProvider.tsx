@@ -7,12 +7,22 @@ import {
   friendsErrorMessage,
   removeFriend as sendRemoval,
   resetFriendCode as sendReset,
+  sendCrewmate,
   sendFriendCode,
   type FriendsBoard,
   type FriendsErrorCode,
   type FriendSummary,
 } from "./client";
-import { flushOutbox, queueFriendCode, readCachedBoard, readOutbox, writeCachedBoard, type FlushOutcome, type PendingFriend, type PendingSource } from "./outbox";
+import {
+  flushOutbox,
+  queueFriendCode,
+  readCachedBoard,
+  readOutbox,
+  writeCachedBoard,
+  type FlushOutcome,
+  type PendingFriend,
+  type PendingSource,
+} from "./outbox";
 
 /**
  * Friends state for the signed-in player (#64), behind the `friends` feature flag. The board is
@@ -53,6 +63,11 @@ type FriendsContextValue = {
   clearNotices: () => void;
   refresh: () => Promise<void>;
   add: (code: string, source: PendingSource) => Promise<AddResult>;
+  /**
+   * Adds crewmates by handle, one after another, then refreshes the board once. Online only: it
+   * follows a crew join, which needed a connection. Returns who is now a friend and the first refusal.
+   */
+  addCrewmates: (handles: string[]) => Promise<{ friends: FriendSummary[]; failure: string | null }>;
   remove: (handle: string) => Promise<void>;
   resetCode: () => Promise<void>;
 };
@@ -63,7 +78,7 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const enabled = useFeatureFlag("friends");
   const accountId = enabled ? auth.ownerAccountId : null;
-  const onlineAccount = enabled && auth.phase === "authenticated" ? auth.account?.id ?? null : null;
+  const onlineAccount = enabled && auth.phase === "authenticated" ? (auth.account?.id ?? null) : null;
   const [board, setBoard] = useState<FriendsBoard | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [status, setStatus] = useState<BoardStatus>("idle");
@@ -124,28 +139,31 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Sends the outbox. Outcomes for `own` are returned only; the rest also become notices. */
-  const flush = useCallback(async (own?: string): Promise<FlushOutcome[]> => {
-    const id = onlineOwner.current;
-    if (!id) return [];
-    while (flushing.current) await flushing.current.catch(() => []);
-    const work = (async () => {
-      const { outcomes, remaining } = await flushOutbox(id, (code) => sendFriendCode(id, code));
-      if (onlineOwner.current === id) {
-        setPending(remaining);
-        const background = outcomes.filter((outcome) => outcome.code !== own);
-        if (background.length) setNotices((current) => [...current, ...background]);
+  const flush = useCallback(
+    async (own?: string): Promise<FlushOutcome[]> => {
+      const id = onlineOwner.current;
+      if (!id) return [];
+      while (flushing.current) await flushing.current.catch(() => []);
+      const work = (async () => {
+        const { outcomes, remaining } = await flushOutbox(id, (code) => sendFriendCode(id, code));
+        if (onlineOwner.current === id) {
+          setPending(remaining);
+          const background = outcomes.filter((outcome) => outcome.code !== own);
+          if (background.length) setNotices((current) => [...current, ...background]);
+        }
+        return outcomes;
+      })();
+      flushing.current = work;
+      try {
+        const outcomes = await work;
+        if (outcomes.some((outcome) => outcome.status === "added") && onlineOwner.current === id) void refresh();
+        return outcomes;
+      } finally {
+        if (flushing.current === work) flushing.current = null;
       }
-      return outcomes;
-    })();
-    flushing.current = work;
-    try {
-      const outcomes = await work;
-      if (outcomes.some((outcome) => outcome.status === "added") && onlineOwner.current === id) void refresh();
-      return outcomes;
-    } finally {
-      if (flushing.current === work) flushing.current = null;
-    }
-  }, [refresh]);
+    },
+    [refresh],
+  );
 
   // The next sync sends waiting codes: after every account backup run, and when the device reconnects.
   useEffect(() => {
@@ -160,30 +178,59 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("online", onOnline);
   }, [onlineAccount, flush]);
 
-  const add = useCallback(async (code: string, source: PendingSource): Promise<AddResult> => {
-    const id = owner.current;
-    if (!id) return { kind: "rejected", code: "unauthenticated", message: "Sign in to add friends." };
-    if (boardRef.current?.code === code) return { kind: "rejected", code: "own_friend_code", message: friendsErrorMessage(new FriendsError("own_friend_code", 409)) };
-    setPending(queueFriendCode(id, code, source, new Date()));
-    if (!onlineOwner.current) return { kind: "queued" };
-    const outcome = (await flush(code)).find((item) => item.code === code);
-    if (!outcome) return { kind: "queued" };
-    if (outcome.status === "rejected") return { kind: "rejected", code: outcome.error.code, message: outcome.error.message };
-    return outcome.status === "added" ? { kind: "added", friend: outcome.friend } : { kind: "already_friends", friend: outcome.friend };
-  }, [flush]);
+  const add = useCallback(
+    async (code: string, source: PendingSource): Promise<AddResult> => {
+      const id = owner.current;
+      if (!id) return { kind: "rejected", code: "unauthenticated", message: "Sign in to add friends." };
+      if (boardRef.current?.code === code)
+        return { kind: "rejected", code: "own_friend_code", message: friendsErrorMessage(new FriendsError("own_friend_code", 409)) };
+      setPending(queueFriendCode(id, code, source, new Date()));
+      if (!onlineOwner.current) return { kind: "queued" };
+      const outcome = (await flush(code)).find((item) => item.code === code);
+      if (!outcome) return { kind: "queued" };
+      if (outcome.status === "rejected") return { kind: "rejected", code: outcome.error.code, message: outcome.error.message };
+      return outcome.status === "added" ? { kind: "added", friend: outcome.friend } : { kind: "already_friends", friend: outcome.friend };
+    },
+    [flush],
+  );
 
-  const remove = useCallback(async (handle: string) => {
-    const id = onlineOwner.current;
-    if (!id) throw new FriendsError("offline", 0);
-    try {
-      await sendRemoval(id, handle);
-    } catch (caught) {
-      // Already gone is the outcome the player wanted.
-      if (!(caught instanceof FriendsError && caught.code === "friend_not_found")) throw caught;
-    }
-    setBoard((current) => current ? { ...current, players: current.players.filter((row) => row.handle !== handle) } : current);
-    void refresh();
-  }, [refresh]);
+  const addCrewmates = useCallback(
+    async (handles: string[]) => {
+      const id = onlineOwner.current;
+      if (!id) return { friends: [], failure: friendsErrorMessage(new FriendsError("offline", 0)) };
+      const friends: FriendSummary[] = [];
+      let failure: string | null = null;
+      let added = false;
+      for (const handle of handles) {
+        try {
+          const { status, friend } = await sendCrewmate(id, handle);
+          friends.push(friend);
+          added ||= status === "added";
+        } catch (caught) {
+          failure ??= friendsErrorMessage(caught);
+        }
+      }
+      if (added && onlineOwner.current === id) void refresh();
+      return { friends, failure };
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (handle: string) => {
+      const id = onlineOwner.current;
+      if (!id) throw new FriendsError("offline", 0);
+      try {
+        await sendRemoval(id, handle);
+      } catch (caught) {
+        // Already gone is the outcome the player wanted.
+        if (!(caught instanceof FriendsError && caught.code === "friend_not_found")) throw caught;
+      }
+      setBoard((current) => (current ? { ...current, players: current.players.filter((row) => row.handle !== handle) } : current));
+      void refresh();
+    },
+    [refresh],
+  );
 
   const resetCode = useCallback(async () => {
     const id = onlineOwner.current;
@@ -197,27 +244,31 @@ export function FriendsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const value = useMemo<FriendsContextValue>(() => ({
-    enabled,
-    accountId,
-    online: !!onlineAccount,
-    board,
-    fetchedAt,
-    status,
-    error,
-    pending,
-    incoming,
-    openIncoming: (code) => setIncoming(code),
-    clearIncoming: () => setIncoming(null),
-    addSheet,
-    setAddSheet,
-    notices,
-    clearNotices: () => setNotices([]),
-    refresh,
-    add,
-    remove,
-    resetCode,
-  }), [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, remove, resetCode]);
+  const value = useMemo<FriendsContextValue>(
+    () => ({
+      enabled,
+      accountId,
+      online: !!onlineAccount,
+      board,
+      fetchedAt,
+      status,
+      error,
+      pending,
+      incoming,
+      openIncoming: (code) => setIncoming(code),
+      clearIncoming: () => setIncoming(null),
+      addSheet,
+      setAddSheet,
+      notices,
+      clearNotices: () => setNotices([]),
+      refresh,
+      add,
+      addCrewmates,
+      remove,
+      resetCode,
+    }),
+    [enabled, accountId, onlineAccount, board, fetchedAt, status, error, pending, incoming, addSheet, notices, refresh, add, addCrewmates, remove, resetCode],
+  );
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;
 }

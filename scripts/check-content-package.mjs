@@ -35,12 +35,14 @@ const REQUIRED_BUNDLED_ONBOARDING_ASSETS = [
 try {
   const overviewProvenance = JSON.parse(await readFile(OVERVIEW_PROVENANCE_PATH, "utf8"));
   const pinnedOverview = overviewProvenance?.artifact;
-  if (overviewProvenance?.schema !== "parkdex.bundled-map-overview/v2"
-    || pinnedOverview?.path !== `public/${OVERVIEW_PATH}`
-    || !/^[a-f0-9]{64}$/.test(pinnedOverview?.sha256 ?? "")
-    || !Number.isSafeInteger(pinnedOverview?.bytes)
-    || pinnedOverview.bytes <= 0
-    || pinnedOverview.bytes > MAX_BUNDLED_OVERVIEW_BYTES) {
+  if (
+    overviewProvenance?.schema !== "parkdex.bundled-map-overview/v2" ||
+    pinnedOverview?.path !== `public/${OVERVIEW_PATH}` ||
+    !/^[a-f0-9]{64}$/.test(pinnedOverview?.sha256 ?? "") ||
+    !Number.isSafeInteger(pinnedOverview?.bytes) ||
+    pinnedOverview.bytes <= 0 ||
+    pinnedOverview.bytes > MAX_BUNDLED_OVERVIEW_BYTES
+  ) {
     throw new Error("Pinned bundled Canada overview provenance is invalid or exceeds its size budget");
   }
 
@@ -59,9 +61,7 @@ try {
   const failures = [];
   const packagedPaths = new Set(files.map((file) => toPosix(relative(outputDirectory, file))));
   for (const required of REQUIRED_BUNDLED_ONBOARDING_ASSETS) {
-    const found = required.endsWith("-")
-      ? [...packagedPaths].some((path) => path.startsWith(required) && path.endsWith(".webp"))
-      : packagedPaths.has(required);
+    const found = required.endsWith("-") ? [...packagedPaths].some((path) => path.startsWith(required) && path.endsWith(".webp")) : packagedPaths.has(required);
     if (!found) failures.push({ path: required, reason: "required bundled onboarding artwork is missing" });
   }
   for (const required of ["maplibre/maplibre-gl-worker.mjs", "maplibre/maplibre-gl-shared.mjs"]) {
@@ -76,7 +76,9 @@ try {
     } else if (overviewStat.size !== pinnedOverview.bytes) {
       failures.push({ path: OVERVIEW_PATH, reason: `bundled Canada overview has ${overviewStat.size} bytes; expected pinned size ${pinnedOverview.bytes}` });
     } else {
-      const digest = createHash("sha256").update(await readFile(overviewFile)).digest("hex");
+      const digest = createHash("sha256")
+        .update(await readFile(overviewFile))
+        .digest("hex");
       if (digest !== pinnedOverview.sha256) failures.push({ path: OVERVIEW_PATH, reason: "bundled Canada overview does not match its pinned SHA-256" });
     }
   }
@@ -89,7 +91,8 @@ try {
       const source = await readFile(file, "utf8");
       let matchingIds = 0;
       for (const id of parkIds) if (source.includes(id)) matchingIds += 1;
-      if (matchingIds > 0) failures.push({ path: relativePath, reason: `compiled JavaScript contains ${matchingIds} catalog park ID${matchingIds === 1 ? "" : "s"}` });
+      if (matchingIds > 0)
+        failures.push({ path: relativePath, reason: `compiled JavaScript contains ${matchingIds} catalog park ID${matchingIds === 1 ? "" : "s"}` });
     }
   }
 

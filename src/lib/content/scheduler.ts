@@ -55,7 +55,10 @@ export class ContentDownloadScheduler {
   private nextOrder = 0;
   private disposed = false;
 
-  constructor(policy: DownloadPolicy, private readonly concurrency = 3) {
+  constructor(
+    policy: DownloadPolicy,
+    private readonly concurrency = 3,
+  ) {
     this.policy = policy;
   }
 
@@ -153,33 +156,37 @@ export class ContentDownloadScheduler {
       this.sortQueue();
       const mapLimit = Math.max(1, this.concurrency - 1);
       const activeMap = [...this.tasks.values()].filter((task) => task.state === "running" && isMapWork(task)).length;
-      const nextIndex = this.queue.findIndex((task) => task.waiters.size > 0 &&
-        (!isMapWork(task) || activeMap < mapLimit) && isDownloadAllowed(task.purpose, task.path, this.policy));
+      const nextIndex = this.queue.findIndex(
+        (task) => task.waiters.size > 0 && (!isMapWork(task) || activeMap < mapLimit) && isDownloadAllowed(task.purpose, task.path, this.policy),
+      );
       if (nextIndex < 0) return;
       const [task] = this.queue.splice(nextIndex, 1);
       if (!task || task.state !== "queued") continue;
       task.state = "running";
       this.active++;
       task.requeueOnAbort = false;
-      void Promise.resolve().then(() => task.run(task.controller.signal)).then(
-        () => {
-          if (!task.requeueOnAbort) this.finishWaiters(task);
-        },
-        (error) => {
-          if (!task.requeueOnAbort) this.finishWaiters(task, error);
-        },
-      ).finally(() => {
-        this.active--;
-        if (task.requeueOnAbort && !this.disposed && task.waiters.size > 0 && this.tasks.get(task.key) === task) {
-          task.requeueOnAbort = false;
-          task.controller = new AbortController();
-          task.state = "queued";
-          this.queue.push(task);
-        } else if (this.tasks.get(task.key) === task) {
-          this.tasks.delete(task.key);
-        }
-        this.pump();
-      });
+      void Promise.resolve()
+        .then(() => task.run(task.controller.signal))
+        .then(
+          () => {
+            if (!task.requeueOnAbort) this.finishWaiters(task);
+          },
+          (error) => {
+            if (!task.requeueOnAbort) this.finishWaiters(task, error);
+          },
+        )
+        .finally(() => {
+          this.active--;
+          if (task.requeueOnAbort && !this.disposed && task.waiters.size > 0 && this.tasks.get(task.key) === task) {
+            task.requeueOnAbort = false;
+            task.controller = new AbortController();
+            task.state = "queued";
+            this.queue.push(task);
+          } else if (this.tasks.get(task.key) === task) {
+            this.tasks.delete(task.key);
+          }
+          this.pump();
+        });
     }
   }
 }

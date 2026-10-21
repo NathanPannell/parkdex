@@ -123,7 +123,16 @@ function boundary(id = PARK_ID): ContentSyncState["boundaries"]["features"][numb
     properties: { id, biome: "forest" },
     geometry: {
       type: "MultiPolygon",
-      coordinates: [[[[west, south], [west + 0.01, south], [west + 0.01, south + 0.01], [west, south]]]],
+      coordinates: [
+        [
+          [
+            [west, south],
+            [west + 0.01, south],
+            [west + 0.01, south + 0.01],
+            [west, south],
+          ],
+        ],
+      ],
     },
   };
 }
@@ -321,7 +330,9 @@ describe("NativeContentStore sync persistence with SQLite", () => {
 
     await expect(store.applySyncBatch(ENVIRONMENT, 7, batch, SOURCE)).rejects.toThrow();
     await expect(store.applySyncBatch(ENVIRONMENT, 7, { ...batch, revision: 8 }, "other-source")).rejects.toThrow();
-    await expect(store.replaceSyncState(ENVIRONMENT, 7, syncState(8, "uncommitted-scene", "other-source"), "other-source", "stale-source", true)).rejects.toThrow();
+    await expect(
+      store.replaceSyncState(ENVIRONMENT, 7, syncState(8, "uncommitted-scene", "other-source"), "other-source", "stale-source", true),
+    ).rejects.toThrow();
 
     await expect(store.getSyncState(ENVIRONMENT)).resolves.toEqual(before);
     await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 7, sourceId: SOURCE, readerVersion: 3 });
@@ -362,8 +373,7 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     await store.replaceSyncState(ENVIRONMENT, null, emptyState(9, "recovered-source"), "recovered-source", null, true);
     await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 9, sourceId: "recovered-source", readerVersion: 3 });
 
-    database.prepare("UPDATE content_sync_cursors SET revision = ?, source_id = ? WHERE environment = ?")
-      .run(10, "newer-source", ENVIRONMENT);
+    database.prepare("UPDATE content_sync_cursors SET revision = ?, source_id = ? WHERE environment = ?").run(10, "newer-source", ENVIRONMENT);
     await expect(store.replaceSyncState(ENVIRONMENT, null, emptyState(11, "stale-source"), "stale-source", null, true)).rejects.toThrow();
     await expect(store.getSyncCursor(ENVIRONMENT)).resolves.toEqual({ revision: 10, sourceId: "newer-source", readerVersion: 3 });
     await expect(store.getArchivedScene(archived.releaseId, archived.scene)).resolves.toEqual(archived);
@@ -391,9 +401,9 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     const archived = archivedScene("e".repeat(64), "release-format-scene");
     await store.retainArchivedScene(archived);
 
-    const row = database.prepare(
-      "SELECT release_id, scene, file_json FROM content_archived_scenes WHERE release_id = ? AND scene = ?",
-    ).get(archived.releaseId, archived.scene) as { release_id: string; scene: string; file_json: string } | undefined;
+    const row = database
+      .prepare("SELECT release_id, scene, file_json FROM content_archived_scenes WHERE release_id = ? AND scene = ?")
+      .get(archived.releaseId, archived.scene) as { release_id: string; scene: string; file_json: string } | undefined;
     expect(row).toEqual({ release_id: archived.releaseId, scene: archived.scene, file_json: JSON.stringify(archived.file) });
     await expect(store.getArchivedScene(archived.releaseId, archived.scene)).resolves.toEqual(archived);
   });
@@ -406,7 +416,8 @@ describe("NativeContentStore sync persistence with SQLite", () => {
     const archived = archivedScene("f".repeat(64), "earned-scene", digest, bytes.byteLength);
     await store.putFile(digest, bytes);
     // Seed the exact row format written by the accounts staging release.
-    database.prepare("INSERT INTO content_archived_scenes(release_id, scene, file_json) VALUES(?, ?, ?)")
+    database
+      .prepare("INSERT INTO content_archived_scenes(release_id, scene, file_json) VALUES(?, ?, ?)")
       .run(archived.releaseId, archived.scene, JSON.stringify(archived.file));
 
     await store.replaceSyncState(ENVIRONMENT, 30, emptyState(0, "native-test-source-b"), "native-test-source-b", SOURCE, true);

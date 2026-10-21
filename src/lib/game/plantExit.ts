@@ -24,10 +24,13 @@ export function backCanLeavePlant(): boolean {
   return openPhase === null || canLeavePlant(openPhase);
 }
 
-/** Leaving ends the trip; back on the map, the park's sheet opens so the player sees where they were. */
+/**
+ * Leaving clears the plant screen's target. Back on the map the camera settles on the park with the map clear:
+ * no park page and no arrival card for a visit the player just made.
+ */
 export function leavePlant(parkId: string | null, to: "map" | "parks" = "map"): Action[] {
   const actions: Action[] = [{ type: "trip", id: null }];
-  if (to === "map" && parkId) actions.push({ type: "focus", id: parkId });
+  if (to === "map" && parkId) actions.push({ type: "focus", id: parkId, open: false });
   actions.push({ type: "go", screen: to });
   return actions;
 }

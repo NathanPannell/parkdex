@@ -3,9 +3,9 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import { createFeedbackWorker, type WorkerEnvironment } from "./index.js";
 import type { AccountAuthStore, StoredSession } from "./accounts/auth-store.js";
-import type { AddFriendResult, FriendsStore, FriendWeekRow } from "./friends-store.js";
-import { addResultFromJson } from "./friends-store.js";
-import { FRIEND_LIMIT, validateAddFriendBody } from "./friends.js";
+import type { AddCrewmateResult, AddFriendResult, FriendsStore, FriendWeekRow } from "./friends-store.js";
+import { addResultFromJson, crewmateResultFromJson } from "./friends-store.js";
+import { FRIEND_LIMIT, validateAddCrewmateBody, validateAddFriendBody } from "./friends.js";
 import { classifySql } from "./db.js";
 import { FRIEND_CODE_LENGTH, normalizeSocialCode, SOCIAL_CODE_ALPHABET } from "./socialCodes.js";
 
@@ -25,10 +25,18 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 
 function session(transport: "native" | "web"): StoredSession {
   return {
-    id: ACCOUNT, email: "player@example.test", emailVerified: true, displayName: "Player", providers: ["email"],
-    sessionId: "22222222-2222-4222-8222-222222222222", tokenHash: hash(transport === "native" ? bearer : cookieToken),
-    csrfHash: transport === "web" ? hash(csrfToken) : null, transport,
-    expiresAt: "2099-01-01T00:00:00Z", absoluteExpiresAt: "2099-02-01T00:00:00Z", reauthenticatedAt: null,
+    id: ACCOUNT,
+    email: "player@example.test",
+    emailVerified: true,
+    displayName: "Player",
+    providers: ["email"],
+    sessionId: "22222222-2222-4222-8222-222222222222",
+    tokenHash: hash(transport === "native" ? bearer : cookieToken),
+    csrfHash: transport === "web" ? hash(csrfToken) : null,
+    transport,
+    expiresAt: "2099-01-01T00:00:00Z",
+    absoluteExpiresAt: "2099-02-01T00:00:00Z",
+    reauthenticatedAt: null,
   };
 }
 
@@ -49,15 +57,25 @@ class MemoryFriendsStore implements FriendsStore {
   code: string | null = "ABCD2345";
   addResult: AddFriendResult = { status: "added", friend: { handle: "bee", flagSeed: "fedcba9876543210" } };
   addCalls: Array<{ accountId: string; code: string; limit: number }> = [];
+  crewmateResult: AddCrewmateResult = { status: "added", friend: { handle: "sam", flagSeed: "0123456789abcdef" } };
+  crewmateCalls: Array<{ accountId: string; handle: string; limit: number }> = [];
   removeCalls: Array<{ accountId: string; handle: string }> = [];
   weekCalls: string[] = [];
   removed = true;
 
-  async friendCode() { return this.code; }
-  async resetFriendCode() { return this.code === null ? null : "WXYZ6789"; }
+  async friendCode() {
+    return this.code;
+  }
+  async resetFriendCode() {
+    return this.code === null ? null : "WXYZ6789";
+  }
   async addFriend(accountId: string, code: string, limit: number) {
     this.addCalls.push({ accountId, code, limit });
     return this.addResult;
+  }
+  async addCrewmate(accountId: string, handle: string, limit: number) {
+    this.crewmateCalls.push({ accountId, handle, limit });
+    return this.crewmateResult;
   }
   async removeFriend(accountId: string, handle: string) {
     this.removeCalls.push({ accountId, handle });
@@ -88,24 +106,32 @@ function setup() {
 }
 
 async function code(response: Response): Promise<string> {
-  return (await response.json() as { code: string }).code;
+  return ((await response.json()) as { code: string }).code;
 }
 
 test("every friends route needs an account", async () => {
   const { call, store } = setup();
-  for (const [method, path, body] of [["GET", "/api/friends"], ["POST", "/api/friends", { code: "ABCD2345" }], ["DELETE", "/api/friends/bee"], ["POST", "/api/friends/code"]] as const) {
+  for (const [method, path, body] of [
+    ["GET", "/api/friends"],
+    ["POST", "/api/friends", { code: "ABCD2345" }],
+    ["POST", "/api/friends/crewmate", { handle: "sam" }],
+    ["DELETE", "/api/friends/bee"],
+    ["POST", "/api/friends/code"],
+  ] as const) {
     const response = await call(method, path, body, "none");
     assert.equal(response.status, 401, `${method} ${path}`);
     assert.equal(await code(response), "authentication_required");
   }
-  assert.equal(store.addCalls.length, 0);
+  assert.equal(store.addCalls.length + store.crewmateCalls.length, 0);
 });
 
 test("cookie writes need the CSRF token, reads only the session", async () => {
   const { call, store } = setup();
   assert.equal((await call("POST", "/api/friends", { code: "ABCD2345" }, "cookie-no-csrf")).status, 403);
   assert.equal((await call("DELETE", "/api/friends/bee", undefined, "cookie-no-csrf")).status, 403);
-  assert.equal(store.addCalls.length + store.removeCalls.length, 0);
+  assert.equal((await call("POST", "/api/friends/crewmate", { handle: "sam" }, "cookie-no-csrf")).status, 403);
+  assert.equal(store.addCalls.length + store.removeCalls.length + store.crewmateCalls.length, 0);
+  assert.equal((await call("POST", "/api/friends/crewmate", { handle: "sam" }, "cookie")).status, 200);
   assert.equal((await call("POST", "/api/friends", { code: "ABCD2345" }, "cookie")).status, 200);
   assert.equal((await call("GET", "/api/friends", undefined, "cookie-no-csrf")).status, 200);
 });
@@ -144,12 +170,21 @@ test("adding a friend normalizes the code and passes the friend limit", async ()
   store.addResult = { status: "already_friends", friend: { handle: "bee", flagSeed: "fedcba9876543210" } };
   const replay = await call("POST", "/api/friends", { code: "ABCD2345" });
   assert.equal(replay.status, 200, "a resent offline add is not an error");
-  assert.equal((await replay.json() as { status: string }).status, "already_friends");
+  assert.equal(((await replay.json()) as { status: string }).status, "already_friends");
 });
 
 test("friend code bodies are strictly validated before the store is touched", async () => {
   const { call, store } = setup();
-  for (const body of [{}, { code: 12345678 }, { code: "ABCD2345", extra: true }, { code: "ABC" }, { code: "ABCD234O" }, { code: "ABCD2341" }, { code: "x".repeat(65) }, ["ABCD2345"]]) {
+  for (const body of [
+    {},
+    { code: 12345678 },
+    { code: "ABCD2345", extra: true },
+    { code: "ABC" },
+    { code: "ABCD234O" },
+    { code: "ABCD2341" },
+    { code: "x".repeat(65) },
+    ["ABCD2345"],
+  ]) {
     const response = await call("POST", "/api/friends", body);
     assert.equal(response.status, 400, JSON.stringify(body));
   }
@@ -172,6 +207,63 @@ test("add outcomes map to the documented errors", async () => {
     assert.equal(response.status, status, result.status);
     assert.equal(await code(response), errorCode);
   }
+});
+
+test("adding a crewmate normalizes the handle and passes the friend limit", async () => {
+  const { call, store } = setup();
+  const response = await call("POST", "/api/friends/crewmate", { handle: " @Sam " });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), { status: "added", friend: { handle: "sam", flagSeed: "0123456789abcdef" } });
+  assert.deepEqual(store.crewmateCalls, [{ accountId: ACCOUNT, handle: "sam", limit: FRIEND_LIMIT }]);
+  store.crewmateResult = { status: "already_friends", friend: { handle: "sam", flagSeed: "0123456789abcdef" } };
+  const replay = await call("POST", "/api/friends/crewmate", { handle: "sam" });
+  assert.equal(replay.status, 200, "a second tap is not an error");
+  assert.equal(((await replay.json()) as { status: string }).status, "already_friends");
+});
+
+test("crewmate bodies are strictly validated before the store is touched", async () => {
+  const { call, store } = setup();
+  for (const body of [
+    {},
+    { handle: 42 },
+    { handle: "sam", code: "ABCD2345" },
+    { handle: "no spaces" },
+    { handle: "ab" },
+    { handle: "x".repeat(21) },
+    ["sam"],
+  ]) {
+    const response = await call("POST", "/api/friends/crewmate", body);
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.equal(await code(response), "invalid_request");
+  }
+  assert.equal(store.crewmateCalls.length, 0);
+  assert.equal(validateAddCrewmateBody({ handle: "@Bee_2" }), "bee_2");
+});
+
+test("crewmate outcomes map to the documented errors", async () => {
+  const cases: Array<[AddCrewmateResult, number, string]> = [
+    [{ status: "not_crewmates" }, 404, "crewmate_not_found"],
+    [{ status: "own_handle" }, 409, "own_handle"],
+    [{ status: "too_many_friends" }, 409, "too_many_friends"],
+    [{ status: "handle_required" }, 409, "handle_required"],
+    [{ status: "account_unavailable" }, 410, "account_deleting"],
+  ];
+  for (const [result, status, errorCode] of cases) {
+    const { call, store } = setup();
+    store.crewmateResult = result;
+    const response = await call("POST", "/api/friends/crewmate", { handle: "sam" });
+    assert.equal(response.status, status, result.status);
+    assert.equal(await code(response), errorCode);
+  }
+});
+
+test("the crewmate route leaves a friend called crewmate removable", async () => {
+  const { call, store } = setup();
+  assert.equal((await call("DELETE", "/api/friends/crewmate")).status, 200);
+  assert.deepEqual(store.removeCalls, [{ accountId: ACCOUNT, handle: "crewmate" }]);
+  assert.equal((await call("GET", "/api/friends/crewmate")).status, 405);
+  assert.equal(store.crewmateCalls.length, 0);
 });
 
 test("removing a friend validates the handle and reports a missing friendship", async () => {
@@ -202,10 +294,19 @@ test("routing rejects wrong methods and unknown friends paths", async () => {
 });
 
 test("stored add results are parsed strictly", () => {
-  assert.deepEqual(addResultFromJson('{"status":"added","friend":{"handle":"bee","flagSeed":"fedcba9876543210"}}'),
-    { status: "added", friend: { handle: "bee", flagSeed: "fedcba9876543210" } });
+  assert.deepEqual(addResultFromJson('{"status":"added","friend":{"handle":"bee","flagSeed":"fedcba9876543210"}}'), {
+    status: "added",
+    friend: { handle: "bee", flagSeed: "fedcba9876543210" },
+  });
   assert.deepEqual(addResultFromJson({ status: "code_not_found" }), { status: "code_not_found" });
   assert.throws(() => addResultFromJson({ status: "maybe" }));
+  assert.throws(() => addResultFromJson({ status: "not_crewmates" }), "crewmate statuses are not code statuses");
+  assert.deepEqual(crewmateResultFromJson('{"status":"already_friends","friend":{"handle":"sam","flagSeed":"0123456789abcdef"}}'), {
+    status: "already_friends",
+    friend: { handle: "sam", flagSeed: "0123456789abcdef" },
+  });
+  assert.deepEqual(crewmateResultFromJson({ status: "not_crewmates" }), { status: "not_crewmates" });
+  assert.throws(() => crewmateResultFromJson({ status: "own_code" }));
 });
 
 test("social codes use the shared alphabet", () => {
@@ -218,7 +319,7 @@ test("social codes use the shared alphabet", () => {
 });
 
 test("friends database functions that change data count as writes", () => {
-  for (const name of ["ensure_friend_code", "reset_friend_code", "add_friend", "remove_friend"]) {
+  for (const name of ["ensure_friend_code", "reset_friend_code", "add_friend", "add_crewmate", "remove_friend"]) {
     assert.equal(classifySql(`SELECT kip_social.${name}($1::uuid, $2) AS result`).operation, "write", name);
   }
   assert.equal(classifySql("SELECT rank, handle FROM kip_social.friends_week($1::uuid, $2::timestamptz)").operation, "read");

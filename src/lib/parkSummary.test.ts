@@ -6,11 +6,16 @@ vi.mock("./accounts/authClient", () => ({
   accountApiUrl: (path: string) => new URL(path, "https://api.example.test/").href,
 }));
 
-const { FOUNDER_HINT, REVIEW_PENDING_TEXT, founderCta, summaryCover, summaryStats } = await import("./parkSummary");
+const { FOUNDER_HINT, REVIEW_PENDING_TEXT, founderCta, summaryCover, summaryStats, visitsLine } = await import("./parkSummary");
 type ParkSummary = import("./founders").ParkSummary;
 
 const open: ParkSummary = { parkId: "p", founder: null, coverUrl: null, visits: { total: 4, last30Days: 2, mine: 1 } };
-const founded: ParkSummary = { parkId: "p", founder: { handle: "robin", foundedAt: null }, coverUrl: "/api/parks/p/cover/abc.jpg", visits: { total: 9, last30Days: 3, mine: null } };
+const founded: ParkSummary = {
+  parkId: "p",
+  founder: { handle: "robin", foundedAt: null },
+  coverUrl: "/api/parks/p/cover/abc.jpg",
+  visits: { total: 9, last30Days: 3, mine: null },
+};
 
 describe("founderCta", () => {
   it("offers founding inside a park with no founder, and a hint outside", () => {
@@ -44,13 +49,29 @@ describe("founderCta", () => {
 
 describe("summaryStats", () => {
   it("shows the founder and the three visit counts", () => {
-    expect(summaryStats({ status: "ready", summary: open }, true)).toEqual({ founder: "No founder yet", mine: "1", total: "4", last30Days: "2", pending: false, note: null });
-    expect(summaryStats({ status: "ready", summary: founded }, false)).toMatchObject({ founder: "Founder: @robin", mine: "Sign in", total: "9", last30Days: "3" });
+    expect(summaryStats({ status: "ready", summary: open }, true)).toEqual({
+      founder: "No founder yet",
+      mine: "1",
+      total: "4",
+      last30Days: "2",
+      pending: false,
+      note: null,
+    });
+    expect(summaryStats({ status: "ready", summary: founded }, false)).toMatchObject({
+      founder: "Founder: @robin",
+      mine: "Sign in",
+      total: "9",
+      last30Days: "3",
+    });
   });
 
   it("shows placeholders while loading and a note offline", () => {
     expect(summaryStats({ status: "loading", summary: null }, true)).toMatchObject({ mine: "–", total: "–", pending: true, note: null });
-    expect(summaryStats({ status: "error", summary: null }, true)).toMatchObject({ founder: "Founder unknown", pending: false, note: "Visit counts need a connection." });
+    expect(summaryStats({ status: "error", summary: null }, true)).toMatchObject({
+      founder: "Founder unknown",
+      pending: false,
+      note: "Visit counts need a connection.",
+    });
     expect(summaryStats({ status: "error", summary: open }, true)).toMatchObject({ total: "4", note: "Counts may be out of date." });
   });
 });
@@ -65,5 +86,19 @@ describe("summaryCover", () => {
     expect(summaryCover({ status: "loading", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
     expect(summaryCover({ status: "error", summary: null }, "/api/parks/p/cover/def.jpg")).toBe("https://api.example.test/api/parks/p/cover/def.jpg");
     expect(summaryCover({ status: "ready", summary: open }, "/api/parks/p/cover/def.jpg")).toBeNull();
+  });
+});
+
+describe("the park page's visit line", () => {
+  it("puts every known count on one line", () => {
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "2" }, true)).toBe("12 visits · 3 in the last 30 days · 2 yours");
+    expect(visitsLine({ total: "1", last30Days: "1", mine: "1" }, true)).toBe("1 visit · 1 in the last 30 days · 1 yours");
+  });
+
+  it("leaves out what is unknown or doesn't apply", () => {
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "Sign in" }, false)).toBe("12 visits · 3 in the last 30 days");
+    expect(visitsLine({ total: "0", last30Days: "0", mine: "0" }, true)).toBe("0 visits");
+    expect(visitsLine({ total: "4", last30Days: "1", mine: "0" }, true)).toBe("4 visits · 1 in the last 30 days");
+    expect(visitsLine({ total: "–", last30Days: "–", mine: "–" }, true)).toBeNull();
   });
 });

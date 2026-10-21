@@ -2,9 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import type { SqlRunner } from "../drafts.js";
 import { DB_EVENT_TYPES } from "./filters.js";
 import { probeFeatures, unavailableNotes, type Features } from "./schema.js";
-import type {
-  AccountDetail, AccountQuery, AccountRow, AnalyticsStore, DeletionRow, EventCursor, EventFilter, EventRow, HistogramBucket, Overview, Period,
-} from "./types.js";
+import type { AccountQuery, AccountRow, AnalyticsStore, DeletionRow, EventCursor, EventFilter, EventRow, HistogramBucket, Overview, Period } from "./types.js";
 
 /**
  * Read-mostly SQL behind the analytics pages. Every read runs in a read-only transaction with a
@@ -45,8 +43,8 @@ function day(value: unknown): string {
 
 function jsonObject(value: unknown): Record<string, unknown> | null {
   if (value === null || value === undefined) return null;
-  const parsed = typeof value === "string" ? JSON.parse(value) as unknown : value;
-  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+  return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
 }
 
 function textArray(value: unknown): string[] | null {
@@ -54,7 +52,12 @@ function textArray(value: unknown): string[] | null {
   if (Array.isArray(value)) return value.map(String);
   // pg returns text[] as "{a,b}" when its type parser is not loaded.
   const raw = String(value);
-  return raw === "{}" ? [] : raw.replace(/^\{|\}$/g, "").split(",").map((item) => item.replace(/^"|"$/g, ""));
+  return raw === "{}"
+    ? []
+    : raw
+        .replace(/^\{|\}$/g, "")
+        .split(",")
+        .map((item) => item.replace(/^"|"$/g, ""));
 }
 
 function period(row: Row, current: string, previous: string): Period {
@@ -87,7 +90,7 @@ function accountRow(row: Row): AccountRow {
     id: String(row.id),
     handle: textOrNull(row.handle),
     createdAt: iso(row.created_at),
-    lastActiveAt: lastEvent && lastSession ? (lastEvent > lastSession ? lastEvent : lastSession) : lastEvent ?? lastSession,
+    lastActiveAt: lastEvent && lastSession ? (lastEvent > lastSession ? lastEvent : lastSession) : (lastEvent ?? lastSession),
     providers: providers(row),
     visits: num(row.visits),
     parksHeld: num(row.parks_held),
@@ -199,12 +202,16 @@ export function overviewStatements(now: Date, days: number, features: Features):
         (SELECT count(*) FROM kip_account.accounts WHERE created_at > $1::timestamptz - ${span("2 * $2::int")}
           AND created_at <= $1::timestamptz - ${span("$2::int")})::int AS accounts_previous,
         (SELECT count(*) FROM kip_game.players p JOIN kip_account.accounts a ON a.id = p.account_id AND a.deletion_state = 'active')::int AS with_handle,
-${founders ? `
+${
+  founders
+    ? `
         (SELECT count(*) FROM kip_founders.parks)::int AS founded_total,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - interval '7 days')::int AS founded_new7,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - ${span("$2::int")})::int AS founded_period,
         (SELECT count(*) FROM kip_founders.parks WHERE founded_at > $1::timestamptz - ${span("2 * $2::int")}
-          AND founded_at <= $1::timestamptz - ${span("$2::int")})::int AS founded_previous,` : ""}
+          AND founded_at <= $1::timestamptz - ${span("$2::int")})::int AS founded_previous,`
+    : ""
+}
         (SELECT count(*) FROM kip_feedback.reports WHERE status IN ('new', 'reviewing', 'planned'))::int AS feedback_open`,
       params: [at, days],
     },
@@ -230,9 +237,11 @@ ${founders ? `
       WHERE visited_at > $1::timestamptz - ${span("2 * $2::int")} AND visited_at <= $1::timestamptz AND source = 'visit'`,
       params: [at, days],
     },
-    !founders ? null : {
-      key: "checks",
-      text: `SELECT
+    !founders
+      ? null
+      : {
+          key: "checks",
+          text: `SELECT
         count(*) FILTER (WHERE created_at > $1::timestamptz - ${span("$2::int")})::int AS total_current,
         count(*) FILTER (WHERE created_at <= $1::timestamptz - ${span("$2::int")})::int AS total_previous,
         count(*) FILTER (WHERE created_at > $1::timestamptz - ${span("$2::int")} AND outcome = 'approve')::int AS approved_current,
@@ -242,16 +251,18 @@ ${founders ? `
         count(*) FILTER (WHERE created_at > $1::timestamptz - ${span("$2::int")} AND outcome = 'unavailable')::int AS unavailable
       FROM kip_founders.photo_checks
       WHERE created_at > $1::timestamptz - ${span("2 * $2::int")} AND created_at <= $1::timestamptz`,
-      params: [at, days],
-    },
-    !founders ? null : {
-      key: "flags",
-      text: `SELECT flag, count(*)::int AS count
+          params: [at, days],
+        },
+    !founders
+      ? null
+      : {
+          key: "flags",
+          text: `SELECT flag, count(*)::int AS count
       FROM kip_founders.photo_checks, unnest(flags) AS flag
       WHERE created_at > $1::timestamptz - ${span("$2::int")} AND created_at <= $1::timestamptz
       GROUP BY flag ORDER BY count DESC, flag`,
-      params: [at, days],
-    },
+          params: [at, days],
+        },
     {
       key: "topParks",
       text: `SELECT v.park_id, coalesce(p.name, v.park_id) AS name, count(*)::int AS visits, count(DISTINCT v.account_id)::int AS players
@@ -274,8 +285,12 @@ ${founders ? `
         FROM kip_game.visits v, bounds
         WHERE v.visited_at >= bounds.starts AND v.visited_at < bounds.ends AND v.source = 'visit' GROUP BY 1
       ), foundings AS (
-        ${founders ? `SELECT kip_game.local_day(f.founded_at) AS day, count(*)::int AS n FROM kip_founders.parks f, bounds
-        WHERE f.founded_at >= bounds.starts AND f.founded_at < bounds.ends GROUP BY 1` : "SELECT NULL::date AS day, 0 AS n WHERE false"}
+        ${
+          founders
+            ? `SELECT kip_game.local_day(f.founded_at) AS day, count(*)::int AS n FROM kip_founders.parks f, bounds
+        WHERE f.founded_at >= bounds.starts AND f.founded_at < bounds.ends GROUP BY 1`
+            : "SELECT NULL::date AS day, 0 AS n WHERE false"
+        }
       ), active AS (
         -- One index-only pass over the signed-in part of (account_id, received_at) for the
         -- window. Retention caps it at 90 days of events, and it costs the same however many
@@ -311,16 +326,33 @@ function toOverview(byKey: Record<string, Row[]>, now: Date, days: number, featu
     generatedAt: now.toISOString(),
     days,
     accounts: {
-      total: num(c.accounts_total), new7: num(c.accounts_new7), new30: num(c.accounts_new30),
-      period: period(c, "accounts_period", "accounts_previous"), deleting: num(c.accounts_deleting), withHandle: num(c.with_handle),
+      total: num(c.accounts_total),
+      new7: num(c.accounts_new7),
+      new30: num(c.accounts_new30),
+      period: period(c, "accounts_period", "accounts_previous"),
+      deleting: num(c.accounts_deleting),
+      withHandle: num(c.with_handle),
     },
-    players: { day: period(p, "day_current", "day_previous"), week: period(p, "week_current", "week_previous"), month: period(p, "month_current", "month_previous") },
+    players: {
+      day: period(p, "day_current", "day_previous"),
+      week: period(p, "week_current", "week_previous"),
+      month: period(p, "month_current", "month_previous"),
+    },
     founded: founders ? { total: num(c.founded_total), new7: num(c.founded_new7), period: period(c, "founded_period", "founded_previous") } : null,
-    visits: { planted: period(v, "planted_current", "planted_previous"), took: period(v, "took_current", "took_previous"), held: period(v, "held_current", "held_previous") },
-    photoChecks: founders ? {
-      total: period(k, "total_current", "total_previous"), approved: period(k, "approved_current", "approved_previous"),
-      rejected: num(k.rejected), unsure: num(k.unsure), unavailable: num(k.unavailable),
-    } : null,
+    visits: {
+      planted: period(v, "planted_current", "planted_previous"),
+      took: period(v, "took_current", "took_previous"),
+      held: period(v, "held_current", "held_previous"),
+    },
+    photoChecks: founders
+      ? {
+          total: period(k, "total_current", "total_previous"),
+          approved: period(k, "approved_current", "approved_previous"),
+          rejected: num(k.rejected),
+          unsure: num(k.unsure),
+          unavailable: num(k.unavailable),
+        }
+      : null,
     feedbackOpen: num(c.feedback_open),
     series: {
       days: series.map((row) => day(row.day)),
@@ -446,12 +478,14 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
           WHERE v.account_id = $1::uuid ORDER BY v.visited_at DESC LIMIT 20`,
           params: [id],
         },
-        founders ? {
-          text: `SELECT f.park_id, coalesce(p.name, f.park_id) AS park_name, f.founded_at
+        founders
+          ? {
+              text: `SELECT f.park_id, coalesce(p.name, f.park_id) AS park_name, f.founded_at
           FROM kip_founders.parks f LEFT JOIN public.parks p ON p.id = f.park_id
           WHERE f.account_id = $1::uuid ORDER BY f.founded_at DESC LIMIT 50`,
-          params: [id],
-        } : { text: "SELECT 1 WHERE false", params: [] },
+              params: [id],
+            }
+          : { text: "SELECT 1 WHERE false", params: [] },
         {
           text: `SELECT receipt_id::text AS receipt_id, status, created_at FROM kip_account.account_deletion_receipts
           WHERE account_id = $1::uuid ORDER BY (status = 'pending') DESC, created_at DESC LIMIT 1`,
@@ -463,20 +497,29 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
       const receipt = receipts[0];
       return {
         ...base,
-        maskedEmail: maskEmail(String(extra[0].normalized_email)),
+        // A guest account has no email until Google upgrades it.
+        maskedEmail: extra[0].normalized_email == null ? "Guest" : maskEmail(String(extra[0].normalized_email)),
         emailVerified: extra[0].email_verified === true,
         activeSessions: num(extra[0].active_sessions),
         lastSignInAt: isoOrNull(accounts[0].last_session_at),
         recentEvents: events.map(eventRow),
-        recentVisits: visits.map((row) => ({ parkId: String(row.park_id), parkName: String(row.park_name), visitedAt: iso(row.visited_at), outcome: String(row.outcome), points: num(row.points_earned) })),
+        recentVisits: visits.map((row) => ({
+          parkId: String(row.park_id),
+          parkName: String(row.park_name),
+          visitedAt: iso(row.visited_at),
+          outcome: String(row.outcome),
+          points: num(row.points_earned),
+        })),
         founded: !founders ? null : founded.map((row) => ({ parkId: String(row.park_id), parkName: String(row.park_name), foundedAt: iso(row.founded_at) })),
-        deletion: receipt ? { receiptId: String(receipt.receipt_id), status: receipt.status === "complete" ? "complete" : "pending", createdAt: iso(receipt.created_at) } : null,
+        deletion: receipt
+          ? { receiptId: String(receipt.receipt_id), status: receipt.status === "complete" ? "complete" : "pending", createdAt: iso(receipt.created_at) }
+          : null,
       };
     },
 
     async accountEmail(id) {
       const rows = await readOne("SELECT normalized_email FROM kip_account.accounts WHERE id = $1::uuid", [id]);
-      return rows[0] ? String(rows[0].normalized_email) : null;
+      return rows[0]?.normalized_email != null ? String(rows[0].normalized_email) : null;
     },
 
     async accountIdForHandle(handle) {
@@ -487,37 +530,47 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
     async listEvents(filter, cursor, limit) {
       const where = eventWhere(filter, cursor);
       where.params.push(limit);
-      const rows = await readOne(`SELECT ${EVENT_COLUMNS}
+      const rows = await readOne(
+        `SELECT ${EVENT_COLUMNS}
   FROM kip_analytics.events e LEFT JOIN kip_game.players pl ON pl.account_id = e.account_id
   WHERE ${where.sql}
   ORDER BY e.received_at DESC, e.event_id DESC
-  LIMIT $${where.params.length}`, where.params);
+  LIMIT $${where.params.length}`,
+        where.params,
+      );
       return rows.map(eventRow);
     },
 
     async histogram(filter, bucket) {
       const where = eventWhere(filter, null);
-      const rows = await readOne(`SELECT (date_trunc('${bucket}', e.received_at AT TIME ZONE '${TIME_ZONE}') AT TIME ZONE '${TIME_ZONE}') AS at,
+      const rows = await readOne(
+        `SELECT (date_trunc('${bucket}', e.received_at AT TIME ZONE '${TIME_ZONE}') AT TIME ZONE '${TIME_ZONE}') AS at,
     count(*)::int AS count, count(*) FILTER (WHERE e.event_type = ANY(${DB_TYPES_SQL}))::int AS db
   FROM kip_analytics.events e
   WHERE ${where.sql}
-  GROUP BY 1 ORDER BY 1`, where.params);
+  GROUP BY 1 ORDER BY 1`,
+        where.params,
+      );
       return rows.map((row): HistogramBucket => ({ at: iso(row.at), count: num(row.count), db: num(row.db) }));
     },
 
     async routes() {
       // A loose index scan over interactions_route_received_at_idx: one probe per distinct route.
-      const rows = await readOne(`WITH RECURSIVE r AS (
+      const rows = await readOne(
+        `WITH RECURSIVE r AS (
     (SELECT route FROM kip_analytics.events WHERE route IS NOT NULL ORDER BY route LIMIT 1)
     UNION ALL
     SELECT (SELECT e.route FROM kip_analytics.events e WHERE e.route > r.route ORDER BY e.route LIMIT 1) FROM r WHERE r.route IS NOT NULL
   )
-  SELECT route FROM r WHERE route IS NOT NULL LIMIT 300`, []);
+  SELECT route FROM r WHERE route IS NOT NULL LIMIT 300`,
+        [],
+      );
       return rows.map((row) => String(row.route));
     },
 
     async pendingDeletions() {
-      const rows = await readOne(`SELECT r.receipt_id::text AS receipt_id, r.account_id::text AS account_id, r.created_at, pl.handle, a.deletion_state,
+      const rows = await readOne(
+        `SELECT r.receipt_id::text AS receipt_id, r.account_id::text AS account_id, r.created_at, pl.handle, a.deletion_state,
     (SELECT count(*) FROM kip_account.account_deletion_photo_objects o WHERE o.receipt_id = r.receipt_id)::int AS photo_objects,
     (SELECT coalesce(max(o.attempts), 0) FROM kip_account.account_deletion_photo_objects o WHERE o.receipt_id = r.receipt_id)::int AS attempts,
     (SELECT o.last_error FROM kip_account.account_deletion_photo_objects o WHERE o.receipt_id = r.receipt_id AND o.last_error IS NOT NULL LIMIT 1) AS last_error
@@ -526,10 +579,17 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
   LEFT JOIN kip_game.players pl ON pl.account_id = r.account_id
   WHERE r.status = 'pending'
   ORDER BY r.created_at
-  LIMIT 200`, []);
+  LIMIT 200`,
+        [],
+      );
       return rows.map((row): DeletionRow => ({
-        receiptId: String(row.receipt_id), accountId: String(row.account_id), handle: textOrNull(row.handle), createdAt: iso(row.created_at),
-        photoObjects: num(row.photo_objects), attempts: num(row.attempts), lastError: textOrNull(row.last_error),
+        receiptId: String(row.receipt_id),
+        accountId: String(row.account_id),
+        handle: textOrNull(row.handle),
+        createdAt: iso(row.created_at),
+        photoObjects: num(row.photo_objects),
+        attempts: num(row.attempts),
+        lastError: textOrNull(row.last_error),
         accountState: row.deletion_state === "deleting" ? "deleting" : row.deletion_state === "active" ? "active" : "gone",
       }));
     },
@@ -537,8 +597,9 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
     async beginDeletion(accountId, receiptId, now) {
       // The app's beginDeletion also requires the player's own fresh session; the operator has
       // none, so this is the same marking, sign-out and receipt without that check.
-      const [rows] = await db.transaction([{
-        text: `WITH target AS MATERIALIZED (
+      const [rows] = await db.transaction([
+        {
+          text: `WITH target AS MATERIALIZED (
     SELECT id FROM kip_account.accounts WHERE id = $1::uuid AND deletion_state = 'active' FOR UPDATE
   ), marked AS (
     UPDATE kip_account.accounts a SET deletion_state = 'deleting', updated_at = $3::timestamptz
@@ -554,8 +615,9 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
     (SELECT receipt_id::text FROM kip_account.account_deletion_receipts WHERE account_id = $1::uuid AND status = 'pending' LIMIT 1) AS pending,
     (SELECT count(*) FROM revoked)::int AS revoked,
     EXISTS (SELECT 1 FROM kip_account.accounts WHERE id = $1::uuid) AS found`,
-        params: [accountId, receiptId, now.toISOString()],
-      }]);
+          params: [accountId, receiptId, now.toISOString()],
+        },
+      ]);
       const row = rows[0] ?? {};
       if (row.created) return { receiptId: String(row.created), created: true };
       if (row.pending) return { receiptId: String(row.pending), created: false };
@@ -563,7 +625,11 @@ export function createSqlAnalyticsStore(db: SqlRunner, cacheKey: string | null =
     },
 
     async recordSecurityEvent(eventType, outcome) {
-      await db.query("INSERT INTO kip_account.security_events (id, event_type, scope_hash, outcome) VALUES ($1::uuid, $2, NULL, $3)", [crypto.randomUUID(), eventType, outcome]);
+      await db.query("INSERT INTO kip_account.security_events (id, event_type, scope_hash, outcome) VALUES ($1::uuid, $2, NULL, $3)", [
+        crypto.randomUUID(),
+        eventType,
+        outcome,
+      ]);
     },
   };
 }

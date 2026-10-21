@@ -8,7 +8,7 @@ vi.mock("../accounts/authClient", () => ({
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true } }));
 vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn(), getLaunchUrl: vi.fn() } }));
 
-const { FriendsError, fetchFriendsBoard, isFinalAddError, parseBoard, removeFriend, resetFriendCode, sendFriendCode } = await import("./client");
+const { FriendsError, fetchFriendsBoard, isFinalAddError, parseBoard, removeFriend, resetFriendCode, sendCrewmate, sendFriendCode } = await import("./client");
 const { dropFriendCode, flushOutbox, OUTBOX_LIMIT, queueFriendCode, readCachedBoard, readOutbox, writeCachedBoard } = await import("./outbox");
 const { friendCodeFromText, friendLink } = await import("./links");
 const { sinceLabel, weekLabel } = await import("./format");
@@ -23,9 +23,15 @@ function reply(status: number, body: unknown) {
 
 class MemoryStorage {
   values = new Map<string, string>();
-  getItem(key: string) { return this.values.get(key) ?? null; }
-  setItem(key: string, value: string) { this.values.set(key, value); }
-  removeItem(key: string) { this.values.delete(key); }
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.values.set(key, value);
+  }
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
 }
 
 const boardBody = {
@@ -49,7 +55,10 @@ describe("friends client", () => {
     const board = await fetchFriendsBoard(ACCOUNT);
     expect(board.code).toBe("ABCD2345");
     expect(board.week).toEqual(boardBody.week);
-    expect(board.players.map((row) => [row.handle, row.uniqueParks, row.isMe])).toEqual([["bee", 4, false], ["sam", 2, true]]);
+    expect(board.players.map((row) => [row.handle, row.uniqueParks, row.isMe])).toEqual([
+      ["bee", 4, false],
+      ["sam", 2, true],
+    ]);
     expect(fetchAuthenticated.mock.calls[0][0]).toBe("/api/friends");
     expect(fetchAuthenticated.mock.calls[0][2]).toBe(ACCOUNT);
   });
@@ -72,6 +81,22 @@ describe("friends client", () => {
     await expect(sendFriendCode(ACCOUNT, "ABCD2345")).rejects.toMatchObject({ code: "unauthenticated" });
     fetchAuthenticated.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     await expect(sendFriendCode(ACCOUNT, "ABCD2345")).rejects.toMatchObject({ code: "offline" });
+  });
+
+  it("adds a crewmate by handle and maps its errors", async () => {
+    fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "already_friends", friend: { handle: "sam", flagSeed: "0123456789abcdef" } }));
+    await expect(sendCrewmate(ACCOUNT, "sam")).resolves.toEqual({ status: "already_friends", friend: { handle: "sam", flagSeed: "0123456789abcdef" } });
+    const [path, init] = fetchAuthenticated.mock.calls[0];
+    expect(path).toBe("/api/friends/crewmate");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ handle: "sam" });
+    fetchAuthenticated.mockResolvedValueOnce(reply(404, { error: { code: "crewmate_not_found", message: "x" }, code: "crewmate_not_found" }));
+    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({
+      code: "crewmate_not_found",
+      message: "Add crewmates here within a day of your crew. After that, use their friend code.",
+    });
+    fetchAuthenticated.mockResolvedValueOnce(reply(409, { code: "own_handle" }));
+    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({ code: "own_handle" });
   });
 
   it("removes friends by handle and replaces the code", async () => {
@@ -124,18 +149,29 @@ describe("offline outbox", () => {
     const storage = new MemoryStorage();
     for (const code of ["AAAA2222", "BBBB3333", "CCCC4444", "DDDD5555"]) queueFriendCode(ACCOUNT, code, "typed", NOW, storage);
     const sent: string[] = [];
-    const result = await flushOutbox(ACCOUNT, async (code) => {
-      sent.push(code);
-      if (code === "BBBB3333") throw new FriendsError("friend_code_not_found", 404);
-      if (code === "CCCC4444") throw new FriendsError("offline", 0);
-      return { status: "added", friend: { handle: `h_${code.toLowerCase()}`, flagSeed: "0123456789abcdef" } };
-    }, storage);
+    const result = await flushOutbox(
+      ACCOUNT,
+      async (code) => {
+        sent.push(code);
+        if (code === "BBBB3333") throw new FriendsError("friend_code_not_found", 404);
+        if (code === "CCCC4444") throw new FriendsError("offline", 0);
+        return { status: "added", friend: { handle: `h_${code.toLowerCase()}`, flagSeed: "0123456789abcdef" } };
+      },
+      storage,
+    );
     expect(sent).toEqual(["AAAA2222", "BBBB3333", "CCCC4444"]);
-    expect(result.outcomes.map((outcome) => [outcome.code, outcome.status])).toEqual([["AAAA2222", "added"], ["BBBB3333", "rejected"]]);
+    expect(result.outcomes.map((outcome) => [outcome.code, outcome.status])).toEqual([
+      ["AAAA2222", "added"],
+      ["BBBB3333", "rejected"],
+    ]);
     expect(result.remaining.map((item) => item.code)).toEqual(["CCCC4444", "DDDD5555"]);
 
     // The next sync sends the rest; a code that was already added answers already_friends.
-    const next = await flushOutbox(ACCOUNT, async (code) => ({ status: code === "CCCC4444" ? "already_friends" : "added", friend: { handle: "x_y", flagSeed: "0123456789abcdef" } }), storage);
+    const next = await flushOutbox(
+      ACCOUNT,
+      async (code) => ({ status: code === "CCCC4444" ? "already_friends" : "added", friend: { handle: "x_y", flagSeed: "0123456789abcdef" } }),
+      storage,
+    );
     expect(next.outcomes.map((outcome) => outcome.status)).toEqual(["already_friends", "added"]);
     expect(next.remaining).toEqual([]);
   });

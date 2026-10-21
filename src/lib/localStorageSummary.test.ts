@@ -45,7 +45,10 @@ describe("local storage summary", () => {
 
   it("labels each square with its size and the parks inside it", async () => {
     const index = await loadCellIndex(async () => bundled);
-    const parks = [{ lng: -123.36, lat: 48.43 }, { lng: -123.37, lat: 48.44 }];
+    const parks = [
+      { lng: -123.36, lat: 48.43 },
+      { lng: -123.37, lat: 48.44 },
+    ];
     const victoria = cellKeyAt([-123.3656, 48.4284]);
     expect(parkCountsByCell(parks).get(victoria)).toBe(2);
     const label = squareLabels(index, parks).features.find((feature) => feature.properties.key === victoria)!;

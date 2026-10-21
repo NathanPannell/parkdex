@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Plan and apply reviewed legacy park boundary imports."""
+
 from __future__ import annotations
 
 import argparse
@@ -195,18 +196,13 @@ def parse_boundary_source(value: Any, selected_ids: set[str] | None = None) -> d
         if park_id in by_id:
             raise ParkImportError(f"Boundary source has duplicate park id {park_id}")
         source_ids = properties.get("sourceObjectIds", [])
-        if not isinstance(source_ids, list) or any(
-            isinstance(item, bool) or not isinstance(item, (str, int)) or not str(item).strip()
-            for item in source_ids
-        ):
+        if not isinstance(source_ids, list) or any(isinstance(item, bool) or not isinstance(item, (str, int)) or not str(item).strip() for item in source_ids):
             raise ParkImportError(f"{label} sourceObjectIds must be an array of strings or integers")
         if len({str(item) for item in source_ids}) != len(source_ids):
             raise ParkImportError(f"{label} has duplicate sourceObjectIds")
         primary_source_id = properties.get("sourceId")
         if primary_source_id is not None and (
-            isinstance(primary_source_id, bool)
-            or not isinstance(primary_source_id, (str, int))
-            or not str(primary_source_id).strip()
+            isinstance(primary_source_id, bool) or not isinstance(primary_source_id, (str, int)) or not str(primary_source_id).strip()
         ):
             raise ParkImportError(f"{label} sourceId must be a non-empty string or integer")
         if not source_ids and primary_source_id is None:
@@ -525,7 +521,9 @@ def _db_identity(conn) -> dict[str, Any]:
     return {"host": info.host or "", "port": info.port, "database": info.dbname}
 
 
-def capture_target(conn, target_host: str, target_environment: str, selected_target_ids: list[str]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+def capture_target(
+    conn, target_host: str, target_environment: str, selected_target_ids: list[str]
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     with conn.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         cursor.execute("SELECT revision FROM public.content_clock WHERE singleton = true")
@@ -533,8 +531,7 @@ def capture_target(conn, target_host: str, target_environment: str, selected_tar
         if revision_row is None:
             raise ParkImportError("content sync migration is not installed on the target database")
         cursor.execute(
-            "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb "
-            "FROM public.parks WHERE id = ANY(%s)",
+            "SELECT id, name, short, category, region, lat, lng, biome, shape, rarity, scene, seed, blurb FROM public.parks WHERE id = ANY(%s)",
             (selected_target_ids,),
         )
         parks = {row[0]: dict(zip(cloud_content.PARK_FIELDS, row, strict=True)) for row in cursor.fetchall()}
@@ -692,10 +689,7 @@ def _guard_target(plan: dict[str, Any], revision: int, parks: dict[str, dict[str
 
 
 def _rarity_changes(plan: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        change for change in plan["changes"]
-        if "desiredRarity" in change and change["desiredRarity"] != change["expectedRarity"]
-    ]
+    return [change for change in plan["changes"] if "desiredRarity" in change and change["desiredRarity"] != change["expectedRarity"]]
 
 
 def _lock_authoring_rollout(cursor: Any) -> None:
@@ -710,15 +704,12 @@ def _lock_authoring_rollout(cursor: Any) -> None:
 def _guard_unpublished_selected_art(cursor: Any, changes: list[dict[str, Any]]) -> None:
     park_ids = [change["targetId"] for change in changes]
     cursor.execute(
-        "SELECT park_id FROM public.park_enrichment_jobs "
-        "WHERE park_id = ANY(%s) AND selected_art IS NOT NULL AND state <> 'published' ORDER BY park_id",
+        "SELECT park_id FROM public.park_enrichment_jobs WHERE park_id = ANY(%s) AND selected_art IS NOT NULL AND state <> 'published' ORDER BY park_id",
         (park_ids,),
     )
     selected = [row[0] for row in cursor.fetchall()]
     if selected:
-        raise ParkImportError(
-            "Unpublished frozen authoring art exists for affected rarity changes: " + ", ".join(selected)
-        )
+        raise ParkImportError("Unpublished frozen authoring art exists for affected rarity changes: " + ", ".join(selected))
 
 
 def apply_transaction(conn, plan: dict[str, Any], expected_host: str, target_environment: str) -> dict[str, Any]:
@@ -873,12 +864,31 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
         if target_id not in parks and target_id in boundaries:
             raise ParkImportError(f"Target boundary {target_id} has no matching park row")
     plan = build_plan(
-        features, boundary_source, source_ids, mapping, target, parks, boundaries,
-        catalogue, catalogue_source, review, review_source, hubs,
-        rarity_review, rarity_review_source, getattr(args, "minimum_reader", None),
+        features,
+        boundary_source,
+        source_ids,
+        mapping,
+        target,
+        parks,
+        boundaries,
+        catalogue,
+        catalogue_source,
+        review,
+        review_source,
+        hubs,
+        rarity_review,
+        rarity_review_source,
+        getattr(args, "minimum_reader", None),
     )
     _write_plan(args.out, plan)
-    return {"planSha256": plan["planSha256"], "status": plan["status"], "target": plan["target"], "changeCount": len(plan["changes"]), "blockers": plan["blockers"], "planPath": str(args.out.expanduser().resolve())}
+    return {
+        "planSha256": plan["planSha256"],
+        "status": plan["status"],
+        "target": plan["target"],
+        "changeCount": len(plan["changes"]),
+        "blockers": plan["blockers"],
+        "planPath": str(args.out.expanduser().resolve()),
+    }
 
 
 def run_apply(args: argparse.Namespace) -> dict[str, Any]:

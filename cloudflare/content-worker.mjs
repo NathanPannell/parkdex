@@ -1,17 +1,13 @@
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const CHANNEL_CACHE_CONTROL = "public, max-age=60, s-maxage=60";
 const ALLOWED_METHODS = "GET, HEAD, OPTIONS";
-const ALLOWED_HEADERS =
-  "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range";
+const ALLOWED_HEADERS = "If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Range";
 
 function corsHeaders(headers = new Headers()) {
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
   headers.set("Access-Control-Allow-Headers", ALLOWED_HEADERS);
-  headers.set(
-    "Access-Control-Expose-Headers",
-    "Accept-Ranges, Cache-Control, Content-Length, Content-Range, ETag, Last-Modified, X-Content-Cache",
-  );
+  headers.set("Access-Control-Expose-Headers", "Accept-Ranges, Cache-Control, Content-Length, Content-Range, ETag, Last-Modified, X-Content-Cache");
   return headers;
 }
 
@@ -45,24 +41,11 @@ function keyFromPath(pathname) {
     return null;
   }
 
-  if (
-    decoded.some(
-      (part) =>
-        part === "." ||
-        part === ".." ||
-        part.includes("/") ||
-        part.includes("\\") ||
-        part.includes("\0"),
-    )
-  ) {
+  if (decoded.some((part) => part === "." || part === ".." || part.includes("/") || part.includes("\\") || part.includes("\0"))) {
     return null;
   }
 
-  if (
-    decoded[0] !== "releases" ||
-    !/^[a-f0-9]{64}$/.test(decoded[1] ?? "") ||
-    decoded.length < 3
-  ) {
+  if (decoded[0] !== "releases" || !/^[a-f0-9]{64}$/.test(decoded[1] ?? "") || decoded.length < 3) {
     return null;
   }
 
@@ -80,9 +63,7 @@ function cacheKeyFor(request, key) {
 function etagFor(object) {
   if (object.httpEtag) return object.httpEtag;
   if (!object.etag) return null;
-  return object.etag.startsWith('"') || object.etag.startsWith('W/"')
-    ? object.etag
-    : `"${object.etag}"`;
+  return object.etag.startsWith('"') || object.etag.startsWith('W/"') ? object.etag : `"${object.etag}"`;
 }
 
 function parseEntityTags(value) {
@@ -128,30 +109,17 @@ function conditionalStatus(headers, etag, uploaded, method) {
   if (ifMatch && !tagsMatch(ifMatch, etag, false)) return 412;
 
   const unmodifiedSince = dateHeader(headers, "If-Unmodified-Since");
-  if (
-    !ifMatch &&
-    unmodifiedSince !== null &&
-    Number.isFinite(modified) &&
-    Math.floor(modified / 1000) * 1000 > unmodifiedSince
-  ) {
+  if (!ifMatch && unmodifiedSince !== null && Number.isFinite(modified) && Math.floor(modified / 1000) * 1000 > unmodifiedSince) {
     return 412;
   }
 
   const ifNoneMatch = headers.get("If-None-Match");
   if (ifNoneMatch) {
-    return tagsMatch(ifNoneMatch, etag, true)
-      ? method === "GET" || method === "HEAD"
-        ? 304
-        : 412
-      : null;
+    return tagsMatch(ifNoneMatch, etag, true) ? (method === "GET" || method === "HEAD" ? 304 : 412) : null;
   }
 
   const modifiedSince = dateHeader(headers, "If-Modified-Since");
-  if (
-    modifiedSince !== null &&
-    Number.isFinite(modified) &&
-    Math.floor(modified / 1000) * 1000 <= modifiedSince
-  ) {
+  if (modifiedSince !== null && Number.isFinite(modified) && Math.floor(modified / 1000) * 1000 <= modifiedSince) {
     return method === "GET" || method === "HEAD" ? 304 : null;
   }
 
@@ -173,10 +141,7 @@ function rangeForRequest(headers, etag, uploaded) {
   } else {
     const offset = Number(match[1]);
     const end = match[2] ? Number(match[2]) : null;
-    if (
-      !Number.isSafeInteger(offset) ||
-      (end !== null && (!Number.isSafeInteger(end) || end < offset))
-    ) {
+    if (!Number.isSafeInteger(offset) || (end !== null && (!Number.isSafeInteger(end) || end < offset))) {
       return null;
     }
     range = { offset, ...(end === null ? {} : { length: end - offset + 1 }) };
@@ -186,10 +151,7 @@ function rangeForRequest(headers, etag, uploaded) {
   if (ifRange) {
     const parsedDate = Date.parse(ifRange);
     const matchesTag = ifRange.startsWith('"') && etag && ifRange === etag;
-    const matchesDate =
-      !Number.isNaN(parsedDate) &&
-      uploaded instanceof Date &&
-      Math.floor(uploaded.getTime() / 1000) * 1000 <= parsedDate;
+    const matchesDate = !Number.isNaN(parsedDate) && uploaded instanceof Date && Math.floor(uploaded.getTime() / 1000) * 1000 <= parsedDate;
     if (!matchesTag && !matchesDate) return null;
   }
 
@@ -203,10 +165,7 @@ function resolvedRange(range, size) {
     return { start, end: size - 1 };
   }
   if (range.offset >= size) return null;
-  const end = Math.min(
-    size - 1,
-    range.length === undefined ? size - 1 : range.offset + range.length - 1,
-  );
+  const end = Math.min(size - 1, range.length === undefined ? size - 1 : range.offset + range.length - 1);
   return { start: range.offset, end };
 }
 
@@ -257,11 +216,7 @@ function rangeNotSatisfiable(size, cacheStatus = "BYPASS") {
 async function fetchContent(request, env, ctx) {
   const url = new URL(request.url);
   const channelKey = channelKeyFromPath(url.pathname);
-  if (
-    channelKey &&
-    request.method !== "GET" &&
-    request.method !== "HEAD"
-  ) {
+  if (channelKey && request.method !== "GET" && request.method !== "HEAD") {
     return response(405, "Method Not Allowed", new Headers({ Allow: "GET, HEAD" }));
   }
 
@@ -291,9 +246,7 @@ async function fetchContent(request, env, ctx) {
         const status = conditionalStatus(
           request.headers,
           cached.headers.get("ETag"),
-          cached.headers.has("Last-Modified")
-            ? new Date(cached.headers.get("Last-Modified"))
-            : null,
+          cached.headers.has("Last-Modified") ? new Date(cached.headers.get("Last-Modified")) : null,
           request.method,
         );
         if (status) return conditionResponse(status, cached.headers, "HIT");
@@ -327,11 +280,7 @@ async function fetchContent(request, env, ctx) {
         return response(404, "Not Found", new Headers({ "Content-Type": "text/plain; charset=utf-8" }));
       }
     }
-    requestedRange = rangeForRequest(
-      request.headers,
-      rangeMetadata ? etagFor(rangeMetadata) : null,
-      rangeMetadata?.uploaded ?? null,
-    );
+    requestedRange = rangeForRequest(request.headers, rangeMetadata ? etagFor(rangeMetadata) : null, rangeMetadata?.uploaded ?? null);
   }
 
   const onlyIf = new Headers(request.headers);

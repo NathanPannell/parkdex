@@ -71,7 +71,10 @@ export class ProgressSessionChangedError extends Error {
 }
 
 export class ProgressHttpError extends Error {
-  constructor(readonly status: number, readonly operation: SyncIssue["operation"]) {
+  constructor(
+    readonly status: number,
+    readonly operation: SyncIssue["operation"],
+  ) {
     super(`Progress ${operation} failed with HTTP ${status}.`);
     this.name = "ProgressHttpError";
   }
@@ -136,7 +139,9 @@ async function responseJson(response: Response, fallback: string): Promise<Recor
   try {
     const value: unknown = await response.json();
     if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
-  } catch { /* reported as a stable invalid-response error below */ }
+  } catch {
+    /* reported as a stable invalid-response error below */
+  }
   throw new Error(fallback);
 }
 
@@ -193,18 +198,33 @@ async function recoverPhotoBackups(session: ProgressSession, owner: ProgressOwne
         const converted = await createPhotoBackupRendition(photo.blob, claim.parkSnapshot);
         assertCurrent(session);
         if (converted) {
-          const outcome = await commitPhotoBackupRendition(owner, photo.claimId, {
-            sha256: photo.sha256,
-            contentType: photo.contentType,
-            sizeBytes: photo.sizeBytes,
-            backupState: photo.backupState,
-            parkSnapshot: claim.parkSnapshot,
-          }, converted, () => !session.isCurrent || session.isCurrent());
+          const outcome = await commitPhotoBackupRendition(
+            owner,
+            photo.claimId,
+            {
+              sha256: photo.sha256,
+              contentType: photo.contentType,
+              sizeBytes: photo.sizeBytes,
+              backupState: photo.backupState,
+              parkSnapshot: claim.parkSnapshot,
+            },
+            converted,
+            () => !session.isCurrent || session.isCurrent(),
+          );
           if (outcome === "session-changed") throw new ProgressSessionChangedError();
           if (outcome === "stale") continue;
-          if (claim.remotePhoto.status === "ready" && (converted.sha256 !== claim.remotePhoto.sha256 ||
-              converted.sizeBytes !== claim.remotePhoto.sizeBytes || converted.contentType !== claim.remotePhoto.contentType)) {
-            result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_conflict", message: "A different photo is already backed up for this claim." });
+          if (
+            claim.remotePhoto.status === "ready" &&
+            (converted.sha256 !== claim.remotePhoto.sha256 ||
+              converted.sizeBytes !== claim.remotePhoto.sizeBytes ||
+              converted.contentType !== claim.remotePhoto.contentType)
+          ) {
+            result.issues.push({
+              operation: "photo-upload",
+              claimId: photo.claimId,
+              code: "photo_conflict",
+              message: "A different photo is already backed up for this claim.",
+            });
           }
           continue;
         }
@@ -216,23 +236,43 @@ async function recoverPhotoBackups(session: ProgressSession, owner: ProgressOwne
         if (!eligible) {
           if (source.blob === photo.blob) await markPhotoUnsupported(owner, photo.claimId);
           else await markPhotoConflict(owner, photo.claimId);
-          result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: source.blob === photo.blob ? "unsupported_photo" : "photo_changed", message: "This photo cannot be backed up in its current format." });
+          result.issues.push({
+            operation: "photo-upload",
+            claimId: photo.claimId,
+            code: source.blob === photo.blob ? "unsupported_photo" : "photo_changed",
+            message: "This photo cannot be backed up in its current format.",
+          });
           continue;
         }
         const digest = await hashPhoto(source.blob);
         assertCurrent(session);
         if (digest !== source.sha256) {
           await markPhotoConflict(owner, photo.claimId);
-          result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_changed", message: "The saved photo failed its integrity check." });
+          result.issues.push({
+            operation: "photo-upload",
+            claimId: photo.claimId,
+            code: "photo_changed",
+            message: "The saved photo failed its integrity check.",
+          });
           continue;
         }
       }
 
       const queued = await queuePhotoBackup(owner, photo.claimId, photo.sha256);
       if (queued === "unsupported") {
-        result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
+        result.issues.push({
+          operation: "photo-upload",
+          claimId: photo.claimId,
+          code: "unsupported_photo",
+          message: "This photo cannot be backed up in its current format.",
+        });
       } else if (queued === "conflict") {
-        result.issues.push({ operation: "photo-upload", claimId: photo.claimId, code: "photo_conflict", message: "A different photo is already backed up for this claim." });
+        result.issues.push({
+          operation: "photo-upload",
+          claimId: photo.claimId,
+          code: "photo_conflict",
+          message: "A different photo is already backed up for this claim.",
+        });
       }
     } catch (error) {
       result.issues.push(issueFor(error, "photo-upload", photo.claimId));
@@ -255,7 +295,12 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
       if (!claim || claim.syncState !== "acknowledged" || !photo) continue;
       const upload = personalPhotoBackupSource(photo);
       if (!upload) {
-        result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
+        result.issues.push({
+          operation: "photo-upload",
+          claimId: item.claimId,
+          code: "unsupported_photo",
+          message: "This photo cannot be backed up in its current format.",
+        });
         continue;
       }
       const eligible = await isPhotoEligible(upload.blob);
@@ -263,7 +308,12 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
       if (!eligible) {
         if (upload.blob === photo.blob) await markPhotoUnsupported(owner, item.claimId);
         else await markPhotoConflict(owner, item.claimId);
-        result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "unsupported_photo", message: "This photo cannot be backed up in its current format." });
+        result.issues.push({
+          operation: "photo-upload",
+          claimId: item.claimId,
+          code: "unsupported_photo",
+          message: "This photo cannot be backed up in its current format.",
+        });
         continue;
       }
       const digest = await hashPhoto(upload.blob);
@@ -282,7 +332,12 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
       assertCurrent(session);
       if (response.status === 409) {
         await markPhotoConflict(owner, item.claimId);
-        result.issues.push({ operation: "photo-upload", claimId: item.claimId, code: "photo_conflict", message: "A different photo is already backed up for this claim." });
+        result.issues.push({
+          operation: "photo-upload",
+          claimId: item.claimId,
+          code: "photo_conflict",
+          message: "A different photo is already backed up for this claim.",
+        });
         continue;
       }
       await ensureOk(response, "photo-upload");
@@ -296,8 +351,13 @@ async function pushPhotos(session: ProgressSession, owner: ProgressOwner, result
         contentReleaseId: claim.contentReleaseId,
         photo: remotePhoto,
       }).photo;
-      if (body.claimId !== item.claimId || photoState.status !== "ready" || photoState.sha256 !== digest ||
-          photoState.sizeBytes !== upload.sizeBytes || photoState.contentType !== upload.contentType) {
+      if (
+        body.claimId !== item.claimId ||
+        photoState.status !== "ready" ||
+        photoState.sha256 !== digest ||
+        photoState.sizeBytes !== upload.sizeBytes ||
+        photoState.contentType !== upload.contentType
+      ) {
         throw new Error("The server confirmed different photo data.");
       }
       assertCurrent(session);
@@ -318,12 +378,18 @@ async function fetchPage(session: ProgressSession, cursor: string | null): Promi
   assertCurrent(session);
   await ensureOk(response, "claim-restore");
   let body: unknown;
-  try { body = await response.json(); }
-  catch { throw new Error("The server returned an invalid progress page."); }
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("The server returned an invalid progress page.");
+  }
   if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("The server returned an invalid progress page.");
   const page = body as Record<string, unknown>;
-  if (!Array.isArray(page.claims) || page.claims.length > MAX_CLAIMS_PER_PAGE ||
-      (page.nextCursor !== null && (typeof page.nextCursor !== "string" || page.nextCursor.length > 2048))) {
+  if (
+    !Array.isArray(page.claims) ||
+    page.claims.length > MAX_CLAIMS_PER_PAGE ||
+    (page.nextCursor !== null && (typeof page.nextCursor !== "string" || page.nextCursor.length > 2048))
+  ) {
     throw new Error("The server returned an invalid progress page.");
   }
   const claims = page.claims.map(validateRemoteClaim);
@@ -376,11 +442,21 @@ async function pullPhotos(session: ProgressSession, owner: ProgressOwner, result
       assertCurrent(session);
       const outcome = await commitDownloadedPhoto(owner, item.claim.claimId, item.photo, blob, digest);
       if (outcome === "stored") result.photosRestored += 1;
-      else result.issues.push({ operation: "photo-restore", claimId: item.claim.claimId, code: "photo_conflict", message: "A different local photo is already saved for this claim." });
+      else
+        result.issues.push({
+          operation: "photo-restore",
+          claimId: item.claim.claimId,
+          code: "photo_conflict",
+          message: "A different local photo is already saved for this claim.",
+        });
     } catch (error) {
       result.issues.push(issueFor(error, "photo-restore", item.claim.claimId));
       if (error instanceof ProgressSessionChangedError) return;
-      if (error instanceof Error && (error.name === "AccountBackupUnavailableError" || error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))) return;
+      if (
+        error instanceof Error &&
+        (error.name === "AccountBackupUnavailableError" || error.name === "WifiUnavailableError" || /wi[\s-]?fi/i.test(error.message))
+      )
+        return;
     }
   }
 }
@@ -396,13 +472,15 @@ export function parseRemotePhotoDisplays(body: unknown): RemotePhotoDisplay[] {
     if (value.crop !== null && !isPhotoCrop(value.crop)) return [];
     if (value.coverAt !== null && (typeof value.coverAt !== "string" || !Number.isFinite(Date.parse(value.coverAt)))) return [];
     const crop = value.crop as RemotePhotoDisplay["crop"];
-    return [{
-      claimId: value.claimId.toLowerCase(),
-      crop: crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null,
-      coverAt: value.coverAt as string | null,
-      removed: value.removed,
-      updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
-    }];
+    return [
+      {
+        claimId: value.claimId.toLowerCase(),
+        crop: crop ? { x: crop.x, y: crop.y, width: crop.width, height: crop.height } : null,
+        coverAt: value.coverAt as string | null,
+        removed: value.removed,
+        updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+      },
+    ];
   });
 }
 
@@ -450,16 +528,19 @@ async function countPending(owner: ProgressOwner, result: ProgressSyncResult) {
   result.savedClaimCount = claims.length;
   for (const photo of photos) {
     const hasUsableBackupSource = personalPhotoBackupSource(photo) !== null;
-    const issue = photo.backupState === "unsupported" && !hasUsableBackupSource
-      ? { code: "unsupported_photo", message: "This saved photo cannot be backed up in its current format." }
-      : photo.backupState === "conflict"
-        ? { code: "photo_conflict", message: "A different photo is already backed up for this claim." }
-        : null;
+    const issue =
+      photo.backupState === "unsupported" && !hasUsableBackupSource
+        ? { code: "unsupported_photo", message: "This saved photo cannot be backed up in its current format." }
+        : photo.backupState === "conflict"
+          ? { code: "photo_conflict", message: "A different photo is already backed up for this claim." }
+          : null;
     if (issue && !result.issues.some((existing) => existing.claimId === photo.claimId && existing.code === issue.code)) {
       result.issues.push({ operation: "photo-upload", claimId: photo.claimId, ...issue });
     }
   }
-  result.claimsPending = outbox.filter((item) => item.kind === "claim").length + claims.filter((claim) => claim.syncState === "pending" && !outbox.some((item) => item.kind === "claim" && item.claimId === claim.claimId)).length;
+  result.claimsPending =
+    outbox.filter((item) => item.kind === "claim").length +
+    claims.filter((claim) => claim.syncState === "pending" && !outbox.some((item) => item.kind === "claim" && item.claimId === claim.claimId)).length;
   result.photosPending = photoIds.size;
 }
 
@@ -468,8 +549,16 @@ export async function syncProgress(session: ProgressSession): Promise<ProgressSy
   const capturedSession = captureProgressSession(session);
   const owner = accountOwner(capturedSession);
   const result: ProgressSyncResult = {
-    ownerKey: ownerKey(owner), claimsUploaded: 0, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-    fullPullCompleted: false, savedClaimCount: 0, claimsPending: 0, photosPending: 0, issues: [],
+    ownerKey: ownerKey(owner),
+    claimsUploaded: 0,
+    photosUploaded: 0,
+    claimsRestored: 0,
+    photosRestored: 0,
+    fullPullCompleted: false,
+    savedClaimCount: 0,
+    claimsPending: 0,
+    photosPending: 0,
+    issues: [],
   };
   try {
     assertCurrent(capturedSession);
@@ -510,7 +599,7 @@ export async function runProgressSyncWhenReady(
   knownConnectivity?: AccountBackupConnectivity,
 ): Promise<ProgressSyncResult | null> {
   if (!isForeground()) return null;
-  const connectivity = knownConnectivity ?? await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false }));
+  const connectivity = knownConnectivity ?? (await getAccountBackupConnectivity().catch(() => ({ connected: false, allowed: false })));
   if (!connectivity.connected || !connectivity.allowed || !isForeground()) return null;
   return syncProgress(session);
 }
@@ -530,11 +619,12 @@ export function coalesceProgressSync<T>(
     return active;
   }
 
-  let task: Promise<T>;
-  task = Promise.resolve().then(run).finally(() => {
-    if (inFlight.get(key) === task) inFlight.delete(key);
-    if (rerunRequested.delete(key)) queueMicrotask(rerun);
-  });
+  const task: Promise<T> = Promise.resolve()
+    .then(run)
+    .finally(() => {
+      if (inFlight.get(key) === task) inFlight.delete(key);
+      if (rerunRequested.delete(key)) queueMicrotask(rerun);
+    });
   inFlight.set(key, task);
   return task;
 }
@@ -542,14 +632,14 @@ export function coalesceProgressSync<T>(
 /** Record only acknowledged outgoing work after all backup work is clear. */
 export function canPersistSuccessfulOutboundBackup(result: ProgressSyncResult): boolean {
   if (result.claimsUploaded + result.photosUploaded === 0 || result.claimsPending > 0 || result.photosPending > 0) return false;
-  return !result.issues.some((issue) => issue.operation === "session" || issue.operation === "claim-upload" || issue.operation === "photo-upload" || /conflict|changed/i.test(issue.code));
+  return !result.issues.some(
+    (issue) =>
+      issue.operation === "session" || issue.operation === "claim-upload" || issue.operation === "photo-upload" || /conflict|changed/i.test(issue.code),
+  );
 }
 
 /** Schedule backup only when a real connectivity transition makes the account backup available. */
-export function shouldScheduleAccountBackup(
-  previous: AccountBackupConnectivity | null,
-  current: AccountBackupConnectivity,
-): boolean {
+export function shouldScheduleAccountBackup(previous: AccountBackupConnectivity | null, current: AccountBackupConnectivity): boolean {
   return previous !== null && current.connected && current.allowed && (!previous.connected || !previous.allowed);
 }
 
@@ -575,8 +665,7 @@ export async function persistSuccessfulOutboundBackupTimestamp(
 
 /** A Last synced marker requires a complete, clean pass over an account with saved progress. */
 export function canPersistLastCompleteSync(result: ProgressSyncResult): boolean {
-  return result.fullPullCompleted && result.savedClaimCount > 0 &&
-    result.claimsPending === 0 && result.photosPending === 0 && result.issues.length === 0;
+  return result.fullPullCompleted && result.savedClaimCount > 0 && result.claimsPending === 0 && result.photosPending === 0 && result.issues.length === 0;
 }
 
 /** Persist a complete-sync marker only while the captured session and runtime policy remain valid. */

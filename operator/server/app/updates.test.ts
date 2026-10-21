@@ -25,8 +25,17 @@ function request(path: string, options: { method?: string; body?: unknown; origi
 
 function pointer(channel: "staging" | "production", generation: number, sha256: string, commit: string, minimum = 12, maximum = 12) {
   return {
-    schema: APP_BUNDLE_POINTER_SCHEMA, channel, generation, version: bundleVersion(commit, sha256), bundleUrl: bundleUrlFor(CDN_ORIGIN, sha256),
-    sha256, byteSize: 100, minimumNativeBuild: minimum, maximumNativeBuild: maximum, sourceCommit: commit, publishedAt: "2026-10-01T00:00:00.000Z",
+    schema: APP_BUNDLE_POINTER_SCHEMA,
+    channel,
+    generation,
+    version: bundleVersion(commit, sha256),
+    bundleUrl: bundleUrlFor(CDN_ORIGIN, sha256),
+    sha256,
+    byteSize: 100,
+    minimumNativeBuild: minimum,
+    maximumNativeBuild: maximum,
+    sourceCommit: commit,
+    publishedAt: "2026-10-01T00:00:00.000Z",
   };
 }
 
@@ -38,18 +47,59 @@ async function setup() {
   cloud.put(`app-bundles/${NEW}.zip`, new Uint8Array(100));
   cloud.put(pointerKey("staging"), JSON.stringify(pointer("staging", 2, NEW, COMMIT_NEW, 13, 14)));
   cloud.put(pointerKey("production"), JSON.stringify(pointer("production", 1, OLD, COMMIT_OLD)));
-  const base = { channel: "staging" as const, previousGeneration: 0, source: "script" as const, previousSha256: null, byteSize: 100, outcome: "confirmed" as const, note: "", publishedAt: "2026-10-01T00:00:00.000Z" };
-  await history.record({ ...base, generation: 1, action: "publish", sha256: OLD, version: bundleVersion(COMMIT_OLD, OLD), minimumNativeBuild: 12, maximumNativeBuild: 12, sourceCommit: COMMIT_OLD }, "2026-10-01T00:00:00.000Z");
-  await history.record({ ...base, generation: 2, action: "publish", sha256: NEW, version: bundleVersion(COMMIT_NEW, NEW), minimumNativeBuild: 13, maximumNativeBuild: 14, sourceCommit: COMMIT_NEW }, "2026-10-02T00:00:00.000Z");
+  const base = {
+    channel: "staging" as const,
+    previousGeneration: 0,
+    source: "script" as const,
+    previousSha256: null,
+    byteSize: 100,
+    outcome: "confirmed" as const,
+    note: "",
+    publishedAt: "2026-10-01T00:00:00.000Z",
+  };
+  await history.record(
+    {
+      ...base,
+      generation: 1,
+      action: "publish",
+      sha256: OLD,
+      version: bundleVersion(COMMIT_OLD, OLD),
+      minimumNativeBuild: 12,
+      maximumNativeBuild: 12,
+      sourceCommit: COMMIT_OLD,
+    },
+    "2026-10-01T00:00:00.000Z",
+  );
+  await history.record(
+    {
+      ...base,
+      generation: 2,
+      action: "publish",
+      sha256: NEW,
+      version: bundleVersion(COMMIT_NEW, NEW),
+      minimumNativeBuild: 13,
+      maximumNativeBuild: 14,
+      sourceCommit: COMMIT_NEW,
+    },
+    "2026-10-02T00:00:00.000Z",
+  );
   const api = createDashboardApi({ otaFetch: cloud.fetch, otaHistoryStore: () => history, otaNow: () => NOW });
   return { cloud, history, api };
 }
 
 async function body<T>(response: Response): Promise<T> {
-  return await response.json() as T;
+  return (await response.json()) as T;
 }
 
-const move = (overrides: Record<string, unknown> = {}) => ({ channel: "staging", sha256: OLD, expectedGeneration: 2, minimumNativeBuild: 12, maximumNativeBuild: 12, note: "Roll back the founders card", ...overrides });
+const move = (overrides: Record<string, unknown> = {}) => ({
+  channel: "staging",
+  sha256: OLD,
+  expectedGeneration: 2,
+  minimumNativeBuild: 12,
+  maximumNativeBuild: 12,
+  note: "Roll back the founders card",
+  ...overrides,
+});
 
 test("rolling staging back writes generation + 1, confirms it through R2 and the CDN, and records it", async () => {
   const { cloud, history, api } = await setup();
@@ -66,10 +116,16 @@ test("rolling staging back writes generation + 1, confirms it through R2 and the
   // The CDN readback must skip the worker's 60 second cache.
   assert.ok(cloud.requests.some((item) => item.method === "GET" && item.url.startsWith(`${CDN_ORIGIN}/${pointerKey("staging")}?fresh=`)));
   const row = history.rows.at(-1)!;
-  assert.deepEqual([row.channel, row.generation, row.previousGeneration, row.action, row.source, row.outcome, row.previousSha256, row.note], ["staging", 3, 2, "rollback", "dashboard", "confirmed", NEW, "Roll back the founders card"]);
+  assert.deepEqual(
+    [row.channel, row.generation, row.previousGeneration, row.action, row.source, row.outcome, row.previousSha256, row.note],
+    ["staging", 3, 2, "rollback", "dashboard", "confirmed", NEW, "Roll back the founders card"],
+  );
 
   // Promoting staging's bundle to production is the other common move.
-  const promote = await api(request("/api/app/updates/move", { method: "POST", body: move({ channel: "production", sha256: OLD, expectedGeneration: 1 }) }), env);
+  const promote = await api(
+    request("/api/app/updates/move", { method: "POST", body: move({ channel: "production", sha256: OLD, expectedGeneration: 1 }) }),
+    env,
+  );
   assert.equal((await body<{ action: string }>(promote)).action, "repoint", "production already runs OLD, so this only rewrites its range");
 });
 
@@ -93,18 +149,37 @@ test("a move is refused when the generation moved, the ETag changed, or the bund
 
 test("a move never lowers the minimum native build below what the bundle needs, or uses an unrecorded bundle", async () => {
   const { cloud, api } = await setup();
-  const low = await api(request("/api/app/updates/move", { method: "POST", body: move({ channel: "production", sha256: NEW, expectedGeneration: 1, minimumNativeBuild: 12, maximumNativeBuild: 14 }) }), env);
+  const low = await api(
+    request("/api/app/updates/move", {
+      method: "POST",
+      body: move({ channel: "production", sha256: NEW, expectedGeneration: 1, minimumNativeBuild: 12, maximumNativeBuild: 14 }),
+    }),
+    env,
+  );
   assert.equal(low.status, 409);
   const error = (await body<{ error: { code: string; message: string } }>(low)).error;
   assert.equal(error.code, "minimum_too_low");
   assert.match(error.message, /needs native build 13/);
-  const promoted = await api(request("/api/app/updates/move", { method: "POST", body: move({ channel: "production", sha256: NEW, expectedGeneration: 1, minimumNativeBuild: 13, maximumNativeBuild: 14 }) }), env);
+  const promoted = await api(
+    request("/api/app/updates/move", {
+      method: "POST",
+      body: move({ channel: "production", sha256: NEW, expectedGeneration: 1, minimumNativeBuild: 13, maximumNativeBuild: 14 }),
+    }),
+    env,
+  );
   assert.equal((await body<{ action: string }>(promoted)).action, "promote");
 
   cloud.put(`app-bundles/${"d".repeat(64)}.zip`, new Uint8Array(10));
   const unknown = await api(request("/api/app/updates/move", { method: "POST", body: move({ sha256: "d".repeat(64) }) }), env);
   assert.equal((await body<{ error: { code: string } }>(unknown)).error.code, "bundle_unrecorded");
-  for (const invalid of [move({ channel: "main" }), move({ sha256: "xyz" }), move({ minimumNativeBuild: 14, maximumNativeBuild: 13 }), move({ expectedGeneration: -1 }), move({ extra: true }), move({ note: "x".repeat(301) })]) {
+  for (const invalid of [
+    move({ channel: "main" }),
+    move({ sha256: "xyz" }),
+    move({ minimumNativeBuild: 14, maximumNativeBuild: 13 }),
+    move({ expectedGeneration: -1 }),
+    move({ extra: true }),
+    move({ note: "x".repeat(301) }),
+  ]) {
     assert.equal((await api(request("/api/app/updates/move", { method: "POST", body: invalid }), env)).status, 400, JSON.stringify(invalid).slice(0, 80));
   }
 });
@@ -133,10 +208,15 @@ test("when the CDN does not return the new pointer the move is cdn_pending, not 
   assert.match(frozen.message, /generation 2/);
   cloud.cdnFrozen = false;
   cloud.servesAppBundles = false;
-  const unserved = await body<{ outcome: string; message: string }>(await api(request("/api/app/updates/move", { method: "POST", body: move({ expectedGeneration: 3 }) }), env));
+  const unserved = await body<{ outcome: string; message: string }>(
+    await api(request("/api/app/updates/move", { method: "POST", body: move({ expectedGeneration: 3 }) }), env),
+  );
   assert.equal(unserved.outcome, "cdn_pending");
   assert.match(unserved.message, /CDN worker/);
-  assert.deepEqual(history.rows.slice(-2).map((row) => row.outcome), ["cdn_pending", "cdn_pending"]);
+  assert.deepEqual(
+    history.rows.slice(-2).map((row) => row.outcome),
+    ["cdn_pending", "cdn_pending"],
+  );
 });
 
 test("moves need Cloudflare credentials, the dashboard origin and POST", async () => {
@@ -156,21 +236,35 @@ test("the overview shows each channel, the bundles in R2 with what they need, an
   const overview = await body<{
     channels: { channel: string; state: string; pointer: { generation: number }; r2: { generation: number } }[];
     bundles: { sha256: string; minimumNativeBuild: number; liveOn: string[]; version: string }[];
-    history: { available: boolean; rows: unknown[] }; cloudflare: { configured: boolean };
+    history: { available: boolean; rows: unknown[] };
+    cloudflare: { configured: boolean };
   }>(await api(request("/api/app/updates", { cookie: "parkdex_operator_db=staging" }), env));
-  assert.deepEqual(overview.channels.map((item) => [item.channel, item.state, item.pointer.generation, item.r2.generation]), [["staging", "live", 2, 2], ["production", "live", 1, 1]]);
+  assert.deepEqual(
+    overview.channels.map((item) => [item.channel, item.state, item.pointer.generation, item.r2.generation]),
+    [
+      ["staging", "live", 2, 2],
+      ["production", "live", 1, 1],
+    ],
+  );
   const byBundle = Object.fromEntries(overview.bundles.map((item) => [item.sha256, item]));
   assert.deepEqual([byBundle[NEW].minimumNativeBuild, byBundle[NEW].liveOn, byBundle[OLD].liveOn], [13, ["staging"], ["production"]]);
   assert.equal(overview.history.rows.length, 2);
   assert.equal(overview.cloudflare.configured, true);
-  const without = await body<{ bundles: null; cloudflare: { configured: boolean }; channels: { state: string }[] }>(await api(request("/api/app/updates"), { ...env, CLOUDFLARE_API_TOKEN: undefined }));
+  const without = await body<{ bundles: null; cloudflare: { configured: boolean }; channels: { state: string }[] }>(
+    await api(request("/api/app/updates"), { ...env, CLOUDFLARE_API_TOKEN: undefined }),
+  );
   assert.deepEqual([without.bundles, without.cloudflare.configured, without.channels[0].state], [null, false, "live"]);
 });
 
 test("the setup checklist tells an old CDN worker apart from a channel with no pointer yet", async () => {
   const items = async (cloud: FakeBundleCloud, scoped: DashboardEnv = env) => {
     const api = createDashboardApi({ otaFetch: cloud.fetch, otaHistoryStore: () => new MemoryOtaHistory() });
-    return Object.fromEntries((await body<{ items: { id: string; status: string; detail: string }[] }>(await api(request("/api/app/updates/setup"), scoped))).items.map((item) => [item.id, item]));
+    return Object.fromEntries(
+      (await body<{ items: { id: string; status: string; detail: string }[] }>(await api(request("/api/app/updates/setup"), scoped))).items.map((item) => [
+        item.id,
+        item,
+      ]),
+    );
   };
   // Today's production: nothing published and a worker that predates app-bundles/.
   const old = new FakeBundleCloud();
@@ -205,7 +299,9 @@ test("the setup checklist tells an old CDN worker apart from a channel with no p
 
 test("the live check posts a sample build to the channel's endpoint and compares it with the pointer", async () => {
   const { api } = await setup();
-  const inRange = await body<{ endpoint: string; answer: { version: string }; matches: boolean }>(await api(request("/api/app/updates/check?channel=staging&build=13"), env));
+  const inRange = await body<{ endpoint: string; answer: { version: string }; matches: boolean }>(
+    await api(request("/api/app/updates/check?channel=staging&build=13"), env),
+  );
   assert.equal(inRange.endpoint, "https://staging.web.parkdex.app/api/updates");
   assert.equal(inRange.answer.version, bundleVersion(COMMIT_NEW, NEW));
   assert.equal(inRange.matches, true);

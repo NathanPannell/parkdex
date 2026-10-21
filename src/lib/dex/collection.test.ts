@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { Park } from "../parks";
 import { buildCollection, coverPhoto, mergeVisits, tileImage, victoriaDay, visiblePhotos, type DexPhoto, type ServerDexPark } from "./collection";
-import { readCollapsed, readOnlyMine, writeCollapsed, writeOnlyMine } from "./prefs";
+import { readCollapsed, readOnlyMine, storedOnlyMine, writeCollapsed, writeOnlyMine } from "./prefs";
 import { compareProvinces, provinceFor } from "./regions";
 
 function park(id: string, region: string, name = id): Park {
   return {
-    id, name, short: name, category: "provincial", region, lat: 48.4, lng: -123.4,
-    biome: "forest", shape: "circle", rarity: "common", seed: 1, blurb: "A park.", scene: null,
+    id,
+    name,
+    short: name,
+    category: "provincial",
+    region,
+    lat: 48.4,
+    lng: -123.4,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    seed: 1,
+    blurb: "A park.",
+    scene: null,
   };
 }
 
@@ -21,8 +32,12 @@ function photo(claimId: string, parkId: string, claimedAt: string, extra: Partia
 
 class MemoryStorage {
   values = new Map<string, string>();
-  getItem(key: string) { return this.values.get(key) ?? null; }
-  setItem(key: string, value: string) { this.values.set(key, value); }
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.values.set(key, value);
+  }
 }
 
 const CATALOGUE = [
@@ -59,15 +74,20 @@ describe("mergeVisits", () => {
         { claimId: "3", parkId: "c", claimedAt: "2026-05-01T20:00:00.000Z", parkSnapshot: CATALOGUE[2] },
       ],
     );
-    expect(visits.get("a")).toMatchObject({ days: ["2026-06-01", "2026-06-03", "2026-06-05"], firstVisitAt: "2026-06-01T18:00:00.000Z", lastVisitAt: "2026-06-05T20:00:00.000Z" });
+    expect(visits.get("a")).toMatchObject({
+      days: ["2026-06-01", "2026-06-03", "2026-06-05"],
+      firstVisitAt: "2026-06-01T18:00:00.000Z",
+      lastVisitAt: "2026-06-05T20:00:00.000Z",
+    });
     expect(visits.get("c")).toMatchObject({ days: ["2026-05-01"], snapshot: CATALOGUE[2] });
   });
 });
 
 describe("buildCollection", () => {
-  const visits = mergeVisits([server("a", ["2026-06-01"]), server("d", ["2026-06-02", "2026-06-04"])], [
-    { claimId: "x", parkId: "e", claimedAt: "2026-06-03T18:00:00.000Z", parkSnapshot: null },
-  ]);
+  const visits = mergeVisits(
+    [server("a", ["2026-06-01"]), server("d", ["2026-06-02", "2026-06-04"])],
+    [{ claimId: "x", parkId: "e", claimedAt: "2026-06-03T18:00:00.000Z", parkSnapshot: null }],
+  );
 
   it("shows only visited parks by default, grouped by province then region, hiding empty regions", () => {
     const collection = buildCollection({ parks: CATALOGUE, visits, photos: [], onlyMine: readOnlyMine(new MemoryStorage()) });
@@ -85,23 +105,37 @@ describe("buildCollection", () => {
   it("shows every park with the switch off, visited first, unvisited as their own tiles", () => {
     const collection = buildCollection({ parks: CATALOGUE, visits, photos: [], onlyMine: false });
     const capital = collection.provinces[0].regions.find((region) => region.name === "Capital Region")!;
-    expect(capital.tiles.map((tile) => [tile.park.id, !!tile.visit])).toEqual([["a", true], ["b", false]]);
+    expect(capital.tiles.map((tile) => [tile.park.id, !!tile.visit])).toEqual([
+      ["a", true],
+      ["b", false],
+    ]);
     expect(collection.provinces[0].regions.map((region) => region.name)).toEqual(["Capital Region", "Kootenays"]);
   });
 
   it("leaves hidden parks out of totals but keeps showing a visited one from its snapshot", () => {
     const hiddenPark = park("h", "Kootenays", "Hemlock");
-    const withHidden = mergeVisits([server("a", ["2026-06-01"]), server("h", ["2026-06-01"], true), server("gone", ["2026-06-01"])], [
-      { claimId: "y", parkId: "h", claimedAt: "2026-06-01T18:00:00.000Z", parkSnapshot: hiddenPark },
-    ]);
+    const withHidden = mergeVisits(
+      [server("a", ["2026-06-01"]), server("h", ["2026-06-01"], true), server("gone", ["2026-06-01"])],
+      [{ claimId: "y", parkId: "h", claimedAt: "2026-06-01T18:00:00.000Z", parkSnapshot: hiddenPark }],
+    );
     // The catalogue leaves hidden parks out; a park the server marks hidden is never counted.
-    const collection = buildCollection({ parks: [...CATALOGUE, park("s", "Kootenays", "Stale")], visits: new Map([...withHidden, ["s", { ...withHidden.get("a")!, parkId: "s", hidden: true }]]), photos: [], onlyMine: true });
+    const collection = buildCollection({
+      parks: [...CATALOGUE, park("s", "Kootenays", "Stale")],
+      visits: new Map([...withHidden, ["s", { ...withHidden.get("a")!, parkId: "s", hidden: true }]]),
+      photos: [],
+      onlyMine: true,
+    });
     const kootenays = collection.provinces[0].regions.find((region) => region.name === "Kootenays")!;
     expect(kootenays.tiles.map((tile) => tile.park.id).sort()).toEqual(["h", "s"]);
     expect(kootenays).toMatchObject({ visited: 0, total: 1 });
     expect(collection.visited).toBe(1);
     // A visit to a park with no catalogue entry and no saved snapshot has nothing to draw.
-    expect(collection.provinces.flatMap((province) => province.regions).flatMap((region) => region.tiles).some((tile) => tile.park.id === "gone")).toBe(false);
+    expect(
+      collection.provinces
+        .flatMap((province) => province.regions)
+        .flatMap((region) => region.tiles)
+        .some((tile) => tile.park.id === "gone"),
+    ).toBe(false);
   });
 
   it("puts several photos per park on its tile and picks the cover", () => {
@@ -138,10 +172,14 @@ describe("cover selection", () => {
 });
 
 describe("per-device choices", () => {
-  it("keeps Only my visits on by default and remembers the switch and collapsed regions", () => {
+  it("follows the player's progress until they choose, then remembers the switch and collapsed regions", () => {
     const storage = new MemoryStorage();
+    expect(storedOnlyMine(storage)).toBeNull();
     expect(readOnlyMine(storage)).toBe(true);
+    expect(readOnlyMine(storage, false)).toBe(false);
     expect(readOnlyMine(null)).toBe(true);
+    writeOnlyMine(true, storage);
+    expect(readOnlyMine(storage, false)).toBe(true);
     writeOnlyMine(false, storage);
     expect(readOnlyMine(storage)).toBe(false);
     writeOnlyMine(true, storage);

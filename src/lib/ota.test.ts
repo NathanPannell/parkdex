@@ -32,13 +32,19 @@ const proxyPlugin = vi.hoisted(() => {
     notifyAppReady: async () => ({}),
     addListener: async () => ({ remove: async () => undefined }),
   };
-  const plugin = new Proxy({}, {
-    get: (_target, name) => {
-      calls.push(String(name));
-      if (name === "then") return () => { throw new Error('"CapacitorUpdater.then()" is not implemented on android'); };
-      return methods[String(name)];
+  const plugin = new Proxy(
+    {},
+    {
+      get: (_target, name) => {
+        calls.push(String(name));
+        if (name === "then")
+          return () => {
+            throw new Error('"CapacitorUpdater.then()" is not implemented on android');
+          };
+        return methods[String(name)];
+      },
     },
-  });
+  );
   return { plugin, calls };
 });
 
@@ -46,7 +52,13 @@ vi.mock("@capgo/capacitor-updater", () => ({ CapacitorUpdater: proxyPlugin.plugi
 
 import { bundleToApply, isOverTheAirBundle, notifyOverTheAirReady, overTheAirBundleLabel, resetOverTheAirForTests, startOverTheAirUpdates } from "./ota";
 
-type Bundle = { id: string; version: string; status: "success" | "error" | "pending" | "downloading" | "deleted" | "deleting"; downloaded: string; checksum: string };
+type Bundle = {
+  id: string;
+  version: string;
+  status: "success" | "error" | "pending" | "downloading" | "deleted" | "deleting";
+  downloaded: string;
+  checksum: string;
+};
 
 function bundle(id: string, status: Bundle["status"] = "pending"): Bundle {
   return { id, version: id === "builtin" ? "builtin" : `v-${id}`, status, downloaded: "", checksum: "" };

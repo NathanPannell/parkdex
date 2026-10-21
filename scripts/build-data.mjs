@@ -45,7 +45,10 @@ const BIOME_RULES = [
   ["lake", /lake/i],
   ["mountain", /mount|hill|ridge|escarpment|ski|plateau|alpine|massif|mountain|erskine/i],
   ["river", /river|creek|potholes|estuary|stream/i],
-  ["coast", /\b(beach|bay|cove|spit|point|lagoon|harbour|inlet|passage|marine|sands|islands?|peninsula|arm|narrows|scott|rim|gulf|sea|flores|vargas|nuchatlitz|juan de fuca|sooke|landing|carmanah)\b/i],
+  [
+    "coast",
+    /\b(beach|bay|cove|spit|point|lagoon|harbour|inlet|passage|marine|sands|islands?|peninsula|arm|narrows|scott|rim|gulf|sea|flores|vargas|nuchatlitz|juan de fuca|sooke|landing|carmanah)\b/i,
+  ],
 ];
 
 // Hand-written copy for the parks a Victoria tester is most likely to reach first.
@@ -54,7 +57,8 @@ const BLURBS = {
   "regional-sooke-river-regional-park": "Riverside trails, deep swimming holes and big leaf maples along the Sooke River.",
   "regional-little-huson-cave-regional-park": "Limestone arches and caves carved by the Atluck River. A North Island adventure.",
   "regional-horth-hill-regional-park": "A mossy forest climb to a view over the Gulf Islands. Short, sweet, badge-worthy.",
-  "regional-gonzales-hill-regional-park": "A pocket summit with a 360 view of the Olympics, Oak Bay and every ferry sliding past. Ten minutes up, zero excuses.",
+  "regional-gonzales-hill-regional-park":
+    "A pocket summit with a 360 view of the Olympics, Oak Bay and every ferry sliding past. Ten minutes up, zero excuses.",
   "regional-mill-hill-regional-park": "Garry oak meadows and a wildflower-lined climb to the Langford lookout. Spring here is ridiculous.",
   "regional-francis-king-regional-park": "Old-growth Douglas fir, cedar boardwalks and the kind of quiet that makes you whisper.",
   "regional-thetis-lake-regional-park": "Two lakes, cliff-jump rumours and a forest loop that ends in a swim. Summer's favourite badge.",
@@ -72,7 +76,6 @@ const BLURBS = {
   "regional-mount-wells-regional-park": "A short, steep scramble to a bald summit with a front-row seat over Sooke Hills.",
   "provincial-sooke-potholes-park": "Emerald pools carved in rock. The river does the sculpting, you do the swimming.",
   "regional-sooke-potholes-regional-park": "Emerald pools carved in rock. The river does the sculpting, you do the swimming.",
-  "regional-horth-hill-regional-park": "A mossy forest climb to a view over the Gulf Islands. Short, sweet, badge-worthy.",
   "regional-lone-tree-hill-regional-park": "Yes, there is a lone tree. And a sweeping view of the Highlands to go with it.",
   "provincial-elk-falls-park": "A suspension bridge swinging over a 25 m waterfall. The Island's most photogenic wobble.",
   "provincial-little-qualicum-falls-park": "Tumbling falls in a deep canyon, and a lake for cooling off afterwards.",
@@ -113,7 +116,10 @@ const km = ([aLat, aLng], [bLat, bLng]) => {
 const shortName = (name) =>
   name
     .replace(/\s*\(.*?\)\s*/g, " ")
-    .replace(/\b(Regional Park and Conservation Area|Regional Conservation Area|Regional Park|National Park Reserve|Marine Park|Nature Park|Historic Park|Provincial Park|Park)\b/g, "")
+    .replace(
+      /\b(Regional Park and Conservation Area|Regional Conservation Area|Regional Park|National Park Reserve|Marine Park|Nature Park|Historic Park|Provincial Park|Park)\b/g,
+      "",
+    )
     .replace(/\s+a k a.*$/i, "")
     .trim();
 
@@ -164,8 +170,7 @@ const onIsland = (rings) => {
   return verts.filter((v) => inRing(v, island)).length / verts.length >= 0.5;
 };
 
-const outerRings = (geometry) =>
-  geometry.type === "Polygon" ? [geometry.coordinates[0]] : geometry.coordinates.map((poly) => poly[0]);
+const outerRings = (geometry) => (geometry.type === "Polygon" ? [geometry.coordinates[0]] : geometry.coordinates.map((poly) => poly[0]));
 
 const boundaryById = new Map(boundaries.features.map((f) => [f.properties.id, f]));
 const parks = [];

@@ -11,32 +11,59 @@ type FoundingDecision = import("./game/client").FoundingDecision;
 type GameMe = import("./game/client").GameMe;
 
 function decision(overrides: Partial<FoundingDecision> & { requestId: string }): FoundingDecision {
-  return { status: "approved", parkId: "p", parkName: "Paterson Park", reason: null, coverUrl: null, founderHandle: null, decidedAt: "2026-10-10T03:00:00Z", ...overrides };
+  return {
+    status: "approved",
+    parkId: "p",
+    parkName: "Paterson Park",
+    reason: null,
+    coverUrl: null,
+    founderHandle: null,
+    decidedAt: "2026-10-10T03:00:00Z",
+    ...overrides,
+  };
 }
 
 const me = (pending: { parkId: string | null }[]): GameMe => ({
-  player: null, score: 0, parks: [], takeovers: [], flagSeed: null,
-  foundingReviews: { pending: pending.map((item, index) => ({ requestId: `r${index}`, parkName: "P", createdAt: "2026-10-10T00:00:00Z", ...item })), decided: [] },
+  player: null,
+  score: 0,
+  parks: [],
+  takeovers: [],
+  flagSeed: null,
+  foundingReviews: {
+    pending: pending.map((item, index) => ({ requestId: `r${index}`, parkName: "P", createdAt: "2026-10-10T00:00:00Z", ...item })),
+    decided: [],
+  },
 });
 
 describe("decisionMessage", () => {
   it("celebrates an approval with the bonus", () => {
-    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({ title: "You're the founder of Paterson Park!", text: "Your photo was approved. You're the founder of Paterson Park! +24", kip: "cheer" });
+    expect(decisionMessage(decision({ requestId: "a" }))).toMatchObject({
+      title: "You're the founder of Paterson Park!",
+      text: "Your photo was approved and is the park's cover now. +24 points.",
+      kip: "cheer",
+    });
   });
 
   it("gives the operator's reason for a rejection, without doubling its full stop", () => {
-    expect(decisionMessage(decision({ requestId: "b", status: "rejected", parkName: "Beacon Hill", reason: "Too dark or blurry." })).text)
-      .toBe("Your photo for Beacon Hill wasn't approved: too dark or blurry. You can try again next time you're there.");
-    expect(decisionMessage(decision({ requestId: "b2", status: "rejected", parkName: "Beacon Hill", reason: "The photo is too dark or blurry." })).text)
-      .toBe("Your photo for Beacon Hill wasn't approved: the photo is too dark or blurry. You can try again next time you're there.");
-    expect(decisionMessage(decision({ requestId: "b3", status: "rejected", parkName: "Beacon Hill", reason: "OK sign visible!" })).text)
-      .toContain("wasn't approved: OK sign visible. You can");
-    expect(decisionMessage(decision({ requestId: "c", status: "rejected", parkName: "Beacon Hill", reason: null })).text)
-      .toBe("Your photo for Beacon Hill wasn't approved. You can try again next time you're there.");
+    expect(decisionMessage(decision({ requestId: "b", status: "rejected", parkName: "Beacon Hill", reason: "Too dark or blurry." })).text).toBe(
+      "Your photo for Beacon Hill wasn't approved: too dark or blurry. You can try again next time you're there.",
+    );
+    expect(decisionMessage(decision({ requestId: "b2", status: "rejected", parkName: "Beacon Hill", reason: "The photo is too dark or blurry." })).text).toBe(
+      "Your photo for Beacon Hill wasn't approved: the photo is too dark or blurry. You can try again next time you're there.",
+    );
+    expect(decisionMessage(decision({ requestId: "b3", status: "rejected", parkName: "Beacon Hill", reason: "OK sign visible!" })).text).toContain(
+      "wasn't approved: OK sign visible. You can",
+    );
+    expect(decisionMessage(decision({ requestId: "c", status: "rejected", parkName: "Beacon Hill", reason: null })).text).toBe(
+      "Your photo for Beacon Hill wasn't approved. You can try again next time you're there.",
+    );
   });
 
   it("says when someone else became the founder first", () => {
-    expect(decisionMessage(decision({ requestId: "d", status: "superseded" }))).toMatchObject({ title: "Someone else became the founder first", text: "Paterson Park has a founder now. You can still plant your flag there." });
+    expect(decisionMessage(decision({ requestId: "d", status: "superseded" }))).toMatchObject({
+      title: "Someone else became the founder first",
+      text: "Paterson Park has a founder now. You can still plant your flag there.",
+    });
     expect(decisionMessage(decision({ requestId: "e", status: "superseded", founderHandle: "sam" })).title).toBe("@sam became the founder first");
   });
 

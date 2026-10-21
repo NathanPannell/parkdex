@@ -53,7 +53,12 @@ describe("nearby selection", () => {
 });
 
 describe("LRU cap", () => {
-  const sizes = new Map([["a", 1_000_000], ["b", 1_000_000], ["c", 1_000_000], ["d", 1_000_000]]);
+  const sizes = new Map([
+    ["a", 1_000_000],
+    ["b", 1_000_000],
+    ["c", 1_000_000],
+    ["d", 1_000_000],
+  ]);
 
   it("evicts the least recently used files until the rest fit", () => {
     expect(chunksToEvict(["a", "b", "c", "d"], sizes, new Set(), 2_000_000)).toEqual(["a", "b"]);
@@ -71,7 +76,14 @@ describe("LRU cap", () => {
 });
 
 function file(path: string, sha: string, size = 100): ContentFile {
-  return { path, key: `releases/${"a".repeat(64)}/${path}`, url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/${path}`, sha256: sha.repeat(64).slice(0, 64), byte_size: size, content_type: "application/octet-stream" };
+  return {
+    path,
+    key: `releases/${"a".repeat(64)}/${path}`,
+    url: `https://kip-assets.parkdex.app/releases/${"a".repeat(64)}/${path}`,
+    sha256: sha.repeat(64).slice(0, 64),
+    byte_size: size,
+    content_type: "application/octet-stream",
+  };
 }
 
 describe("cleanup rules", () => {
@@ -84,8 +96,9 @@ describe("cleanup rules", () => {
   const oldMapChunk = "7".repeat(64);
   const farArt = "8".repeat(64);
   const downloading = "9".repeat(64);
-  const stored = [layout.sha256, glyph.sha256, nearChunk.sha256, farChunk.sha256, claimedArt.sha256, retained, oldMapChunk, farArt, downloading]
-    .map((hash) => ({ hash, size: 10 }));
+  const stored = [layout.sha256, glyph.sha256, nearChunk.sha256, farChunk.sha256, claimedArt.sha256, retained, oldMapChunk, farArt, downloading].map(
+    (hash) => ({ hash, size: 10 }),
+  );
 
   it("keeps map labels, nearby detail, kept art and protected files, and deletes the rest", () => {
     const keep = cleanupKeepSet({
@@ -94,7 +107,11 @@ describe("cleanup rules", () => {
       art: [claimedArt],
       protectedHashes: [retained, downloading],
     });
-    expect(filesToDelete(stored, keep).map((entry) => entry.hash).sort()).toEqual([farChunk.sha256, oldMapChunk, farArt].sort());
+    expect(
+      filesToDelete(stored, keep)
+        .map((entry) => entry.hash)
+        .sort(),
+    ).toEqual([farChunk.sha256, oldMapChunk, farArt].sort());
   });
 
   it("keeps every saved chunk of the current map until the player's surroundings are known", () => {
@@ -131,29 +148,54 @@ describe("cleanup rules", () => {
 
 describe("lean catalogue state", () => {
   const park = (id: string, lng: number, lat: number) => ({
-    id, name: id, short: id, category: "municipal", region: "Delta", lat, lng, biome: "forest", shape: "circle", rarity: "common", scene: null, seed: 1, blurb: "A park.",
+    id,
+    name: id,
+    short: id,
+    category: "municipal",
+    region: "Delta",
+    lat,
+    lng,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    scene: null,
+    seed: 1,
+    blurb: "A park.",
   });
   const boundary = (id: string) => ({
     type: "Feature" as const,
     properties: { id, biome: "forest" },
-    geometry: { type: "MultiPolygon" as const, coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
-  });
-  const ids = ["deas-island", "boundary-bay", "beacon-hill"];
-  const base = (): ContentSyncState => validateContentSyncState({
-    revision: 5,
-    parks: ids.map((id, index) => park(id, -123 - index * 0.1, 49)) as ContentSyncState["parks"],
-    boundaries: { type: "FeatureCollection", features: [boundary("deas-island")] as ContentSyncState["boundaries"]["features"] },
-    drive: { hubs: [{ name: "Delta", lng: -123, lat: 49 }], parks: Object.fromEntries(ids.map((id) => [id, { drive: [null], walkM: 0 }])) },
-    assets: [],
-    map: null,
-    catalogue: {
-      version: "a".repeat(64),
-      revision: 4,
-      chunks: [chunk("catalogue/boundaries/000.json", ["deas-island"]), chunk("catalogue/boundaries/001.json", ["boundary-bay", "beacon-hill"])],
-      loaded: ["catalogue/boundaries/000.json"],
-      pinned: [],
+    geometry: {
+      type: "MultiPolygon" as const,
+      coordinates: [
+        [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      ],
     },
   });
+  const ids = ["deas-island", "boundary-bay", "beacon-hill"];
+  const base = (): ContentSyncState =>
+    validateContentSyncState({
+      revision: 5,
+      parks: ids.map((id, index) => park(id, -123 - index * 0.1, 49)) as ContentSyncState["parks"],
+      boundaries: { type: "FeatureCollection", features: [boundary("deas-island")] as ContentSyncState["boundaries"]["features"] },
+      drive: { hubs: [{ name: "Delta", lng: -123, lat: 49 }], parks: Object.fromEntries(ids.map((id) => [id, { drive: [null], walkM: 0 }])) },
+      assets: [],
+      map: null,
+      catalogue: {
+        version: "a".repeat(64),
+        revision: 4,
+        chunks: [chunk("catalogue/boundaries/000.json", ["deas-island"]), chunk("catalogue/boundaries/001.json", ["boundary-bay", "beacon-hill"])],
+        loaded: ["catalogue/boundaries/000.json"],
+        pinned: [],
+      },
+    });
 
   it("accepts a catalogue with only some boundaries", () => {
     expect(base().boundaries.features).toHaveLength(1);
@@ -171,13 +213,43 @@ describe("lean catalogue state", () => {
 
   it("evicts a chunk's boundaries but keeps one changed after the release", () => {
     const merged = mergeCatalogueChunks(base(), new Map([["catalogue/boundaries/001.json", [boundary("boundary-bay"), boundary("beacon-hill")]]]));
-    const changed = applyContentChangeBatch(merged, { revision: 6, changes: [{ entity: "boundary", op: "upsert", id: "beacon-hill", value: boundary("beacon-hill") }] });
+    const changed = applyContentChangeBatch(merged, {
+      revision: 6,
+      changes: [{ entity: "boundary", op: "upsert", id: "beacon-hill", value: boundary("beacon-hill") }],
+    });
     expect(changed.catalogue?.pinned).toEqual(["beacon-hill"]);
     const evicted = evictCatalogueChunks(changed, ["catalogue/boundaries/001.json"]);
     expect(evicted.boundaries.features.map((feature) => feature.properties.id)).toEqual(["deas-island", "beacon-hill"]);
     expect(evicted.catalogue?.loaded).toEqual(["catalogue/boundaries/000.json"]);
     // Loading the chunk again does not overwrite the newer boundary.
-    const reloaded = mergeCatalogueChunks(validateContentSyncState(evicted), new Map([["catalogue/boundaries/001.json", [boundary("boundary-bay"), { ...boundary("beacon-hill"), properties: { id: "beacon-hill", biome: "forest" }, geometry: { type: "MultiPolygon", coordinates: [[[[5, 5], [6, 5], [6, 6], [5, 5]]]] } }]]]));
+    const reloaded = mergeCatalogueChunks(
+      validateContentSyncState(evicted),
+      new Map([
+        [
+          "catalogue/boundaries/001.json",
+          [
+            boundary("boundary-bay"),
+            {
+              ...boundary("beacon-hill"),
+              properties: { id: "beacon-hill", biome: "forest" },
+              geometry: {
+                type: "MultiPolygon",
+                coordinates: [
+                  [
+                    [
+                      [5, 5],
+                      [6, 5],
+                      [6, 6],
+                      [5, 5],
+                    ],
+                  ],
+                ],
+              },
+            },
+          ],
+        ],
+      ]),
+    );
     expect(reloaded.boundaries.features.find((feature) => feature.properties.id === "beacon-hill")?.geometry.coordinates[0]![0]![0]).toEqual([0, 0]);
   });
 

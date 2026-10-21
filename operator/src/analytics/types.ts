@@ -76,18 +76,46 @@ export type DeletionRow = {
   accountState: "active" | "deleting" | "gone";
 };
 
-export type EventsPage = { events: EventRow[]; nextCursor: string | null; filter: { from: string; to: string; types: string[] }; unknownHandle: string | null; unavailable: string[] };
-export type Histogram = { bucket: "hour" | "day"; from: string; to: string; buckets: { at: string; count: number; db: number }[]; dbOmitted: boolean; unknownHandle: string | null };
+export type EventsPage = {
+  events: EventRow[];
+  nextCursor: string | null;
+  filter: { from: string; to: string; types: string[] };
+  unknownHandle: string | null;
+  unavailable: string[];
+};
+export type Histogram = {
+  bucket: "hour" | "day";
+  from: string;
+  to: string;
+  buckets: { at: string; count: number; db: number }[];
+  dbOmitted: boolean;
+  unknownHandle: string | null;
+};
 
 export type PostHogStatus = { configured: boolean; host: string; missing: string[]; problem: string | null; environment: string };
 export type QueryResult = { columns: string[]; rows: unknown[][]; hasMore: boolean; nextCursor: string | null };
 
 /** Every server event type, in the order the type filter lists them. */
 export const EVENT_TYPES = [
-  "flag_planted", "flag_taken", "flag_held", "visit_already_today", "flag_fell",
-  "leaderboard_viewed", "takeover_message_seen", "handle_set",
-  "park_founded", "founder_photo_checked", "founding_review_requested", "founding_review_decided", "park_removed",
-  "crew_joined", "crew_code_shown", "visit_logged_protected",
-  "park_viewed", "directions_opened", "park_claimed",
-  "db_read", "db_write",
+  "flag_planted",
+  "flag_taken",
+  "flag_held",
+  "visit_already_today",
+  "flag_fell",
+  "leaderboard_viewed",
+  "takeover_message_seen",
+  "handle_set",
+  "park_founded",
+  "founder_photo_checked",
+  "founding_review_requested",
+  "founding_review_decided",
+  "park_removed",
+  "crew_joined",
+  "crew_code_shown",
+  "visit_logged_protected",
+  "park_viewed",
+  "directions_opened",
+  "park_claimed",
+  "db_read",
+  "db_write",
 ] as const;

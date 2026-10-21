@@ -43,13 +43,27 @@ export type ParkRow = {
 /** GET /api/parks/stats */
 export type ParkStats = { live: number; hidden: number; founded: number; osmOutlines: number; osmNotInParkdex: number; osmSourceDate: string | null };
 
-export type ChangeRow = { revision: number; at: string; entity: "park" | "boundary" | "drive" | "asset"; operation: "upsert" | "delete"; value: Record<string, unknown> | null };
+export type ChangeRow = {
+  revision: number;
+  at: string;
+  entity: "park" | "boundary" | "drive" | "asset";
+  operation: "upsert" | "delete";
+  value: Record<string, unknown> | null;
+};
 
 /** GET /api/parks/<id> `activity` */
 export type ParkActivity = {
   source: ParkSource;
   hidden: HiddenState | null;
-  founder: { handle: string | null; foundedAt: string; source: string; photoSha256: string; photoWidth: number; photoHeight: number; photoBytes: number } | null;
+  founder: {
+    handle: string | null;
+    foundedAt: string;
+    source: string;
+    photoSha256: string;
+    photoWidth: number;
+    photoHeight: number;
+    photoBytes: number;
+  } | null;
   visits: { total: number; last30Days: number; uniquePlayers: number };
   flag: { handle: string | null; since: string; lastVisitAt: string; fallsAt: string; up: boolean } | null;
   tenures: number;
@@ -144,7 +158,12 @@ export const REVIEW_REASONS: Array<{ code: ReviewReasonCode; label: string; text
 
 /** The check's flags, in the words the player saw. */
 export const FLAG_LABELS: Record<string, string> = {
-  people: "People", lighting: "Too dark or blurry", not_park: "Not the park", inappropriate: "Inappropriate", not_photo: "Screen or edited", personal_info: "Personal details",
+  people: "People",
+  lighting: "Too dark or blurry",
+  not_park: "Not the park",
+  inappropriate: "Inappropriate",
+  not_photo: "Screen or edited",
+  personal_info: "Personal details",
 };
 
 /** One row of GET /api/parks/review */

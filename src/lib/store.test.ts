@@ -32,6 +32,7 @@ const readyState: StoreState = {
   accuracy: null,
   located: null,
   locationError: null,
+  webLocation: false,
   muted: false,
   screen: "claim",
   startupReady: true,
@@ -43,7 +44,11 @@ const readyState: StoreState = {
   tripId: park.id,
   pendingPhoto: "data:image/jpeg;base64,photo",
   focusId: null,
+  focusOpen: true,
   feedback: null,
+  resume: null,
+  accountFrom: null,
+  arrivalId: null,
 };
 
 afterEach(() => {
@@ -64,12 +69,13 @@ function restoredClaim(id: string, rarity: Rarity): Claim {
 describe("claim progress hydration", () => {
   it("waits on the splash until the same build and package install are confirmed", () => {
     vi.stubGlobal("localStorage", {
-      getItem: () => JSON.stringify({
-        onboarded: true,
-        muted: true,
-        onboardingBuildId: "source-sha",
-        onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
-      }),
+      getItem: () =>
+        JSON.stringify({
+          onboarded: true,
+          muted: true,
+          onboardingBuildId: "source-sha",
+          onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
+        }),
     });
 
     const loaded = load();
@@ -81,12 +87,14 @@ describe("claim progress hydration", () => {
       onboardingBuildId: "source-sha",
       onboardingPackageIdentity: "app.parkdex:1790000000000:1790000000000:12",
     });
-    expect(reducer(loaded, {
-      type: "installReady",
-      buildId: "source-sha",
-      packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
-      native: true,
-    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
+    expect(
+      reducer(loaded, {
+        type: "installReady",
+        buildId: "source-sha",
+        packageInstallIdentity: "app.parkdex:1790000000000:1790000000000:12",
+        native: true,
+      }),
+    ).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("keeps the splash for a visitor who has not completed onboarding", () => {
@@ -131,19 +139,18 @@ describe("claim progress hydration", () => {
       getItem: () => JSON.stringify({ onboarded: true, muted: false, onboardingBuildId: "old-source-sha", onboardingPackageIdentity: null }),
     });
 
-    expect(reducer(load(), {
-      type: "installReady",
-      buildId: "new-source-sha",
-      packageInstallIdentity: null,
-      native: false,
-    })).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
+    expect(
+      reducer(load(), {
+        type: "installReady",
+        buildId: "new-source-sha",
+        packageInstallIdentity: null,
+        native: false,
+      }),
+    ).toMatchObject({ onboarded: true, startupReady: true, screen: "splash" });
   });
 
   it("preserves the legacy claims and other local preferences when saving onboarding identity", () => {
-    const stored = new Map([[
-      "parkdex-mockup-v1",
-      JSON.stringify({ claims: { "park-a": { at: "saved", photo: "old-photo" } }, unrelatedPreference: "keep" }),
-    ]]);
+    const stored = new Map([["parkdex-mockup-v1", JSON.stringify({ claims: { "park-a": { at: "saved", photo: "old-photo" } }, unrelatedPreference: "keep" })]]);
     const storage = {
       getItem: (key: string) => stored.get(key) ?? null,
       setItem: (key: string, value: string) => stored.set(key, value),
@@ -168,18 +175,24 @@ describe("claim progress hydration", () => {
 
   it("restores every owner claim and marks progress ready", () => {
     const restoredClaims: Record<string, Claim> = {};
-    for (const [rarity, count] of [["common", 3], ["uncommon", 3]] as const) {
+    for (const [rarity, count] of [
+      ["common", 3],
+      ["uncommon", 3],
+    ] as const) {
       for (let index = 0; index < count; index += 1) {
         const id = `${rarity}-${index}`;
         restoredClaims[id] = restoredClaim(id, rarity);
       }
     }
 
-    const restored = reducer({ ...readyState, claims: {}, progressReady: false }, {
-      type: "progressLoaded",
-      ownerKey: "guest",
-      claims: restoredClaims,
-    });
+    const restored = reducer(
+      { ...readyState, claims: {}, progressReady: false },
+      {
+        type: "progressLoaded",
+        ownerKey: "guest",
+        claims: restoredClaims,
+      },
+    );
     expect(restored.progressReady).toBe(true);
     expect(Object.keys(restored.claims).sort()).toEqual(Object.keys(restoredClaims).sort());
   });
@@ -255,12 +268,15 @@ describe("claim progress hydration", () => {
   });
 
   it("keeps metadata ready when later photo hydration fails", () => {
-    const afterMetadata = reducer({ ...readyState, claims: {}, progressReady: false }, {
-      type: "progressLoaded",
-      ownerKey: "guest",
-      metadataOnly: true,
-      claims: { [park.id]: restoredClaim(park.id, "common") },
-    });
+    const afterMetadata = reducer(
+      { ...readyState, claims: {}, progressReady: false },
+      {
+        type: "progressLoaded",
+        ownerKey: "guest",
+        metadataOnly: true,
+        claims: { [park.id]: restoredClaim(park.id, "common") },
+      },
+    );
     const afterPhotoFailure = reducer(afterMetadata, {
       type: "progressFailed",
       ownerKey: "guest",
@@ -350,5 +366,37 @@ describe("flag visits", () => {
     const next = reducer(planting, { type: "progressLoading", ownerKey: "account:new-owner" });
     expect(next.screen).toBe("map");
     expect(next.tripId).toBeNull();
+  });
+});
+
+describe("signing in for an action", () => {
+  it("remembers what the player was doing and where Account was opened from", () => {
+    const onMap = { ...readyState, screen: "map" as const, selectedId: "a-park" };
+    const signingIn = reducer(onMap, { type: "signInFor", resume: { kind: "join", parkId: "a-park", code: "K7QX2M" } });
+    expect(signingIn.screen).toBe("account");
+    expect(signingIn.accountFrom).toBe("map");
+    expect(signingIn.selectedId).toBeNull();
+    expect(signingIn.resume).toEqual({ kind: "join", parkId: "a-park", code: "K7QX2M" });
+    expect(reducer(signingIn, { type: "resume", resume: null }).resume).toBeNull();
+  });
+
+  it("keeps the screen Account was first opened from", () => {
+    const fromSettings = reducer({ ...readyState, screen: "settings" }, { type: "go", screen: "account" });
+    expect(fromSettings.accountFrom).toBe("settings");
+    expect(reducer(fromSettings, { type: "go", screen: "account" }).accountFrom).toBe("settings");
+  });
+
+  it("settles on a park without opening its page when asked", () => {
+    expect(reducer(readyState, { type: "focus", id: "a-park", open: false })).toMatchObject({ focusId: "a-park", focusOpen: false });
+    expect(reducer(readyState, { type: "focus", id: "a-park" })).toMatchObject({ focusId: "a-park", focusOpen: true });
+  });
+});
+
+describe("arrival card", () => {
+  it("records which park's arrival card is up and keeps the same state when nothing changes", () => {
+    const up = reducer(readyState, { type: "arrival", id: park.id });
+    expect(up.arrivalId).toBe(park.id);
+    expect(reducer(up, { type: "arrival", id: park.id })).toBe(up);
+    expect(reducer(up, { type: "arrival", id: null }).arrivalId).toBeNull();
   });
 });

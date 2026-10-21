@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { handleAuthRequest, resumeAccountDeletion, type AuthDependencies, type AuthEnvironment, type GoogleIdentityClaims } from "./auth.ts";
+import {
+  handleAuthRequest,
+  purgeAbandonedGuests,
+  resumeAccountDeletion,
+  type AuthDependencies,
+  type AuthEnvironment,
+  type GoogleIdentityClaims,
+} from "./auth.ts";
 import type {
   AccountAuthStore,
   AccountCredentials,
@@ -39,6 +46,7 @@ function summary(account: AccountCredentials): AccountSummary {
     emailVerified: account.emailVerified,
     displayName: account.displayName,
     providers: [...account.providers],
+    guest: account.email === "",
   };
 }
 
@@ -52,6 +60,7 @@ class MemoryAuthStore implements AccountAuthStore {
   readonly receipts = new Map<string, DeletionReceipt>();
   readonly events: Array<{ eventType: string; scopeHash: string | null; outcome: string }> = [];
   readonly rates = new Map<string, number>();
+  readonly createdAt = new Map<string, string>();
 
   async reserveRateLimit(action: string, scopeHash: string, limit: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
     const key = `${action}:${scopeHash}`;
@@ -98,10 +107,30 @@ class MemoryAuthStore implements AccountAuthStore {
     };
   }
 
+  async createGuestAccount(accountId: string, session: SessionInsert) {
+    const account: AccountCredentials = {
+      id: accountId,
+      email: "",
+      emailVerified: false,
+      displayName: null,
+      providers: [],
+      passwordHash: null,
+      deletionState: "active",
+    };
+    this.accounts.set(account.id, account);
+    const stored = this.addSession(account, session);
+    return { account: summary(account), sessionId: stored.sessionId, expiresAt: stored.expiresAt, absoluteExpiresAt: stored.absoluteExpiresAt };
+  }
+
   addGoogleOnlyAccount(email: string, subject: string): AccountCredentials {
     const account: AccountCredentials = {
-      id: randomUUID(), email, emailVerified: true, displayName: null,
-      providers: ["google"], passwordHash: null, deletionState: "active",
+      id: randomUUID(),
+      email,
+      emailVerified: true,
+      displayName: null,
+      providers: ["google"],
+      passwordHash: null,
+      deletionState: "active",
     };
     this.accounts.set(account.id, account);
     this.googleSubjects.set(subject, account.id);
@@ -114,7 +143,7 @@ class MemoryAuthStore implements AccountAuthStore {
 
   async findAccountById(accountId: string): Promise<AccountCredentials | null> {
     const account = this.accounts.get(accountId);
-    return account ? { ...account, providers: [...account.providers] } : null;
+    return account ? { ...account, providers: [...account.providers], guest: account.email === "" } : null;
   }
 
   async createSession(accountId: string, session: SessionInsert) {
@@ -137,10 +166,16 @@ class MemoryAuthStore implements AccountAuthStore {
     return { ...stored, ...summary(account) };
   }
 
-  async rotateSession(sessionId: string, previousTokenHash: string, session: SessionInsert, now: string): Promise<string | null> {
+  async rotateSession(
+    sessionId: string,
+    previousTokenHash: string,
+    session: SessionInsert,
+    now: string,
+    renewWindowMs = 7 * 24 * 60 * 60 * 1000,
+  ): Promise<string | null> {
     const stored = this.sessions.get(sessionId);
     if (!stored || stored.tokenHash !== previousTokenHash || this.revokedSessions.has(sessionId)) return null;
-    if (Date.parse(stored.expiresAt) <= Date.parse(now) || Date.parse(stored.expiresAt) > Date.parse(now) + 7 * 24 * 60 * 60 * 1000) return null;
+    if (Date.parse(stored.expiresAt) <= Date.parse(now) || Date.parse(stored.expiresAt) > Date.parse(now) + renewWindowMs) return null;
     stored.tokenHash = session.tokenHash;
     stored.csrfHash = session.csrfHash;
     stored.transport = session.transport;
@@ -168,11 +203,18 @@ class MemoryAuthStore implements AccountAuthStore {
   async hasValidActionToken(tokenHash: string, purpose: "verification" | "password_reset", now: string): Promise<boolean> {
     const token = this.actionTokens.get(tokenHash);
     const account = token ? this.accounts.get(token.accountId) : null;
-    return Boolean(token && token.purpose === purpose && !token.usedAt && Date.parse(token.expiresAt) > Date.parse(now) && account?.deletionState === "active" && (purpose !== "password_reset" || account.passwordHash));
+    return Boolean(
+      token &&
+      token.purpose === purpose &&
+      !token.usedAt &&
+      Date.parse(token.expiresAt) > Date.parse(now) &&
+      account?.deletionState === "active" &&
+      (purpose !== "password_reset" || account.passwordHash),
+    );
   }
 
   async consumeVerificationToken(tokenHash: string, now: string): Promise<boolean> {
-    if (!await this.hasValidActionToken(tokenHash, "verification", now)) return false;
+    if (!(await this.hasValidActionToken(tokenHash, "verification", now))) return false;
     const token = this.actionTokens.get(tokenHash)!;
     token.usedAt = now;
     const account = this.accounts.get(token.accountId)!;
@@ -181,7 +223,7 @@ class MemoryAuthStore implements AccountAuthStore {
   }
 
   async consumePasswordResetToken(tokenHash: string, passwordHash: string, now: string): Promise<boolean> {
-    if (!await this.hasValidActionToken(tokenHash, "password_reset", now)) return false;
+    if (!(await this.hasValidActionToken(tokenHash, "password_reset", now))) return false;
     const token = this.actionTokens.get(tokenHash)!;
     token.usedAt = now;
     const account = this.accounts.get(token.accountId)!;
@@ -244,17 +286,41 @@ class MemoryAuthStore implements AccountAuthStore {
     return true;
   }
 
-  async completeGoogleLink(input: { subject: string; email: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<GoogleLinkResult> {
+  async completeGoogleLink(input: {
+    subject: string;
+    email: string;
+    accountId: string;
+    sessionId: string;
+    tokenHash: string;
+    now: string;
+  }): Promise<GoogleLinkResult> {
     const session = this.sessions.get(input.sessionId);
     const account = this.accounts.get(input.accountId);
-    if (!session || !account || session.tokenHash !== input.tokenHash || session.id !== input.accountId || account.deletionState !== "active" || this.revokedSessions.has(input.sessionId) ||
-        !session.reauthenticatedAt || Date.parse(session.reauthenticatedAt) < Date.parse(input.now) - 5 * 60 * 1000) return "retry";
+    if (
+      !session ||
+      !account ||
+      session.tokenHash !== input.tokenHash ||
+      session.id !== input.accountId ||
+      account.deletionState !== "active" ||
+      this.revokedSessions.has(input.sessionId) ||
+      (account.email !== "" && (!session.reauthenticatedAt || Date.parse(session.reauthenticatedAt) < Date.parse(input.now) - 5 * 60 * 1000))
+    )
+      return "retry";
     const subjectOwner = this.googleSubjects.get(input.subject);
     if (subjectOwner) return subjectOwner === input.accountId ? "ok" : "subject_conflict";
     const emailOwner = await this.findAccountByEmail(input.email);
     if (emailOwner && emailOwner.id !== input.accountId) return "email_conflict";
     this.googleSubjects.set(input.subject, input.accountId);
     account.providers = [...new Set([...account.providers, "google" as const])];
+    if (account.email === "") {
+      account.email = input.email;
+      account.emailVerified = true;
+      for (const stored of this.sessions.values()) {
+        if (stored.id !== account.id) continue;
+        stored.absoluteExpiresAt = new Date(Math.min(Date.parse(stored.absoluteExpiresAt), Date.parse(input.now) + 90 * 24 * 60 * 60 * 1000)).toISOString();
+        stored.expiresAt = new Date(Math.min(Date.parse(stored.expiresAt), Date.parse(input.now) + 30 * 24 * 60 * 60 * 1000)).toISOString();
+      }
+    }
     return "ok";
   }
 
@@ -268,8 +334,14 @@ class MemoryAuthStore implements AccountAuthStore {
   async beginDeletion(accountId: string, sessionId: string, tokenHash: string, receiptId: string, now: string): Promise<string | null> {
     const account = this.accounts.get(accountId);
     const current = this.sessions.get(sessionId);
-    if (!account || !current || account.deletionState !== "active" || current.tokenHash !== tokenHash || !current.reauthenticatedAt ||
-        Date.parse(current.reauthenticatedAt) < Date.parse(now) - 5 * 60 * 1000) return null;
+    if (
+      !account ||
+      !current ||
+      account.deletionState !== "active" ||
+      current.tokenHash !== tokenHash ||
+      (account.email !== "" && (!current.reauthenticatedAt || Date.parse(current.reauthenticatedAt) < Date.parse(now) - 5 * 60 * 1000))
+    )
+      return null;
     account.deletionState = "deleting";
     for (const session of this.sessions.values()) if (session.id === accountId) this.revokedSessions.add(session.sessionId);
     this.receipts.set(receiptId, { receiptId, accountId, status: "pending" });
@@ -289,6 +361,37 @@ class MemoryAuthStore implements AccountAuthStore {
     this.accounts.delete(receipt.accountId);
     this.receipts.set(receiptId, { ...receipt, status: "complete" });
     return true;
+  }
+
+  async markAbandonedGuestsForDeletion(cutoff: string, now: string, limit: number): Promise<string[]> {
+    const receipts: string[] = [];
+    for (const account of this.accounts.values()) {
+      if (receipts.length >= limit) break;
+      if (account.email !== "" || account.deletionState !== "active") continue;
+      if (Date.parse(this.createdAt.get(account.id) ?? new Date(NOW).toISOString()) >= Date.parse(cutoff)) continue;
+      const sessions = [...this.sessions.values()].filter((session) => session.id === account.id);
+      const live = sessions.some(
+        (session) =>
+          !this.revokedSessions.has(session.sessionId) &&
+          Date.parse(session.expiresAt) > Date.parse(now) &&
+          Date.parse(session.absoluteExpiresAt) > Date.parse(now),
+      );
+      const recent = sessions.some((session) => Math.min(Date.parse(session.expiresAt), Date.parse(session.absoluteExpiresAt)) >= Date.parse(cutoff));
+      if (live || recent) continue;
+      account.deletionState = "deleting";
+      for (const session of sessions) this.revokedSessions.add(session.sessionId);
+      const receiptId = randomUUID();
+      this.receipts.set(receiptId, { receiptId, accountId: account.id, status: "pending" });
+      receipts.push(receiptId);
+    }
+    return receipts;
+  }
+
+  async pendingGuestDeletionReceipts(limit: number): Promise<string[]> {
+    return [...this.receipts.values()]
+      .filter((receipt) => receipt.status === "pending" && this.accounts.get(receipt.accountId)?.email === "")
+      .slice(0, limit)
+      .map((receipt) => receipt.receiptId);
   }
 
   async purgeRetention(): Promise<{ deleted: number; remainingExpired: number }> {
@@ -346,22 +449,30 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
       if (!claims) throw new Error("unknown test token");
       return claims;
     },
-    sendEmail: async (message) => { emails.push(message); },
-    waitUntil: (promise) => { void promise; },
+    sendEmail: async (message) => {
+      emails.push(message);
+    },
+    waitUntil: (promise) => {
+      void promise;
+    },
   };
   return { store, env, dependencies, emails, googleTokens, googleAudiences };
 }
 
-function request(path: string, body?: unknown, options: {
-  method?: string;
-  origin?: string | null;
-  cookie?: string;
-  csrf?: string;
-  authorization?: string;
-  accountId?: string;
-  ip?: string;
-  native?: boolean;
-} = {}): Request {
+function request(
+  path: string,
+  body?: unknown,
+  options: {
+    method?: string;
+    origin?: string | null;
+    cookie?: string;
+    csrf?: string;
+    authorization?: string;
+    accountId?: string;
+    ip?: string;
+    native?: boolean;
+  } = {},
+): Request {
   const headers = new Headers();
   if (body !== undefined) headers.set("content-type", "application/json");
   if (options.origin !== null) headers.set("origin", options.origin ?? API_ORIGIN);
@@ -385,7 +496,7 @@ async function call(r: TestRig, path: string, body?: unknown, options: Parameter
 }
 
 async function responseJson(response: Response): Promise<Record<string, any>> {
-  return await response.json() as Record<string, any>;
+  return (await response.json()) as Record<string, any>;
 }
 
 async function seedPasswordAccount(r: TestRig, email = "person@example.test", password = "correct horse battery") {
@@ -447,7 +558,9 @@ test("registration uses Argon2id with the required work factor and web CSRF cook
   r.dependencies.hashPassword = undefined;
   r.dependencies.verifyPassword = undefined;
   const response = await call(r, "/api/auth/register", {
-    email: " Person@Example.Test ", password: "a long enough password", displayName: "  Kip User  ",
+    email: " Person@Example.Test ",
+    password: "a long enough password",
+    displayName: "  Kip User  ",
   });
   assert.equal(response.status, 201);
   const data = await responseJson(response);
@@ -460,7 +573,12 @@ test("registration uses Argon2id with the required work factor and web CSRF cook
   const account = [...r.store.accounts.values()][0];
   const encodedHash = account.passwordHash ?? "";
   assert.match(encodedHash, /^\$argon2id\$v=19\$/u);
-  const params = Object.fromEntries(encodedHash.split("$")[3].split(",").map((part) => part.split("=")));
+  const params = Object.fromEntries(
+    encodedHash
+      .split("$")[3]
+      .split(",")
+      .map((part) => part.split("=")),
+  );
   assert.deepEqual(params, { m: "19456", p: "1", t: "2" });
   const login = await call(r, "/api/auth/login", { email: "person@example.test", password: "a long enough password" });
   assert.equal(login.status, 200);
@@ -485,7 +603,12 @@ test("login failures do not disclose whether an email exists and are rate limite
 
   const sprayRig = rig({ EMAIL_MODE: "disabled" });
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const response = await call(sprayRig, "/api/auth/login", { email: `spray${attempt}@example.test`, password: "wrong password here" }, { ip: "203.0.113.50" });
+    const response = await call(
+      sprayRig,
+      "/api/auth/login",
+      { email: `spray${attempt}@example.test`, password: "wrong password here" },
+      { ip: "203.0.113.50" },
+    );
     assert.equal(response.status, 401);
   }
   const sprayed = await call(sprayRig, "/api/auth/login", { email: "spray-final@example.test", password: "wrong password here" }, { ip: "203.0.113.50" });
@@ -500,20 +623,32 @@ test("web writes require matching CSRF token and trusted origin, and logout revo
   const noCsrf = await call(r, "/api/auth/logout", undefined, { method: "POST", cookie: `kip_account_session=${session}`, accountId });
   assert.equal(noCsrf.status, 403);
   const badOrigin = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", origin: "https://evil.example", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId,
+    method: "POST",
+    origin: "https://evil.example",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId,
   });
   assert.equal(badOrigin.status, 403);
   const changedAccount = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf,
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
   });
   assert.equal(changedAccount.status, 409);
   const mismatchedAccount = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId: randomUUID(),
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId: randomUUID(),
   });
   assert.equal(mismatchedAccount.status, 409);
   assert.equal((await call(r, "/api/auth/me", undefined, { cookie: `kip_account_session=${session}` })).status, 200);
   const loggedOut = await call(r, "/api/auth/logout", undefined, {
-    method: "POST", cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`, csrf, accountId,
+    method: "POST",
+    cookie: `kip_account_session=${session}; kip_account_csrf=${csrf}`,
+    csrf,
+    accountId,
   });
   assert.equal(loggedOut.status, 204);
   const me = await call(r, "/api/auth/me", undefined, { cookie: `kip_account_session=${session}` });
@@ -559,7 +694,9 @@ test("verification and reset Resend requests configure redirect rejection", asyn
   const requests: Array<{ url: string; redirect: string | undefined; payload: Record<string, any> }> = [];
   const deliveries: Promise<unknown>[] = [];
   r.dependencies.sendEmail = undefined;
-  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.dependencies.waitUntil = (promise) => {
+    deliveries.push(promise);
+  };
   r.dependencies.fetch = async (input, init) => {
     requests.push({
       url: String(input),
@@ -614,23 +751,33 @@ test("password reset responses are identical for password, Google-only and unkno
     await call(r, "/api/auth/password-reset/request", { email: "google@example.test" }),
     await call(r, "/api/auth/password-reset/request", { email: "nobody@example.test" }),
   ];
-  const shapes = await Promise.all(responses.map(async (response) => {
-    const headers: string[][] = [];
-    response.headers.forEach((value, name) => { headers.push([name, value]); });
-    return { status: response.status, headers, body: await response.text() };
-  }));
+  const shapes = await Promise.all(
+    responses.map(async (response) => {
+      const headers: string[][] = [];
+      response.headers.forEach((value, name) => {
+        headers.push([name, value]);
+      });
+      return { status: response.status, headers, body: await response.text() };
+    }),
+  );
   assert.equal(shapes[0].status, 202);
   assert.equal(shapes[0].body, JSON.stringify({ accepted: true }));
   assert.deepEqual(shapes[1], shapes[0]);
   assert.deepEqual(shapes[2], shapes[0]);
 
-  assert.deepEqual(r.emails.map((message) => [message.to, message.subject]), [
-    ["password@example.test", "Reset your Parkdex password"],
-    ["google@example.test", "How to sign in to Parkdex"],
-  ]);
+  assert.deepEqual(
+    r.emails.map((message) => [message.to, message.subject]),
+    [
+      ["password@example.test", "Reset your Parkdex password"],
+      ["google@example.test", "How to sign in to Parkdex"],
+    ],
+  );
   assert.match(r.emails[0].text, /#resetToken=[A-Za-z0-9_-]{43}/u);
   const resetTokens = [...r.store.actionTokens.values()].filter((token) => token.purpose === "password_reset");
-  assert.deepEqual(resetTokens.map((token) => token.accountId), [seeded.account!.id]);
+  assert.deepEqual(
+    resetTokens.map((token) => token.accountId),
+    [seeded.account!.id],
+  );
 });
 
 test("password reset sends nothing to a deleting Google-only account", async () => {
@@ -646,13 +793,20 @@ test("password reset sends nothing to a deleting Google-only account", async () 
 test("a failed Google sign-in directions email records its own delivery failure", async () => {
   const r = rig();
   const deliveries: Promise<unknown>[] = [];
-  r.dependencies.sendEmail = async () => { throw new Error("provider down"); };
-  r.dependencies.waitUntil = (promise) => { deliveries.push(promise); };
+  r.dependencies.sendEmail = async () => {
+    throw new Error("provider down");
+  };
+  r.dependencies.waitUntil = (promise) => {
+    deliveries.push(promise);
+  };
   r.store.addGoogleOnlyAccount("google-fail@example.test", "google-fail-subject");
   const response = await call(r, "/api/auth/password-reset/request", { email: "google-fail@example.test" });
   assert.equal(response.status, 202);
   await Promise.all(deliveries);
-  assert.deepEqual(r.store.events.filter((event) => event.outcome === "delivery_failed").map((event) => event.eventType), ["password_reset_google_email"]);
+  assert.deepEqual(
+    r.store.events.filter((event) => event.outcome === "delivery_failed").map((event) => event.eventType),
+    ["password_reset_google_email"],
+  );
 });
 
 test("Google nonce is single use and changed Google email does not change the Kip account email", async () => {
@@ -664,8 +818,14 @@ test("Google nonce is single use and changed Google email does not change the Ki
   const { nonce } = await responseJson(challengeResponse);
   const token = "valid-google-token";
   r.googleTokens.set(token, {
-    sub: "subject-1", email: "google@example.test", email_verified: true, iss: "https://accounts.google.com",
-    aud: GOOGLE_CLIENT_ID, exp: Math.floor(NOW / 1000) + 3_000, iat: Math.floor(NOW / 1000), nonce,
+    sub: "subject-1",
+    email: "google@example.test",
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   const first = await call(r, "/api/auth/google", { idToken: token, nonce });
   assert.equal(first.status, 200);
@@ -698,9 +858,14 @@ test("Google sign-in does not auto-link by email, and a linked subject cannot mo
   const { nonce } = await responseJson(challengeResponse);
   const token = "already-linked-token";
   r.googleTokens.set(token, {
-    sub: "already-linked", email: "google-owner@example.test", email_verified: true,
-    iss: "https://accounts.google.com", aud: GOOGLE_CLIENT_ID, exp: Math.floor(NOW / 1000) + 3_000,
-    iat: Math.floor(NOW / 1000), nonce,
+    sub: "already-linked",
+    email: "google-owner@example.test",
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   const link = await call(r, "/api/auth/google/native", { idToken: token, nonce }, bearerOptions(target.bearer, target.account!.id));
   assert.equal(link.status, 409);
@@ -764,8 +929,12 @@ async function googleSignInVia(
   const { nonce } = await responseJson(challengeResponse);
   const token = `google-test-${randomUUID()}`;
   r.googleTokens.set(token, {
-    ...claims, email_verified: true, iss: "https://accounts.google.com",
-    exp: Math.floor(NOW / 1000) + 3_000, iat: Math.floor(NOW / 1000), nonce,
+    ...claims,
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
   });
   return call(r, route, { idToken: token, nonce }, options);
 }
@@ -857,4 +1026,148 @@ test("account deletion marks the account unavailable and resumes from a durable 
   assert.equal(resumed.status, "complete");
   assert.equal(await r.store.findAccountById(seeded.account!.id), null);
   assert.equal((await r.store.findDeletionReceipt(receiptId))?.status, "complete");
+});
+
+async function startGuest(r: TestRig, ip = "203.0.113.7") {
+  const response = await call(r, "/api/auth/guest", {}, { native: true, origin: null, ip });
+  assert.equal(response.status, 201);
+  const body = await responseJson(response);
+  return { account: body.account as AccountSummary, bearer: body.sessionToken as string, expiresAt: body.expiresAt as string };
+}
+
+async function linkGoogle(r: TestRig, bearer: string, accountId: string, claims: Pick<GoogleIdentityClaims, "sub" | "email">): Promise<Response> {
+  const challengeResponse = await call(r, "/api/auth/google/challenge", { purpose: "link" }, bearerOptions(bearer, accountId));
+  if (challengeResponse.status !== 200) return challengeResponse;
+  const { nonce } = await responseJson(challengeResponse);
+  const token = `google-link-${randomUUID()}`;
+  r.googleTokens.set(token, {
+    ...claims,
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce,
+  });
+  return call(r, "/api/auth/google/native", { idToken: token, nonce }, bearerOptions(bearer, accountId));
+}
+
+test("a guest account has no email, a year-long session, and is limited per address", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  assert.equal(guest.account.guest, true);
+  assert.equal(guest.account.email, "");
+  assert.deepEqual(guest.account.providers, []);
+  assert.equal(Date.parse(guest.expiresAt), NOW + 365 * 24 * 60 * 60 * 1000);
+  const me = await responseJson(await call(r, "/api/auth/me", undefined, bearerOptions(guest.bearer, guest.account.id)));
+  assert.equal(me.account.guest, true);
+
+  const web = await call(r, "/api/auth/guest", {}, { ip: "203.0.113.8" });
+  assert.equal(web.status, 201);
+  assert.ok(cookieValues(web).session);
+  assert.equal((await call(r, "/api/auth/guest", {}, { origin: "https://evil.example.test", ip: "203.0.113.8" })).status, 403);
+  assert.equal((await call(r, "/api/auth/guest", { email: "x@example.test" }, { native: true, origin: null, ip: "203.0.113.9" })).status, 400);
+
+  for (let index = 0; index < 20; index += 1) await startGuest(r, "198.51.100.1");
+  const limited = await call(r, "/api/auth/guest", {}, { native: true, origin: null, ip: "198.51.100.1" });
+  assert.equal(limited.status, 429);
+});
+
+test("a guest session renews once it is a month old instead of waiting for its last week", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  const stored = [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(guest.bearer));
+  assert.ok(stored);
+  const fresh = await responseJson(await call(r, "/api/auth/sessions/renew", {}, bearerOptions(guest.bearer, guest.account.id)));
+  assert.equal(fresh.renewed, false);
+  stored.expiresAt = new Date(NOW + 300 * 24 * 60 * 60 * 1000).toISOString();
+  const renewed = await responseJson(await call(r, "/api/auth/sessions/renew", {}, bearerOptions(guest.bearer, guest.account.id)));
+  assert.equal(renewed.renewed, true);
+  assert.equal(Date.parse(renewed.expiresAt), NOW + 365 * 24 * 60 * 60 * 1000);
+});
+
+test("Google upgrades a guest in place without a password, and its sessions shorten to an account's", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  const linked = await linkGoogle(r, guest.bearer, guest.account.id, { sub: "guest-google", email: "Guest.Person@example.test" });
+  assert.equal(linked.status, 200);
+  const account = (await responseJson(linked)).account as AccountSummary;
+  assert.equal(account.id, guest.account.id);
+  assert.equal(account.guest, false);
+  assert.equal(account.email, "guest.person@example.test");
+  assert.deepEqual(account.providers, ["google"]);
+  const stored = [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(guest.bearer));
+  assert.equal(stored?.expiresAt, new Date(NOW + 30 * 24 * 60 * 60 * 1000).toISOString());
+  // Signing in with that Google account later reaches the same account.
+  const again = await googleSignIn(r, { sub: "guest-google", email: "guest.person@example.test" });
+  assert.equal((await responseJson(again)).account.id, guest.account.id);
+  // Once upgraded, linking needs a fresh reauthentication like any account.
+  const relink = await call(r, "/api/auth/google/challenge", { purpose: "link" }, bearerOptions(guest.bearer, guest.account.id));
+  assert.equal(relink.status, 403);
+});
+
+test("a guest cannot take over a Google account or email that already has a Parkdex account", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const existing = await googleSignIn(r, { sub: "taken-subject", email: "taken@example.test" });
+  assert.equal(existing.status, 200);
+  await seedPasswordAccount(r, "password-owner@example.test");
+  const guest = await startGuest(r);
+  const subjectConflict = await linkGoogle(r, guest.bearer, guest.account.id, { sub: "taken-subject", email: "taken@example.test" });
+  assert.equal(subjectConflict.status, 409);
+  const emailConflict = await linkGoogle(r, guest.bearer, guest.account.id, { sub: "fresh-subject", email: "password-owner@example.test" });
+  assert.equal(emailConflict.status, 409);
+  const after = await r.store.findAccountById(guest.account.id);
+  assert.equal(after?.email, "");
+  assert.deepEqual(after?.providers, []);
+});
+
+test("a guest can delete its account without reauthenticating", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  const deleted = await call(r, "/api/account", undefined, { method: "DELETE", ...bearerOptions(guest.bearer, guest.account.id) });
+  assert.equal(deleted.status, 200);
+  assert.equal((await call(r, "/api/auth/me", undefined, bearerOptions(guest.bearer, guest.account.id))).status, 401);
+});
+
+test("abandoned guests are deleted after 30 days through the ordinary deletion path; live, recent and real accounts stay", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const day = 24 * 60 * 60 * 1000;
+  const old = new Date(NOW - 60 * day).toISOString();
+  const abandoned = await startGuest(r, "203.0.113.20");
+  const live = await startGuest(r, "203.0.113.21");
+  const recent = await startGuest(r, "203.0.113.22");
+  const realAccount = await seedPasswordAccount(r, "real@example.test");
+  for (const id of [abandoned.account.id, live.account.id, recent.account.id, realAccount.account!.id]) r.store.createdAt.set(id, old);
+  const sessionOf = (bearer: string) => [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(bearer))!;
+  sessionOf(abandoned.bearer).expiresAt = new Date(NOW - 40 * day).toISOString();
+  sessionOf(recent.bearer).expiresAt = new Date(NOW - 10 * day).toISOString();
+  sessionOf(realAccount.bearer).expiresAt = new Date(NOW - 40 * day).toISOString();
+
+  const deletedData: string[] = [];
+  r.dependencies.deleteAccountData = async ({ accountId }) => {
+    deletedData.push(accountId);
+    return { complete: true };
+  };
+  const result = await purgeAbandonedGuests(r.env, r.dependencies);
+  assert.deepEqual(result, { deleted: 1, pending: 0 });
+  assert.deepEqual(deletedData, [abandoned.account.id], "private data goes first, through deleteAccountData");
+  assert.equal(await r.store.findAccountById(abandoned.account.id), null);
+  for (const kept of [live.account.id, recent.account.id, realAccount.account!.id])
+    assert.equal((await r.store.findAccountById(kept))?.deletionState, "active");
+});
+
+test("an abandoned guest whose private data couldn't be deleted is resumed on the next run", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r, "203.0.113.30");
+  r.store.createdAt.set(guest.account.id, new Date(NOW - 60 * 24 * 60 * 60 * 1000).toISOString());
+  [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(guest.bearer))!.expiresAt = new Date(
+    NOW - 40 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  r.dependencies.deleteAccountData = async () => ({ complete: false });
+  assert.deepEqual(await purgeAbandonedGuests(r.env, r.dependencies), { deleted: 0, pending: 1 });
+  assert.equal((await r.store.findAccountById(guest.account.id))?.deletionState, "deleting");
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  assert.deepEqual(await purgeAbandonedGuests(r.env, r.dependencies), { deleted: 1, pending: 0 });
+  assert.equal(await r.store.findAccountById(guest.account.id), null);
 });

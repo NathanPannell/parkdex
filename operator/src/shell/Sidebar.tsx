@@ -4,7 +4,15 @@ import { SECTIONS, type ResolvedRoute } from "../routes";
 import { Icon, Kip } from "../ui";
 
 /** The left navigation: brand, the four sections with their pages, and the database controls. */
-export function Sidebar({ route, health, environment, open, onClose, onSwitch, counts = {} }: {
+export function Sidebar({
+  route,
+  health,
+  environment,
+  open,
+  onClose,
+  onSwitch,
+  counts = {},
+}: {
   route: ResolvedRoute | null;
   health: Health | null;
   environment: string;
@@ -25,7 +33,9 @@ export function Sidebar({ route, health, environment, open, onClose, onSwitch, c
             <p className="brand__name">parkdex</p>
             <p className="brand__sub">Operator</p>
           </div>
-          <button type="button" className="sidebar__close" aria-label="Close navigation" onClick={onClose}><Icon name="close" size={18} /></button>
+          <button type="button" className="sidebar__close" aria-label="Close navigation" onClick={onClose}>
+            <Icon name="close" size={18} />
+          </button>
         </div>
 
         <nav className="nav" aria-label="Sections">
@@ -34,7 +44,16 @@ export function Sidebar({ route, health, environment, open, onClose, onSwitch, c
             const href = section.children?.[0].path ?? section.path;
             return (
               <div key={section.id} className={`nav__group${on ? " is-on" : ""}`}>
-                <a href={href} className={`nav__item${on ? " is-on" : ""}`} aria-current={on && !section.children ? "page" : undefined} title={section.description} onClick={(event) => { linkHandler(href)(event); onClose(); }}>
+                <a
+                  href={href}
+                  className={`nav__item${on ? " is-on" : ""}`}
+                  aria-current={on && !section.children ? "page" : undefined}
+                  title={section.description}
+                  onClick={(event) => {
+                    linkHandler(href)(event);
+                    onClose();
+                  }}
+                >
                   <Icon name={section.icon} size={19} />
                   <span>{section.label}</span>
                 </a>
@@ -44,10 +63,27 @@ export function Sidebar({ route, health, environment, open, onClose, onSwitch, c
                       const current = route?.child?.path === child.path;
                       const count = counts[child.path] ?? 0;
                       return (
-                        <a key={child.path} href={child.path} className={`nav__child${current ? " is-on" : ""}`} aria-current={current ? "page" : undefined} onClick={(event) => { linkHandler(child.path)(event); onClose(); }}>
+                        <a
+                          key={child.path}
+                          href={child.path}
+                          className={`nav__child${current ? " is-on" : ""}`}
+                          aria-current={current ? "page" : undefined}
+                          onClick={(event) => {
+                            linkHandler(child.path)(event);
+                            onClose();
+                          }}
+                        >
                           {child.label}
-                          {child.database === "production" && <span className="nav__tag" title="Always reads production">Prod</span>}
-                          {count > 0 && <span className="nav__count" aria-label={`${count} waiting`}>{count}</span>}
+                          {child.database === "production" && (
+                            <span className="nav__tag" title="Always reads production">
+                              Prod
+                            </span>
+                          )}
+                          {count > 0 && (
+                            <span className="nav__count" aria-label={`${count} waiting`}>
+                              {count}
+                            </span>
+                          )}
                         </a>
                       );
                     })}
@@ -68,7 +104,14 @@ export function Sidebar({ route, health, environment, open, onClose, onSwitch, c
           ) : health?.canSwitch ? (
             <div className="db-toggle" role="radiogroup" aria-label="Database">
               {(["production", "staging"] as const).map((target) => (
-                <button key={target} type="button" role="radio" aria-checked={environment === target} className={`db-toggle__item db-toggle__item--${target}${environment === target ? " is-on" : ""}`} onClick={() => onSwitch(target)}>
+                <button
+                  key={target}
+                  type="button"
+                  role="radio"
+                  aria-checked={environment === target}
+                  className={`db-toggle__item db-toggle__item--${target}${environment === target ? " is-on" : ""}`}
+                  onClick={() => onSwitch(target)}
+                >
                   <span className="env__dot" aria-hidden="true" />
                   {target === "production" ? "Production" : "Staging"}
                 </button>
@@ -82,8 +125,12 @@ export function Sidebar({ route, health, environment, open, onClose, onSwitch, c
           ) : (
             <p className="sidebar__note">Checking the connection...</p>
           )}
-          {health && health.emailMode !== "resend" && <p className="sidebar__note">{health.emailMode === "disabled" ? "Email sending is off here." : "Email retry is not set up yet."}</p>}
-          <p className="sidebar__note"><Icon name="shield" size={14} /> Protected by Vercel login</p>
+          {health && health.emailMode !== "resend" && (
+            <p className="sidebar__note">{health.emailMode === "disabled" ? "Email sending is off here." : "Email retry is not set up yet."}</p>
+          )}
+          <p className="sidebar__note">
+            <Icon name="shield" size={14} /> Protected by Vercel login
+          </p>
         </div>
       </aside>
     </>

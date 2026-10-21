@@ -34,10 +34,7 @@ export const IDENTITY: ViewerTransform = Object.freeze({ scale: 1, x: 0, y: 0 })
  * stepping stops at either end instead of wrapping.
  */
 export type ViewerState = { index: number | null };
-export type ViewerAction =
-  | { type: "open"; index: number; count: number }
-  | { type: "close" }
-  | { type: "step"; delta: number; count: number };
+export type ViewerAction = { type: "open"; index: number; count: number } | { type: "close" } | { type: "step"; delta: number; count: number };
 
 export function viewerReducer(state: ViewerState, action: ViewerAction): ViewerState {
   switch (action.type) {
@@ -68,7 +65,8 @@ function clamp(value: number, min: number, max: number): number {
 
 /** The largest size of this shape that fits inside `box`, never zero. */
 export function fitInside(natural: Size, box: Size): Size {
-  if (!(natural.width > 0) || !(natural.height > 0) || !(box.width > 0) || !(box.height > 0)) return { width: Math.max(1, box.width), height: Math.max(1, box.height) };
+  if (!(natural.width > 0) || !(natural.height > 0) || !(box.width > 0) || !(box.height > 0))
+    return { width: Math.max(1, box.width), height: Math.max(1, box.height) };
   const scale = Math.min(box.width / natural.width, box.height / natural.height);
   return { width: natural.width * scale, height: natural.height * scale };
 }
@@ -98,11 +96,15 @@ export function zoomAround(transform: ViewerTransform, factor: number, focus: Po
   if (!(factor > 0) || !Number.isFinite(factor)) return clampTransform(transform, box, content);
   const scale = clamp(transform.scale * factor, 1, MAX_VIEWER_ZOOM);
   const applied = scale / transform.scale;
-  return clampTransform({
-    scale,
-    x: focus.x - (focus.x - transform.x) * applied,
-    y: focus.y - (focus.y - transform.y) * applied,
-  }, box, content);
+  return clampTransform(
+    {
+      scale,
+      x: focus.x - (focus.x - transform.x) * applied,
+      y: focus.y - (focus.y - transform.y) * applied,
+    },
+    box,
+    content,
+  );
 }
 
 /** Moves a zoomed slide with the finger. */

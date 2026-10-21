@@ -12,19 +12,14 @@ const nativeMocks = vi.hoisted(() => ({
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
-    getPlatform: () => nativeMocks.native ? "android" : "web",
+    getPlatform: () => (nativeMocks.native ? "android" : "web"),
     isNativePlatform: () => nativeMocks.native,
     isPluginAvailable: () => true,
   },
   registerPlugin: () => nativeMocks.plugin,
 }));
 
-import {
-  NativeSessionOriginMismatchError,
-  nativeAuthFetch,
-  persistNativeSession,
-  readNativeSession,
-} from "./nativeIdentity";
+import { NativeSessionOriginMismatchError, nativeAuthFetch, persistNativeSession, readNativeSession } from "./nativeIdentity";
 
 describe("native session API-origin binding", () => {
   beforeEach(() => {
@@ -47,10 +42,12 @@ describe("native session API-origin binding", () => {
 
     await persistNativeSession({ sessionToken: "scoped-session", expiresAt: Date.now() + 60_000 });
 
-    expect(nativeMocks.plugin.setSession).toHaveBeenCalledWith(expect.objectContaining({
-      token: "scoped-session",
-      apiOrigin: "https://parkdex-kip-staging.vercel.app",
-    }));
+    expect(nativeMocks.plugin.setSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: "scoped-session",
+        apiOrigin: "https://parkdex-kip-staging.vercel.app",
+      }),
+    );
   });
 
   it("allows the issuer origin and preserves the stored session when the app changes environment", async () => {

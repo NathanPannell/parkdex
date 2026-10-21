@@ -66,7 +66,12 @@ export function patchedPinIconId(icon: string, patches: readonly string[]): stri
   return patches.length ? `${icon}:patches:${patches.join(",")}` : icon;
 }
 
-export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<string, ParkFlag> | null, now: number, options: PinOptions = {}): {
+export function buildPins(
+  parks: readonly PinnedPark[],
+  flags: ReadonlyMap<string, ParkFlag> | null,
+  now: number,
+  options: PinOptions = {},
+): {
   collection: PinCollection;
   images: Map<string, PinImage>;
 } {
@@ -83,9 +88,10 @@ export function buildPins(parks: readonly PinnedPark[], flags: ReadonlyMap<strin
       const crew = options.crews ? pinCrew(flag, now) : null;
       icon = pinIconId(flag.flagSeed, weather, label, crew ?? undefined);
       dot = flagSpec(flag.flagSeed).field;
-      const image: PinImage = crew && (crew.pennants.length || crew.shield)
-        ? { seed: flag.flagSeed, weather, label, pennants: crew.pennants, extra: crew.extra, shield: crew.shield }
-        : { seed: flag.flagSeed, weather, label };
+      const image: PinImage =
+        crew && (crew.pennants.length || crew.shield)
+          ? { seed: flag.flagSeed, weather, label, pennants: crew.pennants, extra: crew.extra, shield: crew.shield }
+          : { seed: flag.flagSeed, weather, label };
       if (!images.has(icon)) images.set(icon, image);
       const patches = options.badges ? drawablePatches(flag.patches) : [];
       patched = patchedPinIconId(icon, patches);
@@ -158,24 +164,29 @@ export function pennantShape(seed: string, x: number, y: number, width = 7, heig
   const spec = flagSpec(seed);
   const tip = `${n(x + width / 2)},${n(y + height)}`;
   const band = height * 0.34;
-  return `<polygon points="${n(x)},${n(y)} ${n(x + width)},${n(y)} ${tip}" fill="${spec.field}"/>`
-    + `<polygon points="${n(x + (width * band) / height / 2)},${n(y + band)} ${n(x + width - (width * band) / height / 2)},${n(y + band)} ${n(x + width / 2)},${n(y + band * 1.9)}" fill="${spec.accent}"/>`
-    + `<polygon points="${n(x)},${n(y)} ${n(x + width)},${n(y)} ${tip}" fill="none" stroke="${INK}" stroke-width="1" stroke-linejoin="round"/>`;
+  return (
+    `<polygon points="${n(x)},${n(y)} ${n(x + width)},${n(y)} ${tip}" fill="${spec.field}"/>` +
+    `<polygon points="${n(x + (width * band) / height / 2)},${n(y + band)} ${n(x + width - (width * band) / height / 2)},${n(y + band)} ${n(x + width / 2)},${n(y + band * 1.9)}" fill="${spec.accent}"/>` +
+    `<polygon points="${n(x)},${n(y)} ${n(x + width)},${n(y)} ${tip}" fill="none" stroke="${INK}" stroke-width="1" stroke-linejoin="round"/>`
+  );
 }
 
 /** A pennant on its own, for the join scene and crew lists: a long triangle pointing away from the pole. */
 export function pennantSvg(seed: string): string {
   const spec = flagSpec(seed);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 50 32" width="50" height="32">`
-    + `<polygon points="0,0 48,15 0,30" fill="${spec.field}"/>`
-    + `<polygon points="0,9 19.2,15 0,21" fill="${spec.accent}"/>`
-    + `<circle cx="8" cy="15" r="3.2" fill="${spec.emblemColor}"/>`
-    + `<polygon points="0,0 48,15 0,30" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 50 32" width="50" height="32">` +
+    `<polygon points="0,0 48,15 0,30" fill="${spec.field}"/>` +
+    `<polygon points="0,9 19.2,15 0,21" fill="${spec.accent}"/>` +
+    `<circle cx="8" cy="15" r="3.2" fill="${spec.emblemColor}"/>` +
+    `<polygon points="0,0 48,15 0,30" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/></svg>`
+  );
 }
 
 /** The protected hour's mark: a small gold shield over the flag's top corner. */
-const SHIELD = `<path d="M42.5 1.2 47 3v3.7c0 2.9-1.9 4.7-4.5 5.8-2.6-1.1-4.5-2.9-4.5-5.8V3Z" fill="#FFC93C" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/>`
-  + `<path d="M40.6 6.6 42 8l2.5-2.8" fill="none" stroke="${INK}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`;
+const SHIELD =
+  `<path d="M42.5 1.2 47 3v3.7c0 2.9-1.9 4.7-4.5 5.8-2.6-1.1-4.5-2.9-4.5-5.8V3Z" fill="#FFC93C" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/>` +
+  `<path d="M40.6 6.6 42 8l2.5-2.8" fill="none" stroke="${INK}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 /** The pin without its patches, `ratio` times its size; patches are drawn over it on a canvas. */
 export function pinImageSvg(image: PinImage, ratio = PIN_PIXEL_RATIO): string {
@@ -195,14 +206,16 @@ export function pinImageSvg(image: PinImage, ratio = PIN_PIXEL_RATIO): string {
     const x = 11 + pennants.length * 8;
     // A crew has at most 8 people, so the tag is "+1" to "+4" and fits inside the pin.
     const width = 4 + text.length * 4.2;
-    overlay += `<rect x="${n(x)}" y="31" width="${n(width)}" height="9" rx="4.5" fill="${INK}"/>`
-      + `<text x="${n(x + width / 2)}" y="38.2" font-family="system-ui, sans-serif" font-size="7" font-weight="800" fill="${PAPER}" text-anchor="middle">${text}</text>`;
+    overlay +=
+      `<rect x="${n(x)}" y="31" width="${n(width)}" height="9" rx="4.5" fill="${INK}"/>` +
+      `<text x="${n(x + width / 2)}" y="38.2" font-family="system-ui, sans-serif" font-size="7" font-weight="800" fill="${PAPER}" text-anchor="middle">${text}</text>`;
   }
   const label = image.label ? escapeText(image.label.slice(0, 6)) : "";
   if (label) {
     const width = 7 + label.length * 5.6;
-    overlay += `<rect x="10.5" y="${pennants.length || extra ? 42 : 33}" width="${n(width)}" height="11" rx="5.5" fill="${INK}"/>`
-      + `<text x="${n(10.5 + width / 2)}" y="${pennants.length || extra ? 50.4 : 41.4}" font-family="system-ui, sans-serif" font-size="9" font-weight="800" fill="${PAPER}" text-anchor="middle">${label}</text>`;
+    overlay +=
+      `<rect x="10.5" y="${pennants.length || extra ? 42 : 33}" width="${n(width)}" height="11" rx="5.5" fill="${INK}"/>` +
+      `<text x="${n(10.5 + width / 2)}" y="${pennants.length || extra ? 50.4 : 41.4}" font-family="system-ui, sans-serif" font-size="9" font-weight="800" fill="${PAPER}" text-anchor="middle">${label}</text>`;
   }
   if (image.shield) overlay += SHIELD;
   return `${base}${overlay}</svg>`;

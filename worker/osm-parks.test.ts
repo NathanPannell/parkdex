@@ -28,10 +28,50 @@ const RELATION = {
   tags: { type: "multipolygon", leisure: "park", name: "Two Part Park", operator: "City of Victoria", "addr:street": "dropped" },
   bounds: { minlat: 48.45, minlon: -123.36, maxlat: 48.456, maxlon: -123.346 },
   members: [
-    { type: "way", ref: 1, role: "outer", geometry: geometry([[-123.36, 48.45], [-123.35, 48.45], [-123.35, 48.456]]) },
-    { type: "way", ref: 2, role: "outer", geometry: geometry([[-123.36, 48.45], [-123.36, 48.456], [-123.35, 48.456]]) },
-    { type: "way", ref: 3, role: "inner", geometry: geometry([[-123.357, 48.452], [-123.353, 48.452], [-123.353, 48.454], [-123.357, 48.454], [-123.357, 48.452]]) },
-    { type: "way", ref: 4, role: "outer", geometry: geometry([[-123.348, 48.45], [-123.346, 48.45], [-123.346, 48.452], [-123.348, 48.452], [-123.348, 48.45]]) },
+    {
+      type: "way",
+      ref: 1,
+      role: "outer",
+      geometry: geometry([
+        [-123.36, 48.45],
+        [-123.35, 48.45],
+        [-123.35, 48.456],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 2,
+      role: "outer",
+      geometry: geometry([
+        [-123.36, 48.45],
+        [-123.36, 48.456],
+        [-123.35, 48.456],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 3,
+      role: "inner",
+      geometry: geometry([
+        [-123.357, 48.452],
+        [-123.353, 48.452],
+        [-123.353, 48.454],
+        [-123.357, 48.454],
+        [-123.357, 48.452],
+      ]),
+    },
+    {
+      type: "way",
+      ref: 4,
+      role: "outer",
+      geometry: geometry([
+        [-123.348, 48.45],
+        [-123.346, 48.45],
+        [-123.346, 48.452],
+        [-123.348, 48.452],
+        [-123.348, 48.45],
+      ]),
+    },
     { type: "node", ref: 5, role: "label" },
   ],
 };
@@ -40,10 +80,26 @@ const WAY = {
   id: 2002,
   tags: { leisure: "garden", name: "Corner Garden" },
   bounds: { minlat: 48.4565, minlon: -123.3601, maxlat: 48.4572, maxlon: -123.359 },
-  geometry: geometry([[-123.3601, 48.4565], [-123.359, 48.4565], [-123.359, 48.4572], [-123.3601, 48.4572], [-123.3601, 48.4565]]),
+  geometry: geometry([
+    [-123.3601, 48.4565],
+    [-123.359, 48.4565],
+    [-123.359, 48.4572],
+    [-123.3601, 48.4572],
+    [-123.3601, 48.4565],
+  ]),
 };
-const PRIVATE = { type: "way", id: 3003, tags: { leisure: "garden", access: "private" }, bounds: { minlat: 48.451, minlon: -123.359, maxlat: 48.4512, maxlon: -123.3588 } };
-const HUGE = { type: "relation", id: 4004, tags: { boundary: "protected_area", name: "Big Watershed" }, bounds: { minlat: 48.3, minlon: -123.7, maxlat: 48.6, maxlon: -123.3 } };
+const PRIVATE = {
+  type: "way",
+  id: 3003,
+  tags: { leisure: "garden", access: "private" },
+  bounds: { minlat: 48.451, minlon: -123.359, maxlat: 48.4512, maxlon: -123.3588 },
+};
+const HUGE = {
+  type: "relation",
+  id: 4004,
+  tags: { boundary: "protected_area", name: "Big Watershed" },
+  bounds: { minlat: 48.3, minlon: -123.7, maxlat: 48.6, maxlon: -123.3 },
+};
 // Nominatim is first by default; these Overpass tests turn it off to see Overpass alone.
 const OVERPASS_ONLY = { NOMINATIM_URL: "off" };
 const summary = (element: Record<string, unknown>) => ({ type: element.type, id: element.id, tags: element.tags, bounds: element.bounds });
@@ -78,7 +134,10 @@ test("search assembles a relation with holes and several parts, and keeps only t
   assert.doesNotMatch(calls[1].query, /3003|4004/);
 
   // The garden 600 m away is no longer offered: only parks that contain the position are.
-  assert.deepEqual(parks.map((park) => [park.type, park.id, park.containsPin]), [["relation", 1001, true]]);
+  assert.deepEqual(
+    parks.map((park) => [park.type, park.id, park.containsPin]),
+    [["relation", 1001, true]],
+  );
   const relation = parks[0];
   assert.equal(relation.name, "Two Part Park");
   assert.equal(relation.kind, "leisure=park");
@@ -106,17 +165,24 @@ test("a position in the pond is not in the park, and one just outside the edge c
 
 test("nothing found returns an empty list without a geometry request", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [] }), calls));
+  const client = createOsmClient(
+    OVERPASS_ONLY,
+    overpass(() => ({ elements: [] }), calls),
+  );
   assert.deepEqual(await client.search(48.5, -123.4, 35), []);
   assert.equal(calls.length, 1);
 });
 
 test("a slow Overpass answer times out cleanly", async () => {
-  const hanging = ((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-    init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
-  })) as unknown as typeof fetch;
+  const hanging = ((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })) as unknown as typeof fetch;
   const client = createOsmClient({ NOMINATIM_URL: "off" }, hanging, { timeoutMs: 30 });
-  await assert.rejects(client.search(48.45, -123.36, 35), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
+  await assert.rejects(
+    client.search(48.45, -123.36, 35),
+    (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable",
+  );
 });
 
 const FIRST = "https://overpass.first.test/api/interpreter";
@@ -134,7 +200,8 @@ function failover(first: "timeout" | "504" | "429" | "remark" | "ok") {
       if (first === "timeout") {
         return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
       }
-      if (first === "remark") return Promise.resolve(new Response(JSON.stringify({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 10 seconds." })));
+      if (first === "remark")
+        return Promise.resolve(new Response(JSON.stringify({ elements: [], remark: 'runtime error: Query timed out in "query" at line 3 after 10 seconds.' })));
       return Promise.resolve(new Response("<html>busy</html>", { status: first === "504" ? 504 : 429 }));
     }
     return good(url, init);
@@ -163,10 +230,16 @@ test("when every endpoint fails the search is a clean 503 after one try each", a
     urls.push(String(url));
     return new Response("Too many requests", { status: 429 });
   }) as unknown as typeof fetch;
-  await assert.rejects(createOsmClient(TWO, busy).search(48.45, -123.36, 35), (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable");
+  await assert.rejects(
+    createOsmClient(TWO, busy).search(48.45, -123.36, 35),
+    (error: unknown) => error instanceof HttpError && error.status === 503 && error.code === "osm_unavailable",
+  );
   assert.deepEqual(urls, [FIRST, SECOND]);
   const remarkCalls: Call[] = [];
-  const remark = createOsmClient(TWO, overpass(() => ({ elements: [], remark: "runtime error: out of memory" }), remarkCalls));
+  const remark = createOsmClient(
+    TWO,
+    overpass(() => ({ elements: [], remark: "runtime error: out of memory" }), remarkCalls),
+  );
   await assert.rejects(remark.feature({ type: "way", id: 1 }), (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
   assert.equal(remarkCalls.length, 2);
 });
@@ -183,23 +256,38 @@ test("endpoints come from OVERPASS_URLS, then OVERPASS_URL, then the defaults", 
 
 const NOMINATIM = "https://nominatim.example.test";
 const WITH_NOMINATIM = { OVERPASS_URLS: `${FIRST}, ${SECOND}`, NOMINATIM_URL: NOMINATIM };
-const PIN: [number, number] = [-123.0630, 49.0105];
-const box = (west: number, south: number, east: number, north: number): Position[] => [[west, south], [east, south], [east, north], [west, north], [west, south]];
+const PIN: [number, number] = [-123.063, 49.0105];
+const box = (west: number, south: number, east: number, north: number): Position[] => [
+  [west, south],
+  [east, south],
+  [east, north],
+  [west, north],
+  [west, south],
+];
 // Like Boundary Bay Regional Park: the pin is inside, but the park's centre is about 2.5 km east.
-const BIG_RING = box(-123.0660, 49.0050, -122.9960, 49.0160);
+const BIG_RING = box(-123.066, 49.005, -122.996, 49.016);
 // A small park 400 m north of the pin.
-const NEAR_RING = box(-123.0640, 49.0141, -123.0620, 49.0151);
+const NEAR_RING = box(-123.064, 49.0141, -123.062, 49.0151);
 // A reserve with a pond, 600 m west.
-const RESERVE_OUTER = box(-123.0760, 49.0090, -123.0712, 49.0120);
-const RESERVE_POND = box(-123.0745, 49.0100, -123.0730, 49.0110);
+const RESERVE_OUTER = box(-123.076, 49.009, -123.0712, 49.012);
+const RESERVE_POND = box(-123.0745, 49.01, -123.073, 49.011);
 // Its bounding box is within 1 km, but its outline is 1.3 km away.
-const SLIVER_RING = box(-123.0630, 49.0200, -123.0450, 49.0220);
+const SLIVER_RING = box(-123.063, 49.02, -123.045, 49.022);
 const bb = (ring: Position[]) => {
-  const lngs = ring.map((point) => point[0]), lats = ring.map((point) => point[1]);
+  const lngs = ring.map((point) => point[0]),
+    lats = ring.map((point) => point[1]);
   return [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)].map(String);
 };
 const PARK_RESULTS = [
-  { osm_type: "way", osm_id: 24722692, category: "leisure", type: "park", name: "Boundary Bay Regional Park", boundingbox: bb(BIG_RING), extratags: { operator: "Metro Vancouver" } },
+  {
+    osm_type: "way",
+    osm_id: 24722692,
+    category: "leisure",
+    type: "park",
+    name: "Boundary Bay Regional Park",
+    boundingbox: bb(BIG_RING),
+    extratags: { operator: "Metro Vancouver" },
+  },
   { osm_type: "way", osm_id: 501, category: "leisure", type: "park", name: "Corner Park", boundingbox: bb(NEAR_RING) },
   { osm_type: "way", osm_id: 502, category: "leisure", type: "park", name: "Far Park", boundingbox: ["49.04", "49.05", "-123.04", "-123.03"] },
   { osm_type: "way", osm_id: 503, category: "leisure", type: "park", name: "Sliver Park", boundingbox: ["49.0185", "49.022", "-123.063", "-123.045"] },
@@ -208,13 +296,37 @@ const PARK_RESULTS = [
   { osm_type: "way", osm_id: 11, category: "leisure", type: "garden", name: "Private Park Garden", extratags: { access: "private" } },
 ];
 const RESERVE_RESULTS = [
-  { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", boundingbox: bb(RESERVE_OUTER), extratags: { operator: "Delta" } },
+  {
+    osm_type: "relation",
+    osm_id: 555,
+    category: "leisure",
+    type: "nature_reserve",
+    name: "Pond Reserve",
+    boundingbox: bb(RESERVE_OUTER),
+    extratags: { operator: "Delta" },
+  },
 ];
 const OUTLINES: Record<string, unknown> = {
-  W24722692: { type: "Feature", properties: { osm_type: "way", osm_id: 24722692, category: "leisure", type: "park", name: "Boundary Bay Regional Park" }, geometry: { type: "Polygon", coordinates: [BIG_RING] } },
-  W501: { type: "Feature", properties: { osm_type: "way", osm_id: 501, category: "leisure", type: "park", name: "Corner Park" }, geometry: { type: "Polygon", coordinates: [NEAR_RING] } },
-  W503: { type: "Feature", properties: { osm_type: "way", osm_id: 503, category: "leisure", type: "park", name: "Sliver Park" }, geometry: { type: "Polygon", coordinates: [SLIVER_RING] } },
-  R555: { type: "Feature", properties: { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", extratags: { operator: "Delta" } }, geometry: { type: "MultiPolygon", coordinates: [[RESERVE_OUTER, RESERVE_POND]] } },
+  W24722692: {
+    type: "Feature",
+    properties: { osm_type: "way", osm_id: 24722692, category: "leisure", type: "park", name: "Boundary Bay Regional Park" },
+    geometry: { type: "Polygon", coordinates: [BIG_RING] },
+  },
+  W501: {
+    type: "Feature",
+    properties: { osm_type: "way", osm_id: 501, category: "leisure", type: "park", name: "Corner Park" },
+    geometry: { type: "Polygon", coordinates: [NEAR_RING] },
+  },
+  W503: {
+    type: "Feature",
+    properties: { osm_type: "way", osm_id: 503, category: "leisure", type: "park", name: "Sliver Park" },
+    geometry: { type: "Polygon", coordinates: [SLIVER_RING] },
+  },
+  R555: {
+    type: "Feature",
+    properties: { osm_type: "relation", osm_id: 555, category: "leisure", type: "nature_reserve", name: "Pond Reserve", extratags: { operator: "Delta" } },
+    geometry: { type: "MultiPolygon", coordinates: [[RESERVE_OUTER, RESERVE_POND]] },
+  },
 };
 
 type NominatimCall = { url: string; at: number; agent: string | null };
@@ -229,10 +341,14 @@ function nominatimWorld(options: { parks?: unknown[]; reserves?: unknown[]; nomi
     if (options.nominatimStatus && options.nominatimStatus !== 200) return new Response("busy", { status: options.nominatimStatus });
     const params = new URL(String(url)).searchParams;
     if (String(url).includes("/lookup")) {
-      const features = params.get("osm_ids")!.split(",").map((id) => OUTLINES[id]).filter(Boolean);
+      const features = params
+        .get("osm_ids")!
+        .split(",")
+        .map((id) => OUTLINES[id])
+        .filter(Boolean);
       return new Response(JSON.stringify({ type: "FeatureCollection", features }), { status: 200 });
     }
-    const results = params.get("q") === "nature reserve" ? options.reserves ?? RESERVE_RESULTS : options.parks ?? PARK_RESULTS;
+    const results = params.get("q") === "nature reserve" ? (options.reserves ?? RESERVE_RESULTS) : (options.parks ?? PARK_RESULTS);
     return new Response(JSON.stringify(results), { status: 200 });
   }) as unknown as typeof fetch;
   const nominatim = () => calls.filter((call) => call.url.startsWith(NOMINATIM));
@@ -243,7 +359,10 @@ test("Nominatim finds the park that contains the pin even when its centre is kil
   const { nominatim, fetcher } = nominatimWorld();
   const parks = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 0 }).search(PIN[1], PIN[0], 35);
   const requests = nominatim().map((call) => new URL(call.url));
-  assert.deepEqual(requests.map((url) => `${url.pathname} ${url.searchParams.get("q") ?? ""}`.trim()), ["/search park", "/search nature reserve", "/lookup"]);
+  assert.deepEqual(
+    requests.map((url) => `${url.pathname} ${url.searchParams.get("q") ?? ""}`.trim()),
+    ["/search park", "/search nature reserve", "/lookup"],
+  );
   const [west, north, east, south] = requests[0].searchParams.get("viewbox")!.split(",").map(Number);
   assert.ok(east - west > 0.07 && north - south > 0.05, "the search box is several km across");
   assert.equal(requests[0].searchParams.get("bounded"), "1");
@@ -252,17 +371,32 @@ test("Nominatim finds the park that contains the pin even when its centre is kil
   assert.equal(requests[2].searchParams.get("polygon_geojson"), "1");
   assert.ok(nominatim().every((call) => call.agent === OSM_USER_AGENT));
 
-  assert.deepEqual(parks.map((park) => [park.type, park.id, park.containsPin]), [["way", 24722692, true]]);
+  assert.deepEqual(
+    parks.map((park) => [park.type, park.id, park.containsPin]),
+    [["way", 24722692, true]],
+  );
   assert.equal(parks[0].name, "Boundary Bay Regional Park");
 });
 
 test("a wide search cut off at its limit adds a tighter one for the small parks nearby", async () => {
-  const filler = Array.from({ length: 40 }, (_, index) => ({ osm_type: "way", osm_id: 9000 + index, category: "leisure", type: "park", name: `Park ${index}`, boundingbox: ["49.09", "49.1", "-123.0", "-122.99"] }));
+  const filler = Array.from({ length: 40 }, (_, index) => ({
+    osm_type: "way",
+    osm_id: 9000 + index,
+    category: "leisure",
+    type: "park",
+    name: `Park ${index}`,
+    boundingbox: ["49.09", "49.1", "-123.0", "-122.99"],
+  }));
   const { nominatim, fetcher } = nominatimWorld({ parks: filler });
   await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 0 }).search(PIN[1], PIN[0], 35);
-  const searches = nominatim().map((call) => new URL(call.url)).filter((url) => url.pathname === "/search");
+  const searches = nominatim()
+    .map((call) => new URL(call.url))
+    .filter((url) => url.pathname === "/search");
   assert.equal(searches.length, 3);
-  const widths = searches.map((url) => { const [w, , e] = url.searchParams.get("viewbox")!.split(",").map(Number); return e - w; });
+  const widths = searches.map((url) => {
+    const [w, , e] = url.searchParams.get("viewbox")!.split(",").map(Number);
+    return e - w;
+  });
   assert.ok(widths[1] < widths[0] / 3, "the second search is the tight one");
 });
 
@@ -275,20 +409,33 @@ test("Nominatim finding nothing returns an empty list without an outline request
 test("when Nominatim fails the search waits for Overpass, and fails only when both do", async () => {
   const healthy = nominatimWorld({ nominatimStatus: 503, overpassBody: parkFixture });
   const parks = await createOsmClient(WITH_NOMINATIM, healthy.fetcher, { nominatimSpacingMs: 0 }).search(48.451, -123.359, 35);
-  assert.deepEqual(parks.map((park) => park.id), [1001]);
+  assert.deepEqual(
+    parks.map((park) => park.id),
+    [1001],
+  );
   const down = nominatimWorld({ nominatimStatus: 503 });
-  await assert.rejects(createOsmClient(WITH_NOMINATIM, down.fetcher, { nominatimSpacingMs: 0 }).search(48.45, -123.36, 35),
-    (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable");
+  await assert.rejects(
+    createOsmClient(WITH_NOMINATIM, down.fetcher, { nominatimSpacingMs: 0 }).search(48.45, -123.36, 35),
+    (error: unknown) => error instanceof HttpError && error.code === "osm_unavailable",
+  );
 });
 
 test("Overpass results are merged in when Overpass answers in time", async () => {
   // Overpass finds an unnamed garden around the position that a Nominatim name search cannot.
-  const garden = { type: "way", id: 7007, tags: { leisure: "garden" }, bounds: { minlat: 49.0103, minlon: -123.0632, maxlat: 49.0108, maxlon: -123.0626 },
-    geometry: geometry(box(-123.0632, 49.0103, -123.0626, 49.0108)) };
+  const garden = {
+    type: "way",
+    id: 7007,
+    tags: { leisure: "garden" },
+    bounds: { minlat: 49.0103, minlon: -123.0632, maxlat: 49.0108, maxlon: -123.0626 },
+    geometry: geometry(box(-123.0632, 49.0103, -123.0626, 49.0108)),
+  };
   const { fetcher } = nominatimWorld({ overpassBody: (query) => (query.includes("out tags bb") ? { elements: [summary(garden)] } : { elements: [garden] }) });
   const parks = await createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 0, overpassGraceMs: 1_000 }).search(PIN[1], PIN[0], 35);
   // Both contain the position; the smaller, more specific place comes first.
-  assert.deepEqual(parks.map((park) => park.id), [7007, 24722692]);
+  assert.deepEqual(
+    parks.map((park) => park.id),
+    [7007, 24722692],
+  );
 });
 
 test("a failed Overpass endpoint is skipped for a while", async () => {
@@ -303,7 +450,10 @@ test("a failed Overpass endpoint is skipped for a while", async () => {
   clock += 3 * 60 * 1000;
   calls.length = 0;
   await client.search(49.03, -123.08, 35);
-  assert.ok(calls.some((call) => call.url === FIRST), "after the cooldown Overpass is tried again");
+  assert.ok(
+    calls.some((call) => call.url === FIRST),
+    "after the cooldown Overpass is tried again",
+  );
 });
 
 test("an outline fetch asks Nominatim /lookup first, keeps holes, and falls back to Overpass for ids Nominatim lacks", async () => {
@@ -325,7 +475,9 @@ test("Nominatim requests are spaced out across clients", async () => {
     createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60, overpassGraceMs: 0 }).search(PIN[1], PIN[0], 35),
     createOsmClient(WITH_NOMINATIM, fetcher, { nominatimSpacingMs: 60, overpassGraceMs: 0 }).search(49.05, -123.1, 35),
   ]);
-  const starts = nominatim().map((call) => call.at).sort((a, b) => a - b);
+  const starts = nominatim()
+    .map((call) => call.at)
+    .sort((a, b) => a - b);
   assert.ok(starts.length >= 5, `${starts.length} requests`);
   for (let index = 1; index < starts.length; index += 1) assert.ok(starts[index] - starts[index - 1] >= 55, `gap ${starts[index] - starts[index - 1]}`);
 });
@@ -347,30 +499,74 @@ test("repeat searches near the same spot use the cache", async () => {
 
 test("feature() fetches one outline by id with full detail", async () => {
   const calls: Call[] = [];
-  const client = createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [RELATION] }), calls));
+  const client = createOsmClient(
+    OVERPASS_ONLY,
+    overpass(() => ({ elements: [RELATION] }), calls),
+  );
   const feature = await client.feature({ type: "relation", id: 1001 });
   assert.equal(feature?.geometry.coordinates.length, 2);
   assert.match(calls[0].query, /relation\(id:1001\);/);
-  assert.equal(await createOsmClient(OVERPASS_ONLY, overpass(() => ({ elements: [] }))).feature({ type: "way", id: 9 }), null);
+  assert.equal(
+    await createOsmClient(
+      OVERPASS_ONLY,
+      overpass(() => ({ elements: [] })),
+    ).feature({ type: "way", id: 9 }),
+    null,
+  );
 });
 
 test("rings are stitched from segments in any direction and open rings are dropped", () => {
   const rings = assembleRings([
-    [[0, 0], [1, 0]],
-    [[1, 1], [1, 0]],
-    [[1, 1], [0, 1], [0, 0]],
-    [[5, 5], [6, 6]],
+    [
+      [0, 0],
+      [1, 0],
+    ],
+    [
+      [1, 1],
+      [1, 0],
+    ],
+    [
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ],
+    [
+      [5, 5],
+      [6, 6],
+    ],
   ]);
-  assert.deepEqual(rings, [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]);
+  assert.deepEqual(rings, [
+    [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ],
+  ]);
 });
 
 test("point and distance checks respect holes", () => {
   const square: MultiPolygon = {
     type: "MultiPolygon",
-    coordinates: [[
-      [[-123.36, 48.45], [-123.35, 48.45], [-123.35, 48.456], [-123.36, 48.456], [-123.36, 48.45]],
-      [[-123.357, 48.452], [-123.353, 48.452], [-123.353, 48.454], [-123.357, 48.454], [-123.357, 48.452]],
-    ]],
+    coordinates: [
+      [
+        [
+          [-123.36, 48.45],
+          [-123.35, 48.45],
+          [-123.35, 48.456],
+          [-123.36, 48.456],
+          [-123.36, 48.45],
+        ],
+        [
+          [-123.357, 48.452],
+          [-123.353, 48.452],
+          [-123.353, 48.454],
+          [-123.357, 48.454],
+          [-123.357, 48.452],
+        ],
+      ],
+    ],
   };
   assert.equal(pointInMultiPolygon([-123.359, 48.451], square), true);
   assert.equal(pointInMultiPolygon([-123.355, 48.453], square), false);
@@ -384,7 +580,9 @@ function fakeClient(result: Awaited<ReturnType<OsmClient["search"]>> | Error): O
       if (result instanceof Error) throw result;
       return result;
     },
-    async feature() { return null; },
+    async feature() {
+      return null;
+    },
   };
 }
 
@@ -393,9 +591,33 @@ const SECRET = "test-session-secret-which-is-long-enough";
 test("GET /api/osm/parks validates the position, rate limits per client and returns candidates", async () => {
   const subjects: string[] = [];
   let allowed = true;
-  const geometryValue: MultiPolygon = { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] };
+  const geometryValue: MultiPolygon = {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 0],
+        ],
+      ],
+    ],
+  };
   const worker = createFeedbackWorker({
-    osmClient: fakeClient([{ type: "way", id: 7, name: "Pocket Park", kind: "leisure=park", tags: { leisure: "park" }, geometry: geometryValue, areaM2: 1200, containsPin: true, distanceM: 0 }]),
+    osmClient: fakeClient([
+      {
+        type: "way",
+        id: 7,
+        name: "Pocket Park",
+        kind: "leisure=park",
+        tags: { leisure: "park" },
+        geometry: geometryValue,
+        areaM2: 1200,
+        containsPin: true,
+        distanceM: 0,
+      },
+    ]),
     osmSearchAllowed: async (subject) => {
       subjects.push(subject);
       return allowed;
@@ -410,12 +632,24 @@ test("GET /api/osm/parks validates the position, rate limits per client and retu
   assert.equal((await call("?lat=48.45&lng=-123.36&accuracy=abc")).status, 400);
   const imprecise = await call("?lat=48.45&lng=-123.36&accuracy=150");
   assert.equal(imprecise.status, 422);
-  assert.equal((await imprecise.json() as { code: string }).code, "location_imprecise");
+  assert.equal(((await imprecise.json()) as { code: string }).code, "location_imprecise");
   const ok = await call("?lat=48.45&lng=-123.36");
   assert.equal(ok.status, 200);
-  const body = await ok.json() as { attribution: string; parks: Record<string, unknown>[] };
+  const body = (await ok.json()) as { attribution: string; parks: Record<string, unknown>[] };
   assert.match(body.attribution, /OpenStreetMap/);
-  assert.deepEqual(Object.keys(body.parks[0]).sort(), ["areaM2", "containsPin", "distanceM", "founder", "geometry", "hasCover", "id", "inCatalogue", "kind", "name", "type"]);
+  assert.deepEqual(Object.keys(body.parks[0]).sort(), [
+    "areaM2",
+    "containsPin",
+    "distanceM",
+    "founder",
+    "geometry",
+    "hasCover",
+    "id",
+    "inCatalogue",
+    "kind",
+    "name",
+    "type",
+  ]);
   assert.equal(body.parks[0].founder, null);
   assert.equal(body.parks[0].hasCover, false);
   assert.equal(subjects.length, 1);
@@ -425,7 +659,7 @@ test("GET /api/osm/parks validates the position, rate limits per client and retu
   allowed = false;
   const limited = await call("?lat=48.45&lng=-123.36");
   assert.equal(limited.status, 429);
-  assert.equal((await limited.json() as { code: string }).code, "rate_limited_osm");
+  assert.equal(((await limited.json()) as { code: string }).code, "rate_limited_osm");
 
   const post = await worker.fetch(new Request("https://api.example.test/api/osm/parks?lat=1&lng=1", { method: "POST" }), env);
   assert.equal(post.status, 405);
@@ -438,5 +672,5 @@ test("GET /api/osm/parks reports Overpass trouble as a 503", async () => {
   });
   const response = await worker.fetch(new Request("https://api.example.test/api/osm/parks?lat=48.45&lng=-123.36"), { SESSION_SECRET: SECRET } as never);
   assert.equal(response.status, 503);
-  assert.equal((await response.json() as { code: string }).code, "osm_unavailable");
+  assert.equal(((await response.json()) as { code: string }).code, "osm_unavailable");
 });

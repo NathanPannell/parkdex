@@ -22,7 +22,7 @@ type Props = {
 /** The patches to draw, as a cache key: none at all while the `badges` flag is off. */
 function usePatchKey(patches: readonly string[] | undefined): string {
   const badges = useFeatureFlag("badges");
-  return badges ? patches?.join(",") ?? "" : "";
+  return badges ? (patches?.join(",") ?? "") : "";
 }
 
 export function Flag({ seed, size = 48, days = 0, label, className, patches }: Props) {
@@ -32,9 +32,13 @@ export function Flag({ seed, size = 48, days = 0, label, className, patches }: P
   // The markup is generated from a fixed vocabulary of shapes and colours, never from user text;
   // patches only ever name badges from the bundled list.
   const markup = useMemo(
-    () => (seed
-      ? withPatches(flagSvg(seed, { weather, idPrefix: `flag${id}` }), flagPatchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `flag${id}` }))
-      : blankFlagSvg()),
+    () =>
+      seed
+        ? withPatches(
+            flagSvg(seed, { weather, idPrefix: `flag${id}` }),
+            flagPatchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `flag${id}` }),
+          )
+        : blankFlagSvg(),
     [seed, weather, id, patchKey, size],
   );
   const height = Math.round((size * (FLAG_HEIGHT + 2)) / (FLAG_WIDTH + 2));
@@ -59,13 +63,10 @@ export function FlagPin({ seed, days = 0, ageMs, size = 48, showAge = true, labe
   const weather = weatherForDays(days);
   const age = seed && showAge ? formatFlagAge(ageMs ?? days * 86_400_000) : undefined;
   const patchKey = usePatchKey(patches);
-  const markup = useMemo(
-    () => {
-      const pin = flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: age });
-      return seed ? withPatches(pin, pinPatchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `pin${id}` })) : pin;
-    },
-    [seed, weather, id, age, patchKey, size],
-  );
+  const markup = useMemo(() => {
+    const pin = flagPinSvg(seed, { weather, idPrefix: `pin${id}`, label: age });
+    return seed ? withPatches(pin, pinPatchesMarkup(patchKey ? patchKey.split(",") : [], { sizePx: size, idPrefix: `pin${id}` })) : pin;
+  }, [seed, weather, id, age, patchKey, size]);
   return (
     <span
       className={["flag", "flag-pin", className].filter(Boolean).join(" ")}

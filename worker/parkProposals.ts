@@ -44,10 +44,7 @@ export interface ParkProposalRecord {
   publishedParkId?: string | null;
 }
 
-export type SaveProposalResult =
-  | { status: "created" | "duplicate"; proposal: ParkProposalRecord }
-  | { status: "conflict" }
-  | { status: "rate_limited" };
+export type SaveProposalResult = { status: "created" | "duplicate"; proposal: ParkProposalRecord } | { status: "conflict" } | { status: "rate_limited" };
 
 export interface ParkProposalStore {
   save(input: { id: string; payloadHash: string; ipHash: string; proposal: ValidatedProposal }): Promise<SaveProposalResult>;
@@ -58,8 +55,16 @@ export interface ParkProposalStore {
 function coordinate(value: unknown, label: string): LngLat {
   if (!Array.isArray(value) || value.length !== 2) throw new HttpError(400, "invalid_location", `${label} must be a [longitude, latitude] pair.`);
   const [lng, lat] = value;
-  if (typeof lng !== "number" || typeof lat !== "number" || !Number.isFinite(lng) || !Number.isFinite(lat) ||
-      lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+  if (
+    typeof lng !== "number" ||
+    typeof lat !== "number" ||
+    !Number.isFinite(lng) ||
+    !Number.isFinite(lat) ||
+    lng < -180 ||
+    lng > 180 ||
+    lat < -90 ||
+    lat > 90
+  ) {
     throw new HttpError(400, "invalid_location", `${label} is not a valid location.`);
   }
   // Six decimals is about 10 cm, plenty for a proposal and keeps rows small.
@@ -100,8 +105,16 @@ export function validateProposalBody(body: unknown): ValidatedProposal {
 
 function osmRef(value: unknown): OsmRef {
   const input = value as Record<string, unknown>;
-  if (typeof value !== "object" || value === null || Array.isArray(value) || Object.keys(input).some((key) => key !== "type" && key !== "id") ||
-      (input.type !== "way" && input.type !== "relation") || typeof input.id !== "number" || !Number.isSafeInteger(input.id) || input.id <= 0) {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    Object.keys(input).some((key) => key !== "type" && key !== "id") ||
+    (input.type !== "way" && input.type !== "relation") ||
+    typeof input.id !== "number" ||
+    !Number.isSafeInteger(input.id) ||
+    input.id <= 0
+  ) {
     throw new HttpError(400, "invalid_osm", "Unknown OpenStreetMap park.");
   }
   return { type: input.type, id: input.id };
@@ -142,18 +155,20 @@ function toRecord(row: Row): ParkProposalRecord {
     name: row.name,
     note: row.note,
     point: [Number(row.longitude), Number(row.latitude)],
-    outline: Array.isArray(row.outline) ? row.outline as LngLat[] : null,
-    context: typeof row.context === "object" && row.context !== null ? row.context as Record<string, string> : {},
+    outline: Array.isArray(row.outline) ? (row.outline as LngLat[]) : null,
+    context: typeof row.context === "object" && row.context !== null ? (row.context as Record<string, string>) : {},
     status: row.status as ProposalStatus,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
-    ...("decision" in row ? {
-      osm: row.osm_type && row.osm_id ? { type: row.osm_type as OsmRef["type"], id: Number(row.osm_id) } : null,
-      decision: (row.decision as Decision | null) ?? null,
-      moderation: typeof row.moderation === "object" && row.moderation !== null ? row.moderation as ModerationRecord : null,
-      decidedAt: row.decided_at ? new Date(row.decided_at).toISOString() : null,
-      publishedParkId: row.published_park_id ?? null,
-    } : {}),
+    ...("decision" in row
+      ? {
+          osm: row.osm_type && row.osm_id ? { type: row.osm_type as OsmRef["type"], id: Number(row.osm_id) } : null,
+          decision: (row.decision as Decision | null) ?? null,
+          moderation: typeof row.moderation === "object" && row.moderation !== null ? (row.moderation as ModerationRecord) : null,
+          decidedAt: row.decided_at ? new Date(row.decided_at).toISOString() : null,
+          publishedParkId: row.published_park_id ?? null,
+        }
+      : {}),
   };
 }
 
@@ -161,11 +176,11 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
   const sql = database(databaseUrl);
   return {
     async save({ id, payloadHash, ipHash, proposal }) {
-      const existing = await sql`SELECT * FROM kip_proposals.parks WHERE submission_id = ${proposal.submissionId}::uuid` as Row[];
+      const existing = (await sql`SELECT * FROM kip_proposals.parks WHERE submission_id = ${proposal.submissionId}::uuid`) as Row[];
       if (existing[0]) {
         return existing[0].payload_hash === payloadHash ? { status: "duplicate", proposal: toRecord(existing[0]) } : { status: "conflict" };
       }
-      const limit = await sql`
+      const limit = (await sql`
         INSERT INTO kip_proposals.rate_limits (subject_hash, window_started_at, hit_count)
         VALUES (${ipHash}, now(), 1)
         ON CONFLICT (subject_hash) DO UPDATE SET
@@ -173,32 +188,34 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
           hit_count = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '1 hour' THEN 1 ELSE kip_proposals.rate_limits.hit_count + 1 END,
           updated_at = now()
         RETURNING hit_count <= 10 AS allowed
-      ` as Array<{ allowed: boolean }>;
+      `) as Array<{ allowed: boolean }>;
       if (limit[0]?.allowed !== true) return { status: "rate_limited" };
-      const rows = await sql`
+      const rows = (await sql`
         INSERT INTO kip_proposals.parks (id, submission_id, payload_hash, name, note, longitude, latitude, outline, context, osm_type, osm_id)
         VALUES (${id}::uuid, ${proposal.submissionId}::uuid, ${payloadHash}, ${proposal.name}, ${proposal.note},
           ${proposal.point[0]}, ${proposal.point[1]}, ${proposal.outline ? JSON.stringify(proposal.outline) : null}::jsonb,
           ${JSON.stringify(proposal.context)}::jsonb, ${proposal.osm?.type ?? null}, ${proposal.osm?.id ?? null})
         ON CONFLICT (submission_id) DO NOTHING
         RETURNING *
-      ` as Row[];
+      `) as Row[];
       if (rows[0]) return { status: "created", proposal: toRecord(rows[0]) };
       // A concurrent retry won the insert; report it like any other retry.
       return this.save({ id, payloadHash, ipHash, proposal });
     },
     async list(status) {
       // Every column, so the dashboard keeps working whether or not the moderation migration has run.
-      const rows = (status
-        ? await sql`SELECT * FROM kip_proposals.parks WHERE status = ${status} ORDER BY created_at DESC LIMIT 200`
-        : await sql`SELECT * FROM kip_proposals.parks ORDER BY created_at DESC LIMIT 200`) as Row[];
+      const rows = (
+        status
+          ? await sql`SELECT * FROM kip_proposals.parks WHERE status = ${status} ORDER BY created_at DESC LIMIT 200`
+          : await sql`SELECT * FROM kip_proposals.parks ORDER BY created_at DESC LIMIT 200`
+      ) as Row[];
       return rows.map(toRecord);
     },
     async updateStatus(id, status) {
-      const rows = await sql`
+      const rows = (await sql`
         UPDATE kip_proposals.parks SET status = ${status}, updated_at = now() WHERE id = ${id}::uuid
         RETURNING *
-      ` as Row[];
+      `) as Row[];
       return rows[0] ? toRecord(rows[0]) : null;
     },
   };
@@ -212,7 +229,7 @@ export function createNeonParkProposalStore(databaseUrl: string): ParkProposalSt
 export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: string) => Promise<boolean> {
   const sql = database(databaseUrl);
   return async (subjectHash) => {
-    const rows = await sql`
+    const rows = (await sql`
       INSERT INTO kip_proposals.rate_limits (subject_hash, window_started_at, hit_count)
       VALUES (${subjectHash}, now(), 1)
       ON CONFLICT (subject_hash) DO UPDATE SET
@@ -220,7 +237,7 @@ export function createNeonOsmSearchLimiter(databaseUrl: string): (subjectHash: s
         hit_count = CASE WHEN kip_proposals.rate_limits.window_started_at <= now() - interval '1 minute' THEN 1 ELSE kip_proposals.rate_limits.hit_count + 1 END,
         updated_at = now()
       RETURNING hit_count <= 10 AS allowed
-    ` as Array<{ allowed: boolean }>;
+    `) as Array<{ allowed: boolean }>;
     return rows[0]?.allowed === true;
   };
 }

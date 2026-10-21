@@ -30,7 +30,9 @@ export interface LiveParkDetail extends LivePark {
   geometry: MultiPolygon | null;
 }
 
-export type LiveParkChanges = Partial<Pick<LivePark, "name" | "short" | "category" | "region" | "lat" | "lng" | "biome" | "rarity" | "blurb">> & { geometry?: MultiPolygon };
+export type LiveParkChanges = Partial<Pick<LivePark, "name" | "short" | "category" | "region" | "lat" | "lng" | "biome" | "rarity" | "blurb">> & {
+  geometry?: MultiPolygon;
+};
 
 export interface LiveParkStore {
   list(): Promise<LivePark[]>;
@@ -45,9 +47,19 @@ const COLUMNS = "id, name, short, category, region, lat, lng, biome, shape, rari
 
 function toPark(row: Record<string, unknown>): LivePark {
   return {
-    id: String(row.id), name: String(row.name), short: String(row.short), category: String(row.category), region: String(row.region),
-    lat: Number(row.lat), lng: Number(row.lng), biome: String(row.biome), shape: String(row.shape), rarity: String(row.rarity),
-    scene: (row.scene as string | null) ?? null, seed: Number(row.seed), blurb: String(row.blurb),
+    id: String(row.id),
+    name: String(row.name),
+    short: String(row.short),
+    category: String(row.category),
+    region: String(row.region),
+    lat: Number(row.lat),
+    lng: Number(row.lng),
+    biome: String(row.biome),
+    shape: String(row.shape),
+    rarity: String(row.rarity),
+    scene: (row.scene as string | null) ?? null,
+    seed: Number(row.seed),
+    blurb: String(row.blurb),
   };
 }
 
@@ -67,7 +79,8 @@ function choice(value: unknown, options: readonly string[], label: string): stri
 }
 
 function coordinate(value: unknown, min: number, max: number, label: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) throw new HttpError(400, "invalid_field", `${label} is out of range.`);
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max)
+    throw new HttpError(400, "invalid_field", `${label} is out of range.`);
   return Math.round(value * 1e6) / 1e6;
 }
 
@@ -76,7 +89,7 @@ export function validateLiveChanges(value: unknown): LiveParkChanges {
   const input = value as Record<string, unknown>;
   const allowed = ["name", "short", "category", "region", "lat", "lng", "biome", "rarity", "blurb", "geometry"];
   if (Object.keys(input).some((key) => !allowed.includes(key))) throw new HttpError(400, "invalid_request", "Invalid park changes.");
-  if (("lat" in input) !== ("lng" in input)) throw new HttpError(400, "invalid_request", "Send the pin's latitude and longitude together.");
+  if ("lat" in input !== "lng" in input) throw new HttpError(400, "invalid_request", "Send the pin's latitude and longitude together.");
   const changes: LiveParkChanges = {};
   if ("name" in input) changes.name = text(input.name, "Name", 140, false);
   if ("short" in input) changes.short = text(input.short, "Short name", 140, false);
@@ -103,7 +116,8 @@ export function validateNewPark(value: unknown): NewParkFields {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new HttpError(400, "invalid_request", "Send the new park's fields.");
   const input = value as Record<string, unknown>;
   const keys = ["name", "short", "category", "region", "biome", "rarity", "blurb"];
-  if (Object.keys(input).some((key) => !keys.includes(key)) || keys.some((key) => !(key in input))) throw new HttpError(400, "invalid_request", "Send name, short, category, region, biome, rarity and blurb.");
+  if (Object.keys(input).some((key) => !keys.includes(key)) || keys.some((key) => !(key in input)))
+    throw new HttpError(400, "invalid_request", "Send name, short, category, region, biome, rarity and blurb.");
   const category = choice(input.category, CATEGORIES, "category");
   return {
     name: text(input.name, "Name", 140, false),
@@ -123,7 +137,12 @@ export function validateExpected(value: unknown): LivePark {
   for (const key of ["id", "name", "short", "category", "region", "biome", "shape", "rarity", "blurb"]) {
     if (typeof park[key] !== "string") throw new HttpError(400, "invalid_request", "Send the park as you opened it.");
   }
-  if (typeof park.lat !== "number" || typeof park.lng !== "number" || typeof park.seed !== "number" || !(park.scene === null || typeof park.scene === "string")) {
+  if (
+    typeof park.lat !== "number" ||
+    typeof park.lng !== "number" ||
+    typeof park.seed !== "number" ||
+    !(park.scene === null || typeof park.scene === "string")
+  ) {
     throw new HttpError(400, "invalid_request", "Send the park as you opened it.");
   }
   return toPark(park);
@@ -140,7 +159,20 @@ export function liveUpdateStatements(id: string, expected: LivePark, changes: Li
       // Compare with what the operator opened, so two editors cannot silently overwrite each other.
       text: `SELECT kip_park_drafts.require(EXISTS (SELECT 1 FROM public.parks WHERE id = $1 AND name = $2 AND short = $3 AND category = $4
         AND region = $5 AND lat = $6 AND lng = $7 AND biome = $8 AND shape = $9 AND rarity = $10 AND scene IS NOT DISTINCT FROM $11::text AND blurb = $12), 'park_changed')`,
-      params: [id, expected.name, expected.short, expected.category, expected.region, expected.lat, expected.lng, expected.biome, expected.shape, expected.rarity, expected.scene, expected.blurb],
+      params: [
+        id,
+        expected.name,
+        expected.short,
+        expected.category,
+        expected.region,
+        expected.lat,
+        expected.lng,
+        expected.biome,
+        expected.shape,
+        expected.rarity,
+        expected.scene,
+        expected.blurb,
+      ],
     },
     {
       text: `UPDATE public.parks SET name = $2, short = $3, category = $4, region = $5, lat = $6, lng = $7, biome = $8, shape = $9,
@@ -171,7 +203,9 @@ export function createSqlLiveParkStore(db: SqlRunner): LiveParkStore {
     },
     async get(id) {
       const rows = await db.query(
-        `SELECT ${COLUMNS.split(", ").map((column) => `p.${column}`).join(", ")}, b.feature->'geometry' AS geometry
+        `SELECT ${COLUMNS.split(", ")
+          .map((column) => `p.${column}`)
+          .join(", ")}, b.feature->'geometry' AS geometry
            FROM public.parks p
            LEFT JOIN public.boundaries b ON b.park_id = p.id
           WHERE p.id = $1`,
@@ -188,7 +222,8 @@ export function createSqlLiveParkStore(db: SqlRunner): LiveParkStore {
         return revision === undefined || revision === null ? null : Number(revision);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
-        if (message.includes("park_changed")) throw new HttpError(409, "park_changed", "This park changed since you opened it. Reload it and make your edit again.");
+        if (message.includes("park_changed"))
+          throw new HttpError(409, "park_changed", "This park changed since you opened it. Reload it and make your edit again.");
         const code = (error as { code?: unknown })?.code;
         throw new HttpError(422, "save_failed", `The save was rolled back by a content check${typeof code === "string" ? ` (${code})` : ""}.`);
       }
@@ -200,6 +235,7 @@ export function createNeonLiveParkStore(databaseUrl: string): LiveParkStore {
   const sql = neon(databaseUrl);
   return createSqlLiveParkStore({
     query: (statement, params = []) => sql.query(statement, params) as Promise<Record<string, unknown>[]>,
-    transaction: (statements) => sql.transaction(statements.map(({ text: statement, params }) => sql.query(statement, params))) as Promise<Record<string, unknown>[][]>,
+    transaction: (statements) =>
+      sql.transaction(statements.map(({ text: statement, params }) => sql.query(statement, params))) as Promise<Record<string, unknown>[][]>,
   });
 }

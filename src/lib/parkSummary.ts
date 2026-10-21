@@ -3,16 +3,11 @@ import { coverImageUrl, fetchParkSummary, FOUNDER_POINTS, type ParkSummary } fro
 
 /** A park's founder and visit counts as the park sheet sees them. */
 export type SummaryState =
-  | { status: "loading"; summary: ParkSummary | null }
-  | { status: "ready"; summary: ParkSummary }
-  | { status: "error"; summary: ParkSummary | null };
+  { status: "loading"; summary: ParkSummary | null } | { status: "ready"; summary: ParkSummary } | { status: "error"; summary: ParkSummary | null };
 
 /** What the sheet offers for founding: nothing, the button, or a hint to go there first. */
 export type FounderCta =
-  | { kind: "hidden" }
-  | { kind: "found"; points: number }
-  | { kind: "hint"; text: string; points: number }
-  | { kind: "pending"; text: string };
+  { kind: "hidden" } | { kind: "found"; points: number } | { kind: "hint"; text: string; points: number } | { kind: "pending"; text: string };
 
 export const FOUNDER_HINT = "Visit the park to become its founder";
 export const REVIEW_PENDING_TEXT = "Your photo is waiting for review";
@@ -98,4 +93,18 @@ export function useParkSummary(parkId: string, accountId: string | null): Summar
     return () => controller.abort();
   }, [parkId, accountId]);
   return state;
+}
+
+/**
+ * The park page's one line of visit counts: "12 visits · 3 in the last 30 days · 2 yours".
+ * A count the app doesn't know yet, or a zero of your own, is left out; with nothing known it is null.
+ */
+export function visitsLine(stats: Pick<SummaryStats, "total" | "last30Days" | "mine">, signedIn: boolean): string | null {
+  const known = (value: string) => /^\d+$/.test(value);
+  if (!known(stats.total)) return null;
+  const total = Number(stats.total);
+  const parts = [`${total} ${total === 1 ? "visit" : "visits"}`];
+  if (known(stats.last30Days) && total > 0) parts.push(`${stats.last30Days} in the last 30 days`);
+  if (signedIn && known(stats.mine) && Number(stats.mine) > 0) parts.push(`${stats.mine} yours`);
+  return parts.join(" · ");
 }

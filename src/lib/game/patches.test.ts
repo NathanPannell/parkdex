@@ -9,7 +9,20 @@ import { Flag, FlagPin } from "../../components/Flag";
 import { setFeatureFlagsForTests } from "../appConfig";
 import { badgeById, BADGES, shelfBadges } from "./badges";
 import { FLAG_HEIGHT, FLAG_WIDTH, flagPinSvg, flagSpec, flagSvg } from "./flag";
-import { CLOTH_RECT, drawPatches, flagPatchesMarkup, MIN_PATCH_CLOTH_PX, patchesFit, patchesSvg, patchLayout, PIN_CLOTH_RECT, PIN_CLOTH_TRANSFORM, pinPatchesMarkup, placePatches, withPatches } from "./patches";
+import {
+  CLOTH_RECT,
+  drawPatches,
+  flagPatchesMarkup,
+  MIN_PATCH_CLOTH_PX,
+  patchesFit,
+  patchesSvg,
+  patchLayout,
+  PIN_CLOTH_RECT,
+  PIN_CLOTH_TRANSFORM,
+  pinPatchesMarkup,
+  placePatches,
+  withPatches,
+} from "./patches";
 
 const SEED = "0f6c1d2e9a7b4c3d";
 const THREE = ["parks-1", "hold-7", "coast-to-coast"];
@@ -83,10 +96,19 @@ describe("flag patches", () => {
       fill: () => calls.push("fill"),
       clip: () => calls.push("clip"),
       drawImage: () => calls.push("image"),
-      set fillStyle(value: string) { calls.push(`fill ${value}`); },
+      set fillStyle(value: string) {
+        calls.push(`fill ${value}`);
+      },
     } as unknown as CanvasRenderingContext2D;
     const art = {} as CanvasImageSource;
-    drawPatches(context, [{ id: "parks-1", art }, { id: "hold-7", art }], PIN_CLOTH_RECT);
+    drawPatches(
+      context,
+      [
+        { id: "parks-1", art },
+        { id: "hold-7", art },
+      ],
+      PIN_CLOTH_RECT,
+    );
     const svg = patchesSvg(["parks-1", "hold-7"], PIN_CLOTH_RECT, "x");
     const [first, second] = placePatches(2, PIN_CLOTH_RECT);
     for (const slot of [first, second]) {
@@ -136,9 +158,16 @@ describe("badge shelf view", () => {
     { id: "hold-7", progress: 7, goal: 7, unlockedAt: "2026-10-08T00:00:00Z" },
     { id: "parks-10", progress: 4, goal: 10, unlockedAt: null },
   ]);
-  const render = (patches: string[], seen: string[]) => renderToStaticMarkup(createElement(BadgeShelfView, {
-    items, patches, flagSeed: SEED, seen: new Set(seen), onOpen: () => {},
-  }));
+  const render = (patches: string[], seen: string[]) =>
+    renderToStaticMarkup(
+      createElement(BadgeShelfView, {
+        items,
+        patches,
+        flagSeed: SEED,
+        seen: new Set(seen),
+        onOpen: () => {},
+      }),
+    );
 
   it("shows earned badges in colour and locked ones as silhouettes with how to earn them", () => {
     const html = render([], []);
@@ -170,7 +199,9 @@ describe("badges flag off", () => {
     }
     expect(count(renderToStaticMarkup(createElement(FlagPin, { seed: SEED, size: 56, patches: THREE })))).toBe(0);
     // The same flag as one drawn without patches.
-    expect(renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72, patches: THREE }))).toBe(renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72 })));
+    expect(renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72, patches: THREE }))).toBe(
+      renderToStaticMarkup(createElement(Flag, { seed: SEED, size: 72 })),
+    );
   });
 
   it("shows no badge shelf and no unlock on a visit result", () => {

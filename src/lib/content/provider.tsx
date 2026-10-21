@@ -50,11 +50,12 @@ function initialConnectivity() {
 export function ContentProvider({ children }: { children: ReactNode }) {
   const { state } = useStore();
   const auth = useAuth();
-  const activeOwnerKey = auth.phase === "guest"
-    ? "guest"
-    : (auth.phase === "authenticated" || auth.phase === "offline-account") && auth.ownerAccountId
-      ? `account:${auth.ownerAccountId.toLowerCase()}`
-      : null;
+  const activeOwnerKey =
+    auth.phase === "guest"
+      ? "guest"
+      : (auth.phase === "authenticated" || auth.phase === "offline-account") && auth.ownerAccountId
+        ? `account:${auth.ownerAccountId.toLowerCase()}`
+        : null;
   const claimsReady = state.progressReady && state.progressOwnerKey === activeOwnerKey;
   const claimsRef = useRef(state.claims);
   const claimsReadyRef = useRef(claimsReady);
@@ -68,7 +69,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
       store,
       apiUrl: getContentApiOrigin(),
       environment: contentEnvironment(),
-      claimedParkIds: () => claimsReadyRef.current ? Object.keys(claimsRef.current) : [],
+      claimedParkIds: () => (claimsReadyRef.current ? Object.keys(claimsRef.current) : []),
       badgeArt: SHOW_BADGE_ART,
       connectivity: initialConnectivity(),
       fetch: contentFetch,
@@ -107,9 +108,13 @@ export function ContentProvider({ children }: { children: ReactNode }) {
         if (live) appListeners.push(listener);
         else void listener.remove();
       };
-      void CapacitorApp.addListener("appStateChange", ({ isActive }) => setForeground(isActive)).then(keep).catch(() => {});
+      void CapacitorApp.addListener("appStateChange", ({ isActive }) => setForeground(isActive))
+        .then(keep)
+        .catch(() => {});
       // A permission dialog pauses the Activity without stopping it, so no appStateChange follows.
-      void CapacitorApp.addListener("resume", () => runtime.resumeAfterPause?.()).then(keep).catch(() => {});
+      void CapacitorApp.addListener("resume", () => runtime.resumeAfterPause?.())
+        .then(keep)
+        .catch(() => {});
     }
 
     // Runtime owns storage initialization and shutdown, including URL revocation.
@@ -147,7 +152,11 @@ export function useContentRuntime() {
 
 export function useContentStatus(): ContentStatus {
   const runtime = useContentRuntime();
-  return useSyncExternalStore((listener) => runtime.subscribe(listener), () => runtime.getStatus(), () => runtime.getStatus());
+  return useSyncExternalStore(
+    (listener) => runtime.subscribe(listener),
+    () => runtime.getStatus(),
+    () => runtime.getStatus(),
+  );
 }
 
 export function useMapDetailReady(): boolean {
@@ -163,7 +172,11 @@ export function useMapDetailReady(): boolean {
 // progress tick, and returning it would re-render every catalogue reader each time.
 export function useContent() {
   const runtime = useContentRuntime();
-  return useSyncExternalStore((listener) => runtime.subscribe(listener), () => runtime.getStatus().snapshot, () => runtime.getStatus().snapshot);
+  return useSyncExternalStore(
+    (listener) => runtime.subscribe(listener),
+    () => runtime.getStatus().snapshot,
+    () => runtime.getStatus().snapshot,
+  );
 }
 
 // Presentation helpers such as Badge can still render in storybook-style isolated tests.

@@ -8,13 +8,16 @@ function context(): RequestContext {
 }
 
 test("plain selects are reads and record every schema-qualified table", () => {
-  assert.deepEqual(classifySql(`
+  assert.deepEqual(
+    classifySql(`
     SELECT r.id, a.content_type FROM kip_feedback.reports r
     LEFT JOIN kip_feedback.attachments a ON a.report_id = r.id
-    WHERE EXISTS (SELECT 1 FROM kip_feedback.email_deliveries d WHERE d.report_id = r.id)`), {
-    operation: "read",
-    tables: ["kip_feedback.attachments", "kip_feedback.email_deliveries", "kip_feedback.reports"],
-  });
+    WHERE EXISTS (SELECT 1 FROM kip_feedback.email_deliveries d WHERE d.report_id = r.id)`),
+    {
+      operation: "read",
+      tables: ["kip_feedback.attachments", "kip_feedback.email_deliveries", "kip_feedback.reports"],
+    },
+  );
   assert.deepEqual(classifySql("SELECT revision FROM public.content_clock, public.parks p WHERE singleton = true"), {
     operation: "read",
     tables: ["public.content_clock", "public.parks"],
@@ -58,12 +61,21 @@ test("keywords inside literals and comments are ignored", () => {
 test("calls to listed write functions count as writes, other functions as reads", () => {
   const result = classifySql("SELECT kip_game.record_visit($1::uuid, $2::uuid, $3, $4::timestamptz) AS result");
   assert.deepEqual(result, { operation: "write", tables: ["kip_game.record_visit"] });
-  assert.deepEqual(classifySql("SELECT kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz) AS result"), { operation: "write", tables: ["kip_game.join_crew"] });
+  assert.deepEqual(classifySql("SELECT kip_game.join_crew($1::uuid, $2, $3::uuid, $4::timestamptz) AS result"), {
+    operation: "write",
+    tables: ["kip_game.join_crew"],
+  });
   assert.deepEqual(classifySql("SELECT kip_game.park_crew($1, $2::uuid, $3::timestamptz) AS crew").operation, "read");
   assert.deepEqual(classifySql("SELECT rank, handle FROM kip_game.leaderboard($1::timestamptz)"), { operation: "read", tables: ["kip_game.leaderboard"] });
-  assert.deepEqual(classifySql(`SELECT t.park_id, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
-    FROM kip_game.tenures t WHERE kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)`).operation, "read");
-  assert.equal(classifySql("INSERT INTO kip_game.players (account_id, flag_seed) SELECT a.id, kip_game.flag_seed(a.id) FROM kip_account.accounts a").operation, "write");
+  assert.deepEqual(
+    classifySql(`SELECT t.park_id, kip_game.holding_points(t.started_at, t.last_visit_at, t.ended_at, $2::timestamptz) AS days
+    FROM kip_game.tenures t WHERE kip_game.flag_up(t.last_visit_at, t.ended_at, $2::timestamptz)`).operation,
+    "read",
+  );
+  assert.equal(
+    classifySql("INSERT INTO kip_game.players (account_id, flag_seed) SELECT a.id, kip_game.flag_seed(a.id) FROM kip_account.accounts a").operation,
+    "write",
+  );
   assert.equal(classifySql("SELECT hashtextextended($1, 0), jsonb_to_recordset($2::jsonb)").operation, "read");
 });
 
@@ -98,9 +110,15 @@ function fakeNeon(behaviour: { fail?: unknown; delayMs?: number } = {}) {
     const promise = {
       execute: (data: unknown) => run(data),
       queryData,
-      then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) { return promise.execute(queryData).then(resolve, reject); },
-      catch(reject: (reason: unknown) => unknown) { return promise.execute(queryData).catch(reject); },
-      finally(done: () => void) { return promise.execute(queryData).finally(done); },
+      then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
+        return promise.execute(queryData).then(resolve, reject);
+      },
+      catch(reject: (reason: unknown) => unknown) {
+        return promise.execute(queryData).catch(reject);
+      },
+      finally(done: () => void) {
+        return promise.execute(queryData).finally(done);
+      },
     };
     return promise;
   };
@@ -147,7 +165,10 @@ test("a failed query records its error code and still rejects", async () => {
   const fake = fakeNeon({ fail: Object.assign(new Error("duplicate key for a@b.test"), { code: "23505" }) });
   const sql = database("postgresql://ignored", () => fake.raw);
   const request = context();
-  await assert.rejects(runWithRequestContext(request, () => sql`INSERT INTO kip_account.accounts (email) VALUES (${"a@b.test"})`), /duplicate/);
+  await assert.rejects(
+    runWithRequestContext(request, () => sql`INSERT INTO kip_account.accounts (email) VALUES (${"a@b.test"})`),
+    /duplicate/,
+  );
   assert.equal(request.events.length, 1);
   assert.equal(request.events[0].result, "23505");
   assert.doesNotMatch(JSON.stringify(request.events), /a@b\.test/);
@@ -157,10 +178,12 @@ test("a transaction is one event covering every statement, and its queries are n
   const fake = fakeNeon();
   const sql = database("postgresql://ignored", () => fake.raw);
   const request = context();
-  await runWithRequestContext(request, () => sql.transaction([
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${"x"}, 0))`,
-    sql`INSERT INTO kip_feedback.reports (id) SELECT ${"id"} FROM kip_feedback.rate_limits`,
-  ]));
+  await runWithRequestContext(request, () =>
+    sql.transaction([
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${"x"}, 0))`,
+      sql`INSERT INTO kip_feedback.reports (id) SELECT ${"id"} FROM kip_feedback.rate_limits`,
+    ]),
+  );
   assert.equal(fake.executed.length, 0, "transaction members are not executed on their own");
   assert.equal(fake.transactions.length, 1);
   assert.equal(request.events.length, 1);

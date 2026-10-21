@@ -36,9 +36,11 @@ function EventsPage() {
         id="events-title"
         eyebrow="Analytics"
         title="Events"
-        lede={tab === "app"
-          ? "What players tap and see in the app, from PostHog."
-          : "Server events from kip_analytics.events: game events and, when you ask for them, one row per database query. Kept for 90 days."}
+        lede={
+          tab === "app"
+            ? "What players tap and see in the app, from PostHog."
+            : "Server events from kip_analytics.events: game events and, when you ask for them, one row per database query. Kept for 90 days."
+        }
         actions={<Tabs label="Event source" value={tab} onChange={choose} items={SOURCES} />}
       />
       {tab === "app" ? <PostHogEvents /> : <ServerEvents />}

@@ -6,13 +6,26 @@ import { Flag } from "./Flag";
 import "../crews.css";
 
 /** A crew (#171): each member's flag, @handle, and "planted" or "joined +12 min". */
-export function CrewList({ members, flagSince, myHandle, className }: { members: readonly CrewMember[]; flagSince: string; myHandle?: string | null; className?: string }) {
+export function CrewList({
+  members,
+  flagSince,
+  myHandle,
+  className,
+}: {
+  members: readonly CrewMember[];
+  flagSince: string;
+  myHandle?: string | null;
+  className?: string;
+}) {
   return (
     <ul className={["crew-list", className].filter(Boolean).join(" ")} aria-label="Crew">
       {members.map((member) => (
         <li key={member.handle} className={member.handle === myHandle ? "is-me" : undefined}>
           <Flag seed={member.flagSeed} size={38} patches={member.patches} />
-          <strong>@{member.handle}{member.handle === myHandle ? " (you)" : ""}</strong>
+          <strong>
+            @{member.handle}
+            {member.handle === myHandle ? " (you)" : ""}
+          </strong>
           <em>{crewMemberNote(member, flagSince)}</em>
         </li>
       ))}

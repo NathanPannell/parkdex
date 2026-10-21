@@ -7,7 +7,10 @@ import { MIN_PATCH_CLOTH_PX, PIN_CLOTH_RECT, placePatches } from "./patches";
 const DAY = 86_400_000;
 const now = Date.parse("2026-10-07T12:00:00Z");
 const flag = (parkId: string, flagSeed: string, daysAgo: number): ParkFlag => ({
-  parkId, handle: flagSeed, flagSeed, since: new Date(now - daysAgo * DAY).toISOString(),
+  parkId,
+  handle: flagSeed,
+  flagSeed,
+  since: new Date(now - daysAgo * DAY).toISOString(),
 });
 
 describe("map pins", () => {
@@ -19,7 +22,10 @@ describe("map pins", () => {
   ];
 
   it("pins every park, with empty poles where nobody holds one", () => {
-    const flags = new Map([["a", flag("a", "robin", 2)], ["c", flag("c", "sam", 25)]]);
+    const flags = new Map([
+      ["a", flag("a", "robin", 2)],
+      ["c", flag("c", "sam", 25)],
+    ]);
     const { collection, images } = buildPins(parks, flags, now);
     expect(collection.features.map((feature) => [feature.properties.id, feature.properties.icon, feature.properties.held])).toEqual([
       ["a", pinIconId("robin", 0, "2d"), 1],
@@ -33,13 +39,19 @@ describe("map pins", () => {
   });
 
   it("tags a young flag with minutes or hours", () => {
-    const flags = new Map([["a", flag("a", "robin", 35 / 1440)], ["b", flag("b", "sam", 3.5 / 24)]]);
+    const flags = new Map([
+      ["a", flag("a", "robin", 35 / 1440)],
+      ["b", flag("b", "sam", 3.5 / 24)],
+    ]);
     const { collection } = buildPins(parks, flags, now);
     expect(collection.features.slice(0, 2).map((feature) => feature.properties.icon)).toEqual([pinIconId("robin", 0, "35m"), pinIconId("sam", 0, "3h")]);
   });
 
   it("shares one image between parks with the same flag and age", () => {
-    const flags = new Map([["a", flag("a", "robin", 3)], ["b", flag("b", "robin", 3)]]);
+    const flags = new Map([
+      ["a", flag("a", "robin", 3)],
+      ["b", flag("b", "robin", 3)],
+    ]);
     const { images } = buildPins(parks, flags, now);
     expect(images.size).toBe(2);
   });
@@ -56,11 +68,12 @@ describe("map pins", () => {
     expect(flagPinSvg("robin", { label: "12d" })).toContain(">12d</text>");
   });
 
-  const patchedFlags = () => new Map([
-    ["a", { ...flag("a", "robin", 2), patches: ["nope", "hold-7", "parks-1"] }],
-    ["b", { ...flag("b", "sam", 2), patches: ["hold-7"] }],
-    ["c", flag("c", "kim", 2)],
-  ]);
+  const patchedFlags = () =>
+    new Map([
+      ["a", { ...flag("a", "robin", 2), patches: ["nope", "hold-7", "parks-1"] }],
+      ["b", { ...flag("b", "sam", 2), patches: ["hold-7"] }],
+      ["c", flag("c", "kim", 2)],
+    ]);
 
   it("gives a holder's pin a second image with their patches, named by what it draws (#175)", () => {
     const flags = patchedFlags();

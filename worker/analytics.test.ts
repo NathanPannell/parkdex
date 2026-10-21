@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  createAnalyticsSink,
-  eventRows,
-  flushRequestAnalytics,
-  posthogBatch,
-  posthogConfig,
-  type AnalyticsSink,
-} from "./analyticsSink.ts";
+import { createAnalyticsSink, eventRows, flushRequestAnalytics, posthogBatch, posthogConfig, type AnalyticsSink } from "./analyticsSink.ts";
 import {
   analyticsEnvironment,
   createRequestContext,
@@ -63,6 +56,8 @@ test("routes keep their shape but never identifiers", () => {
   assert.equal(normalizeRoute("GET", "/api/content/snapshot"), "GET /api/content/snapshot");
   assert.equal(normalizeRoute("DELETE", "/api/friends/sara_k"), "DELETE /api/friends/:handle");
   assert.equal(normalizeRoute("POST", "/api/friends/code"), "POST /api/friends/code");
+  assert.equal(normalizeRoute("POST", "/api/friends/crewmate"), "POST /api/friends/crewmate");
+  assert.equal(normalizeRoute("DELETE", "/api/friends/crewmate"), "DELETE /api/friends/:handle", "a friend whose handle is crewmate");
   assert.equal(normalizeRoute("GET", `/api/recovery/${"a".repeat(64)}/12`), "GET /api/recovery/:hash/:n");
   assert.equal(normalizeRoute("GET", "/api/Some%20Thing/a@b.test"), "GET /api/:x/:x");
   assert.equal(normalizeRoute("BREW", "/"), "OTHER /");
@@ -99,7 +94,10 @@ test("emitEvent outside a request or with an unknown type does nothing", () => {
 });
 
 test("database rows carry request labels and no free text", () => {
-  const context = requestContext({ "X-Kip-Installation-Id": INSTALLATION, "X-Kip-App-Version": "0.1.0", "X-Kip-Bundle-Id": "abc1234" }, { CONTENT_CHANNEL: "staging" });
+  const context = requestContext(
+    { "X-Kip-Installation-Id": INSTALLATION, "X-Kip-App-Version": "0.1.0", "X-Kip-Bundle-Id": "abc1234" },
+    { CONTENT_CHANNEL: "staging" },
+  );
   runWithRequestContext(context, () => dbEvent("write"));
   const [row] = eventRows(context);
   assert.equal(row.event_type, "db_write");
@@ -127,7 +125,10 @@ test("PostHog gets writes and game events, never the read firehose", () => {
   });
   const anonymous = posthogBatch(context, KEY);
   assert.equal(anonymous.api_key, KEY);
-  assert.deepEqual(anonymous.batch.map((item) => item.event), ["db_write", "leaderboard_viewed"]);
+  assert.deepEqual(
+    anonymous.batch.map((item) => item.event),
+    ["db_write", "leaderboard_viewed"],
+  );
   const first = anonymous.batch[0] as { distinct_id: string; uuid: string; properties: Record<string, unknown> };
   assert.equal(first.distinct_id, INSTALLATION);
   assert.equal(first.uuid, context.events[1].eventId);
@@ -148,9 +149,20 @@ test("the sink inserts once and posts one capture batch to the configured host",
     calls.push({ url: String(url), init: init ?? {} });
     return new Response("{}", { status: 200 });
   }) as typeof fetch;
-  const sink = createAnalyticsSink({ POSTHOG_PROJECT_KEY: KEY }, { writeRows: async (rows) => { inserted.push(rows); }, fetch: fetcher })!;
+  const sink = createAnalyticsSink(
+    { POSTHOG_PROJECT_KEY: KEY },
+    {
+      writeRows: async (rows) => {
+        inserted.push(rows);
+      },
+      fetch: fetcher,
+    },
+  )!;
   const context = requestContext({ "X-Kip-Installation-Id": INSTALLATION });
-  runWithRequestContext(context, () => { dbEvent("read"); dbEvent("write"); });
+  runWithRequestContext(context, () => {
+    dbEvent("read");
+    dbEvent("write");
+  });
   await sink.write(context);
   assert.equal(inserted.length, 1);
   assert.equal(inserted[0].length, 2);
@@ -164,7 +176,16 @@ test("the sink inserts once and posts one capture batch to the configured host",
 
 test("without a key nothing is sent to PostHog, and without anything there is no sink", async () => {
   let fetched = false;
-  const sink = createAnalyticsSink({}, { writeRows: async () => undefined, fetch: (async () => { fetched = true; return new Response(); }) as typeof fetch })!;
+  const sink = createAnalyticsSink(
+    {},
+    {
+      writeRows: async () => undefined,
+      fetch: (async () => {
+        fetched = true;
+        return new Response();
+      }) as typeof fetch,
+    },
+  )!;
   const context = requestContext();
   runWithRequestContext(context, () => dbEvent("write"));
   await sink.write(context);
@@ -173,15 +194,30 @@ test("without a key nothing is sent to PostHog, and without anything there is no
 });
 
 test("sink failures never reach the caller", async () => {
-  const sink = createAnalyticsSink({ POSTHOG_PROJECT_KEY: KEY }, {
-    writeRows: async () => { throw new Error("database down"); },
-    fetch: (async () => { throw new Error("network down"); }) as typeof fetch,
-  })!;
+  const sink = createAnalyticsSink(
+    { POSTHOG_PROJECT_KEY: KEY },
+    {
+      writeRows: async () => {
+        throw new Error("database down");
+      },
+      fetch: (async () => {
+        throw new Error("network down");
+      }) as typeof fetch,
+    },
+  )!;
   const context = requestContext();
   runWithRequestContext(context, () => dbEvent("write"));
   await assert.doesNotReject(sink.write(context));
-  const throwing: AnalyticsSink = { write() { throw new Error("sync failure"); } };
-  assert.doesNotThrow(() => flushRequestAnalytics(context, throwing, () => { throw new Error("no waitUntil"); }));
+  const throwing: AnalyticsSink = {
+    write() {
+      throw new Error("sync failure");
+    },
+  };
+  assert.doesNotThrow(() =>
+    flushRequestAnalytics(context, throwing, () => {
+      throw new Error("no waitUntil");
+    }),
+  );
 });
 
 class RecordingAppConfigStore implements Partial<AppConfigStore> {
@@ -200,13 +236,25 @@ test("the API router records a request's queries after the response via waitUnti
   const pending: Promise<unknown>[] = [];
   const worker = createFeedbackWorker({
     createAppConfigStore: () => new RecordingAppConfigStore() as unknown as AppConfigStore,
-    analytics: () => ({ async write(context) { written.push(context); } }),
+    analytics: () => ({
+      async write(context) {
+        written.push(context);
+      },
+    }),
   });
-  const response = await worker.fetch(new Request("https://kip.example.test/api/app-config?platform=web&build=0", {
-    headers: { "X-Kip-Installation-Id": INSTALLATION, "X-Kip-App-Version": "0.1.0", "X-Kip-Bundle-Id": "abc1234" },
-  }), { POSTHOG_PROJECT_KEY: KEY }, { waitUntil: (promise) => { pending.push(promise); } });
+  const response = await worker.fetch(
+    new Request("https://kip.example.test/api/app-config?platform=web&build=0", {
+      headers: { "X-Kip-Installation-Id": INSTALLATION, "X-Kip-App-Version": "0.1.0", "X-Kip-Bundle-Id": "abc1234" },
+    }),
+    { POSTHOG_PROJECT_KEY: KEY },
+    {
+      waitUntil: (promise) => {
+        pending.push(promise);
+      },
+    },
+  );
   assert.equal(response.status, 200);
-  const body = await response.json() as { analytics: unknown };
+  const body = (await response.json()) as { analytics: unknown };
   assert.deepEqual(body.analytics, { posthogKey: KEY, posthogHost: "https://us.i.posthog.com" });
   assert.equal(pending.length, 1);
   await Promise.all(pending);
@@ -219,7 +267,7 @@ test("the API router records a request's queries after the response via waitUnti
 test("the app config omits analytics without a key", async () => {
   const worker = createFeedbackWorker({ createAppConfigStore: () => new RecordingAppConfigStore() as unknown as AppConfigStore, analytics: () => null });
   const response = await worker.fetch(new Request("https://kip.example.test/api/app-config?platform=web&build=0"), {});
-  assert.equal((await response.json() as { analytics: unknown }).analytics, null);
+  assert.equal(((await response.json()) as { analytics: unknown }).analytics, null);
 });
 
 test("CORS preflights allow the context headers", async () => {

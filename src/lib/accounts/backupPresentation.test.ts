@@ -26,4 +26,9 @@ describe("account backup presentation", () => {
     expect(settingsAccountSubtitle("authenticated", "success", true)).toBe("Backed up");
     expect(settingsAccountSubtitle("authenticated", "idle", false)).toBe("Not backed up yet");
   });
+
+  it("asks a guest account to back up with Google", () => {
+    expect(settingsAccountSubtitle("authenticated", "success", true, true)).toBe("Guest · back up with Google");
+    expect(settingsAccountSubtitle("guest", "idle", false, true)).toBe("Sign in to plant your flag");
+  });
 });

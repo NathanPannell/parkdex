@@ -4,7 +4,17 @@ import { linkHandler } from "../router";
 import { formatCount, fullDate, Icon, Notice, PageHeader, Spinner, Tabs, timeAgo, useConfirm, useToast, EmptyState } from "../ui";
 import { ParkMap } from "./ParkMap";
 import { notifyReviewsChanged, useReviewCount } from "./reviewCount";
-import { FLAG_LABELS, REVIEW_REASONS, title, type Position, type ReviewDetail, type ReviewItem, type ReviewList, type ReviewReasonCode, type ReviewStatus } from "./types";
+import {
+  FLAG_LABELS,
+  REVIEW_REASONS,
+  title,
+  type Position,
+  type ReviewDetail,
+  type ReviewItem,
+  type ReviewList,
+  type ReviewReasonCode,
+  type ReviewStatus,
+} from "./types";
 
 /**
  * /parks/review: players' requests for a manual review of a founding photo the check turned
@@ -24,17 +34,21 @@ const STATUSES: Array<{ id: ReviewStatus | "all"; label: string }> = [
 export function ParksTabs({ current }: { current: "/parks" | "/parks/review" }) {
   const pending = useReviewCount();
   return (
-    <Tabs label="Parks pages" value={current} items={[
-      { id: "/parks", label: "Catalogue", icon: "park", href: "/parks" },
-      { id: "/parks/review", label: "Review", icon: "check", href: "/parks/review", count: pending || undefined },
-    ]} />
+    <Tabs
+      label="Parks pages"
+      value={current}
+      items={[
+        { id: "/parks", label: "Catalogue", icon: "park", href: "/parks" },
+        { id: "/parks/review", label: "Review", icon: "check", href: "/parks/review", count: pending || undefined },
+      ]}
+    />
   );
 }
 
 function readParams(): { status: ReviewStatus | "all"; id: string | null } {
   const params = new URLSearchParams(window.location.search);
   const status = params.get("status");
-  return { status: STATUSES.some((item) => item.id === status) ? status as ReviewStatus | "all" : "pending", id: params.get("id") };
+  return { status: STATUSES.some((item) => item.id === status) ? (status as ReviewStatus | "all") : "pending", id: params.get("id") };
 }
 
 function writeParams(status: string, id: string | null) {
@@ -47,7 +61,8 @@ function writeParams(status: string, id: string | null) {
 
 /** A ring around the player's position as wide as the reported accuracy, drawn as the map's sketch. */
 function accuracyRing(lng: number, lat: number, radiusM: number, sides = 48): Position[] {
-  const kx = 111_320 * Math.cos((lat * Math.PI) / 180), ky = 110_540;
+  const kx = 111_320 * Math.cos((lat * Math.PI) / 180),
+    ky = 110_540;
   return Array.from({ length: sides }, (_, index) => {
     const angle = (index / sides) * Math.PI * 2;
     return [lng + (Math.cos(angle) * radiusM) / kx, lat + (Math.sin(angle) * radiusM) / ky] as Position;
@@ -71,16 +86,24 @@ function percent(value: number | undefined): string {
 function Row({ item, active, onOpen }: { item: ReviewItem; active: boolean; onOpen(): void }) {
   return (
     <button type="button" className={`rv-row${active ? " is-active" : ""}`} onClick={onOpen} aria-current={active ? "true" : undefined}>
-      {item.hasPhoto
-        ? <img className="rv-thumb" src={`/api/parks/review/${item.id}/photo`} alt="" loading="lazy" width={64} height={48} />
-        : <span className="rv-thumb rv-thumb--gone"><Icon name="image" size={18} /></span>}
+      {item.hasPhoto ? (
+        <img className="rv-thumb" src={`/api/parks/review/${item.id}/photo`} alt="" loading="lazy" width={64} height={48} />
+      ) : (
+        <span className="rv-thumb rv-thumb--gone">
+          <Icon name="image" size={18} />
+        </span>
+      )}
       <span className="rv-row__main">
         <strong>{item.parkName}</strong>
-        <span>@{item.handle ?? "deleted account"} · {timeAgo(item.createdAt)}</span>
+        <span>
+          @{item.handle ?? "deleted account"} · {timeAgo(item.createdAt)}
+        </span>
       </span>
-      {item.status === "pending"
-        ? <span className={`rv-chip rv-chip--${item.outcome}`}>{outcomeLabel(item)}</span>
-        : <span className={`rv-chip rv-chip--${item.status}`}>{title(item.status)}</span>}
+      {item.status === "pending" ? (
+        <span className={`rv-chip rv-chip--${item.outcome}`}>{outcomeLabel(item)}</span>
+      ) : (
+        <span className={`rv-chip rv-chip--${item.status}`}>{title(item.status)}</span>
+      )}
     </button>
   );
 }
@@ -107,25 +130,40 @@ function CheckAnswers({ detail }: { detail: ReviewDetail }) {
         {verdict ? (
           <div className="rv-bar rv-bar--verdict">
             <span>Approve</span>
-            <span className="rv-bar__track"><span style={{ width: percent(verdict.approve) }} /></span>
+            <span className="rv-bar__track">
+              <span style={{ width: percent(verdict.approve) }} />
+            </span>
             <strong>{percent(verdict.approve)}</strong>
           </div>
         ) : null}
         {flags.map((flag) => {
           const yes = answers[flag]?.probabilities?.yes;
           return (
-            <div key={flag} className={`rv-bar${typeof yes === "number" && yes > limit(flag) ? " is-flagged" : ""}`} title={`Counts above ${percent(limit(flag))}`}>
+            <div
+              key={flag}
+              className={`rv-bar${typeof yes === "number" && yes > limit(flag) ? " is-flagged" : ""}`}
+              title={`Counts above ${percent(limit(flag))}`}
+            >
               <span>{FLAG_LABELS[flag]}</span>
-              <span className="rv-bar__track"><span style={{ width: percent(yes) }} /><i className="rv-bar__tick" style={{ left: percent(limit(flag)) }} /></span>
+              <span className="rv-bar__track">
+                <span style={{ width: percent(yes) }} />
+                <i className="rv-bar__tick" style={{ left: percent(limit(flag)) }} />
+              </span>
               <strong>{percent(yes)}</strong>
             </div>
           );
         })}
       </div>
       <p className="muted rv-check__model">
-        {!moderation ? "No answers were stored for this check."
-          : verdict ? <>{moderation.model ?? "Unknown model"} · approves at {percent(moderation.threshold ?? undefined)} and no flag above 50%</>
-          : <>{moderation.model ?? "Unknown model"} · approves when no flag is above its mark</>}
+        {!moderation ? (
+          "No answers were stored for this check."
+        ) : verdict ? (
+          <>
+            {moderation.model ?? "Unknown model"} · approves at {percent(moderation.threshold ?? undefined)} and no flag above 50%
+          </>
+        ) : (
+          <>{moderation.model ?? "Unknown model"} · approves when no flag is above its mark</>
+        )}
       </p>
     </section>
   );
@@ -137,9 +175,14 @@ function Decision({ detail }: { detail: ReviewDetail }) {
     return (
       <div className="rv-decided rv-decided--approved">
         <Icon name="check" size={20} />
-        <p>Approved {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}. <strong>@{detail.handle ?? "deleted account"}</strong> founded{" "}
-          <a href={`/parks/${parkId}`} onClick={linkHandler(`/parks/${parkId}`)}>{detail.parkName}</a> with this photo as its cover.
-          {detail.seenAt ? " The player has seen it." : " The player sees it the next time they open the app."}</p>
+        <p>
+          Approved {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}. <strong>@{detail.handle ?? "deleted account"}</strong> founded{" "}
+          <a href={`/parks/${parkId}`} onClick={linkHandler(`/parks/${parkId}`)}>
+            {detail.parkName}
+          </a>{" "}
+          with this photo as its cover.
+          {detail.seenAt ? " The player has seen it." : " The player sees it the next time they open the app."}
+        </p>
       </div>
     );
   }
@@ -147,14 +190,20 @@ function Decision({ detail }: { detail: ReviewDetail }) {
     return (
       <div className="rv-decided rv-decided--rejected">
         <Icon name="close" size={20} />
-        <p>Rejected {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}. The player reads: <q>{detail.reason}</q>{detail.seenAt ? " (seen)" : ""}</p>
+        <p>
+          Rejected {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}. The player reads: <q>{detail.reason}</q>
+          {detail.seenAt ? " (seen)" : ""}
+        </p>
       </div>
     );
   }
   return (
     <div className="rv-decided">
       <Icon name="flag" size={20} />
-      <p>Superseded {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}: {detail.park.founder ? <>@{detail.park.founder.handle ?? "deleted account"} founded it first.</> : "the park was founded another way first."}</p>
+      <p>
+        Superseded {detail.decidedAt ? timeAgo(detail.decidedAt) : ""}:{" "}
+        {detail.park.founder ? <>@{detail.park.founder.handle ?? "deleted account"} founded it first.</> : "the park was founded another way first."}
+      </p>
     </div>
   );
 }
@@ -168,15 +217,18 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
   const [reasonCode, setReasonCode] = useState<ReviewReasonCode | null>(null);
   const [reason, setReason] = useState("");
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setError("");
-    try {
-      const loaded = await api<{ request: ReviewDetail }>(`/api/parks/review/${id}`, { signal });
-      setDetail(loaded.request);
-    } catch (reason) {
-      if (!signal?.aborted) setError(errorText(reason, "Could not load this request."));
-    }
-  }, [id]);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      setError("");
+      try {
+        const loaded = await api<{ request: ReviewDetail }>(`/api/parks/review/${id}`, { signal });
+        setDetail(loaded.request);
+      } catch (reason) {
+        if (!signal?.aborted) setError(errorText(reason, "Could not load this request."));
+      }
+    },
+    [id],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -187,12 +239,26 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
     return () => controller.abort();
   }, [load]);
 
-  if (error) return <div className="rv-detail"><Notice tone="error">{error}</Notice></div>;
-  if (!detail) return <div className="rv-detail rv-detail--loading"><Spinner /> Opening request...</div>;
+  if (error)
+    return (
+      <div className="rv-detail">
+        <Notice tone="error">{error}</Notice>
+      </div>
+    );
+  if (!detail)
+    return (
+      <div className="rv-detail rv-detail--loading">
+        <Spinner /> Opening request...
+      </div>
+    );
 
   const pending = detail.status === "pending";
   const newPark = Boolean(detail.osm) && !detail.park.inParkdex;
-  const blocked = detail.park.founder ? `@${detail.park.founder.handle ?? "deleted account"} founded this park ${timeAgo(detail.park.founder.foundedAt)}.` : detail.park.hidden ? "This park is hidden." : null;
+  const blocked = detail.park.founder
+    ? `@${detail.park.founder.handle ?? "deleted account"} founded this park ${timeAgo(detail.park.founder.foundedAt)}.`
+    : detail.park.hidden
+      ? "This park is hidden."
+      : null;
   const photoUrl = `/api/parks/review/${detail.id}/photo`;
   const pin: Position = [detail.position.lng, detail.position.lat];
   const ring = accuracyRing(detail.position.lng, detail.position.lat, Math.max(detail.position.accuracyM, 3));
@@ -223,23 +289,40 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
       confirmLabel: "Approve and found",
       body: (
         <>
-          <p><strong>@{detail.handle ?? "deleted account"}</strong> becomes the founder, this photo becomes the public cover, and they earn the 10 founder points.</p>
+          <p>
+            <strong>@{detail.handle ?? "deleted account"}</strong> becomes the founder, this photo becomes the public cover, and they earn the 10 founder
+            points.
+          </p>
           <ul>
-            {newPark && <li>The OpenStreetMap outline is published as a new Parkdex park in the same change, so every player's app gets it on its next sync.</li>}
+            {newPark && (
+              <li>The OpenStreetMap outline is published as a new Parkdex park in the same change, so every player's app gets it on its next sync.</li>
+            )}
             <li>No flag is planted and no visit is recorded. Flags still need a real visit.</li>
-            {detail.otherPending > 0 && <li>{detail.otherPending} other pending {detail.otherPending === 1 ? "request" : "requests"} for this park close as superseded.</li>}
+            {detail.otherPending > 0 && (
+              <li>
+                {detail.otherPending} other pending {detail.otherPending === 1 ? "request" : "requests"} for this park close as superseded.
+              </li>
+            )}
             <li>The player sees "You're the founder of {detail.parkName}" the next time they open the app.</li>
           </ul>
         </>
       ),
     });
     if (!confirmed) return;
-    await decide("approve", () => api(`/api/parks/review/${detail.id}/approve`, { method: "POST" }), `${detail.parkName} was founded by @${detail.handle ?? "the player"}`);
+    await decide(
+      "approve",
+      () => api(`/api/parks/review/${detail.id}/approve`, { method: "POST" }),
+      `${detail.parkName} was founded by @${detail.handle ?? "the player"}`,
+    );
   }
 
   async function reject() {
     if (!detail || !reasonCode) return;
-    await decide("reject", () => api(`/api/parks/review/${detail.id}/reject`, { method: "POST", body: JSON.stringify({ reasonCode, reason: typedReason || undefined }) }), "The request was rejected");
+    await decide(
+      "reject",
+      () => api(`/api/parks/review/${detail.id}/reject`, { method: "POST", body: JSON.stringify({ reasonCode, reason: typedReason || undefined }) }),
+      "The request was rejected",
+    );
   }
 
   function pick(code: ReviewReasonCode) {
@@ -252,10 +335,26 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
       <header className="rv-detail__head">
         <div>
           <p className="eyebrow">
-            {newPark ? <>New OpenStreetMap park · {detail.osm!.type} {detail.osm!.id}</> : <>Parkdex park · <a href={`/parks/${detail.parkId}`} onClick={linkHandler(`/parks/${detail.parkId}`)}>{detail.parkId}</a></>}
+            {newPark ? (
+              <>
+                New OpenStreetMap park · {detail.osm!.type} {detail.osm!.id}
+              </>
+            ) : (
+              <>
+                Parkdex park ·{" "}
+                <a href={`/parks/${detail.parkId}`} onClick={linkHandler(`/parks/${detail.parkId}`)}>
+                  {detail.parkId}
+                </a>
+              </>
+            )}
           </p>
-          <h2 id="rv-detail-title">{detail.parkName} <span className={`rv-status rv-status--${detail.status}`}>{title(detail.status)}</span></h2>
-          <p className="muted rv-detail__meta">Asked {timeAgo(detail.createdAt)} by <strong>@{detail.handle ?? "deleted account"}</strong>{detail.otherPending > 0 && <> · {detail.otherPending} more pending for this park</>}</p>
+          <h2 id="rv-detail-title">
+            {detail.parkName} <span className={`rv-status rv-status--${detail.status}`}>{title(detail.status)}</span>
+          </h2>
+          <p className="muted rv-detail__meta">
+            Asked {timeAgo(detail.createdAt)} by <strong>@{detail.handle ?? "deleted account"}</strong>
+            {detail.otherPending > 0 && <> · {detail.otherPending} more pending for this park</>}
+          </p>
         </div>
       </header>
 
@@ -265,17 +364,44 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
         <figure className="rv-photo">
           {detail.photo.bytes !== null ? (
             <a href={photoUrl} target="_blank" rel="noreferrer" title="Open the full photo">
-              <img src={photoUrl} alt={`The photo @${detail.handle ?? "player"} took at ${detail.parkName}`} width={detail.photo.width} height={detail.photo.height} />
+              <img
+                src={photoUrl}
+                alt={`The photo @${detail.handle ?? "player"} took at ${detail.parkName}`}
+                width={detail.photo.width}
+                height={detail.photo.height}
+              />
             </a>
-          ) : <div className="rv-photo__gone"><Icon name="image" size={28} /> The photo was removed 90 days after the decision.</div>}
-          <figcaption>{detail.photo.width} × {detail.photo.height} · {bytes(detail.photo.bytes)} · location and camera details removed</figcaption>
+          ) : (
+            <div className="rv-photo__gone">
+              <Icon name="image" size={28} /> The photo was removed 90 days after the decision.
+            </div>
+          )}
+          <figcaption>
+            {detail.photo.width} × {detail.photo.height} · {bytes(detail.photo.bytes)} · location and camera details removed
+          </figcaption>
         </figure>
         <div className="rv-side">
           <dl className="rv-facts">
-            <div><dt>Player</dt><dd>@{detail.handle ?? "deleted account"}</dd></div>
-            <div><dt>Taken</dt><dd title={fullDate(detail.checkedAt)}>{fullDate(detail.checkedAt)} ({timeAgo(detail.checkedAt)})</dd></div>
-            <div><dt>Position</dt><dd>{detail.position.lat.toFixed(5)}, {detail.position.lng.toFixed(5)} · ±{formatCount(Math.round(detail.position.accuracyM))} m</dd></div>
-            <div><dt>Founder</dt><dd>{detail.park.founder ? `@${detail.park.founder.handle ?? "deleted account"}` : "None yet"}</dd></div>
+            <div>
+              <dt>Player</dt>
+              <dd>@{detail.handle ?? "deleted account"}</dd>
+            </div>
+            <div>
+              <dt>Taken</dt>
+              <dd title={fullDate(detail.checkedAt)}>
+                {fullDate(detail.checkedAt)} ({timeAgo(detail.checkedAt)})
+              </dd>
+            </div>
+            <div>
+              <dt>Position</dt>
+              <dd>
+                {detail.position.lat.toFixed(5)}, {detail.position.lng.toFixed(5)} · ±{formatCount(Math.round(detail.position.accuracyM))} m
+              </dd>
+            </div>
+            <div>
+              <dt>Founder</dt>
+              <dd>{detail.park.founder ? `@${detail.park.founder.handle ?? "deleted account"}` : "None yet"}</dd>
+            </div>
           </dl>
           <CheckAnswers detail={detail} />
         </div>
@@ -296,27 +422,62 @@ function Detail({ id, onDecided }: { id: string; onDecided(next: { decidedId: st
             <h3>Approve</h3>
             <p className="muted">Founds the park with this photo as its cover and pays the founder bonus. No flag.</p>
             <button type="button" className="button button--primary" onClick={() => void approve()} disabled={busy !== null || Boolean(blocked)}>
-              {busy === "approve" ? <><Spinner small /> Founding</> : <><Icon name="check" size={16} /> Approve...</>}
+              {busy === "approve" ? (
+                <>
+                  <Spinner small /> Founding
+                </>
+              ) : (
+                <>
+                  <Icon name="check" size={16} /> Approve...
+                </>
+              )}
             </button>
           </section>
           <section className="rv-decide__card">
             <h3>Reject</h3>
             <div className="rv-reasons" role="radiogroup" aria-label="Reason">
               {REVIEW_REASONS.map((item) => (
-                <button key={item.code} type="button" role="radio" aria-checked={reasonCode === item.code} className={`chip-toggle${reasonCode === item.code ? " is-on" : ""}`} onClick={() => pick(item.code)}>{item.label}</button>
+                <button
+                  key={item.code}
+                  type="button"
+                  role="radio"
+                  aria-checked={reasonCode === item.code}
+                  className={`chip-toggle${reasonCode === item.code ? " is-on" : ""}`}
+                  onClick={() => pick(item.code)}
+                >
+                  {item.label}
+                </button>
               ))}
             </div>
             <label className="field">
               <span>What the player reads</span>
-              <textarea rows={2} maxLength={300} value={reason} placeholder={reasonCode === "other" ? "Write a short reason." : "Pick a reason above, then edit it if you like."}
-                onChange={(event) => { setReason(event.target.value); if (!reasonCode) setReasonCode("other"); }} />
+              <textarea
+                rows={2}
+                maxLength={300}
+                value={reason}
+                placeholder={reasonCode === "other" ? "Write a short reason." : "Pick a reason above, then edit it if you like."}
+                onChange={(event) => {
+                  setReason(event.target.value);
+                  if (!reasonCode) setReasonCode("other");
+                }}
+              />
             </label>
             <button type="button" className="button button--danger" onClick={() => void reject()} disabled={busy !== null || !canReject}>
-              {busy === "reject" ? <><Spinner small /> Rejecting</> : <><Icon name="close" size={16} /> Reject</>}
+              {busy === "reject" ? (
+                <>
+                  <Spinner small /> Rejecting
+                </>
+              ) : (
+                <>
+                  <Icon name="close" size={16} /> Reject
+                </>
+              )}
             </button>
           </section>
         </div>
-      ) : <Decision detail={detail} />}
+      ) : (
+        <Decision detail={detail} />
+      )}
     </article>
   );
 }
@@ -338,7 +499,9 @@ export function ReviewPage() {
         // Open the oldest request unless one is already chosen.
         setSelected((current) => current ?? loaded.requests[0]?.id ?? null);
       })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(errorText(reason, "Could not load the review queue.")); });
+      .catch((reason: unknown) => {
+        if (!controller.signal.aborted) setError(errorText(reason, "Could not load the review queue."));
+      });
     return () => controller.abort();
   }, [status, reload]);
 
@@ -372,20 +535,39 @@ export function ReviewPage() {
         lede="Players ask for a second look when the photo check turns down their founding photo. Approve to found the park with that photo as its cover, or reject with a reason they will read."
         actions={<ParksTabs current="/parks/review" />}
       />
-      {error && <Notice tone="error" action={<button type="button" className="text-button" onClick={() => setReload((value) => value + 1)}>Try again</button>}>{error}</Notice>}
+      {error && (
+        <Notice
+          tone="error"
+          action={
+            <button type="button" className="text-button" onClick={() => setReload((value) => value + 1)}>
+              Try again
+            </button>
+          }
+        >
+          {error}
+        </Notice>
+      )}
       {list && !list.available && <Notice>Not in this database yet: founding reviews arrive with the founders_002 migration.</Notice>}
 
       <div className="rv-body">
         <aside className="rv-queue" aria-label="Requests">
           <div className="rv-queue__filter">
-            <Tabs label="Status" value={status} onChange={choose} items={STATUSES.map((item) => ({
-              id: item.id, label: item.label,
-              count: counts ? (item.id === "all" ? total : counts[item.id as ReviewStatus]) : undefined,
-            }))} />
+            <Tabs
+              label="Status"
+              value={status}
+              onChange={choose}
+              items={STATUSES.map((item) => ({
+                id: item.id,
+                label: item.label,
+                count: counts ? (item.id === "all" ? total : counts[item.id as ReviewStatus]) : undefined,
+              }))}
+            />
           </div>
           <div className="rv-queue__list">
             {!list && !error && Array.from({ length: 4 }, (_, index) => <div key={index} className="pm-row--skeleton" />)}
-            {list?.requests.map((item) => <Row key={item.id} item={item} active={item.id === selected} onOpen={() => setSelected(item.id)} />)}
+            {list?.requests.map((item) => (
+              <Row key={item.id} item={item} active={item.id === selected} onOpen={() => setSelected(item.id)} />
+            ))}
             {list && list.available && !list.requests.length && (
               <EmptyState compact pose={status === "pending" ? "celebrate" : "sleep"} title={status === "pending" ? "Nothing to review" : "No requests here"}>
                 <p className="muted">{status === "pending" ? "New requests appear here, oldest first." : "Requests move here when they are decided."}</p>
@@ -393,8 +575,12 @@ export function ReviewPage() {
             )}
           </div>
         </aside>
-        {selected ? <Detail key={selected} id={selected} onDecided={decided} /> : (
-          <div className="rv-detail rv-detail--empty"><p className="muted">Pick a request to see the photo, the check's answers and where the player stood.</p></div>
+        {selected ? (
+          <Detail key={selected} id={selected} onDecided={decided} />
+        ) : (
+          <div className="rv-detail rv-detail--empty">
+            <p className="muted">Pick a request to see the photo, the check's answers and where the player stood.</p>
+          </div>
         )}
       </div>
     </section>

@@ -11,16 +11,42 @@ import { insidePark } from "../../lib/boundaries";
 import { buzz, sfx } from "../../lib/feedback";
 import { startPhotoCapture } from "../../lib/captureMode";
 import {
-  canFound, checkFlags, defaultPark, foundBackAction, formatHectares, founderCapture, founderLine, foundPark, FounderError, isFreshFix, MAX_FOUND_ACCURACY_M, parkKey, parkLabel, requestFoundingReview,
-  REVIEW_HINT, reviewButton, reviewProblem, scanParks, targetFor,
-  type ContainingPark, type DeviceFix, type FoundResult, type FoundTarget, type PhotoFlag, type ReviewState,
+  canFound,
+  checkFlags,
+  defaultPark,
+  foundBackAction,
+  formatHectares,
+  founderCapture,
+  founderLine,
+  foundPark,
+  dexCropFromCover,
+  FounderError,
+  isFreshFix,
+  MAX_FOUND_ACCURACY_M,
+  parkKey,
+  parkLabel,
+  requestFoundingReview,
+  REVIEW_HINT,
+  reviewButton,
+  reviewProblem,
+  scanParks,
+  targetFor,
+  type ContainingPark,
+  type DeviceFix,
+  type FoundResult,
+  type FoundTarget,
+  type PhotoFlag,
+  type ReviewState,
 } from "../../lib/founders";
 import { createVisitId } from "../../lib/game/client";
 import { useGame } from "../../lib/game/GameProvider";
 import type { Boundary, LngLat } from "../../lib/geo";
 import { currentFix } from "../../lib/native";
 import type { Park } from "../../lib/parks";
-import type { EncodedPhoto } from "../../lib/photoEncode";
+import type { CapturedPhoto, EncodedPhoto } from "../../lib/photoEncode";
+import { useContent } from "../../lib/content/provider";
+import { useSaveDexPhoto } from "../../lib/dex/useDex";
+import { useToast } from "../../components/Toast";
 import { captureProductEvent } from "../../lib/productAnalytics";
 import { FoundCelebration } from "./FoundCelebration";
 import "../../found-park.css";
@@ -118,6 +144,11 @@ function AboveNav({ children }: { children: ReactNode }) {
 export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onSignIn, onClose, onFounded }: Props) {
   const auth = useAuth();
   const game = useGame();
+  const content = useContent();
+  const saveDexPhoto = useSaveDexPhoto();
+  const toast = useToast();
+  // The photo the player took, so an approved founder photo also goes in their Dex: one photo, two jobs.
+  const captured = useRef<CapturedPhoto | null>(null);
   const [accountId] = useState(() => auth.ownerAccountId);
   const [step, setStep] = useState<Step>({ kind: "locating" });
   const [fix, setFix] = useState<DeviceFix | null>(null);
@@ -135,16 +166,19 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   parksRef.current = parks;
   fixRef.current = fix;
 
-  const choices: Choice[] = park && boundary
-    ? [{ key: `park/${park.id}`, label: park.name, target: { parkId: park.id }, geometry: boundary }]
-    : parks.filter(canFound).map((item) => ({ key: parkKey(item), label: parkLabel(item), target: targetFor(item), geometry: item.geometry }));
+  const choices: Choice[] =
+    park && boundary
+      ? [{ key: `park/${park.id}`, label: park.name, target: { parkId: park.id }, geometry: boundary }]
+      : parks.filter(canFound).map((item) => ({ key: parkKey(item), label: parkLabel(item), target: targetFor(item), geometry: item.geometry }));
   const choice = choices.find((item) => item.key === selected) ?? null;
   const scanningNow = step.kind === "locating" || step.kind === "scanning";
 
   useEffect(() => {
     live.current = true;
     captureProductEvent("found_park_started", { entry: park ? "sheet" : "menu" });
-    return () => { live.current = false; };
+    return () => {
+      live.current = false;
+    };
   }, []);
 
   // Locate, then scan. A sheet's park skips the scan: its own boundary is checked here and on the server.
@@ -167,7 +201,13 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       mapRef.current?.easeTo({ center: next.point, zoom: Math.max(mapRef.current.getZoom(), 15.5), duration: 900 });
       if (next.accuracy > MAX_FOUND_ACCURACY_M) {
         await wait(Math.max(0, MIN_SCAN_MS - (Date.now() - started)));
-        if (!controller.signal.aborted) setStep({ kind: "problem", message: "Your location is not precise enough.", detail: `It's within ${Math.round(next.accuracy)} m right now. Step into the open, wait a moment and scan again.`, action: "scan" });
+        if (!controller.signal.aborted)
+          setStep({
+            kind: "problem",
+            message: "Your location is not precise enough.",
+            detail: `It's within ${Math.round(next.accuracy)} m right now. Step into the open, wait a moment and scan again.`,
+            action: "scan",
+          });
         return;
       }
       setStep({ kind: "scanning" });
@@ -176,7 +216,12 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
           await wait(Math.max(0, MIN_SCAN_MS - (Date.now() - started)));
           if (controller.signal.aborted) return;
           if (!insidePark(next.point, boundary, next.accuracy)) {
-            setStep({ kind: "problem", message: `You're not inside ${park.name} yet.`, detail: "Get inside the park's boundary, then try again.", action: "scan" });
+            setStep({
+              kind: "problem",
+              message: `You're not inside ${park.name} yet.`,
+              detail: "Get inside the park's boundary, then try again.",
+              action: "scan",
+            });
             return;
           }
           setSelected(`park/${park.id}`);
@@ -211,26 +256,32 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       const el = document.createElement("div");
       el.className = "found-radar";
       el.setAttribute("aria-hidden", "true");
-      el.innerHTML = '<span class="found-radar__sweep"></span><span class="found-radar__ring"></span><span class="found-radar__ring found-radar__ring--2"></span><span class="found-radar__core"></span>';
+      el.innerHTML =
+        '<span class="found-radar__sweep"></span><span class="found-radar__ring"></span><span class="found-radar__ring found-radar__ring--2"></span><span class="found-radar__core"></span>';
       radar.current = new Marker({ element: el }).setLngLat(ringAt).addTo(map);
     } else {
       radar.current.setLngLat(ringAt);
     }
   }, [mapRef, scanningNow, ringAt?.[0], ringAt?.[1]]);
 
-  useEffect(() => () => {
-    radar.current?.remove();
-    radar.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      radar.current?.remove();
+      radar.current = null;
+    },
+    [],
+  );
 
   // Outlines on the map: the picked one strong, others light, founded ones grey.
   const shown = step.kind === "results" || step.kind === "problem";
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const outlines = !shown ? [] : park && boundary
-      ? [{ key: `park/${park.id}`, geometry: boundary, open: true }]
-      : parks.map((item) => ({ key: parkKey(item), geometry: item.geometry, open: canFound(item) }));
+    const outlines = !shown
+      ? []
+      : park && boundary
+        ? [{ key: `park/${park.id}`, geometry: boundary, open: true }]
+        : parks.map((item) => ({ key: parkKey(item), geometry: item.geometry, open: canFound(item) }));
     const data = collection(outlines, selected);
     const source = map.getSource(SOURCE) as GeoJSONSource | undefined;
     if (source) source.setData(data);
@@ -258,12 +309,15 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
     }
   }, [mapRef, parks, selected, shown, park, boundary]);
 
-  useEffect(() => () => {
-    const map = mapRef.current;
-    if (!map) return;
-    for (const layer of [LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
-    if (map.getSource(SOURCE)) map.removeSource(SOURCE);
-  }, [mapRef]);
+  useEffect(
+    () => () => {
+      const map = mapRef.current;
+      if (!map) return;
+      for (const layer of [LINE, FILL]) if (map.getLayer(layer)) map.removeLayer(layer);
+      if (map.getSource(SOURCE)) map.removeSource(SOURCE);
+    },
+    [mapRef],
+  );
 
   // Tapping an outline picks it.
   useEffect(() => {
@@ -343,7 +397,11 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
     try {
       const result = await foundPark(accountId, {
         attemptId: attemptId.current,
-        position: { lat: Number(position.point[1].toFixed(6)), lng: Number(position.point[0].toFixed(6)), accuracyM: Math.max(1, Math.round(position.accuracy)) },
+        position: {
+          lat: Number(position.point[1].toFixed(6)),
+          lng: Number(position.point[0].toFixed(6)),
+          accuracyM: Math.max(1, Math.round(position.accuracy)),
+        },
         target,
         photo: { mime: "image/jpeg", base64: picture.base64, width: picture.width, height: picture.height },
       });
@@ -353,6 +411,14 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         captureProductEvent("found_park_completed", { source: "osm" in target ? "osm" : "catalogue", visit: result.visit?.outcome ?? null });
         setStep({ kind: "founded", result });
         onFounded(result.park.id);
+        // A park that was new a moment ago may not be in the catalogue yet; then only the cover is kept.
+        const dexPark = content?.parkById.get(result.park.id);
+        const shot = captured.current;
+        if (dexPark && shot) {
+          // The Dex shows photos at 3:4, so its copy is re-framed from the cover's wide crop.
+          const crop = dexCropFromCover(shot.crop, shot.original.width, shot.original.height);
+          void saveDexPhoto(dexPark, { ...shot, crop }).catch(() => toast("Your photo couldn't be added to your Dex. Add it from the park page.", "kip"));
+        }
         return;
       }
       const flags = checkFlags(result);
@@ -424,7 +490,13 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   if (step.kind === "founded" && photo) {
     return (
       <AboveNav>
-        <FoundCelebration result={step.result} photo={photo.dataUrl} photoAspect={photo.width / photo.height} flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null} onClose={onClose} />
+        <FoundCelebration
+          result={step.result}
+          photo={photo.dataUrl}
+          photoAspect={photo.width / photo.height}
+          flagSeed={game.me?.player?.flagSeed ?? game.me?.flagSeed ?? null}
+          onClose={onClose}
+        />
       </AboveNav>
     );
   }
@@ -432,10 +504,22 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
   const allFounded = !park && step.kind === "results" && parks.length > 0 && !parks.some(canFound);
   const firstFounder = parks.find((item) => item.founder)?.founder?.handle ?? null;
 
-  const instruction = step.kind === "locating" ? "Finding you…"
-    : step.kind === "scanning" ? (park ? `Checking you're inside ${park.name}…` : "Looking for mapped parks around you…")
-      : step.kind === "results" && choice ? "Take its photo to be the founder."
-        : "Stand in a park to be its founder.";
+  const instruction =
+    step.kind === "locating"
+      ? "Finding you…"
+      : step.kind === "scanning"
+        ? park
+          ? `Checking you're inside ${park.name}…`
+          : "Looking for mapped parks around you…"
+        : (step.kind === "results" && choice) || step.kind === "camera" || step.kind === "rejected" || step.kind === "retry"
+          ? "Take its photo to be the founder."
+          : step.kind === "checking"
+            ? "Checking your photo…"
+            : step.kind === "review_sent"
+              ? "Your photo is with a person now."
+              : step.kind === "taken"
+                ? "This park has a founder now."
+                : "Stand in a park to be its founder.";
   const busyStep = step.kind === "checking" || step.kind === "rejected" || step.kind === "retry" || step.kind === "taken" || step.kind === "review_sent";
   const review = step.kind === "rejected" ? reviewButton(step.review, step.reviewable) : null;
   const sendingReview = step.kind === "rejected" && step.review.kind === "sending";
@@ -453,7 +537,13 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
       </div>
 
       {!busyStep && step.kind !== "camera" && (
-        <motion.div className="found-sheet card" ref={sheet} initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 380, damping: 30 }}>
+        <motion.div
+          className="found-sheet card"
+          ref={sheet}
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+        >
           {scanningNow ? (
             <div className="found-status" role="status">
               <span className="found-status__spinner" aria-hidden="true" />
@@ -470,8 +560,14 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 {step.detail && <span>{step.detail}</span>}
               </div>
               <div className="found-row">
-                {step.action === "scan" && <button className="btn btn--sm" onClick={rescan}><Icon name="refresh" size={16} /> Try again</button>}
-                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                {step.action === "scan" && (
+                  <button className="btn btn--sm" onClick={rescan}>
+                    <Icon name="refresh" size={16} /> Try again
+                  </button>
+                )}
+                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>
+                  Close
+                </button>
               </div>
             </div>
           ) : !park && parks.length === 0 ? (
@@ -482,8 +578,12 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 <span>To become a park's founder, stand inside its outline on OpenStreetMap. Head into a park and scan again.</span>
               </div>
               <div className="found-row">
-                <button className="btn btn--sm" onClick={rescan}><Icon name="refresh" size={16} /> Scan again</button>
-                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                <button className="btn btn--sm" onClick={rescan}>
+                  <Icon name="refresh" size={16} /> Scan again
+                </button>
+                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>
+                  Close
+                </button>
               </div>
             </div>
           ) : allFounded ? (
@@ -494,7 +594,9 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                 <span>Every park has one founder. You can still plant your flag here.</span>
               </div>
               <div className="found-row">
-                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Back to the map</button>
+                <button className="btn btn--sm btn--paper" onClick={() => onClose()}>
+                  Back to the map
+                </button>
               </div>
             </div>
           ) : (
@@ -553,6 +655,7 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               onClose={() => setStep({ kind: "results" })}
               onUse={(picture) => {
                 // Moderation and the public cover use the player's crop, not the whole photo.
+                captured.current = picture;
                 setPhoto(picture.cropped);
                 void check(picture.cropped, choice.target);
               }}
@@ -563,7 +666,12 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         <AnimatePresence>
           {busyStep && photo && (
             <motion.div key="check" className="found-check" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <motion.div className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}${photo.width > photo.height ? " is-landscape" : ""}`} initial={{ scale: 0.9, rotate: 0 }} animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}>
+              <motion.div
+                className={`polaroid found-check__photo${step.kind === "checking" ? " is-checking" : ""}${photo.width > photo.height ? " is-landscape" : ""}`}
+                initial={{ scale: 0.9, rotate: 0 }}
+                animate={{ scale: 1, rotate: step.kind === "rejected" ? 2 : -3 }}
+                transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              >
                 <div className="polaroid__img" style={{ aspectRatio: `${photo.width} / ${photo.height}` }}>
                   <img src={photo.dataUrl} alt="Your photo" />
                   {step.kind === "checking" && <span className="found-check__scan" aria-hidden="true" />}
@@ -586,19 +694,29 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                     <ul className="found-flags">
                       {step.flags.map((flag) => (
                         <li key={flag.code}>
-                          <span className="found-flags__icon"><Icon name={FLAG_ICONS[flag.code] ?? "camera"} size={18} /></span>
+                          <span className="found-flags__icon">
+                            <Icon name={FLAG_ICONS[flag.code] ?? "camera"} size={18} />
+                          </span>
                           <span>{flag.message}</span>
                         </li>
                       ))}
                     </ul>
                     <div className="found-row">
-                      <button className="btn btn--sm" onClick={openCamera} disabled={sendingReview}><Icon name="camera" size={16} /> Retake</button>
-                      <button className="btn btn--sm btn--paper" onClick={() => onClose()} disabled={sendingReview}>Close</button>
+                      <button className="btn btn--sm" onClick={openCamera} disabled={sendingReview}>
+                        <Icon name="camera" size={16} /> Retake
+                      </button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()} disabled={sendingReview}>
+                        Close
+                      </button>
                     </div>
                     {step.reviewable && (
                       <div className="found-review">
                         {review?.visible && (
-                          <button className="btn btn--sm btn--paper btn--block" onClick={() => void askForReview(step.outcome, step.flags)} disabled={review.disabled}>
+                          <button
+                            className="btn btn--sm btn--paper btn--block"
+                            onClick={() => void askForReview(step.outcome, step.flags)}
+                            disabled={review.disabled}
+                          >
                             <Icon name="search" size={16} /> {review.label}
                           </button>
                         )}
@@ -612,18 +730,26 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                   </>
                 ) : step.kind === "review_sent" ? (
                   <div className="found-sent">
-                    <span className="found-flags__icon found-sent__icon"><Icon name="check" size={18} /></span>
+                    <span className="found-flags__icon found-sent__icon">
+                      <Icon name="check" size={18} />
+                    </span>
                     <strong className="found-check__title">Sent for review</strong>
                     <span className="found-check__detail">We'll look at your photo and let you know in Parkdex.</span>
-                    <button className="btn btn--sm btn--paper btn--block" onClick={() => onClose()}>Close</button>
+                    <button className="btn btn--sm btn--paper btn--block" onClick={() => onClose()}>
+                      Close
+                    </button>
                   </div>
                 ) : step.kind === "retry" ? (
                   <>
                     <strong className="found-check__title">{step.message}</strong>
                     <span className="found-check__detail">Your photo is kept here. Nothing was saved yet.</span>
                     <div className="found-row">
-                      <button className="btn btn--sm" onClick={() => choice && void check(photo, choice.target)}><Icon name="refresh" size={16} /> Try again</button>
-                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Close</button>
+                      <button className="btn btn--sm" onClick={() => choice && void check(photo, choice.target)}>
+                        <Icon name="refresh" size={16} /> Try again
+                      </button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>
+                        Close
+                      </button>
                     </div>
                   </>
                 ) : step.kind === "taken" ? (
@@ -631,7 +757,9 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
                     <strong className="found-check__title">{founderLine(step.founder)}</strong>
                     <span className="found-check__detail">Someone else became the founder first. You can still plant your flag.</span>
                     <div className="found-row">
-                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>Back to the map</button>
+                      <button className="btn btn--sm btn--paper" onClick={() => onClose()}>
+                        Back to the map
+                      </button>
                     </div>
                   </>
                 ) : null}

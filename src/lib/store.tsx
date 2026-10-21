@@ -7,12 +7,20 @@ import { getNativeInstallIdentity, isNative } from "./native";
 import { onboardingMatchesInstall } from "./onboardingIdentity";
 import { isOverTheAirBundle } from "./ota";
 import { readLastLocation } from "./lastLocation";
+import { webLocationAllowed } from "./liveLocation";
 import { isPointInsideContentBounds } from "./content/contracts";
 
 export type Claim = { claimId: string; at: string; photo: string; parkSnapshot: Park | null; contentReleaseId: string | null };
 
 // "claim" is retired; App sends it back to the map. The old camera check-in still names it.
 export type Screen = "splash" | "onboarding" | "map" | "camera" | "claim" | "account" | "settings" | "downloads" | "plant" | "parks" | "leaderboard";
+
+/**
+ * What a signed-out player was doing when the app sent them to sign in. Once they are signed
+ * in, the map picks it up again: the handle sheet if they need one, then the visit, the crew
+ * join or founding they asked for.
+ */
+export type Resume = { kind: "visit"; parkId: string } | { kind: "join"; parkId: string; code: string } | { kind: "found"; parkId: string | null };
 
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };
@@ -32,6 +40,8 @@ type State = {
   // (teleports, simulated trips) never change it. Null when Parkdex has never had one.
   located: LngLat | null;
   locationError: string | null;
+  // The hosted web app follows the player only after they allow location (src/lib/liveLocation.ts).
+  webLocation: boolean;
   muted: boolean;
   screen: Screen;
   startupReady: boolean;
@@ -40,10 +50,18 @@ type State = {
   currentBuildId: string | null;
   currentPackageIdentity: string | null;
   selectedId: string | null;
+  /** The park the plant screen is for. The in-app trip UI is gone; directions open Google Maps. */
   tripId: string | null;
   pendingPhoto: string | null;
   focusId: string | null;
+  // Whether a focus request opens the park's page, or only settles the map on it.
+  focusOpen: boolean;
   feedback: FeedbackOrigin | null;
+  resume: Resume | null;
+  // The screen Account & backup was opened from, so Back returns there.
+  accountFrom: Screen | null;
+  // The park whose arrival card is up on the map. Messages wait for it, so only one shows at a time.
+  arrivalId: string | null;
 };
 
 export type Action =
@@ -54,9 +72,13 @@ export type Action =
   | { type: "trip"; id: string | null }
   | { type: "move"; user: LngLat; accuracy?: number | null }
   | { type: "locationError"; error: string | null }
+  | { type: "webLocation"; allowed: boolean }
   | { type: "photo"; photo: string | null }
   | { type: "claim"; ownerKey: string; id: string; claimId: string; at: string; photo: string; parkSnapshot: Park; contentReleaseId: string | null }
-  | { type: "focus"; id: string | null }
+  | { type: "focus"; id: string | null; open?: boolean }
+  | { type: "arrival"; id: string | null }
+  | { type: "signInFor"; resume: Resume }
+  | { type: "resume"; resume: Resume | null }
   | { type: "mute" }
   | { type: "feedback"; open: boolean; parkId?: string | null }
   | { type: "progressLoading"; ownerKey: string | null }
@@ -81,6 +103,7 @@ const initial: State = {
   accuracy: null,
   located: null,
   locationError: null,
+  webLocation: false,
   muted: false,
   screen: "splash",
   startupReady: false,
@@ -92,7 +115,11 @@ const initial: State = {
   tripId: null,
   pendingPhoto: null,
   focusId: null,
+  focusOpen: true,
   feedback: null,
+  resume: null,
+  accountFrom: null,
+  arrivalId: null,
 };
 
 export function load(): State {
@@ -104,6 +131,7 @@ export function load(): State {
     return {
       ...initial,
       ...savedLocation(),
+      webLocation: webLocationAllowed(),
       onboarded: !!saved.onboarded,
       muted: !!saved.muted,
       onboardingBuildId: typeof saved.onboardingBuildId === "string" ? saved.onboardingBuildId : null,
@@ -142,7 +170,18 @@ export function persistOnboardingPreferences(
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "go":
+      if (action.screen === "account" && state.screen !== "account") return { ...state, screen: action.screen, accountFrom: state.screen };
       return { ...state, screen: action.screen };
+    case "signInFor":
+      return {
+        ...state,
+        resume: action.resume,
+        selectedId: null,
+        screen: "account",
+        accountFrom: state.screen === "account" ? state.accountFrom : state.screen,
+      };
+    case "resume":
+      return { ...state, resume: action.resume };
     case "installReady": {
       const packageInstallIdentity = action.packageInstallIdentity;
       const onboarded = onboardingMatchesInstall(
@@ -180,6 +219,8 @@ export function reducer(state: State, action: Action): State {
       };
     case "locationError":
       return { ...state, locationError: action.error };
+    case "webLocation":
+      return { ...state, webLocation: action.allowed, locationError: action.allowed ? state.locationError : null };
     case "photo":
       return { ...state, pendingPhoto: action.photo };
     case "claim": {
@@ -187,7 +228,16 @@ export function reducer(state: State, action: Action): State {
       const claimRevision = state.claimRevision + 1;
       return {
         ...state,
-        claims: { ...state.claims, [action.id]: { claimId: action.claimId, at: action.at, photo: action.photo, parkSnapshot: action.parkSnapshot, contentReleaseId: action.contentReleaseId } },
+        claims: {
+          ...state.claims,
+          [action.id]: {
+            claimId: action.claimId,
+            at: action.at,
+            photo: action.photo,
+            parkSnapshot: action.parkSnapshot,
+            contentReleaseId: action.contentReleaseId,
+          },
+        },
         claimRevision,
         claimRevisionByPark: { ...state.claimRevisionByPark, [action.id]: claimRevision },
         tripId: null,
@@ -195,7 +245,9 @@ export function reducer(state: State, action: Action): State {
       };
     }
     case "focus":
-      return { ...state, focusId: action.id };
+      return { ...state, focusId: action.id, focusOpen: action.open ?? true };
+    case "arrival":
+      return state.arrivalId === action.id ? state : { ...state, arrivalId: action.id };
     case "mute":
       return { ...state, muted: !state.muted };
     case "feedback":
@@ -285,7 +337,13 @@ export function projectClaims(claims: Awaited<ReturnType<typeof loadPersonalProg
   // Rows are sorted oldest to newest. The badge shows the latest visit while the
   // personal store retains every historical claim UUID for backup and restore.
   for (const claim of claims) {
-    projected[claim.parkId] = { claimId: claim.claimId, at: claim.claimedAt, photo: photos[claim.parkId] ?? "", parkSnapshot: claim.parkSnapshot, contentReleaseId: claim.contentReleaseId };
+    projected[claim.parkId] = {
+      claimId: claim.claimId,
+      at: claim.claimedAt,
+      photo: photos[claim.parkId] ?? "",
+      parkSnapshot: claim.parkSnapshot,
+      contentReleaseId: claim.contentReleaseId,
+    };
   }
   return projected;
 }
@@ -304,13 +362,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const unavailable = new Promise<null>((resolve) => {
       timeout = setTimeout(() => resolve(null), 1500);
     });
-    void Promise.race([getNativeInstallIdentity(), unavailable]).then((packageInstallIdentity) => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative, overTheAir: isOverTheAirBundle() });
-    }).catch(() => {
-      if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative, overTheAir: isOverTheAirBundle() });
-    }).finally(() => {
-      clearTimeout(timeout);
-    });
+    void Promise.race([getNativeInstallIdentity(), unavailable])
+      .then((packageInstallIdentity) => {
+        if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity, native: isNative, overTheAir: isOverTheAirBundle() });
+      })
+      .catch(() => {
+        if (live) dispatch({ type: "installReady", buildId: __APP_BUILD__, packageInstallIdentity: null, native: isNative, overTheAir: isOverTheAirBundle() });
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
     return () => {
       live = false;
       clearTimeout(timeout);
@@ -337,18 +398,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           metadataOnly: true,
         });
       }
-    }).then(({ claims, photos }) => {
-      if (live && currentOwnerKey.current === key) dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
-    }).catch(() => {
-      if (live && currentOwnerKey.current === key) dispatch({
-        type: "progressFailed",
-        ownerKey: key,
-        message: metadataPublished
-          ? "Some saved photos could not be opened. Your saved parks are still available."
-          : "Saved progress could not be opened. Retry from your account.",
+    })
+      .then(({ claims, photos }) => {
+        if (live && currentOwnerKey.current === key)
+          dispatch({ type: "progressLoaded", ownerKey: key, claims: projectClaims(claims, photos), claimRevisionAtStart });
+      })
+      .catch(() => {
+        if (live && currentOwnerKey.current === key)
+          dispatch({
+            type: "progressFailed",
+            ownerKey: key,
+            message: metadataPublished
+              ? "Some saved photos could not be opened. Your saved parks are still available."
+              : "Saved progress could not be opened. Retry from your account.",
+          });
       });
-    });
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [key, owner, auth.progressRevision, state.claimRevision]);
 
   useEffect(() => {
@@ -357,15 +424,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [auth.phase, state.startupReady, state.onboarded, state.muted, state.currentBuildId, state.currentPackageIdentity]);
 
   const wrapped = useCallback((action: Action) => dispatch(action), []);
-  const visibleState = state.progressOwnerKey === key ? state : {
-    ...state,
-    claims: {},
-    progressReady: false,
-    progressError: null,
-    selectedId: null,
-    tripId: null,
-    pendingPhoto: null,
-  };
+  const visibleState =
+    state.progressOwnerKey === key
+      ? state
+      : {
+          ...state,
+          claims: {},
+          progressReady: false,
+          progressError: null,
+          selectedId: null,
+          tripId: null,
+          pendingPhoto: null,
+        };
 
   return <Ctx.Provider value={{ state: visibleState, dispatch: wrapped }}>{children}</Ctx.Provider>;
 }

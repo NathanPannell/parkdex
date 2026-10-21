@@ -110,9 +110,7 @@ export type Crew = {
   codeExpiresAt: string | null;
 };
 export type ParkCrewResponse = { parkId: string; crew: Crew | null; serverTime: string };
-export type JoinCrewResult =
-  | { status: "joined"; visit: VisitResult; crew: Crew }
-  | { status: "already_member"; visit: null; crew: Crew };
+export type JoinCrewResult = { status: "joined"; visit: VisitResult; crew: Crew } | { status: "already_member"; visit: null; crew: Crew };
 /** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
 export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
 export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
@@ -120,24 +118,57 @@ export type LeaderboardRow = { rank: number; handle: string; flagSeed: string; s
 export type LeaderboardResponse = { players: LeaderboardRow[]; serverTime: string };
 
 export type GameErrorCode =
-  | "handle_taken" | "handle_rejected" | "handle_required" | "invalid_handle" | "park_not_found" | "visit_id_reused" | "invalid_request"
-  | "unauthenticated" | "unavailable" | "offline" | "account_deleting"
+  | "handle_taken"
+  | "handle_rejected"
+  | "handle_required"
+  | "invalid_handle"
+  | "park_not_found"
+  | "visit_id_reused"
+  | "invalid_request"
+  | "unauthenticated"
+  | "unavailable"
+  | "offline"
+  | "account_deleting"
   // Badge patches (#175).
-  | "badge_locked" | "invalid_patches"
+  | "badge_locked"
+  | "invalid_patches"
   // Crew joins (#170).
-  | "invalid_code" | "code_not_found" | "code_expired" | "crew_full" | "already_today";
+  | "invalid_code"
+  | "code_not_found"
+  | "code_expired"
+  | "crew_full"
+  | "already_today";
 
 const KNOWN_CODES = new Set<GameErrorCode>([
-  "handle_taken", "handle_rejected", "handle_required", "invalid_handle", "park_not_found", "visit_id_reused", "invalid_request",
-  "unauthenticated", "unavailable", "offline", "account_deleting", "invalid_code", "code_not_found", "code_expired", "crew_full", "already_today",
-  "badge_locked", "invalid_patches",
+  "handle_taken",
+  "handle_rejected",
+  "handle_required",
+  "invalid_handle",
+  "park_not_found",
+  "visit_id_reused",
+  "invalid_request",
+  "unauthenticated",
+  "unavailable",
+  "offline",
+  "account_deleting",
+  "invalid_code",
+  "code_not_found",
+  "code_expired",
+  "crew_full",
+  "already_today",
+  "badge_locked",
+  "invalid_patches",
 ]);
 const OUTCOMES = new Set<VisitOutcome>(["planted", "took", "held", "joined", "logged", "already_today"]);
 const DECISIONS = new Set<FoundingDecisionStatus>(["approved", "rejected", "superseded"]);
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export class GameError extends Error {
-  constructor(readonly code: GameErrorCode, readonly status: number, message: string) {
+  constructor(
+    readonly code: GameErrorCode,
+    readonly status: number,
+    message: string,
+  ) {
     super(message);
     this.name = "GameError";
   }
@@ -172,7 +203,7 @@ export function isOfflineError(error: unknown): boolean {
 }
 
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function text(value: unknown): string | null {
@@ -331,7 +362,9 @@ function parseProtected(value: unknown): ProtectedHour | null {
 function parseFlagCrew(value: unknown): FlagCrew | null {
   const row = record(value);
   if (!row) return null;
-  const memberSeeds = Array.isArray(row.memberSeeds) ? row.memberSeeds.filter((seed): seed is string => typeof seed === "string" && seed.length > 0).slice(0, 3) : [];
+  const memberSeeds = Array.isArray(row.memberSeeds)
+    ? row.memberSeeds.filter((seed): seed is string => typeof seed === "string" && seed.length > 0).slice(0, 3)
+    : [];
   return { size: Math.max(1, count(row.size), memberSeeds.length + 1), memberSeeds, protectedUntil: instant(row.protectedUntil) };
 }
 
@@ -384,7 +417,9 @@ export function parseFlags(body: unknown): FlagsResponse {
       const handle = text(flag.handle);
       const flagSeed = text(flag.flagSeed);
       const since = text(flag.since);
-      return parkId && handle && flagSeed && since ? { parkId, handle, flagSeed, since, crew: parseFlagCrew(flag.crew), patches: badgeIds(flag.patches).slice(0, 3) } : null;
+      return parkId && handle && flagSeed && since
+        ? { parkId, handle, flagSeed, since, crew: parseFlagCrew(flag.crew), patches: badgeIds(flag.patches).slice(0, 3) }
+        : null;
     }),
     founders: list(row.founders, (founder) => {
       const parkId = text(founder.parkId);
@@ -401,7 +436,14 @@ export function parseLeaderboard(body: unknown): LeaderboardResponse {
       const handle = text(player.handle);
       const flagSeed = text(player.flagSeed);
       return handle && flagSeed
-        ? { rank: count(player.rank), handle, flagSeed, score: count(player.score), parksHeld: count(player.parksHeld), patches: badgeIds(player.patches).slice(0, 3) }
+        ? {
+            rank: count(player.rank),
+            handle,
+            flagSeed,
+            score: count(player.score),
+            parksHeld: count(player.parksHeld),
+            patches: badgeIds(player.patches).slice(0, 3),
+          }
         : null;
     }),
     serverTime: text(row.serverTime) ?? new Date().toISOString(),
@@ -461,7 +503,11 @@ async function request(send: Sender, path: string, init: RequestInit = {}): Prom
     clearTimeout(timeout);
   }
   let body: unknown = null;
-  try { body = await response.json(); } catch { /* Empty or non-JSON answer. */ }
+  try {
+    body = await response.json();
+  } catch {
+    /* Empty or non-JSON answer. */
+  }
   if (!response.ok) {
     const code = errorCode(response.status, record(body) ?? {});
     throw new GameError(code, response.status, MESSAGES[code]);
@@ -469,15 +515,20 @@ async function request(send: Sender, path: string, init: RequestInit = {}): Prom
   return body;
 }
 
-const authenticated = (accountId: string): Sender => (path, init) => fetchAuthenticated(path, init, accountId);
+const authenticated =
+  (accountId: string): Sender =>
+  (path, init) =>
+    fetchAuthenticated(path, init, accountId);
 const anyone: Sender = (path, init) => fetchAccountApi(path, init);
 
 export async function fetchGameMe(accountId: string): Promise<GameMe> {
   return parseMe(await request(authenticated(accountId), "/api/game/me"));
 }
 
-export async function saveHandle(accountId: string, handle: string): Promise<GamePlayer> {
-  const body = record(await request(authenticated(accountId), "/api/game/handle", { method: "PUT", body: JSON.stringify({ handle }) }));
+/** `flagSeed` is the flag a signed-out player was already shown; the server uses it only for a new player. */
+export async function saveHandle(accountId: string, handle: string, flagSeed?: string | null): Promise<GamePlayer> {
+  const payload = flagSeed ? { handle, flagSeed } : { handle };
+  const body = record(await request(authenticated(accountId), "/api/game/handle", { method: "PUT", body: JSON.stringify(payload) }));
   const player = parsePlayer(body?.player) ?? parsePlayer(body);
   if (!player) throw new GameError("unavailable", 200, MESSAGES.unavailable);
   return player;

@@ -2,15 +2,7 @@ import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../components/Icon";
 import { useContent, useContentRuntime } from "../lib/content/provider";
-import {
-  bytesForChunks,
-  chunkIdsForCells,
-  formatMegabytes,
-  loadCellIndex,
-  readSavedSquares,
-  requestDownloadMaps,
-  type CellIndex,
-} from "../lib/mapCells";
+import { bytesForChunks, chunkIdsForCells, formatMegabytes, loadCellIndex, readSavedSquares, requestDownloadMaps, type CellIndex } from "../lib/mapCells";
 import { summarizeLocalStorage, type LocalStorageSummary } from "../lib/localStorageSummary";
 import { readAllowMobileMapData, subscribeAllowMobileMapData, writeAllowMobileMapData } from "../lib/downloadPreferences";
 import { mapFolder, OFFLINE_DOWNLOADS } from "../lib/content/contracts";
@@ -102,54 +94,80 @@ export function ManageDownloads() {
       </header>
 
       <div className="account-body">
-        {error && <section className="account-notice card is-error" role="alert"><span>{error}</span></section>}
+        {error && (
+          <section className="account-notice card is-error" role="alert">
+            <span>{error}</span>
+          </section>
+        )}
 
         <section className="account-card card account-section" aria-labelledby="downloads-total">
-          <span className="eyebrow" id="downloads-total">On this phone</span>
+          <span className="eyebrow" id="downloads-total">
+            On this phone
+          </span>
           <dl className="downloads-stats">
-            <div><dt>Parkdex is using</dt><dd>{summary ? formatMegabytes(summary.totalBytes) : "…"}</dd></div>
-            {freeBytes !== null && <div><dt>Free space</dt><dd>{formatMegabytes(freeBytes)}</dd></div>}
+            <div>
+              <dt>Parkdex is using</dt>
+              <dd>{summary ? formatMegabytes(summary.totalBytes) : "…"}</dd>
+            </div>
+            {freeBytes !== null && (
+              <div>
+                <dt>Free space</dt>
+                <dd>{formatMegabytes(freeBytes)}</dd>
+              </div>
+            )}
           </dl>
         </section>
 
-        {OFFLINE_DOWNLOADS && <section className="account-card card account-section" aria-label="Download settings">
-          <label className="account-setting account-setting--row">
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Allow downloads on mobile data</strong>
-              <span>{mobileData ? "Map squares and the area around you download on any connection" : "Map squares and the area around you wait for Wi-Fi"}</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="account-switch"
-              checked={mobileData}
-              onChange={(event) => writeAllowMobileMapData(event.target.checked)}
-              aria-label="Allow downloads on mobile data"
-            />
-          </label>
-        </section>}
+        {OFFLINE_DOWNLOADS && (
+          <section className="account-card card account-section" aria-label="Download settings">
+            <label className="account-setting account-setting--row">
+              <span className="account-setting__icon" aria-hidden="true">
+                <Icon name="download" size={20} />
+              </span>
+              <span className="account-setting__text">
+                <strong>Allow downloads on mobile data</strong>
+                <span>
+                  {mobileData ? "Map squares and the area around you download on any connection" : "Map squares and the area around you wait for Wi-Fi"}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                className="account-switch"
+                checked={mobileData}
+                onChange={(event) => writeAllowMobileMapData(event.target.checked)}
+                aria-label="Allow downloads on mobile data"
+              />
+            </label>
+          </section>
+        )}
 
-        {OFFLINE_DOWNLOADS && <section className="account-card card account-section" aria-labelledby="downloads-squares">
-          <span className="eyebrow" id="downloads-squares">Map squares</span>
-          <p className="account-help">
-            {saved.length
-              ? `${saved.length} ${saved.length === 1 ? "square" : "squares"} offline · ${formatMegabytes(savedBytes)}`
-              : "Choose 50 km squares to keep their full map detail offline."}
-          </p>
-          <button
-            className="btn btn--block"
-            onClick={() => {
-              requestDownloadMaps("downloads");
-              dispatch({ type: "go", screen: "map" });
-            }}
-          >
-            <Icon name="map" size={18} /> {saved.length ? "Add or remove squares" : "Choose map squares"}
-          </button>
-        </section>}
+        {OFFLINE_DOWNLOADS && (
+          <section className="account-card card account-section" aria-labelledby="downloads-squares">
+            <span className="eyebrow" id="downloads-squares">
+              Map squares
+            </span>
+            <p className="account-help">
+              {saved.length
+                ? `${saved.length} ${saved.length === 1 ? "square" : "squares"} offline · ${formatMegabytes(savedBytes)}`
+                : "Choose 50 km squares to keep their full map detail offline."}
+            </p>
+            <button
+              className="btn btn--block"
+              onClick={() => {
+                requestDownloadMaps("downloads");
+                dispatch({ type: "go", screen: "map" });
+              }}
+            >
+              <Icon name="map" size={18} /> {saved.length ? "Add or remove squares" : "Choose map squares"}
+            </button>
+          </section>
+        )}
 
         <section className="account-card card account-section" aria-labelledby="downloads-cached">
-          <span className="eyebrow" id="downloads-cached">Cached automatically</span>
+          <span className="eyebrow" id="downloads-cached">
+            Cached automatically
+          </span>
           <ul className="downloads-list">
             <li>
               <span className="downloads-list__text">
@@ -185,7 +203,7 @@ export function ManageDownloads() {
             )}
           </ul>
           <p className="account-help">
-            Parkdex keeps only what is near you and clears old content after updates. Your claimed badges and photos are never removed here.
+            Parkdex keeps only what is near you and clears old content after updates. Your visits and photos are never removed here.
           </p>
         </section>
       </div>

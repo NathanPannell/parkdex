@@ -70,9 +70,7 @@ class MemoryCursor:
         if sql.startswith("SELECT logical_path, object_key, url, sha256, byte_size, content_type"):
             logical_path = parameters[0]
             asset = self.connection.assets.get(logical_path)
-            self.row = None if asset is None else tuple(
-                asset[key] for key in ("logical_path", "object_key", "url", "sha256", "byte_size", "content_type")
-            )
+            self.row = None if asset is None else tuple(asset[key] for key in ("logical_path", "object_key", "url", "sha256", "byte_size", "content_type"))
             self.rowcount = 1 if self.row else 0
             return
         if sql.startswith("INSERT INTO public.r2_objects"):
@@ -178,25 +176,36 @@ class PublishParkUpdateTests(unittest.TestCase):
             root = Path(directory)
             update_path = root / "update.json"
             image_path = root / "selected.webp"
-            update_path.write_text(json.dumps({
-                "id": "park-one",
-                "scene": "new-badge",
-                "blurb": "A new description.",
-            }), encoding="utf-8")
+            update_path.write_text(
+                json.dumps(
+                    {
+                        "id": "park-one",
+                        "scene": "new-badge",
+                        "blurb": "A new description.",
+                    }
+                ),
+                encoding="utf-8",
+            )
             image_path.write_bytes(valid_webp())
-            args = type("Args", (), {
-                "park_json": update_path,
-                "badge_webp": image_path,
-                "apply": True,
-                "account_id": "test-account",
-                "bucket": "test-bucket",
-                "wrangler_config": None,
-            })()
-            with patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}), \
-                 patch("publish_park_update.publish_content.token_from", return_value="test-token"), \
-                 patch("publish_park_update.publish_content.upload_one", side_effect=RuntimeError("R2 upload failed (503)")), \
-                 patch("publish_park_update.publish_content.verify_one") as verify, \
-                 patch("publish_park_update.apply_database_update") as database:
+            args = type(
+                "Args",
+                (),
+                {
+                    "park_json": update_path,
+                    "badge_webp": image_path,
+                    "apply": True,
+                    "account_id": "test-account",
+                    "bucket": "test-bucket",
+                    "wrangler_config": None,
+                },
+            )()
+            with (
+                patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}),
+                patch("publish_park_update.publish_content.token_from", return_value="test-token"),
+                patch("publish_park_update.publish_content.upload_one", side_effect=RuntimeError("R2 upload failed (503)")),
+                patch("publish_park_update.publish_content.verify_one") as verify,
+                patch("publish_park_update.apply_database_update") as database,
+            ):
                 with self.assertRaisesRegex(PublishError, "R2 upload failed"):
                     run(args)
 
@@ -209,30 +218,47 @@ class PublishParkUpdateTests(unittest.TestCase):
             update_path = root / "update.json"
             image_path = root / "selected.webp"
             image_bytes = valid_webp()
-            update_path.write_text(json.dumps({
-                "id": "park-one",
-                "scene": "new-badge",
-                "blurb": "A new description.",
-            }), encoding="utf-8")
+            update_path.write_text(
+                json.dumps(
+                    {
+                        "id": "park-one",
+                        "scene": "new-badge",
+                        "blurb": "A new description.",
+                    }
+                ),
+                encoding="utf-8",
+            )
             image_path.write_bytes(image_bytes)
-            args = type("Args", (), {
-                "park_json": update_path,
-                "badge_webp": image_path,
-                "apply": True,
-                "account_id": "test-account",
-                "bucket": "test-bucket",
-                "wrangler_config": None,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "park_json": update_path,
+                    "badge_webp": image_path,
+                    "apply": True,
+                    "account_id": "test-account",
+                    "bucket": "test-bucket",
+                    "wrangler_config": None,
+                },
+            )()
             events = []
-            with patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}), \
-                 patch("publish_park_update.publish_content.token_from", return_value="test-token"), \
-                 patch("publish_park_update.publish_content.upload_one", side_effect=lambda *args: events.append("upload") or {"status": "uploaded-and-verified"}), \
-                 patch("publish_park_update.publish_content.verify_one", side_effect=lambda *args: events.append("verify") or {
-                     "status": 200,
-                     "sha256": hashlib.sha256(image_bytes).hexdigest(),
-                     "byte_size": len(image_bytes),
-                 }), \
-                 patch("publish_park_update.apply_database_update", side_effect=lambda *args: events.append("database") or "updated"):
+            with (
+                patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}),
+                patch("publish_park_update.publish_content.token_from", return_value="test-token"),
+                patch(
+                    "publish_park_update.publish_content.upload_one", side_effect=lambda *args: events.append("upload") or {"status": "uploaded-and-verified"}
+                ),
+                patch(
+                    "publish_park_update.publish_content.verify_one",
+                    side_effect=lambda *args: events.append("verify")
+                    or {
+                        "status": 200,
+                        "sha256": hashlib.sha256(image_bytes).hexdigest(),
+                        "byte_size": len(image_bytes),
+                    },
+                ),
+                patch("publish_park_update.apply_database_update", side_effect=lambda *args: events.append("database") or "updated"),
+            ):
                 result = run(args)
 
         self.assertEqual(events, ["upload", "verify", "database"])
@@ -245,19 +271,25 @@ class PublishParkUpdateTests(unittest.TestCase):
             image_path = root / "selected.webp"
             update_path.write_text(json.dumps({"id": "park-one", "scene": "new-badge"}), encoding="utf-8")
             image_path.write_bytes(valid_webp())
-            args = type("Args", (), {
-                "park_json": update_path,
-                "badge_webp": image_path,
-                "apply": True,
-                "account_id": "test-account",
-                "bucket": "test-bucket",
-                "wrangler_config": None,
-            })()
-            with patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}), \
-                 patch("publish_park_update.publish_content.token_from", return_value="test-token"), \
-                 patch("publish_park_update.publish_content.upload_one", return_value={"status": "uploaded-and-verified"}), \
-                 patch("publish_park_update.publish_content.verify_one", side_effect=RuntimeError("CDN byte verification failed (404)")), \
-                 patch("publish_park_update.apply_database_update") as database:
+            args = type(
+                "Args",
+                (),
+                {
+                    "park_json": update_path,
+                    "badge_webp": image_path,
+                    "apply": True,
+                    "account_id": "test-account",
+                    "bucket": "test-bucket",
+                    "wrangler_config": None,
+                },
+            )()
+            with (
+                patch.dict("os.environ", {"DATABASE_URL": "postgresql://example.invalid/db"}),
+                patch("publish_park_update.publish_content.token_from", return_value="test-token"),
+                patch("publish_park_update.publish_content.upload_one", return_value={"status": "uploaded-and-verified"}),
+                patch("publish_park_update.publish_content.verify_one", side_effect=RuntimeError("CDN byte verification failed (404)")),
+                patch("publish_park_update.apply_database_update") as database,
+            ):
                 with self.assertRaisesRegex(PublishError, "CDN byte verification failed"):
                     run(args)
 
@@ -267,14 +299,18 @@ class PublishParkUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             update_path = Path(directory) / "update.json"
             update_path.write_text(json.dumps({"id": "park-one", "blurb": "Updated description."}), encoding="utf-8")
-            args = type("Args", (), {
-                "park_json": update_path,
-                "badge_webp": None,
-                "apply": False,
-                "account_id": None,
-                "bucket": None,
-                "wrangler_config": None,
-            })()
+            args = type(
+                "Args",
+                (),
+                {
+                    "park_json": update_path,
+                    "badge_webp": None,
+                    "apply": False,
+                    "account_id": None,
+                    "bucket": None,
+                    "wrangler_config": None,
+                },
+            )()
             with patch("publish_park_update.apply_database_update") as database:
                 result = run(args)
             database.assert_not_called()

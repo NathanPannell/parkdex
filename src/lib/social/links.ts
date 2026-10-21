@@ -75,7 +75,9 @@ export function listenForAppLinks(routes: AppLinkRoutes): () => void {
       history.replaceState(history.state, "", "/");
       forward(href);
     }
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }
 
   let remove: (() => void) | undefined;

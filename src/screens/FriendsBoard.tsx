@@ -17,14 +17,31 @@ import "../social.css";
 
 const parksText = (count: number) => `${count} ${count === 1 ? "park" : "parks"} this week`;
 
-function FriendRowItem({ row, open, onToggle, onRemove, canRemove }: { row: FriendRow; open: boolean; onToggle: () => void; onRemove: () => Promise<void>; canRemove: boolean }) {
+function FriendRowItem({
+  row,
+  open,
+  onToggle,
+  onRemove,
+  canRemove,
+}: {
+  row: FriendRow;
+  open: boolean;
+  onToggle: () => void;
+  onRemove: () => Promise<void>;
+  canRemove: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const content = (
     <>
-      <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank}`}>{row.rank}</span>
+      <span className={`game-row__rank ${row.rank === 1 ? "is-first" : ""}`} aria-label={`Rank ${row.rank}`}>
+        {row.rank}
+      </span>
       <Flag seed={row.flagSeed} size={40} />
       <span className="game-row__name">
-        <strong style={handleFit(row.isMe ? `${row.handle} (you)` : row.handle)}>@{row.handle}{row.isMe ? " (you)" : ""}</strong>
+        <strong style={handleFit(row.isMe ? `${row.handle} (you)` : row.handle)}>
+          @{row.handle}
+          {row.isMe ? " (you)" : ""}
+        </strong>
         <span>{parksText(row.uniqueParks)}</span>
       </span>
       <span className="game-row__score">
@@ -33,14 +50,25 @@ function FriendRowItem({ row, open, onToggle, onRemove, canRemove }: { row: Frie
       </span>
     </>
   );
-  if (row.isMe) return <div className="game-row card is-me" aria-current="true">{content}</div>;
+  if (row.isMe)
+    return (
+      <div className="game-row card is-me" aria-current="true">
+        {content}
+      </div>
+    );
   return (
     <>
-      <button type="button" className="game-row card" onClick={onToggle} aria-expanded={open}>{content}</button>
+      <button type="button" className="game-row card" onClick={onToggle} aria-expanded={open}>
+        {content}
+      </button>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div className="friend-actions" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-            <span>{canRemove ? `Remove @${row.handle} from your friends? You'll both stop seeing each other here.` : "Connect to the internet to change your friends."}</span>
+            <span>
+              {canRemove
+                ? `Remove @${row.handle} from your friends? You'll both stop seeing each other here.`
+                : "Connect to the internet to change your friends."}
+            </span>
             <motion.button
               whileTap={press}
               type="button"
@@ -96,9 +124,13 @@ export function FriendsBoard() {
       <section className="account-card card game-empty friends-empty">
         <Kip size={72} pose="wave" />
         <h2>Play with friends</h2>
-        <p className="account-help">Sign in to add friends by QR code and see who visits the most parks each week. Playing on your own never needs an account.</p>
+        <p className="account-help">
+          Sign in to add friends by QR code and see who visits the most parks each week. Playing on your own never needs an account.
+        </p>
         {friends.incoming && <p className="friends-incoming__code">Friend code {formatSocialCode(friends.incoming)} is waiting.</p>}
-        <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => dispatch({ type: "go", screen: "account" })}>Sign in</motion.button>
+        <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => dispatch({ type: "go", screen: "account" })}>
+          Sign in
+        </motion.button>
       </section>
     );
   }
@@ -109,7 +141,9 @@ export function FriendsBoard() {
         <Kip size={72} pose="point" />
         <h2>Pick a handle first</h2>
         <p className="account-help">Friends see your @handle and flag on the weekly board.</p>
-        <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => game.openHandleSheet({ onDone: () => void refresh() })}>Pick a handle</motion.button>
+        <motion.button whileTap={press} className="btn btn--sun btn--sm" onClick={() => game.openHandleSheet({ onDone: () => void refresh() })}>
+          Pick a handle
+        </motion.button>
       </section>
     );
   }
@@ -121,7 +155,14 @@ export function FriendsBoard() {
     <>
       <AnimatePresence initial={false}>
         {friends.incoming && (
-          <motion.section key="incoming" className="account-card card friends-incoming" initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -12, opacity: 0 }} aria-labelledby="friends-incoming-title">
+          <motion.section
+            key="incoming"
+            className="account-card card friends-incoming"
+            initial={{ y: -12, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -12, opacity: 0 }}
+            aria-labelledby="friends-incoming-title"
+          >
             <span className="eyebrow">Friend link</span>
             <h2 id="friends-incoming-title">Add this friend?</h2>
             <p className="friends-incoming__code">{formatSocialCode(friends.incoming)}</p>
@@ -129,7 +170,9 @@ export function FriendsBoard() {
               <motion.button whileTap={press} className="btn btn--sun btn--sm" disabled={adding} onClick={() => void confirmIncoming(friends.incoming!)}>
                 {adding ? "Adding…" : "Add friend"}
               </motion.button>
-              <button type="button" className="btn btn--paper btn--sm" disabled={adding} onClick={friends.clearIncoming}>Not now</button>
+              <button type="button" className="btn btn--paper btn--sm" disabled={adding} onClick={friends.clearIncoming}>
+                Not now
+              </button>
             </div>
           </motion.section>
         )}
@@ -147,12 +190,17 @@ export function FriendsBoard() {
 
       {friends.status === "offline" && (
         <p className="friends-note" role="status">
-          {board && friends.fetchedAt ? `You're offline. This board is from ${sinceLabel(friends.fetchedAt, Date.now())}.` : "You're offline. Your friends show up when you reconnect."}
+          {board && friends.fetchedAt
+            ? `You're offline. This board is from ${sinceLabel(friends.fetchedAt, Date.now())}.`
+            : "You're offline. Your friends show up when you reconnect."}
         </p>
       )}
       {friends.status === "error" && (
         <p className="friends-note friends-note--error" role="alert">
-          {friends.error ?? friendsErrorMessage(null)} <button type="button" className="friends-note__retry" onClick={() => void refresh()}>Try again</button>
+          {friends.error ?? friendsErrorMessage(null)}{" "}
+          <button type="button" className="friends-note__retry" onClick={() => void refresh()}>
+            Try again
+          </button>
         </p>
       )}
 
@@ -160,7 +208,9 @@ export function FriendsBoard() {
         <section className="account-card card friends-pending" aria-labelledby="friends-pending-title">
           <h2 id="friends-pending-title">Waiting to send</h2>
           <ul>
-            {friends.pending.map((item) => <li key={item.code}>{formatSocialCode(item.code)}</li>)}
+            {friends.pending.map((item) => (
+              <li key={item.code}>{formatSocialCode(item.code)}</li>
+            ))}
           </ul>
           <p className="account-help">These friend codes go out the next time you're online.</p>
         </section>
@@ -169,7 +219,9 @@ export function FriendsBoard() {
       {!board && friends.status === "loading" ? (
         <section className="account-card card account-loading" aria-live="polite">
           <Kip size={64} pose="think" />
-          <div><strong>Finding your friends…</strong></div>
+          <div>
+            <strong>Finding your friends…</strong>
+          </div>
         </section>
       ) : board && others.length === 0 ? (
         <section className="account-card card game-empty friends-empty">
@@ -179,8 +231,14 @@ export function FriendsBoard() {
         </section>
       ) : null}
 
-      {board && board.players.length > 0 && (others.length > 0) && (
-        <motion.ol className="game-list game-board" aria-label="You and your friends by parks visited this week" variants={listParent} initial="hidden" animate="show">
+      {board && board.players.length > 0 && others.length > 0 && (
+        <motion.ol
+          className="game-list game-board"
+          aria-label="You and your friends by parks visited this week"
+          variants={listParent}
+          initial="hidden"
+          animate="show"
+        >
           {board.players.map((row) => (
             <motion.li key={row.handle} variants={listItem}>
               <FriendRowItem

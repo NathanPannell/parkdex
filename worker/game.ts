@@ -2,8 +2,16 @@ import { HttpError, readJsonBody } from "./validation.js";
 import { checkHandle, HANDLE_PATTERN, normalizeHandle, type HandleVerdict } from "./handles.js";
 import type { ModerationEnv, ModerationFetch } from "./moderation.js";
 import {
-  createNeonGameStore, type BadgeUnlock, type CrewRecord, type FlagRecord, type FoundingReviewRecord, type GameStore, type LeaderboardRow, type PlayerRecord,
-  type RecordVisitResult, type VisitRecord,
+  createNeonGameStore,
+  type BadgeUnlock,
+  type CrewRecord,
+  type FlagRecord,
+  type FoundingReviewRecord,
+  type GameStore,
+  type LeaderboardRow,
+  type PlayerRecord,
+  type RecordVisitResult,
+  type VisitRecord,
 } from "./game-store.js";
 import { normalizeCrewCode } from "./crewCodes.js";
 
@@ -117,12 +125,21 @@ export function validateJoinBody(body: unknown): { visitId: string; code: string
   return { visitId: value.visitId.toLowerCase(), code };
 }
 
-export function validateHandleBody(body: unknown): string {
-  const value = exactKeys(body, ["handle"]);
-  if (typeof value.handle !== "string" || value.handle.length > 64) throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
+const FLAG_SEED_PATTERN = /^[0-9a-f]{16}$/;
+
+/**
+ * `PUT /api/game/handle`: the handle, and optionally the flag the app already showed a signed-out
+ * player (#onboarding). The flag is used only when the player is created; it never changes after.
+ */
+export function validateHandleBody(body: unknown): { handle: string; flagSeed: string | null } {
+  const value = exactKeys(body, record(body) && Object.hasOwn(body, "flagSeed") ? ["handle", "flagSeed"] : ["handle"]);
+  if (typeof value.handle !== "string" || value.handle.length > 64)
+    throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
   const handle = normalizeHandle(value.handle);
   if (!HANDLE_PATTERN.test(handle)) throw new HttpError(400, "invalid_handle", "Handles are 3 to 20 letters, numbers or underscores.");
-  return handle;
+  if (value.flagSeed !== undefined && (typeof value.flagSeed !== "string" || !FLAG_SEED_PATTERN.test(value.flagSeed)))
+    throw new HttpError(400, "invalid_request", "Invalid request.");
+  return { handle, flagSeed: (value.flagSeed as string | undefined) ?? null };
 }
 
 /** `PUT /api/game/me/patches`: up to 3 different badge IDs, in the order they are sewn on. */
@@ -204,9 +221,8 @@ export function visitEvents(result: RecordVisitResult, accountId: string): GameE
     events.push({ name: "visit_logged_protected", accountId, parkId: visit.parkId, pointsEarned: visit.pointsEarned, crewSize: visit.protected?.crewSize });
     return events;
   }
-  const name: GameEventName = visit.outcome === "planted" ? "flag_planted"
-    : visit.outcome === "took" ? "flag_taken"
-      : visit.outcome === "held" ? "flag_held" : "visit_already_today";
+  const name: GameEventName =
+    visit.outcome === "planted" ? "flag_planted" : visit.outcome === "took" ? "flag_taken" : visit.outcome === "held" ? "flag_held" : "visit_already_today";
   events.push({ name, accountId, parkId: visit.parkId, pointsEarned: visit.pointsEarned });
   return events;
 }
@@ -220,7 +236,11 @@ export async function flagSeedFor(accountId: string): Promise<string> {
 async function emit(dependencies: GameDependencies, events: GameEvent[]): Promise<void> {
   if (!dependencies.onEvent) return;
   for (const event of events) {
-    try { await dependencies.onEvent(event); } catch { /* Analytics never blocks play. */ }
+    try {
+      await dependencies.onEvent(event);
+    } catch {
+      /* Analytics never blocks play. */
+    }
   }
 }
 
@@ -236,7 +256,7 @@ function requireMethod(request: Request, method: string): void {
 
 async function putHandle(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies): Promise<Response> {
   const { accountId } = await auth.mutation();
-  const handle = validateHandleBody(await readJsonBody(request, MAX_BODY_BYTES));
+  const { handle, flagSeed } = validateHandleBody(await readJsonBody(request, MAX_BODY_BYTES));
   const store = getStore(env, dependencies);
   const owner = await store.handleOwner(handle, accountId);
   if (owner === "other") throw new HttpError(409, "handle_taken", "That handle is taken.");
@@ -244,7 +264,7 @@ async function putHandle(request: Request, env: GameEnv, auth: GameAuth, depende
     const verdict = await (dependencies.checkHandle?.(handle, env) ?? checkHandle(handle, env, dependencies.fetch));
     if (!verdict.allowed) throw new HttpError(422, "handle_rejected", "Choose a different handle.");
   }
-  const saved = await store.setHandle(accountId, handle);
+  const saved = await store.setHandle(accountId, handle, flagSeed);
   if (saved.status !== "saved") {
     if (saved.status === "taken") throw new HttpError(409, "handle_taken", "That handle is taken.");
     throw new HttpError(410, "account_deleting", "This account is being deleted.");
@@ -315,21 +335,32 @@ async function getParkCrew(parkId: string, env: GameEnv, auth: GameAuth, depende
 /** Pending requests and unseen decisions, as `GET /api/game/me` lists them (docs/park-founders.md). */
 export function apiFoundingReviews(records: FoundingReviewRecord[], origin: string) {
   return {
-    pending: records.filter((record) => record.status === "pending").map((record) => ({
-      requestId: record.requestId, parkId: record.parkId, osm: record.osm, parkName: record.parkName, createdAt: record.createdAt,
-    })),
-    decided: records.filter((record) => record.status !== "pending").slice(0, FOUNDING_DECISIONS_LIMIT).map((record) => ({
-      requestId: record.requestId,
-      status: record.status,
-      parkId: record.parkId,
-      parkName: record.parkName,
-      reason: record.status === "rejected" ? record.reason : null,
-      // The cover only while this player is still the founder, so a later operator change shows nothing stale.
-      coverUrl: record.status === "approved" && record.founderIsPlayer && record.coverSha256
-        ? `${origin}/api/parks/${record.parkId}/cover/${record.coverSha256}.jpg` : null,
-      founderHandle: record.status === "rejected" ? null : record.founderHandle,
-      decidedAt: record.decidedAt,
-    })),
+    pending: records
+      .filter((record) => record.status === "pending")
+      .map((record) => ({
+        requestId: record.requestId,
+        parkId: record.parkId,
+        osm: record.osm,
+        parkName: record.parkName,
+        createdAt: record.createdAt,
+      })),
+    decided: records
+      .filter((record) => record.status !== "pending")
+      .slice(0, FOUNDING_DECISIONS_LIMIT)
+      .map((record) => ({
+        requestId: record.requestId,
+        status: record.status,
+        parkId: record.parkId,
+        parkName: record.parkName,
+        reason: record.status === "rejected" ? record.reason : null,
+        // The cover only while this player is still the founder, so a later operator change shows nothing stale.
+        coverUrl:
+          record.status === "approved" && record.founderIsPlayer && record.coverSha256
+            ? `${origin}/api/parks/${record.parkId}/cover/${record.coverSha256}.jpg`
+            : null,
+        founderHandle: record.status === "rejected" ? null : record.founderHandle,
+        decidedAt: record.decidedAt,
+      })),
   };
 }
 
@@ -337,17 +368,29 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   const { accountId } = await auth.account();
   const store = getStore(env, dependencies);
   const player = await store.getPlayer(accountId);
-  const flagSeed = player?.flagSeed ?? await flagSeedFor(accountId);
+  const flagSeed = player?.flagSeed ?? (await flagSeedFor(accountId));
   if (!player) {
     return json({
-      player: null, flagSeed, score: 0, parks: [], takeovers: [], visitedToday: [], visitedTodayUntil: null, loggedToday: [], founderPoints: 0,
-      foundingReviews: { pending: [], decided: [] }, badges: [], flagPatches: [], newBadges: [], serverTime: new Date(now).toISOString(),
+      player: null,
+      flagSeed,
+      score: 0,
+      parks: [],
+      takeovers: [],
+      visitedToday: [],
+      visitedTodayUntil: null,
+      loggedToday: [],
+      founderPoints: 0,
+      foundingReviews: { pending: [], decided: [] },
+      badges: [],
+      flagPatches: [],
+      newBadges: [],
+      serverTime: new Date(now).toISOString(),
     });
   }
   const serverTime = new Date(now).toISOString();
   // Every badge rule is checked again on read: holding badges unlock with time, and crew and
   // operator-approved founding badges through other people's actions.
-  const newBadges = await store.awardBadges?.(accountId, serverTime) ?? [];
+  const newBadges = (await store.awardBadges?.(accountId, serverTime)) ?? [];
   const [summary, founderPoints, reviews, badges] = await Promise.all([
     store.summary(accountId, serverTime),
     store.founderPoints?.(accountId, serverTime) ?? Promise.resolve(0),
@@ -357,10 +400,15 @@ async function getMe(env: GameEnv, auth: GameAuth, dependencies: GameDependencie
   await emit(dependencies, badgeEvents(newBadges, accountId));
   // founderPoints is already part of score; the app can show it separately.
   return json({
-    player: apiPlayer(player), flagSeed, ...summary, founderPoints,
+    player: apiPlayer(player),
+    flagSeed,
+    ...summary,
+    founderPoints,
     foundingReviews: apiFoundingReviews(reviews, dependencies.publicOrigin ?? ""),
     // Additive (#175): every badge with its progress, the badges worn on the flag, and the ones this read unlocked.
-    badges: badges.badges, flagPatches: badges.patches, newBadges: apiNewBadges(newBadges),
+    badges: badges.badges,
+    flagPatches: badges.patches,
+    newBadges: apiNewBadges(newBadges),
     serverTime,
   });
 }
@@ -377,8 +425,12 @@ async function getDex(env: GameEnv, auth: GameAuth, dependencies: GameDependenci
   const parks = await store.dex(accountId, serverTime);
   return json({
     parks: parks.map((park) => ({
-      parkId: park.parkId, visits: park.days.length, days: park.days,
-      firstVisitAt: park.firstVisitAt, lastVisitAt: park.lastVisitAt, hidden: park.hidden,
+      parkId: park.parkId,
+      visits: park.days.length,
+      days: park.days,
+      firstVisitAt: park.firstVisitAt,
+      lastVisitAt: park.lastVisitAt,
+      hidden: park.hidden,
     })),
     serverTime,
   });
@@ -440,12 +492,7 @@ async function getLeaderboard(env: GameEnv, dependencies: GameDependencies, now:
 }
 
 /** Routes `/api/game/*`. Returns null for other paths. Throws HttpError for the shared error format. */
-export async function handleGameRequest(
-  request: Request,
-  env: GameEnv,
-  auth: GameAuth,
-  dependencies: GameDependencies = {},
-): Promise<Response | null> {
+export async function handleGameRequest(request: Request, env: GameEnv, auth: GameAuth, dependencies: GameDependencies = {}): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (path !== "/api/game" && !path.startsWith("/api/game/")) return null;
   const now = dependencies.now?.() ?? Date.now();

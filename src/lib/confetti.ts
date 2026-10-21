@@ -14,12 +14,7 @@ function instance() {
   host.appendChild(canvas);
   fire = confetti.create(canvas, { resize: true, useWorker: false });
   try {
-    shapes = [
-      confetti.shapeFromPath({ path: "M0 10 C4 2 12 0 20 0 C18 8 14 16 0 20 C2 16 2 13 0 10Z" }),
-      "star",
-      "circle",
-      "square",
-    ];
+    shapes = [confetti.shapeFromPath({ path: "M0 10 C4 2 12 0 20 0 C18 8 14 16 0 20 C2 16 2 13 0 10Z" }), "star", "circle", "square"];
   } catch {
     shapes = ["star", "circle", "square"];
   }

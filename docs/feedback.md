@@ -24,4 +24,4 @@ Run `npm run typecheck`, `npm test`, and `npm run build`. `npm run email:preview
 
 Native field builds use `VITE_FEEDBACK_API_URL` from `.env.field`; web deployments use the same origin. The API requires `DATABASE_URL`, `SESSION_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, and `OPERATOR_EMAIL`. `OPERATOR_PASSWORD_HASH` is still part of the delivery secret bundle but is no longer read. `OPERATOR_DASHBOARD_URL` is optional. The deployment helper sets the public URL, native origin allowlist, release SHA, and email mode. Keep every secret out of Vite variables and source control.
 
-Follow [delivery.md](delivery.md) for the isolated preview, exact staging release, and owned teardown. Preview mail is disabled and previews receive fresh database and operator credentials. Production promotion is a separate task.
+Follow [delivery.md](delivery.md): the PR checks gate the merge, then the exact staging release is verified. Production promotion is a separate task.

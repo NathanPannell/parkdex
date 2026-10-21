@@ -55,19 +55,45 @@ function importedParks(catalogue: Place[], review: Review, features: Feature[]):
     const place = places.get(id)!;
     const p = item.presentation;
     const park = {
-      id, name: place.name, short: p.short, category: place.category, region: place.region,
-      lat: place.latitude, lng: place.longitude, biome: p.biome, shape: p.shape, rarity: p.rarity,
-      scene: p.scene ?? null, seed: p.seed, blurb: p.blurb,
+      id,
+      name: place.name,
+      short: p.short,
+      category: place.category,
+      region: place.region,
+      lat: place.latitude,
+      lng: place.longitude,
+      biome: p.biome,
+      shape: p.shape,
+      rarity: p.rarity,
+      scene: p.scene ?? null,
+      seed: p.seed,
+      blurb: p.blurb,
     };
     const source = geometry.get(id)!;
     const coordinates = source.type === "Polygon" ? [source.coordinates] : source.coordinates;
-    return { park, feature: { type: "Feature", properties: { id, biome: p.biome }, geometry: { type: "MultiPolygon", coordinates } }, drive: { drive: item.drive, walkM: item.walkM } };
+    return {
+      park,
+      feature: { type: "Feature", properties: { id, biome: p.biome }, geometry: { type: "MultiPolygon", coordinates } },
+      drive: { drive: item.drive, walkM: item.walkM },
+    };
   });
 }
 
-const bcParks = importedParks(json(new URL("catalogue.json", BC)), json(new URL("new-park-review.json", BC)), gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", BC)).features);
-const islandParks = importedParks(json(new URL("catalogue.json", ISLAND)), json(new URL("new-park-review.json", ISLAND)), json<{ features: Feature[] }>(new URL("boundaries.geojson", ISLAND)).features);
-const nsParks = importedParks(json(new URL("catalogue.json", NS)), json(new URL("new-park-review.json", NS)), gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", NS)).features);
+const bcParks = importedParks(
+  json(new URL("catalogue.json", BC)),
+  json(new URL("new-park-review.json", BC)),
+  gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", BC)).features,
+);
+const islandParks = importedParks(
+  json(new URL("catalogue.json", ISLAND)),
+  json(new URL("new-park-review.json", ISLAND)),
+  json<{ features: Feature[] }>(new URL("boundaries.geojson", ISLAND)).features,
+);
+const nsParks = importedParks(
+  json(new URL("catalogue.json", NS)),
+  json(new URL("new-park-review.json", NS)),
+  gzJson<{ features: Feature[] }>(new URL("boundaries.geojson.gz", NS)).features,
+);
 
 function release(base: Snapshot, ...additions: Added[]): Snapshot {
   const added = additions.flat();
@@ -95,7 +121,16 @@ const FULL_RELEASES = [
 
 function response() {
   let body = "";
-  return { statusCode: 0, get body() { return body; }, setHeader() {}, end(value?: string) { body = value ?? ""; } };
+  return {
+    statusCode: 0,
+    get body() {
+      return body;
+    },
+    setHeader() {},
+    end(value?: string) {
+      body = value ?? "";
+    },
+  };
 }
 
 async function served(snapshot: Snapshot, reader: string): Promise<{ status: number; body: string }> {
@@ -150,16 +185,38 @@ describe.each(FULL_RELEASES)("reader 3 catalogue: $name", ({ snapshot }) => {
     const accessFields = { googleMapsUrl: null, trailheadLat: null, trailheadLng: null };
     const parks: Json[] = snapshot.parks.map((park) => ({ ...accessFields, ...park }));
     const version = "a".repeat(64);
-    const pointer = { revision: snapshot.revision, version, indexUrl: `https://kip-assets.parkdex.app/releases/${version}/catalogue/index.json`, indexSha256: version, indexBytes: 1000, parkCount: parks.length };
+    const pointer = {
+      revision: snapshot.revision,
+      version,
+      indexUrl: `https://kip-assets.parkdex.app/releases/${version}/catalogue/index.json`,
+      indexSha256: version,
+      indexBytes: 1000,
+      parkCount: parks.length,
+    };
     // Releases group boundaries by area, so chunk order is not park order.
     const ids = parks.map((park) => String(park.id)).reverse();
     const chunkIds = Array.from({ length: Math.ceil(ids.length / 100) }, (_, index) => ids.slice(index * 100, index * 100 + 100));
-    const index = currentReader.parseCatalogueIndex({
-      schema: "parkdex.content-catalogue/v1", revision: snapshot.revision, parks, drive: snapshot.drive, assets: snapshot.assets, map: snapshot.map,
-      boundaryChunks: chunkIds.map((parkIds, number) => ({ path: `catalogue/boundaries/${String(number).padStart(3, "0")}.json`, sha256: "b".repeat(64), byte_size: 1, parkIds })),
-    }, pointer);
+    const index = currentReader.parseCatalogueIndex(
+      {
+        schema: "parkdex.content-catalogue/v1",
+        revision: snapshot.revision,
+        parks,
+        drive: snapshot.drive,
+        assets: snapshot.assets,
+        map: snapshot.map,
+        boundaryChunks: chunkIds.map((parkIds, number) => ({
+          path: `catalogue/boundaries/${String(number).padStart(3, "0")}.json`,
+          sha256: "b".repeat(64),
+          byte_size: 1,
+          parkIds,
+        })),
+      },
+      pointer,
+    );
     const byId = new Map(snapshot.boundaries.features.map((feature) => [String(feature.properties.id), feature]));
-    const chunks = index.chunks.map((chunk) => currentReader.parseCatalogueChunk({ schema: "parkdex.content-boundaries/v1", features: chunk.parkIds.map((id) => byId.get(id)) }, chunk));
+    const chunks = index.chunks.map((chunk) =>
+      currentReader.parseCatalogueChunk({ schema: "parkdex.content-boundaries/v1", features: chunk.parkIds.map((id) => byId.get(id)) }, chunk),
+    );
     const state = currentReader.assembleCatalogueSnapshot(index, chunks);
     expect(state.parks).toHaveLength(snapshot.parks.length);
     expect(state.boundaries.features).toHaveLength(snapshot.parks.length);
@@ -174,7 +231,13 @@ describe.each(FULL_RELEASES)("reader 3 catalogue: $name", ({ snapshot }) => {
     const res = response();
     const repository = {
       snapshot: async () => staging,
-      changes: async () => ({ headRevision: staging.revision + 1, retentionFloor: 0, hasMore: false, hubs: staging.drive.hubs, batches: [{ revision: staging.revision + 1, changes }] }),
+      changes: async () => ({
+        headRevision: staging.revision + 1,
+        retentionFloor: 0,
+        hasMore: false,
+        hubs: staging.drive.hubs,
+        batches: [{ revision: staging.revision + 1, changes }],
+      }),
       scene: async () => null,
     };
     await createChangesHandler({ repository })({ method: "GET", query: { after: String(staging.revision), limit: "50", reader: "3" }, headers: {} }, res);
@@ -192,7 +255,13 @@ describe("Nova Scotia reaching reader 3 installs that are behind", () => {
     const res = response();
     const repository = {
       snapshot: async () => staging,
-      changes: async () => ({ headRevision: staging.revision + 1, retentionFloor: 0, hasMore: false, hubs: staging.drive.hubs, batches: [{ revision: staging.revision + 1, changes }] }),
+      changes: async () => ({
+        headRevision: staging.revision + 1,
+        retentionFloor: 0,
+        hasMore: false,
+        hubs: staging.drive.hubs,
+        batches: [{ revision: staging.revision + 1, changes }],
+      }),
       scene: async () => null,
     };
     await createChangesHandler({ repository })({ method: "GET", query: { after: String(staging.revision), limit: "50", reader: "3" }, headers: {} }, res);
@@ -205,7 +274,9 @@ describe.each([
   { name: "legacy BC", bundle: BC, parks: bcParks, minimum: 100 },
   { name: "Nova Scotia", bundle: NS, parks: nsParks, minimum: 40 },
 ])("$name boundaries in the app's containment check", ({ bundle, parks, minimum }) => {
-  const report = json<{ parks: { id: string; status: string; probes?: { secondaryRegion?: [number, number]; hole?: [number, number] } }[] }>(new URL("comparison-report.json", bundle));
+  const report = json<{ parks: { id: string; status: string; probes?: { secondaryRegion?: [number, number]; hole?: [number, number] } }[] }>(
+    new URL("comparison-report.json", bundle),
+  );
   const byId = new Map(parks.map(({ park, feature }) => [String(park.id), feature.geometry as unknown as Boundary]));
   const probed = report.parks.filter((row) => row.status === "new" && row.probes && Object.keys(row.probes).length);
 

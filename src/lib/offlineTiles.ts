@@ -177,8 +177,7 @@ const TILE_URL = /^pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)$/;
  */
 export const detailedAreaTile: AddProtocolAction = async (request, controller) => {
   const match = TILE_URL.exec(request.url);
-  if (match && decodeURIComponent(match[1]!) !== BASE_OVERVIEW_KEY &&
-    !tileIntersectsContentBounds(Number(match[2]), Number(match[3]), Number(match[4]))) {
+  if (match && decodeURIComponent(match[1]!) !== BASE_OVERVIEW_KEY && !tileIntersectsContentBounds(Number(match[2]), Number(match[3]), Number(match[4]))) {
     return { data: new Uint8Array() };
   }
   if (!tileProtocol) throw new Error("Map tiles are not registered");
@@ -342,11 +341,7 @@ export class BundledOverviewSource implements Source {
 
   async getBytes(offset: number, length: number, signal?: AbortSignal): Promise<RangeResponse> {
     throwIfAborted(signal);
-    if (
-      !Number.isSafeInteger(offset) || offset < 0 ||
-      !Number.isSafeInteger(length) || length < 0 ||
-      !Number.isSafeInteger(offset + length)
-    ) {
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0 || !Number.isSafeInteger(offset + length)) {
       throw new RangeError("Invalid bundled PMTiles byte range");
     }
     if (length === 0) return { data: new ArrayBuffer(0) };
@@ -477,10 +472,7 @@ export function reloadDetailedMapSource(map: Pick<MapLibreMap, "getStyle" | "set
 }
 
 /** Consume a pending refresh before changing style, including synchronous style.load events. */
-export function flushPendingDetailedMapSourceRefresh(
-  map: Pick<MapLibreMap, "getStyle" | "setStyle">,
-  pending: { current: boolean },
-): boolean {
+export function flushPendingDetailedMapSourceRefresh(map: Pick<MapLibreMap, "getStyle" | "setStyle">, pending: { current: boolean }): boolean {
   if (!pending.current) return false;
   pending.current = false;
   if (reloadDetailedMapSource(map)) return true;
@@ -501,9 +493,12 @@ function withCoverageRevision(tileTemplate: string): string {
 
 function validateMapManifest(manifest: MapManifest): void {
   if (
-    !Number.isSafeInteger(manifest.size) || manifest.size <= 0 ||
-    !Number.isSafeInteger(manifest.chunkBytes) || manifest.chunkBytes <= 0 ||
-    !Number.isSafeInteger(manifest.count) || manifest.count <= 0 ||
+    !Number.isSafeInteger(manifest.size) ||
+    manifest.size <= 0 ||
+    !Number.isSafeInteger(manifest.chunkBytes) ||
+    manifest.chunkBytes <= 0 ||
+    !Number.isSafeInteger(manifest.count) ||
+    manifest.count <= 0 ||
     Math.ceil(manifest.size / manifest.chunkBytes) !== manifest.count
   ) {
     throw new Error("Content map manifest is invalid");

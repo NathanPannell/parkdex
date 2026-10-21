@@ -148,7 +148,10 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   useEffect(() => {
     if (status === "sent") return;
     if (saveDraft(draft, draftGeneration)) setDraftSaveError("");
-    else setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
+    else
+      setDraftSaveError(
+        "This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.",
+      );
   }, [draft, draftGeneration, status]);
 
   useEffect(() => {
@@ -200,7 +203,16 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const emailOk = emailFormatOk && (!draft.contact || email.length > 0);
   const emailError = !emailFormatOk ? "Check that email address." : draft.contact && !email ? "Add an email address to allow follow-up." : "";
   const isEditingLocked = status === "sending" || shotLoading;
-  const canSend = draft.message.trim().length > 0 && emailOk && !shotLoading && !shotProcessing && !attemptResetPending && !storageError && !draftSaveError && nativeInfoStatus === "ready" && status !== "sending";
+  const canSend =
+    draft.message.trim().length > 0 &&
+    emailOk &&
+    !shotLoading &&
+    !shotProcessing &&
+    !attemptResetPending &&
+    !storageError &&
+    !draftSaveError &&
+    nativeInfoStatus === "ready" &&
+    status !== "sending";
   const isSending = status === "sending";
 
   const close = () => {
@@ -221,7 +233,8 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
         if (resetNumber === resetCountRef.current) setStorageError("");
       })
       .catch(() => {
-        if (resetNumber === resetCountRef.current) setStorageError("Couldn't update the saved report on this phone. Check device storage before sending again.");
+        if (resetNumber === resetCountRef.current)
+          setStorageError("Couldn't update the saved report on this phone. Check device storage before sending again.");
       })
       .finally(() => {
         if (resetNumber === resetCountRef.current) setAttemptResetPending(false);
@@ -290,7 +303,9 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const send = async () => {
     if (sendingRef.current || !canSend) return;
     if (!saveDraft(draft, draftGeneration)) {
-      setDraftSaveError("This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.");
+      setDraftSaveError(
+        "This device couldn't save feedback draft data. Sending is paused, and report details may be lost if you close this sheet. Check device storage and try again.",
+      );
       return;
     }
     setDraftSaveError("");
@@ -369,7 +384,14 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
           {status === "sent" && savedReport ? (
             <motion.div key="sent" className="fb-done" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
               <Kip pose="cheer" size={150} />
-              <span className="eyebrow">Report {savedReport.id}</span>
+              <span className="eyebrow">
+                Report PD-
+                {savedReport.id
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9]/g, "")
+                  .slice(0, 10)}
+              </span>
+              {/* The same reference as the receipt email (worker/emails.ts). */}
               <h2>Feedback saved</h2>
               <p>
                 Your {FEEDBACK_KINDS.find((item) => item.id === savedReport.kind)?.label.toLowerCase()} report is saved.
@@ -393,7 +415,6 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <Kip pose="avatar" size={52} />
                 </span>
                 <div>
-                  <span className="eyebrow">Internal testing</span>
                   <h2 id="fb-title">Send feedback</h2>
                 </div>
               </header>
@@ -439,21 +460,39 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <span className="fb-label">
                     Screenshot <em>Optional</em>
                   </span>
-                  <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={pickShot} disabled={isEditingLocked || shotProcessing} />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    hidden
+                    onChange={pickShot}
+                    disabled={isEditingLocked || shotProcessing}
+                  />
                   {shot ? (
                     <div className="fb-shot card">
                       <img src={shot.url} alt="Attached screenshot" />
                       <span className="fb-shot__name">{shot.name}</span>
-                      <button type="button" className="fb-shot__remove" onClick={() => void removeShot()} aria-label="Remove screenshot" disabled={isEditingLocked || shotProcessing}>
+                      <button
+                        type="button"
+                        className="fb-shot__remove"
+                        onClick={() => void removeShot()}
+                        aria-label="Remove screenshot"
+                        disabled={isEditingLocked || shotProcessing}
+                      >
                         <Icon name="close" size={16} stroke={3} />
                       </button>
                     </div>
                   ) : (
                     <button type="button" className="fb-attach" onClick={() => fileRef.current?.click()} disabled={isEditingLocked || shotProcessing}>
-                      <Icon name="image" size={20} /> {shotProcessing ? "Preparing screenshot…" : shotLoading ? "Loading saved screenshot…" : "Attach a screenshot"}
+                      <Icon name="image" size={20} />{" "}
+                      {shotProcessing ? "Preparing screenshot…" : shotLoading ? "Loading saved screenshot…" : "Attach a screenshot"}
                     </button>
                   )}
-                  {shotError && <span className="fb-error-text" role="alert">{shotError}</span>}
+                  {shotError && (
+                    <span className="fb-error-text" role="alert">
+                      {shotError}
+                    </span>
+                  )}
                 </div>
 
                 <label className="fb-field">
@@ -473,7 +512,13 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                     aria-invalid={Boolean(emailError && emailTouched)}
                     disabled={isEditingLocked}
                   />
-                  {emailError && emailTouched ? <span className="fb-error-text">{emailError}</span> : <span className="fb-error-text" style={{ color: "var(--ink-soft)" }}>Used for a receipt. The switch below separately allows follow-up. No marketing.</span>}
+                  {emailError && emailTouched ? (
+                    <span className="fb-error-text">{emailError}</span>
+                  ) : (
+                    <span className="fb-error-text" style={{ color: "var(--ink-soft)" }}>
+                      Used for a receipt. The switch below separately allows follow-up. No marketing.
+                    </span>
+                  )}
                 </label>
 
                 <div className="fb-field">
@@ -500,7 +545,12 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   </button>
                   <AnimatePresence initial={false}>
                     {draft.contact && (
-                      <motion.div className="fb-email" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+                      <motion.div
+                        className="fb-email"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                      >
                         <span className="fb-error-text" style={{ color: "var(--ink-soft)" }}>
                           Follow-up uses the receipt email above. An email address is required for this permission.
                         </span>
@@ -517,7 +567,9 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   <dl>
                     <dt>App</dt>
                     <dd>
-                      {nativeInfoStatus === "loading" && !retryContext ? "Loading installed app details…" : `Parkdex ${displayContext.version} · build ${displayContext.build} · ${displayContext.platform}`}
+                      {nativeInfoStatus === "loading" && !retryContext
+                        ? "Loading installed app details…"
+                        : `Parkdex ${displayContext.version} · build ${displayContext.build} · ${displayContext.platform}`}
                     </dd>
                     <dt>Screen</dt>
                     <dd>{displayContext.screen}</dd>
@@ -530,8 +582,16 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   </dl>
                   <p>Your location, photos and logs are never included. Screenshots are only sent if you attach one.</p>
                 </details>
-                {storageError && <span className="fb-error-text" role="alert">{storageError}</span>}
-                {draftSaveError && <span className="fb-error-text" role="alert">{draftSaveError}</span>}
+                {storageError && (
+                  <span className="fb-error-text" role="alert">
+                    {storageError}
+                  </span>
+                )}
+                {draftSaveError && (
+                  <span className="fb-error-text" role="alert">
+                    {draftSaveError}
+                  </span>
+                )}
               </div>
 
               <div className="fb-foot">

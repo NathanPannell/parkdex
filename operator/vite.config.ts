@@ -16,7 +16,12 @@ function devApi(): Plugin {
         if (!handler) {
           const { createDashboardApi } = await server.ssrLoadModule("/server/api.ts");
           const { demoDependencies } = await server.ssrLoadModule("/server/demo.ts");
-          const env = { ...process.env, DASHBOARD_ENVIRONMENT: process.env.DATABASE_URL ? process.env.DASHBOARD_ENVIRONMENT : "local demo", EMAIL_MODE: process.env.EMAIL_MODE ?? "disabled", ...(process.env.DATABASE_URL ? {} : { STAGING_DATABASE_URL: "demo" }) };
+          const env = {
+            ...process.env,
+            DASHBOARD_ENVIRONMENT: process.env.DATABASE_URL ? process.env.DASHBOARD_ENVIRONMENT : "local demo",
+            EMAIL_MODE: process.env.EMAIL_MODE ?? "disabled",
+            ...(process.env.DATABASE_URL ? {} : { STAGING_DATABASE_URL: "demo" }),
+          };
           const api = createDashboardApi(process.env.DATABASE_URL ? {} : demoDependencies());
           handler = (request) => api(request, env);
         }

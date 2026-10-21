@@ -4,8 +4,13 @@ import { markerPoint, positionInside, toleranceFor, validatePosition } from "./p
 import { pointInMultiPolygon, type MultiPolygon, type Position } from "./osmParks.ts";
 import { HttpError } from "./validation.ts";
 
-const box = (west: number, south: number, east: number, north: number): Position[] =>
-  [[west, south], [east, south], [east, north], [west, north], [west, south]];
+const box = (west: number, south: number, east: number, north: number): Position[] => [
+  [west, south],
+  [east, south],
+  [east, north],
+  [west, north],
+  [west, south],
+];
 // Paterson Park in Ladner, about 290 m by 245 m, plus a separate far part with a pond.
 const PATERSON: MultiPolygon = { type: "MultiPolygon", coordinates: [[box(-123.062, 49.088, -123.058, 49.0902)]] };
 const TWO_PARTS: MultiPolygon = {
@@ -45,12 +50,28 @@ test("a position in a hole is outside the park", () => {
 test("positions are validated strictly and imprecise fixes are refused", () => {
   assert.deepEqual(validatePosition({ lat: 49.089, lng: -123.06, accuracyM: 12.5 }), { lat: 49.089, lng: -123.06, accuracyM: 12.5 });
   assert.deepEqual(validatePosition({ lat: 49.089, lng: -123.06, accuracyM: 100 }).accuracyM, 100);
-  for (const bad of [null, [], {}, { lat: 49, lng: -123 }, { lat: 49, lng: -123, accuracyM: 5, extra: 1 }, { lat: "49", lng: -123, accuracyM: 5 },
-    { lat: 91, lng: -123, accuracyM: 5 }, { lat: 49, lng: -181, accuracyM: 5 }, { lat: 49, lng: -123, accuracyM: -1 }, { lat: Number.NaN, lng: -123, accuracyM: 5 }]) {
-    assert.throws(() => validatePosition(bad), (error: unknown) => error instanceof HttpError && error.status === 400 && error.code === "invalid_position", JSON.stringify(bad));
+  for (const bad of [
+    null,
+    [],
+    {},
+    { lat: 49, lng: -123 },
+    { lat: 49, lng: -123, accuracyM: 5, extra: 1 },
+    { lat: "49", lng: -123, accuracyM: 5 },
+    { lat: 91, lng: -123, accuracyM: 5 },
+    { lat: 49, lng: -181, accuracyM: 5 },
+    { lat: 49, lng: -123, accuracyM: -1 },
+    { lat: Number.NaN, lng: -123, accuracyM: 5 },
+  ]) {
+    assert.throws(
+      () => validatePosition(bad),
+      (error: unknown) => error instanceof HttpError && error.status === 400 && error.code === "invalid_position",
+      JSON.stringify(bad),
+    );
   }
-  assert.throws(() => validatePosition({ lat: 49, lng: -123, accuracyM: 101 }),
-    (error: unknown) => error instanceof HttpError && error.status === 422 && error.code === "location_imprecise" && /not precise enough/.test(error.message));
+  assert.throws(
+    () => validatePosition({ lat: 49, lng: -123, accuracyM: 101 }),
+    (error: unknown) => error instanceof HttpError && error.status === 422 && error.code === "location_imprecise" && /not precise enough/.test(error.message),
+  );
 });
 
 test("a new park's marker is inside the part the founder stands in, and is not the founder's position", () => {

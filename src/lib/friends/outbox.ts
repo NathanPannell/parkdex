@@ -9,8 +9,7 @@ import { isFinalAddError, type AddFriendResponse, type FriendsBoard, type Friend
 export type PendingSource = "scan" | "typed" | "link";
 export type PendingFriend = { code: string; queuedAt: string; source: PendingSource };
 export type FlushOutcome =
-  | { code: string; status: "added" | "already_friends"; friend: AddFriendResponse["friend"] }
-  | { code: string; status: "rejected"; error: FriendsError };
+  { code: string; status: "added" | "already_friends"; friend: AddFriendResponse["friend"] } | { code: string; status: "rejected"; error: FriendsError };
 export type CachedBoard = { board: FriendsBoard; fetchedAt: string };
 
 type Storage = Pick<globalThis.Storage, "getItem" | "setItem" | "removeItem">;
@@ -32,7 +31,7 @@ function storage(): Storage | null {
 function read(key: string, store: Storage | null): unknown {
   try {
     const raw = store?.getItem(key);
-    return raw ? JSON.parse(raw) as unknown : null;
+    return raw ? (JSON.parse(raw) as unknown) : null;
   } catch {
     return null;
   }
@@ -53,7 +52,7 @@ export function readOutbox(accountId: string, store: Storage | null = storage())
   const value = read(outboxKey(accountId), store);
   if (!Array.isArray(value)) return [];
   return value.flatMap((item) => {
-    const row = typeof item === "object" && item !== null ? item as Record<string, unknown> : null;
+    const row = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : null;
     return row && typeof row.code === "string" && typeof row.queuedAt === "string" && SOURCES.has(row.source as PendingSource)
       ? [{ code: row.code, queuedAt: row.queuedAt, source: row.source as PendingSource }]
       : [];
@@ -63,7 +62,11 @@ export function readOutbox(accountId: string, store: Storage | null = storage())
 function writeOutbox(accountId: string, pending: PendingFriend[], store: Storage | null): void {
   if (pending.length) write(outboxKey(accountId), pending, store);
   else {
-    try { store?.removeItem(outboxKey(accountId)); } catch { /* Nothing to clear. */ }
+    try {
+      store?.removeItem(outboxKey(accountId));
+    } catch {
+      /* Nothing to clear. */
+    }
   }
 }
 

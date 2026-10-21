@@ -1,13 +1,5 @@
 import { database } from "./db.js";
-import type {
-  EmailAudience,
-  EmailStatus,
-  FeedbackContext,
-  FeedbackEmailReport,
-  FeedbackKind,
-  FeedbackStatus,
-  ValidatedFeedback,
-} from "./validation.ts";
+import type { EmailAudience, EmailStatus, FeedbackContext, FeedbackEmailReport, FeedbackKind, FeedbackStatus, ValidatedFeedback } from "./validation.ts";
 
 export interface ResendPayload {
   from: string;
@@ -90,7 +82,14 @@ export interface FeedbackStore {
   getEmailDelivery(id: string, audience: EmailAudience): Promise<EmailDeliveryView | null>;
   claimEmail(id: string, audience: EmailAudience, leaseToken: string, confirmAmbiguousAfter24h: boolean): Promise<ClaimEmailResult>;
   markEmailDisabled(id: string, audience: EmailAudience): Promise<void>;
-  finishEmail(id: string, audience: EmailAudience, leaseToken: string, state: "sent" | "failed" | "ambiguous", error: string | null, providerMessageId?: string | null): Promise<void>;
+  finishEmail(
+    id: string,
+    audience: EmailAudience,
+    leaseToken: string,
+    state: "sent" | "failed" | "ambiguous",
+    error: string | null,
+    providerMessageId?: string | null,
+  ): Promise<void>;
 }
 
 function stringValue(value: unknown): string {
@@ -104,7 +103,11 @@ function nullableString(value: unknown): string | null {
 
 function jsonValue<T>(value: unknown, fallback: T): T {
   if (typeof value === "string") {
-    try { return JSON.parse(value) as T; } catch { return fallback; }
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
   }
   return (value ?? fallback) as T;
 }

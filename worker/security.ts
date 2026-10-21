@@ -33,12 +33,7 @@ export interface OriginEnvironment {
 }
 
 export function allowedOrigins(request: Request, env: OriginEnvironment): Set<string> {
-  const origins = new Set<string>([
-    new URL(request.url).origin,
-    "http://localhost",
-    "https://localhost",
-    "capacitor://localhost",
-  ]);
+  const origins = new Set<string>([new URL(request.url).origin, "http://localhost", "https://localhost", "capacitor://localhost"]);
   for (const value of (env.ALLOWED_ORIGINS ?? "").split(/[\s,]+/)) {
     const origin = normalizedOrigin(value);
     if (origin) origins.add(origin);

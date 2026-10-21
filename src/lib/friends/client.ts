@@ -19,6 +19,8 @@ export type FriendsErrorCode =
   | "too_many_friends"
   | "invalid_friend_code"
   | "friend_not_found"
+  | "crewmate_not_found"
+  | "own_handle"
   | "handle_required"
   | "account_deleting"
   | "invalid_request"
@@ -27,12 +29,30 @@ export type FriendsErrorCode =
   | "offline";
 
 const KNOWN_CODES = new Set<FriendsErrorCode>([
-  "friend_code_not_found", "own_friend_code", "too_many_friends", "invalid_friend_code", "friend_not_found",
-  "handle_required", "account_deleting", "invalid_request", "unauthenticated", "unavailable", "offline",
+  "friend_code_not_found",
+  "own_friend_code",
+  "too_many_friends",
+  "invalid_friend_code",
+  "friend_not_found",
+  "crewmate_not_found",
+  "own_handle",
+  "handle_required",
+  "account_deleting",
+  "invalid_request",
+  "unauthenticated",
+  "unavailable",
+  "offline",
 ]);
 
 /** Errors that will not change by trying again later, so a queued add is dropped. */
-const FINAL_ADD_ERRORS = new Set<FriendsErrorCode>(["friend_code_not_found", "own_friend_code", "too_many_friends", "invalid_friend_code", "invalid_request", "account_deleting"]);
+const FINAL_ADD_ERRORS = new Set<FriendsErrorCode>([
+  "friend_code_not_found",
+  "own_friend_code",
+  "too_many_friends",
+  "invalid_friend_code",
+  "invalid_request",
+  "account_deleting",
+]);
 
 const MESSAGES: Record<FriendsErrorCode, string> = {
   friend_code_not_found: "No one has that friend code. Check it and try again.",
@@ -40,6 +60,8 @@ const MESSAGES: Record<FriendsErrorCode, string> = {
   too_many_friends: "You or your friend already have 200 friends.",
   invalid_friend_code: "Friend codes are 8 letters and numbers.",
   friend_not_found: "You aren't friends with that player anymore.",
+  crewmate_not_found: "Add crewmates here within a day of your crew. After that, use their friend code.",
+  own_handle: "That's your own handle.",
   handle_required: "Pick a handle before you add friends.",
   account_deleting: "This account is being deleted.",
   invalid_request: "Parkdex couldn't use that request.",
@@ -51,7 +73,11 @@ const MESSAGES: Record<FriendsErrorCode, string> = {
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export class FriendsError extends Error {
-  constructor(readonly code: FriendsErrorCode, readonly status: number, message: string = MESSAGES[code]) {
+  constructor(
+    readonly code: FriendsErrorCode,
+    readonly status: number,
+    message: string = MESSAGES[code],
+  ) {
     super(message);
     this.name = "FriendsError";
   }
@@ -66,7 +92,7 @@ export function isFinalAddError(error: unknown): boolean {
 }
 
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function text(value: unknown): string | null {
@@ -96,11 +122,13 @@ export function parseBoard(body: unknown): FriendsBoard {
   if (!code || !start || !DAY.test(start) || !end || !DAY.test(end) || !resetsAt || !Number.isFinite(Date.parse(resetsAt))) {
     throw new FriendsError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
   }
-  const players = Array.isArray(row.players) ? row.players.flatMap((item) => {
-    const player = record(item);
-    const friend = parseFriend(player);
-    return player && friend ? [{ ...friend, rank: count(player.rank), uniqueParks: count(player.uniqueParks), isMe: player.isMe === true }] : [];
-  }) : [];
+  const players = Array.isArray(row.players)
+    ? row.players.flatMap((item) => {
+        const player = record(item);
+        const friend = parseFriend(player);
+        return player && friend ? [{ ...friend, rank: count(player.rank), uniqueParks: count(player.uniqueParks), isMe: player.isMe === true }] : [];
+      })
+    : [];
   return { code, week: { start, end, resetsAt }, players, serverTime: text(row.serverTime) ?? new Date().toISOString() };
 }
 
@@ -139,7 +167,11 @@ async function request(accountId: string, path: string, init: RequestInit = {}):
     clearTimeout(timeout);
   }
   let body: unknown = null;
-  try { body = await response.json(); } catch { /* Empty or non-JSON answer. */ }
+  try {
+    body = await response.json();
+  } catch {
+    /* Empty or non-JSON answer. */
+  }
   if (!response.ok) throw new FriendsError(errorCode(response.status, record(body) ?? {}), response.status);
   return body;
 }
@@ -150,6 +182,11 @@ export async function fetchFriendsBoard(accountId: string): Promise<FriendsBoard
 
 export async function sendFriendCode(accountId: string, code: string): Promise<AddFriendResponse> {
   return parseAddFriend(await request(accountId, "/api/friends", { method: "POST", body: JSON.stringify({ code }) }));
+}
+
+/** Adds a player who was in a crew with this one, by handle (`POST /api/friends/crewmate`). */
+export async function sendCrewmate(accountId: string, handle: string): Promise<AddFriendResponse> {
+  return parseAddFriend(await request(accountId, "/api/friends/crewmate", { method: "POST", body: JSON.stringify({ handle }) }));
 }
 
 export async function removeFriend(accountId: string, handle: string): Promise<void> {

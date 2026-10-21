@@ -1,0 +1,2 @@
+# Python format and lint for CI and local checks.
+ruff==0.14.0

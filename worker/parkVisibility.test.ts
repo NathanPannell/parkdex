@@ -21,8 +21,12 @@ test("hidden park lookups ask once with unique ids and read the reason and sourc
 });
 
 test("a database without the visibility migration hides nothing, and other errors still fail", async () => {
-  const missing = client(async () => { throw Object.assign(new Error("relation does not exist"), { code: "42P01" }); });
+  const missing = client(async () => {
+    throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
+  });
   assert.equal(await isParkHidden(missing, "municipal-a"), false);
-  const broken = client(async () => { throw Object.assign(new Error("connection"), { code: "08006" }); });
+  const broken = client(async () => {
+    throw Object.assign(new Error("connection"), { code: "08006" });
+  });
   await assert.rejects(isParkHidden(broken, "municipal-a"));
 });

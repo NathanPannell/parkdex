@@ -97,6 +97,12 @@ const SESSION_SLIDING_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_MS = 90 * 24 * 60 * 60 * 1000;
 const SESSION_RENEW_BEFORE_MS = 7 * 24 * 60 * 60 * 1000;
 const REAUTH_LIFETIME_MS = 5 * 60 * 1000;
+// A guest's session is its only credential, so it lasts a year from the last open instead of 30 days,
+// renews whenever it is a month old, and is not capped at 90 days. Google sign-in shortens it to an
+// ordinary account's limits when it upgrades the guest.
+const GUEST_SESSION_SLIDING_MS = 365 * 24 * 60 * 60 * 1000;
+const GUEST_SESSION_ABSOLUTE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+const GUEST_RENEW_BEFORE_MS = GUEST_SESSION_SLIDING_MS - 30 * 24 * 60 * 60 * 1000;
 const AUTH_AUDIT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const AUTH_RATE_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const AUTH_RETENTION_BATCH_LIMIT = 5_000;
@@ -154,7 +160,14 @@ function errorResponse(error: unknown): Response {
     const headers = error instanceof RateLimitError ? { "retry-after": String(error.retryAfterSeconds) } : undefined;
     return jsonResponse({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status, headers);
   }
-  return jsonResponse({ error: { code: "service_unavailable", message: "Service temporarily unavailable." }, code: "service_unavailable", message: "Service temporarily unavailable." }, 503);
+  return jsonResponse(
+    {
+      error: { code: "service_unavailable", message: "Service temporarily unavailable." },
+      code: "service_unavailable",
+      message: "Service temporarily unavailable.",
+    },
+    503,
+  );
 }
 
 function requireSecret(env: AuthEnvironment): string {
@@ -203,7 +216,11 @@ function nativeAppRequest(request: Request): boolean {
 
 function emailLinkBase(env: AuthEnvironment): URL | null {
   let base: URL;
-  try { base = new URL(env.PUBLIC_APP_URL ?? ""); } catch { return null; }
+  try {
+    base = new URL(env.PUBLIC_APP_URL ?? "");
+  } catch {
+    return null;
+  }
   const localHttp = base.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname);
   if ((base.protocol !== "https:" && !localHttp) || base.username || base.password || !base.hostname) return null;
   return base;
@@ -338,10 +355,9 @@ function dummyPasswordHash(): Promise<string> {
   return dummyHashPromise;
 }
 
-function sessionMaterial(transport: StoredTransport, now: number, dependencies: AuthDependencies): SessionMaterial {
+function sessionMaterial(transport: StoredTransport, now: number, dependencies: AuthDependencies, guest = false): SessionMaterial {
   const token = bytesToken();
   const csrfToken = transport === "web" ? bytesToken() : null;
-  const createdAt = new Date(now);
   return {
     token,
     csrfToken,
@@ -350,8 +366,8 @@ function sessionMaterial(transport: StoredTransport, now: number, dependencies: 
       tokenHash: sha256(token),
       csrfHash: csrfToken ? sha256(csrfToken) : null,
       transport,
-      expiresAt: new Date(now + SESSION_SLIDING_MS).toISOString(),
-      absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_MS).toISOString(),
+      expiresAt: new Date(now + (guest ? GUEST_SESSION_SLIDING_MS : SESSION_SLIDING_MS)).toISOString(),
+      absoluteExpiresAt: new Date(now + (guest ? GUEST_SESSION_ABSOLUTE_MS : SESSION_ABSOLUTE_MS)).toISOString(),
     },
   };
 }
@@ -359,7 +375,10 @@ function sessionMaterial(transport: StoredTransport, now: number, dependencies: 
 function parseCookie(request: Request, name: string): string | null {
   const header = request.headers.get("cookie");
   if (!header) return null;
-  const matches = header.split(";").map((part) => part.trim()).filter((part) => part.startsWith(`${name}=`));
+  const matches = header
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith(`${name}=`));
   if (matches.length !== 1) return null;
   const value = matches[0].slice(name.length + 1);
   return value.length <= 256 ? value : null;
@@ -421,19 +440,11 @@ function assertExpectedAccount(request: Request, accountId: string): void {
   }
 }
 
-export async function authenticateAccount(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext | null> {
+export async function authenticateAccount(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext | null> {
   return (await lookupSession(request, env, dependencies))?.context ?? null;
 }
 
-export async function requireAccount(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext> {
+export async function requireAccount(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext> {
   if (!authAvailable(env)) throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
   const context = await authenticateAccount(request, env, dependencies);
   if (!context) throw new HttpError(401, "authentication_required", "Authentication required.");
@@ -441,11 +452,7 @@ export async function requireAccount(
   return context;
 }
 
-export async function requireAccountMutation(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<AuthContext> {
+export async function requireAccountMutation(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<AuthContext> {
   const lookup = await lookupSession(request, env, dependencies);
   if (!lookup) {
     if (!authAvailable(env)) throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
@@ -503,18 +510,7 @@ function transportHint(request: Request): StoredTransport {
   throw new HttpError(400, "invalid_request", "Invalid authentication transport.");
 }
 
-function requireMethod(request: Request, method: string): void {
-  if (request.method !== method) throw new HttpError(405, "method_not_allowed", "Method not allowed.");
-}
-
-async function reserveLimit(
-  env: AuthEnvironment,
-  store: AccountAuthStore,
-  action: string,
-  scope: string,
-  limit: number,
-  windowMs: number,
-): Promise<string> {
+async function reserveLimit(env: AuthEnvironment, store: AccountAuthStore, action: string, scope: string, limit: number, windowMs: number): Promise<string> {
   const secret = requireSecret(env);
   const scopeHash = hmacScope(secret, action, scope);
   const result = await store.reserveRateLimit(action, scopeHash, limit, windowMs);
@@ -541,7 +537,7 @@ async function eventScope(env: AuthEnvironment, action: string, value: string): 
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character] ?? character);
+  return value.replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 }
 
 function authMailShell(heading: string, body: string): string {
@@ -618,12 +614,9 @@ function queueEmail(
   eventType: string,
   scopeHash: string,
 ): void {
-  const delivery = (dependencies.sendEmail
-    ? dependencies.sendEmail(message, env)
-    : sendResendEmail(message, env, dependencies))
-    .catch(async () => {
-      await store.recordSecurityEvent(eventType, scopeHash, "delivery_failed").catch(() => undefined);
-    });
+  const delivery = (dependencies.sendEmail ? dependencies.sendEmail(message, env) : sendResendEmail(message, env, dependencies)).catch(async () => {
+    await store.recordSecurityEvent(eventType, scopeHash, "delivery_failed").catch(() => undefined);
+  });
   try {
     (dependencies.waitUntil ?? vercelWaitUntil)(delivery);
   } catch {
@@ -671,10 +664,22 @@ async function googleClaims(
   const audienceMatches = typeof claims.aud === "string" && audiences.includes(claims.aud);
   const issuerMatches = claims.iss === "https://accounts.google.com" || claims.iss === "accounts.google.com";
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
-  if (!claims || typeof claims.sub !== "string" || claims.sub.length < 1 || claims.sub.length > 255 ||
-      !audienceMatches || !issuerMatches || !Number.isFinite(expMillis) || expMillis <= now ||
-      !Number.isFinite(iatMillis) || iatMillis > now + 60_000 || expMillis - iatMillis > 3_600_000 ||
-      claims.email_verified !== true || !EMAIL_PATTERN.test(email) || claims.nonce !== expectedNonce) {
+  if (
+    !claims ||
+    typeof claims.sub !== "string" ||
+    claims.sub.length < 1 ||
+    claims.sub.length > 255 ||
+    !audienceMatches ||
+    !issuerMatches ||
+    !Number.isFinite(expMillis) ||
+    expMillis <= now ||
+    !Number.isFinite(iatMillis) ||
+    iatMillis > now + 60_000 ||
+    expMillis - iatMillis > 3_600_000 ||
+    claims.email_verified !== true ||
+    !EMAIL_PATTERN.test(email) ||
+    claims.nonce !== expectedNonce
+  ) {
     throw new HttpError(401, "invalid_google_token", "Google sign-in could not be verified.");
   }
   return { ...claims, email };
@@ -696,6 +701,7 @@ function methodForAuthRoute(path: string): string | null {
   const methods: Record<string, string> = {
     "/api/auth/config": "GET",
     "/api/auth/register": "POST",
+    "/api/auth/guest": "POST",
     "/api/auth/login": "POST",
     "/api/auth/me": "GET",
     "/api/auth/sessions/renew": "POST",
@@ -713,17 +719,21 @@ function methodForAuthRoute(path: string): string | null {
   return methods[path] ?? null;
 }
 
-async function routeAuth(
-  request: Request,
-  env: AuthEnvironment,
-  dependencies: AuthDependencies,
-): Promise<Response | null> {
+async function routeAuth(request: Request, env: AuthEnvironment, dependencies: AuthDependencies): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
   const expectedMethod = methodForAuthRoute(path);
-  if (!expectedMethod) return path === "/api/auth" || path.startsWith("/api/auth/") || path === "/api/account" ? jsonResponse({ error: { code: "not_found", message: "Account API route not found." }, code: "not_found", message: "Account API route not found." }, 404) : null;
+  if (!expectedMethod)
+    return path === "/api/auth" || path.startsWith("/api/auth/") || path === "/api/account"
+      ? jsonResponse({ error: { code: "not_found", message: "Account API route not found." }, code: "not_found", message: "Account API route not found." }, 404)
+      : null;
   if (request.method === "OPTIONS") return noContent({ allow: "GET, POST, DELETE, OPTIONS" });
-  if (request.method !== expectedMethod) return jsonResponse({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405, { allow: `${expectedMethod}, OPTIONS` });
+  if (request.method !== expectedMethod)
+    return jsonResponse(
+      { error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." },
+      405,
+      { allow: `${expectedMethod}, OPTIONS` },
+    );
 
   const now = nowValue(dependencies);
   const nowIso = new Date(now).toISOString();
@@ -735,7 +745,7 @@ async function routeAuth(
     const originAllowed = !origin || requestOriginAllowed(request, env);
     const webClientId = enabled && originAllowed && validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID) ? env.GOOGLE_WEB_CLIENT_ID : null;
     // Installed Android builds read googleWebClientId as their Credential Manager server client ID.
-    const clientId = webClientId && nativeAppRequest(request) ? nativeGoogleClientId(env) ?? webClientId : webClientId;
+    const clientId = webClientId && nativeAppRequest(request) ? (nativeGoogleClientId(env) ?? webClientId) : webClientId;
     const googleNativeEnabled = Boolean(clientId);
     const googleWebEnabled = Boolean(clientId && originAllowed);
     const emailEnabled = enabled;
@@ -788,8 +798,31 @@ async function routeAuth(
     await store.recordSecurityEvent("register", emailScope, "succeeded").catch(() => undefined);
     if (verificationToken && emailDeliveryEnabled(env)) {
       const link = authLink(env, "verification", verificationToken);
-      queueEmail({ to: email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") }, env, dependencies, store, "verification_email", emailScope);
+      queueEmail(
+        { to: email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") },
+        env,
+        dependencies,
+        store,
+        "verification_email",
+        emailScope,
+      );
     }
+    return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, transport, 201, now);
+  }
+
+  if (path === "/api/auth/guest") {
+    // A guest account for a player who picked a @handle but hasn't signed in: no email, no password.
+    const transport = transportHint(request);
+    if (transport === "web") assertTrustedOrigin(request, env, true);
+    const body = await readJson(request);
+    exactKeys(body, new Set(), []);
+    // Phones on one carrier often share an address, so this matches registration's per-address limit.
+    const ipScope = await reserveIpLimit(env, store, request, "guest_ip", 20, 60 * 60 * 1000);
+    await reserveLimit(env, store, "guest_global", "global", 300, 15 * 60 * 1000);
+    const session = sessionMaterial(transport, now, dependencies, true);
+    const result = await store.createGuestAccount(uuidValue(dependencies), session.record);
+    if (!result) throw new HttpError(503, "service_unavailable", "Guest play is unavailable right now.");
+    await store.recordSecurityEvent("guest_created", ipScope, "succeeded").catch(() => undefined);
     return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, transport, 201, now);
   }
 
@@ -823,13 +856,16 @@ async function routeAuth(
     if (!lookup) throw new HttpError(401, "authentication_required", "Authentication required.");
     const account = await store.findAccountById(lookup.context.accountId);
     if (!account || account.deletionState !== "active") throw new HttpError(401, "authentication_required", "Authentication required.");
-    return jsonResponse(accountResult({
-      id: account.id,
-      email: account.email,
-      emailVerified: account.emailVerified,
-      displayName: account.displayName,
-      providers: account.providers,
-    }));
+    return jsonResponse(
+      accountResult({
+        id: account.id,
+        email: account.email,
+        emailVerified: account.emailVerified,
+        displayName: account.displayName,
+        providers: account.providers,
+        guest: account.guest === true,
+      }),
+    );
   }
 
   if (path === "/api/auth/sessions/renew") {
@@ -839,12 +875,14 @@ async function routeAuth(
     else assertTrustedOrigin(request, env, false);
     assertExpectedAccount(request, lookup.context.accountId);
     const expiry = Date.parse(lookup.stored.expiresAt);
-    if (!Number.isFinite(expiry) || expiry - now > SESSION_RENEW_BEFORE_MS) {
+    const guest = lookup.stored.guest === true;
+    const renewBefore = guest ? GUEST_RENEW_BEFORE_MS : SESSION_RENEW_BEFORE_MS;
+    if (!Number.isFinite(expiry) || expiry - now > renewBefore) {
       return jsonResponse({ renewed: false, expiresAt: lookup.stored.expiresAt });
     }
     const transport = lookup.stored.transport;
-    const material = sessionMaterial(transport, now, dependencies);
-    const expiresAt = await store.rotateSession(lookup.stored.sessionId, lookup.stored.tokenHash, material.record, nowIso);
+    const material = sessionMaterial(transport, now, dependencies, guest);
+    const expiresAt = await store.rotateSession(lookup.stored.sessionId, lookup.stored.tokenHash, material.record, nowIso, renewBefore);
     if (!expiresAt) throw new HttpError(401, "session_expired", "Your session has expired. Sign in again.");
     if (transport === "native") return jsonResponse({ renewed: true, sessionToken: material.token, expiresAt });
     if (!material.csrfToken) throw new Error("web renewal is missing a CSRF token");
@@ -876,13 +914,20 @@ async function routeAuth(
     assertExpectedAccount(request, lookup.context.accountId);
     await reserveIpLimit(env, store, request, "verification_request_ip", 10, 15 * 60 * 1000);
     const account = await store.findAccountById(lookup.context.accountId);
-    if (account && account.deletionState === "active" && !account.emailVerified) {
+    if (account && account.deletionState === "active" && !account.emailVerified && account.guest !== true) {
       const accountScope = await reserveLimit(env, store, "verification_request", account.id, 3, 15 * 60 * 1000);
       const token = bytesToken();
       const created = await store.issueActionToken(account.id, "verification", sha256(token), new Date(now + VERIFICATION_LIFETIME_MS).toISOString());
       if (created) {
         const link = authLink(env, "verification", token);
-        queueEmail({ to: account.email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") }, env, dependencies, store, "verification_email", accountScope);
+        queueEmail(
+          { to: account.email, subject: "Verify your Parkdex email", html: authMailHtml(link, "verification"), text: authMailText(link, "verification") },
+          env,
+          dependencies,
+          store,
+          "verification_email",
+          accountScope,
+        );
       }
     }
     return jsonResponse({ accepted: true }, 202);
@@ -911,12 +956,31 @@ async function routeAuth(
       const issued = await store.issueActionToken(account.id, "password_reset", sha256(token), new Date(now + RESET_LIFETIME_MS).toISOString());
       if (issued) {
         const link = authLink(env, "password_reset", token);
-        queueEmail({ to: account.email, subject: "Reset your Parkdex password", html: authMailHtml(link, "password_reset"), text: authMailText(link, "password_reset") }, env, dependencies, store, "password_reset_email", emailScope);
+        queueEmail(
+          { to: account.email, subject: "Reset your Parkdex password", html: authMailHtml(link, "password_reset"), text: authMailText(link, "password_reset") },
+          env,
+          dependencies,
+          store,
+          "password_reset_email",
+          emailScope,
+        );
       }
     } else if (account && account.deletionState === "active" && account.providers.includes("google")) {
       // Only the inbox owner sees this, and the response below is the same, so it reveals nothing about the account.
       const link = accountPageLink(env).toString();
-      queueEmail({ to: account.email, subject: "How to sign in to Parkdex", html: googleSignInMailHtml(link, account.email), text: googleSignInMailText(link, account.email) }, env, dependencies, store, "password_reset_google_email", emailScope);
+      queueEmail(
+        {
+          to: account.email,
+          subject: "How to sign in to Parkdex",
+          html: googleSignInMailHtml(link, account.email),
+          text: googleSignInMailText(link, account.email),
+        },
+        env,
+        dependencies,
+        store,
+        "password_reset_google_email",
+        emailScope,
+      );
     }
     return jsonResponse({ accepted: true }, 202);
   }
@@ -929,7 +993,7 @@ async function routeAuth(
     const tokenHash = sha256(token);
     await reserveLimit(env, store, "password_reset_confirm", token, 5, 60 * 60 * 1000);
     await reserveIpLimit(env, store, request, "password_reset_confirm_ip", 30, 60 * 60 * 1000);
-    if (!await store.hasValidActionToken(tokenHash, "password_reset", nowIso)) {
+    if (!(await store.hasValidActionToken(tokenHash, "password_reset", nowIso))) {
       throw new HttpError(400, "invalid_token", "This link is invalid or has expired.");
     }
     const newHash = await passwordHash(newPassword, dependencies);
@@ -958,7 +1022,8 @@ async function routeAuth(
       if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
       else assertTrustedOrigin(request, env, false);
       assertExpectedAccount(request, lookup.context.accountId);
-      if (purpose === "link") await requireFreshSession(lookup, now);
+      // A guest upgrading to Google has nothing to reauthenticate with; its session is its only credential.
+      if (purpose === "link" && lookup.stored.guest !== true) await requireFreshSession(lookup, now);
       accountId = lookup.context.accountId;
       sessionId = lookup.context.sessionId;
     }
@@ -1017,8 +1082,12 @@ async function routeAuth(
     }
 
     const lookup = await lookupSession(request, env, dependencies);
-    if (!lookup || lookup.context.transport !== (routeTransport === "native" ? "bearer" : "cookie") ||
-        lookup.context.accountId !== challenge.accountId || lookup.context.sessionId !== challenge.sessionId) {
+    if (
+      !lookup ||
+      lookup.context.transport !== (routeTransport === "native" ? "bearer" : "cookie") ||
+      lookup.context.accountId !== challenge.accountId ||
+      lookup.context.sessionId !== challenge.sessionId
+    ) {
       throw new HttpError(401, "authentication_required", "Authentication required.");
     }
     if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
@@ -1089,7 +1158,7 @@ async function routeAuth(
     if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
     else assertTrustedOrigin(request, env, false);
     assertExpectedAccount(request, lookup.context.accountId);
-    await requireFreshSession(lookup, now);
+    if (lookup.stored.guest !== true) await requireFreshSession(lookup, now);
     if (!dependencies.deleteAccountData) throw new HttpError(503, "service_unavailable", "Account deletion is unavailable.");
     const receiptId = uuidValue(dependencies);
     const receipt = await store.beginDeletion(lookup.context.accountId, lookup.context.sessionId, lookup.stored.tokenHash, receiptId, nowIso);
@@ -1111,6 +1180,7 @@ function accountSummaryFromCredentials(account: AccountCredentials): AccountSumm
     emailVerified: account.emailVerified,
     displayName: account.displayName,
     providers: account.providers,
+    guest: account.guest === true,
   };
 }
 
@@ -1136,10 +1206,7 @@ export async function resumeAccountDeletion(
   return { receiptId, status: complete ? "complete" : "pending", complete };
 }
 
-export async function purgeAuthRetention(
-  env: AuthEnvironment,
-  dependencies: AuthDependencies = {},
-): Promise<{ deleted: number; remainingExpired: number }> {
+export async function purgeAuthRetention(env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<{ deleted: number; remainingExpired: number }> {
   if (!env.DATABASE_URL && !dependencies.createStore) {
     throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
   }
@@ -1152,11 +1219,55 @@ export async function purgeAuthRetention(
   );
 }
 
-export async function handleAuthRequest(
-  request: Request,
+// A guest nobody can open any more (it left, uninstalled, or went a year without opening Parkdex)
+// is deleted 30 days later, so its @handle, flags and private photos don't stay forever.
+export const ABANDONED_GUEST_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+// Each run resumes up to this many stuck deletions and marks up to this many new ones, and stops
+// starting deletions after the time budget so the retention request stays well inside its 60 s.
+const ABANDONED_GUEST_BATCH_LIMIT = 10;
+const ABANDONED_GUEST_TIME_BUDGET_MS = 20_000;
+
+/**
+ * Deletes abandoned guest accounts through the ordinary deletion path (private data first, then
+ * the account, whose rows cascade). Deletions an earlier run left pending are resumed first. Runs
+ * with the daily retention job, never on its own timer.
+ */
+export async function purgeAbandonedGuests(
   env: AuthEnvironment,
   dependencies: AuthDependencies = {},
-): Promise<Response | null> {
+  limit = ABANDONED_GUEST_BATCH_LIMIT,
+): Promise<{ deleted: number; pending: number }> {
+  if (!env.DATABASE_URL && !dependencies.createStore) {
+    throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
+  }
+  const store = getStore(env, dependencies);
+  const now = nowValue(dependencies);
+  const startedAt = Date.now();
+  // Stuck deletions and new ones have separate allowances, so deletions that keep failing never
+  // stop new abandoned guests from being marked.
+  const resumed = await store.pendingGuestDeletionReceipts(limit);
+  const marked = await store.markAbandonedGuestsForDeletion(new Date(now - ABANDONED_GUEST_GRACE_MS).toISOString(), new Date(now).toISOString(), limit);
+  let deleted = 0;
+  let pending = 0;
+  for (const receiptId of [...resumed, ...marked]) {
+    // A marked guest left for later is resumed on the next run.
+    if (Date.now() - startedAt > ABANDONED_GUEST_TIME_BUDGET_MS) {
+      pending += 1;
+      continue;
+    }
+    try {
+      const result = await resumeAccountDeletion(receiptId, env, dependencies);
+      if (result.complete) deleted += 1;
+      else pending += 1;
+    } catch {
+      pending += 1;
+    }
+  }
+  if (marked.length) await store.recordSecurityEvent("guest_abandoned", null, `marked_${marked.length}`).catch(() => undefined);
+  return { deleted, pending };
+}
+
+export async function handleAuthRequest(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<Response | null> {
   try {
     return await routeAuth(request, env, dependencies);
   } catch (error) {

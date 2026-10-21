@@ -16,6 +16,7 @@ touches its own source's outlines.
 
 See docs/osm-park-index.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -53,6 +54,7 @@ class OsmIndexError(ValueError):
 
 # ---------------------------------------------------------------- tags
 
+
 def kind_of(tags: dict[str, str]) -> str | None:
     """The tag that makes an area park-like, in the same order the API reports it."""
     if tags.get("leisure") in LEISURE:
@@ -69,6 +71,7 @@ def is_public(tags: dict[str, str]) -> bool:
 
 
 # ---------------------------------------------------------------- geometry
+
 
 def _ring(value: Any, label: str) -> list[list[float]]:
     if not isinstance(value, list) or len(value) < 4:
@@ -132,6 +135,7 @@ def bbox(geometry: dict[str, Any]) -> tuple[float, float, float, float]:
 
 # ---------------------------------------------------------------- slim file
 
+
 def validate_record(record: Any, line_number: int) -> dict[str, Any]:
     label = f"line {line_number}"
     if not isinstance(record, dict):
@@ -152,9 +156,17 @@ def validate_record(record: Any, line_number: int) -> dict[str, Any]:
     name = tags.get("name") or None
     min_lat, max_lat, min_lng, max_lng = bbox(geometry)
     return {
-        "osm_type": osm_type, "osm_id": osm_id, "name": name, "kind": kind, "tags": tags,
-        "min_lat": min_lat, "max_lat": max_lat, "min_lng": min_lng, "max_lng": max_lng,
-        "area_m2": round(area_m2(geometry), 1), "geometry": geometry,
+        "osm_type": osm_type,
+        "osm_id": osm_id,
+        "name": name,
+        "kind": kind,
+        "tags": tags,
+        "min_lat": min_lat,
+        "max_lat": max_lat,
+        "min_lng": min_lng,
+        "max_lng": max_lng,
+        "area_m2": round(area_m2(geometry), 1),
+        "geometry": geometry,
     }
 
 
@@ -229,6 +241,7 @@ def iso(value: datetime) -> str:
 
 
 # ---------------------------------------------------------------- extract (operator only)
+
 
 def extract(pbf: Path, out: Path, source_id: str, source_date: str | None = None) -> dict[str, Any]:
     source_id = source_id_of(source_id)
@@ -319,6 +332,7 @@ def extract(pbf: Path, out: Path, source_id: str, source_date: str | None = None
 
 # ---------------------------------------------------------------- plan
 
+
 def canonical(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
@@ -348,8 +362,15 @@ def shared_outlines(rows: list[dict[str, Any]], owners: dict[tuple[str, int], st
     return dict(sorted(counts.items()))
 
 
-def build_plan(source: Path, rows: list[dict[str, Any]], sha256: str, size: int, manifest: dict[str, Any], target: dict[str, Any],
-               owners: dict[tuple[str, int], str] | None = None) -> dict[str, Any]:
+def build_plan(
+    source: Path,
+    rows: list[dict[str, Any]],
+    sha256: str,
+    size: int,
+    manifest: dict[str, Any],
+    target: dict[str, Any],
+    owners: dict[tuple[str, int], str] | None = None,
+) -> dict[str, Any]:
     action, blockers = decide(manifest["sourceDate"], sha256, target["current"])
     plan = {
         "schema": SCHEMA,
@@ -387,6 +408,7 @@ def load_reviewed_plan(path: Path, reviewed_sha: str) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- database
 
+
 def _connect():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -406,8 +428,7 @@ def require_schema(cursor) -> None:
     if not cursor.fetchone()[0]:
         raise OsmIndexError("kip_osm.parks is missing; deploy osm_parks_001_init.sql first")
     cursor.execute(
-        "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'kip_osm' "
-        "AND table_name IN ('parks', 'source') AND column_name = 'source_id'"
+        "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'kip_osm' AND table_name IN ('parks', 'source') AND column_name = 'source_id'"
     )
     if cursor.fetchone()[0] != 2:
         raise OsmIndexError("kip_osm has no source_id yet; deploy osm_parks_002_sources.sql first")
@@ -436,8 +457,15 @@ def read_sources(cursor) -> list[dict[str, Any]]:
         "ORDER BY 1"
     )
     return [
-        {"id": row[0], "sourceDate": iso(row[1]) if row[1] else None, "sourceName": row[2], "recordedRows": row[3],
-         "rows": row[4], "named": row[5], "rowBytes": int(row[6])}
+        {
+            "id": row[0],
+            "sourceDate": iso(row[1]) if row[1] else None,
+            "sourceName": row[2],
+            "recordedRows": row[3],
+            "rows": row[4],
+            "named": row[5],
+            "rowBytes": int(row[6]),
+        }
         for row in cursor.fetchall()
     ]
 
@@ -454,8 +482,14 @@ def capture_target(conn, target_host: str, environment: str, source_id: str) -> 
         owners = {(row[0], row[1]): row[2] for row in cursor.fetchall()}
     conn.rollback()
     target = {
-        "host": info.host or "", "port": info.port, "database": info.dbname, "environment": environment, "declaredHost": target_host,
-        "sourceId": source_id, "current": current, "otherSources": others,
+        "host": info.host or "",
+        "port": info.port,
+        "database": info.dbname,
+        "environment": environment,
+        "declaredHost": target_host,
+        "sourceId": source_id,
+        "current": current,
+        "otherSources": others,
     }
     return target, owners
 
@@ -463,9 +497,19 @@ def capture_target(conn, target_host: str, environment: str, source_id: str) -> 
 def _db_rows(rows: Iterable[dict[str, Any]], source_date: str, source_id: str) -> Iterable[tuple[Any, ...]]:
     for row in rows:
         yield (
-            row["osm_type"], row["osm_id"], row["name"], row["kind"], json.dumps(row["tags"], ensure_ascii=False, sort_keys=True),
-            row["min_lat"], row["max_lat"], row["min_lng"], row["max_lng"], row["area_m2"],
-            json.dumps(row["geometry"], separators=(",", ":")), source_date, source_id,
+            row["osm_type"],
+            row["osm_id"],
+            row["name"],
+            row["kind"],
+            json.dumps(row["tags"], ensure_ascii=False, sort_keys=True),
+            row["min_lat"],
+            row["max_lat"],
+            row["min_lng"],
+            row["max_lng"],
+            row["area_m2"],
+            json.dumps(row["geometry"], separators=(",", ":")),
+            source_date,
+            source_id,
         )
 
 
@@ -516,8 +560,13 @@ def apply_plan(conn, plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict[s
                 size = cursor.fetchone()[0]
                 others = {item["id"]: item["rows"] for item in read_sources(cursor) if item["id"] != source_id}
                 return {
-                    "result": "replaced", "sourceId": source_id, "rows": count, "sharedWithOtherSources": shared,
-                    "otherSources": others, "tableBytes": size, "sourceDate": source["sourceDate"],
+                    "result": "replaced",
+                    "sourceId": source_id,
+                    "rows": count,
+                    "sharedWithOtherSources": shared,
+                    "otherSources": others,
+                    "tableBytes": size,
+                    "sourceDate": source["sourceDate"],
                 }
     except OsmIndexError:
         raise
@@ -527,6 +576,7 @@ def apply_plan(conn, plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict[s
 
 
 # ---------------------------------------------------------------- commands
+
 
 def run_extract(args: argparse.Namespace) -> dict[str, Any]:
     return extract(args.pbf, args.out, args.source_id, args.source_date)
@@ -546,7 +596,14 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     out = args.out.expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return {"planSha256": plan["planSha256"], "action": plan["action"], "blockers": plan["blockers"], "source": plan["source"], "target": plan["target"], "planPath": str(out)}
+    return {
+        "planSha256": plan["planSha256"],
+        "action": plan["action"],
+        "blockers": plan["blockers"],
+        "source": plan["source"],
+        "target": plan["target"],
+        "planPath": str(out),
+    }
 
 
 def run_apply(args: argparse.Namespace) -> dict[str, Any]:

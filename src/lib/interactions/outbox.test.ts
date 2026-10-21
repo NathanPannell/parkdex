@@ -129,7 +129,10 @@ describe("InteractionClient", () => {
     const fetcher = async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { events: InteractionEvent[] };
       attempts.push(body.events);
-      if (attempts.length === 1) return await new Promise<Response>((resolve) => { resolveFirst = resolve; });
+      if (attempts.length === 1)
+        return await new Promise<Response>((resolve) => {
+          resolveFirst = resolve;
+        });
       return successfulResponse(body.events.length);
     };
     const client = new InteractionClient({
@@ -183,10 +186,17 @@ describe("InteractionClient", () => {
     });
     await client.recordParkViewed({ parkId: "provincial-goldstream-park", entryPoint: "collection", contentReleaseId: RELEASE_ID });
     await client.recordDirectionsOpened({
-      parkId: "provincial-goldstream-park", entryPoint: "map", provider: "google_maps", travelMode: "driving", contentReleaseId: RELEASE_ID,
+      parkId: "provincial-goldstream-park",
+      entryPoint: "map",
+      provider: "google_maps",
+      travelMode: "driving",
+      contentReleaseId: RELEASE_ID,
     });
     await client.recordParkClaimed({
-      parkId: "provincial-goldstream-park", claimId: "30000000-0000-4000-8000-000000000001", claimStatus: "first", contentReleaseId: RELEASE_ID,
+      parkId: "provincial-goldstream-park",
+      claimId: "30000000-0000-4000-8000-000000000001",
+      claimStatus: "first",
+      contentReleaseId: RELEASE_ID,
     });
     await client.flush(true);
 

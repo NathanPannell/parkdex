@@ -39,14 +39,16 @@ export function seedFor(id: string): number {
 const NATIONAL = /\bnational park\b|\bparks canada\b|\bparcs canada\b/;
 // BC Parks and its ecological reserves, and Nova Scotia's provincial parks, protected
 // wilderness areas and the provincial departments that run them.
-const PROVINCIAL = new RegExp([
-  /\bprovincial (?:wildlife )?park\b/.source,
-  /\becological reserve\b/.source,
-  /\bbc parks\b/.source,
-  /\bwilderness area\b/.source,
-  /\bnova scotia (?:provincial parks|department of natural resources|natural resources and renewables|environment and climate change)\b/.source,
-  /\bprovince of nova scotia\b/.source,
-].join("|"));
+const PROVINCIAL = new RegExp(
+  [
+    /\bprovincial (?:wildlife )?park\b/.source,
+    /\becological reserve\b/.source,
+    /\bbc parks\b/.source,
+    /\bwilderness area\b/.source,
+    /\bnova scotia (?:provincial parks|department of natural resources|natural resources and renewables|environment and climate change)\b/.source,
+    /\bprovince of nova scotia\b/.source,
+  ].join("|"),
+);
 
 /** Only categories every installed build accepts (docs/content-compatibility.md). */
 export function categoryFor(feature: Pick<OsmFeature, "name" | "tags">): string {
@@ -185,8 +187,23 @@ export async function publishProposalPark(db: SqlRunner, park: PublishablePark, 
          SELECT $1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
          WHERE NOT EXISTS (SELECT 1 FROM public.parks WHERE id = $1)
          ON CONFLICT (id) DO NOTHING RETURNING updated_at`,
-        [park.id, JSON.stringify(park.source), sourceSha256, JSON.stringify(park.geometry), park.name, park.short, park.category, park.region,
-          park.lat, park.lng, park.biome, park.shape, park.rarity, park.seed, park.blurb],
+        [
+          park.id,
+          JSON.stringify(park.source),
+          sourceSha256,
+          JSON.stringify(park.geometry),
+          park.name,
+          park.short,
+          park.category,
+          park.region,
+          park.lat,
+          park.lng,
+          park.biome,
+          park.shape,
+          park.rarity,
+          park.seed,
+          park.blurb,
+        ],
       );
       // Someone else wrote the draft between our read and insert; look again.
       if (!inserted.length) continue;

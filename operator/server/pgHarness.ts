@@ -9,7 +9,11 @@ import type { SqlRunner } from "./drafts.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
-export const CONTENT_MIGRATIONS = ["database/001_cloud_content.sql", "database/migrations/content_001_sync.sql", "database/migrations/park_drafts_001_init.sql"];
+export const CONTENT_MIGRATIONS = [
+  "database/001_cloud_content.sql",
+  "database/migrations/content_001_sync.sql",
+  "database/migrations/park_drafts_001_init.sql",
+];
 
 export async function openTestDatabase(dsn: string, migrations: string[] = CONTENT_MIGRATIONS) {
   const url = new URL(dsn);
@@ -41,21 +45,53 @@ export async function openTestDatabase(dsn: string, migrations: string[] = CONTE
   return { pool, runner };
 }
 
-const square = (x: number): [number, number][][] => [[[x, 48.4], [x + 0.01, 48.4], [x + 0.01, 48.41], [x, 48.41], [x, 48.4]]];
+const square = (x: number): [number, number][][] => [
+  [
+    [x, 48.4],
+    [x + 0.01, 48.4],
+    [x + 0.01, 48.41],
+    [x, 48.41],
+    [x, 48.4],
+  ],
+];
 
 /** Writes a draft row the way park founding does and returns its updated_at for publishStatements. */
 export async function insertDraft(runner: SqlRunner, id: string, overrides: Record<string, unknown> = {}): Promise<string> {
   const draft = {
     geometry: { type: "MultiPolygon", coordinates: [square(-123.47), square(-123.45)] },
-    name: "Thetis Lake Regional Park", short: "Thetis Lake", category: "regional", region: "Capital Region",
-    lat: 48.48, lng: -123.47, biome: "lake", shape: "hex", rarity: "common", seed: 812, blurb: "",
+    name: "Thetis Lake Regional Park",
+    short: "Thetis Lake",
+    category: "regional",
+    region: "Capital Region",
+    lat: 48.48,
+    lng: -123.47,
+    biome: "lake",
+    shape: "hex",
+    rarity: "common",
+    seed: 812,
+    blurb: "",
     ...overrides,
   };
   const rows = await runner.query(
     `INSERT INTO kip_park_drafts.drafts (id, source, source_sha256, geometry, name, short, category, region, lat, lng, biome, shape, rarity, seed, blurb)
      VALUES ($1, $2::jsonb, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING updated_at`,
-    [id, JSON.stringify({ record: { id } }), "a".repeat(64), JSON.stringify(draft.geometry), draft.name, draft.short, draft.category, draft.region,
-      draft.lat, draft.lng, draft.biome, draft.shape, draft.rarity, draft.seed, draft.blurb],
+    [
+      id,
+      JSON.stringify({ record: { id } }),
+      "a".repeat(64),
+      JSON.stringify(draft.geometry),
+      draft.name,
+      draft.short,
+      draft.category,
+      draft.region,
+      draft.lat,
+      draft.lng,
+      draft.biome,
+      draft.shape,
+      draft.rarity,
+      draft.seed,
+      draft.blurb,
+    ],
   );
   return new Date(rows[0].updated_at as string).toISOString();
 }

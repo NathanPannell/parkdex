@@ -37,7 +37,11 @@ describe("request context headers", () => {
 
   it("never sends malformed values and survives a storage failure", async () => {
     vi.stubGlobal("__APP_VERSION__", "1.0 beta");
-    await loadInstallationId({ getInstallationId: async () => { throw new Error("no IndexedDB"); } });
+    await loadInstallationId({
+      getInstallationId: async () => {
+        throw new Error("no IndexedDB");
+      },
+    });
     expect(requestContextHeaders()).toEqual({ [BUNDLE_ID_HEADER]: "abc1234" });
   });
 

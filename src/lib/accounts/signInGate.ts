@@ -30,7 +30,10 @@ export class SignInGate {
   async settled(): Promise<void> {
     while (this.flight) {
       const flight = this.flight;
-      await flight.then(() => undefined, () => undefined);
+      await flight.then(
+        () => undefined,
+        () => undefined,
+      );
       if (this.flight === flight) this.flight = null;
     }
   }

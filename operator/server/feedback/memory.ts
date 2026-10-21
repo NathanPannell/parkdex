@@ -6,7 +6,8 @@ import type { FeedbackDependencies } from "./routes.js";
 /** In-memory feedback store for tests and the local demo server. Never used by a deployment. */
 
 const newestFirst = (a: { at: string; id: string }, b: { at: string; id: string }) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id);
-const before = (item: { at: string; id: string }, cursor: FeedbackCursor | null) => !cursor || item.at < cursor.createdAt || (item.at === cursor.createdAt && item.id < cursor.id);
+const before = (item: { at: string; id: string }, cursor: FeedbackCursor | null) =>
+  !cursor || item.at < cursor.createdAt || (item.at === cursor.createdAt && item.id < cursor.id);
 
 export class MemoryFeedbackStore implements FeedbackStore, FeedbackArchiveStore {
   readonly reports = new Map<string, OperatorFeedbackRecord>();
@@ -14,8 +15,12 @@ export class MemoryFeedbackStore implements FeedbackStore, FeedbackArchiveStore 
   /** Report id to the time it was archived. */
   readonly archived = new Map<string, string>();
 
-  async saveFeedback(): Promise<never> { throw new Error("not supported"); }
-  async findBySubmissionId() { return null; }
+  async saveFeedback(): Promise<never> {
+    throw new Error("not supported");
+  }
+  async findBySubmissionId() {
+    return null;
+  }
 
   private view(report: OperatorFeedbackRecord): ArchivedFeedbackRecord {
     return { ...structuredClone(report), archivedAt: this.archived.get(report.id) ?? null };
@@ -44,8 +49,14 @@ export class MemoryFeedbackStore implements FeedbackStore, FeedbackArchiveStore 
     const text = search?.toLowerCase() ?? "";
     return [...this.reports.values()]
       .filter((report) => this.archived.has(report.id))
-      .filter((report) => !text || report.id === text || [report.message, report.context.parkName, report.email, report.context.version, report.context.build]
-        .some((value) => typeof value === "string" && value.toLowerCase().includes(text)));
+      .filter(
+        (report) =>
+          !text ||
+          report.id === text ||
+          [report.message, report.context.parkName, report.email, report.context.version, report.context.build].some(
+            (value) => typeof value === "string" && value.toLowerCase().includes(text),
+          ),
+      );
   }
 
   async listArchive(limit: number, search: string | null, cursor: FeedbackCursor | null) {
@@ -101,7 +112,7 @@ export class MemoryFeedbackStore implements FeedbackStore, FeedbackArchiveStore 
     delivery.status = "sending";
     delivery.attempts += 1;
     delivery.lastAttemptAt = new Date().toISOString();
-    const recipient = audience === "operator" ? "operator@example.test" : report.email ?? "";
+    const recipient = audience === "operator" ? "operator@example.test" : (report.email ?? "");
     return {
       status: "claimed",
       email: {

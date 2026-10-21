@@ -578,7 +578,9 @@ button.game-row:active {
   width: 64px;
   height: 64px;
   margin-left: -32px;
-  box-shadow: 0 4px 0 var(--ink), 0 0 0 4px var(--paper);
+  box-shadow:
+    0 4px 0 var(--ink),
+    0 0 0 4px var(--paper);
 }
 
 .nav--four .fab__hint {
@@ -806,7 +808,9 @@ button.game-row:active {
   color: var(--sun);
   -webkit-text-stroke: 3px var(--ink);
   paint-order: stroke fill;
-  text-shadow: 0 6px 0 var(--ink), 0 0 30px rgba(255, 201, 60, 0.6);
+  text-shadow:
+    0 6px 0 var(--ink),
+    0 0 30px rgba(255, 201, 60, 0.6);
 }
 
 .plant-score span {
@@ -932,4 +936,38 @@ button.game-row:active {
   font-family: var(--display);
   font-size: 18px;
   line-height: 1.1;
+}
+
+/* The leader's crew code on the plant result: a small QR and one line, so friends can join at once. */
+.plant__crew {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px 10px 10px;
+  border: 2px solid rgba(255, 248, 236, 0.45);
+  border-radius: var(--r-md);
+  background: rgba(255, 248, 236, 0.08);
+  text-align: left;
+}
+
+.plant__crew .qr-code {
+  flex: none;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.plant__crew-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--paper);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.plant__crew-text strong {
+  font-family: var(--display);
+  font-size: 17px;
 }

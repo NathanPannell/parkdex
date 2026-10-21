@@ -3,8 +3,22 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, 
 import { createPortal } from "react-dom";
 import { useBackHandler } from "../lib/backStack";
 import {
-  clampTransform, doubleTap, dragDownOpacity, fitInside, IDENTITY, isDoubleTap, isZoomed, panBy, releaseAction, TAP_SLOP_PX, viewerKeyAction, viewerReducer, zoomAround,
-  type Point, type Size, type ViewerTransform,
+  clampTransform,
+  doubleTap,
+  dragDownOpacity,
+  fitInside,
+  IDENTITY,
+  isDoubleTap,
+  isZoomed,
+  panBy,
+  releaseAction,
+  TAP_SLOP_PX,
+  viewerKeyAction,
+  viewerReducer,
+  zoomAround,
+  type Point,
+  type Size,
+  type ViewerTransform,
 } from "../lib/viewer";
 import { usePhotoUrl } from "./DexPhoto";
 import { Icon } from "./Icon";
@@ -235,16 +249,18 @@ function ViewerLayer({ slides, index, onStep, onClose, label, actions }: Props &
       return;
     }
     lastTap.current = null;
-    const outcome = current.multi ? "stay" : releaseAction({
-      dx: point.x - current.start.x,
-      dy: point.y - current.start.y,
-      vx: current.vx,
-      vy: current.vy,
-      transform: latest.current,
-      index,
-      count,
-      box,
-    });
+    const outcome = current.multi
+      ? "stay"
+      : releaseAction({
+          dx: point.x - current.start.x,
+          dy: point.y - current.start.y,
+          vx: current.vx,
+          vy: current.vy,
+          transform: latest.current,
+          index,
+          count,
+          box,
+        });
     if (outcome === "close") {
       onClose();
       return;
@@ -279,7 +295,13 @@ function ViewerLayer({ slides, index, onStep, onClose, label, actions }: Props &
     >
       <div className="fullscreen-viewer__backdrop" style={{ opacity: dragDownOpacity(drag.y) }} aria-hidden="true" />
       <div className="fullscreen-viewer__top">
-        {count > 1 ? <span className="fullscreen-viewer__count" aria-live="polite">{index + 1} / {count}</span> : <span />}
+        {count > 1 ? (
+          <span className="fullscreen-viewer__count" aria-live="polite">
+            {index + 1} / {count}
+          </span>
+        ) : (
+          <span />
+        )}
         <button ref={closeButton} className="fullscreen-viewer__close" onClick={onClose} aria-label="Close">
           <Icon name="close" size={20} stroke={2.8} />
         </button>
@@ -326,7 +348,17 @@ function ViewerLayer({ slides, index, onStep, onClose, label, actions }: Props &
 }
 
 /** A photo, fitted inside the stage at its own shape once it has loaded. */
-function ViewerImage({ slide, box, style, imageRef }: { slide: ViewerSlide; box: Size; style: { transform: string }; imageRef: (element: HTMLImageElement | null) => void }) {
+function ViewerImage({
+  slide,
+  box,
+  style,
+  imageRef,
+}: {
+  slide: ViewerSlide;
+  box: Size;
+  style: { transform: string };
+  imageRef: (element: HTMLImageElement | null) => void;
+}) {
   const fromBlob = usePhotoUrl(slide.blob ?? null);
   const src = slide.src ?? fromBlob;
   const [natural, setNatural] = useState<Size | null>(null);

@@ -6,8 +6,16 @@ import { test } from "node:test";
 import { EXIF_GPS_JPEG } from "../../worker/fixtures/exif-gps-jpeg.ts";
 import { DEFAULT_FLAG_THRESHOLDS, PHOTO_FLAGS, type PhotoFlag } from "../../worker/founderPhoto.ts";
 import {
-  CATEGORIES, decideLab, evaluatePhoto, exportSettings, productionSettings, summarize,
-  type LabSettings, type Manifest, type ManifestPhoto, type RunFile,
+  CATEGORIES,
+  decideLab,
+  evaluatePhoto,
+  exportSettings,
+  productionSettings,
+  summarize,
+  type LabSettings,
+  type Manifest,
+  type ManifestPhoto,
+  type RunFile,
 } from "./evaluate.ts";
 import { classify, labDir, listRuns, loadManifest, readRun, retryingFetch, validateManifest } from "./lab.ts";
 
@@ -15,10 +23,12 @@ type Answers = NonNullable<RunFile["results"][string]["answers"]>;
 
 /** Each flag's yes, 0.01 unless given. */
 function answers(flags: Partial<Record<PhotoFlag, number>> = {}): Answers {
-  return Object.fromEntries(PHOTO_FLAGS.map((flag) => {
-    const p = flags[flag] ?? 0.01;
-    return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
-  }));
+  return Object.fromEntries(
+    PHOTO_FLAGS.map((flag) => {
+      const p = flags[flag] ?? 0.01;
+      return [flag, { choice: p > 0.5 ? "yes" : "no", probabilities: { yes: p, no: 1 - p } }];
+    }),
+  );
 }
 
 /** Answers from a run made before the verdict question was dropped. */
@@ -51,7 +61,10 @@ test("the committed manifest is valid and has the agreed mix", () => {
   assert.ok(count("borderline") >= 8 && count("borderline") <= 14);
   for (const category of CATEGORIES) assert.ok(count(category) > 0, category);
   assert.deepEqual(manifest.notCovered, ["inappropriate"]);
-  assert.ok(manifest.photos.some((item) => item.source.type === "derived"), "some photos are generated from good ones");
+  assert.ok(
+    manifest.photos.some((item) => item.source.type === "derived"),
+    "some photos are generated from good ones",
+  );
   for (const item of manifest.photos) {
     if (item.source.type === "commons") assert.match(String(item.source.licence), /CC|Public domain|Attribution/, item.id);
   }
@@ -64,22 +77,92 @@ test("the manifest schema refuses broken entries", () => {
     return validateManifest(copy);
   };
   assert.deepEqual(validateManifest(null), ["manifest must be an object"]);
-  assert.match(broken((m) => { m.photos[1].id = m.photos[0].id; }).join(), /duplicate id/);
-  assert.match(broken((m) => { m.photos[0].id = "Good 1"; }).join(), /id must look like/);
-  assert.match(broken((m) => { (m.photos[0] as { category: string }).category = "sunset"; }).join(), /unknown category/);
-  assert.match(broken((m) => { m.photos[0].expected.flags = ["people"]; }).join(), /approved photo expects no flags/);
-  assert.match(broken((m) => { (m.photos[0].expected as { outcome: string }).outcome = "maybe"; }).join(), /expected.outcome/);
+  assert.match(
+    broken((m) => {
+      m.photos[1].id = m.photos[0].id;
+    }).join(),
+    /duplicate id/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[0].id = "Good 1";
+    }).join(),
+    /id must look like/,
+  );
+  assert.match(
+    broken((m) => {
+      (m.photos[0] as { category: string }).category = "sunset";
+    }).join(),
+    /unknown category/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[0].expected.flags = ["people"];
+    }).join(),
+    /approved photo expects no flags/,
+  );
+  assert.match(
+    broken((m) => {
+      (m.photos[0].expected as { outcome: string }).outcome = "maybe";
+    }).join(),
+    /expected.outcome/,
+  );
   const people = manifest.photos.findIndex((item) => item.category === "people");
-  assert.match(broken((m) => { m.photos[people].expected.flags = []; }).join(), /names the flag it expects/);
-  assert.match(broken((m) => { m.photos[people].expected.flags = ["shoes" as PhotoFlag]; }).join(), /must be photo flags/);
-  assert.match(broken((m) => { m.photos[people].expected.optionalFlags = ["people"]; }).join(), /both expected and optional/);
-  assert.match(broken((m) => { m.photos[people].expected.optionalFlags = ["inappropriate"]; }).join(), /not covered/);
-  assert.match(broken((m) => { m.photos[0].source.licence = ""; }).join(), /licence is required/);
-  assert.match(broken((m) => { m.photos[0].source.sha1 = "abc"; }).join(), /sha1/);
-  assert.match(broken((m) => { m.photos[0].source.page = "https://example.com/x"; }).join(), /Commons URL/);
+  assert.match(
+    broken((m) => {
+      m.photos[people].expected.flags = [];
+    }).join(),
+    /names the flag it expects/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[people].expected.flags = ["shoes" as PhotoFlag];
+    }).join(),
+    /must be photo flags/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[people].expected.optionalFlags = ["people"];
+    }).join(),
+    /both expected and optional/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[people].expected.optionalFlags = ["inappropriate"];
+    }).join(),
+    /not covered/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[0].source.licence = "";
+    }).join(),
+    /licence is required/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[0].source.sha1 = "abc";
+    }).join(),
+    /sha1/,
+  );
+  assert.match(
+    broken((m) => {
+      m.photos[0].source.page = "https://example.com/x";
+    }).join(),
+    /Commons URL/,
+  );
   const derived = manifest.photos.findIndex((item) => item.source.type === "derived" && "from" in item.source);
-  assert.match(broken((m) => { m.photos[derived].source.from = "good-99"; }).join(), /from must name a Commons photo/);
-  assert.match(broken((m) => { (m.photos[derived].source.transform as { op: string }).op = "sepia"; }).join(), /unknown transform/);
+  assert.match(
+    broken((m) => {
+      m.photos[derived].source.from = "good-99";
+    }).join(),
+    /from must name a Commons photo/,
+  );
+  assert.match(
+    broken((m) => {
+      (m.photos[derived].source.transform as { op: string }).op = "sepia";
+    }).join(),
+    /unknown transform/,
+  );
 });
 
 test("the data folder is outside the repository unless PHOTO_LAB_DIR says otherwise", () => {
@@ -136,7 +219,9 @@ test("agreement: approve or reject must match; borderline photos agree either wa
 
 test("the summary counts accuracy, the confusion matrix and per-flag precision and recall", () => {
   const small: Manifest = {
-    version: 1, notes: "test", notCovered: ["inappropriate"],
+    version: 1,
+    notes: "test",
+    notCovered: ["inappropriate"],
     photos: [
       photo("good-01", "approve"),
       photo("good-02", "approve"),
@@ -193,8 +278,8 @@ test("the export gives the flag thresholds as JSON and the constant for worker/f
   assert.ok(source.includes(production.code.split("\n").slice(1).join("\n")), production.code);
   assert.doesNotMatch(production.code, /APPROVE|unsure|verdict/i);
   const tuned = exportSettings({ flags: { ...productionSettings().flags, lighting: 0.7 } });
-  assert.match(tuned.code, /  lighting: 0\.7,/);
-  assert.match(tuned.code, /  people: 0\.8,/);
+  assert.match(tuned.code, / {2}lighting: 0\.7,/);
+  assert.match(tuned.code, / {2}people: 0\.8,/);
   assert.equal(JSON.parse(tuned.json).flags.lighting, 0.7);
 });
 
@@ -202,20 +287,26 @@ test("the export gives the flag thresholds as JSON and the constant for worker/f
 
 function decisionsReply(): Response {
   const reply = answers();
-  return new Response(JSON.stringify({
-    model: "openai/test-decisions",
-    usage: { input_tokens: 10, output_tokens: 0, cost: 0.0002 },
-    answers: Object.fromEntries(Object.entries(reply).map(([name, answer]) => [name, { type: "choice", ...answer }])),
-  }));
+  return new Response(
+    JSON.stringify({
+      model: "openai/test-decisions",
+      usage: { input_tokens: 10, output_tokens: 0, cost: 0.0002 },
+      answers: Object.fromEntries(Object.entries(reply).map(([name, answer]) => [name, { type: "choice", ...answer }])),
+    }),
+  );
 }
 
 test("a retrying fetch retries 429 and 5xx, then passes the response through with its cost", async () => {
   const statuses = [429, 503, 200];
   const record = { attempts: 0, costUsd: null as number | null, status: null as number | null };
-  const fetcher = retryingFetch(async () => {
-    const status = statuses.shift()!;
-    return status === 200 ? decisionsReply() : new Response("busy", { status });
-  }, record, { baseDelayMs: 1 });
+  const fetcher = retryingFetch(
+    async () => {
+      const status = statuses.shift()!;
+      return status === 200 ? decisionsReply() : new Response("busy", { status });
+    },
+    record,
+    { baseDelayMs: 1 },
+  );
   const response = await fetcher("https://example.invalid", {});
   assert.equal(response.status, 200);
   assert.equal(record.attempts, 3);
@@ -242,7 +333,11 @@ test("classify sends stripped photos through the production checker and versions
         keyCalls += 1;
         return new Response(JSON.stringify({ data: { usage: keyCalls === 1 ? 1 : 1.0006 } }));
       }
-      const body = JSON.parse(String(init?.body)) as { model: string; state: [{ text: string }, { image_url: { url: string } }]; questions: Record<string, unknown> };
+      const body = JSON.parse(String(init?.body)) as {
+        model: string;
+        state: [{ text: string }, { image_url: { url: string } }];
+        questions: Record<string, unknown>;
+      };
       assert.deepEqual(Object.keys(body.questions), [...PHOTO_FLAGS], "a run asks only the flags, as production does");
       assert.match(body.state[0].text, /Beacon Hill Park \(leisure=park\)/);
       sent.push(body.state[1].image_url.url);
@@ -262,13 +357,25 @@ test("classify sends stripped photos through the production checker and versions
       assert.ok(!jpeg.includes("Exif") && !jpeg.includes("GPS"), "metadata is stripped before the photo is sent");
     }
 
-    const second = await classify({ root, ids: ["dark-01"], basedOn: first.id, env: { OPENROUTER_API_KEY: "test-key-not-real" }, fetchImpl, label: "Dark only" });
+    const second = await classify({
+      root,
+      ids: ["dark-01"],
+      basedOn: first.id,
+      env: { OPENROUTER_API_KEY: "test-key-not-real" },
+      fetchImpl,
+      label: "Dark only",
+    });
     assert.equal(second.basedOn, first.id);
     assert.deepEqual(second.queried, ["dark-01"]);
     assert.equal(second.label, "Dark only");
     assert.equal(second.results["good-01"].queriedIn, first.id, "other photos are carried over");
     assert.equal(second.results["dark-01"].queriedIn, second.id);
-    assert.deepEqual(listRuns(root).map((run) => run.id).sort(), [first.id, second.id].sort());
+    assert.deepEqual(
+      listRuns(root)
+        .map((run) => run.id)
+        .sort(),
+      [first.id, second.id].sort(),
+    );
     assert.equal(readRun(second.id, root).results["people-01"].answers?.people.choice, "no");
     assert.equal(readRun(second.id, root).results["people-01"].answers?.verdict, undefined);
     assert.throws(() => readRun("../secrets", root), /Unknown run/);

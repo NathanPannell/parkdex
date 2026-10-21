@@ -7,13 +7,38 @@ import { memoryParks } from "./memory.ts";
 
 const ORIGIN = "https://operator.example.test";
 const env: DashboardEnv = { DATABASE_URL: "postgres://unused" };
-const square: MultiPolygon = { type: "MultiPolygon", coordinates: [[[[-123.4, 48.4], [-123.39, 48.4], [-123.39, 48.41], [-123.4, 48.41], [-123.4, 48.4]]]] };
+const square: MultiPolygon = {
+  type: "MultiPolygon",
+  coordinates: [
+    [
+      [
+        [-123.4, 48.4],
+        [-123.39, 48.4],
+        [-123.39, 48.41],
+        [-123.4, 48.41],
+        [-123.4, 48.4],
+      ],
+    ],
+  ],
+};
 
 function setup() {
   const { live: parks, dependencies } = memoryParks();
   parks.parks.set("beacon-hill", {
-    id: "beacon-hill", name: "Beacon Hill Park", short: "Beacon Hill", category: "municipal", region: "Capital", lat: 48.41, lng: -123.36,
-    biome: "forest", shape: "circle", rarity: "common", scene: null, seed: 7, blurb: "", geometry: square,
+    id: "beacon-hill",
+    name: "Beacon Hill Park",
+    short: "Beacon Hill",
+    category: "municipal",
+    region: "Capital",
+    lat: 48.41,
+    lng: -123.36,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    scene: null,
+    seed: 7,
+    blurb: "",
+    geometry: square,
   });
   const api = createDashboardApi(dependencies);
   const call = (path: string, init: { method?: string; body?: unknown; origin?: string } = {}) => {
@@ -27,16 +52,19 @@ function setup() {
 }
 
 async function opened(call: ReturnType<typeof setup>["call"]) {
-  const { park } = await (await call("/api/parks/beacon-hill")).json() as { park: Record<string, unknown> };
+  const { park } = (await (await call("/api/parks/beacon-hill")).json()) as { park: Record<string, unknown> };
   const { geometry: _geometry, ...expected } = park;
   return expected;
 }
 
 test("live parks list, read with their boundary, and list the regions in use", async () => {
   const { call } = setup();
-  const listed = await (await call("/api/parks")).json() as { parks: { id: string }[] };
-  assert.deepEqual(listed.parks.map((park) => park.id), ["beacon-hill"]);
-  const { park } = await (await call("/api/parks/beacon-hill")).json() as { park: { geometry: unknown } };
+  const listed = (await (await call("/api/parks")).json()) as { parks: { id: string }[] };
+  assert.deepEqual(
+    listed.parks.map((park) => park.id),
+    ["beacon-hill"],
+  );
+  const { park } = (await (await call("/api/parks/beacon-hill")).json()) as { park: { geometry: unknown } };
   assert.deepEqual(park.geometry, square);
   assert.deepEqual(await (await call("/api/parks/regions")).json(), { regions: ["Capital"] });
   assert.equal((await call("/api/parks/no-such-park")).status, 404);
@@ -46,10 +74,25 @@ test("live parks list, read with their boundary, and list the regions in use", a
 test("saving a live park applies only checked changes and moves the shape with the category", async () => {
   const { call, parks } = setup();
   const expected = await opened(call);
-  const ring = [[-123.37, 48.4], [-123.35, 48.4], [-123.35, 48.42], [-123.37, 48.4]];
+  const ring = [
+    [-123.37, 48.4],
+    [-123.35, 48.4],
+    [-123.35, 48.42],
+    [-123.37, 48.4],
+  ];
   const response = await call("/api/parks/beacon-hill", {
     method: "PATCH",
-    body: { expected, changes: { name: "Beacon Hill", category: "regional", rarity: "rare", lat: 48.4123456789, lng: -123.36, geometry: { type: "Polygon", coordinates: [ring] } } },
+    body: {
+      expected,
+      changes: {
+        name: "Beacon Hill",
+        category: "regional",
+        rarity: "rare",
+        lat: 48.4123456789,
+        lng: -123.36,
+        geometry: { type: "Polygon", coordinates: [ring] },
+      },
+    },
   });
   assert.equal(response.status, 200);
   const saved = parks.parks.get("beacon-hill")!;
@@ -82,11 +125,28 @@ test("live park edits are validated against the content contract and must come f
     const response = await call("/api/parks/beacon-hill", { method: "PATCH", body: { expected, changes } });
     assert.equal(response.status, 400, JSON.stringify(changes));
   }
-  assert.equal((await call("/api/parks/beacon-hill", { method: "PATCH", body: { expected, changes: { name: "x" } }, origin: "https://evil.example" })).status, 403);
+  assert.equal(
+    (await call("/api/parks/beacon-hill", { method: "PATCH", body: { expected, changes: { name: "x" } }, origin: "https://evil.example" })).status,
+    403,
+  );
 });
 
 test("the guarded statements check the opened park and only touch the boundary when needed", () => {
-  const expected = { id: "p", name: "P", short: "P", category: "municipal", region: "", lat: 1, lng: 2, biome: "forest", shape: "circle", rarity: "common", scene: null, seed: 1, blurb: "" };
+  const expected = {
+    id: "p",
+    name: "P",
+    short: "P",
+    category: "municipal",
+    region: "",
+    lat: 1,
+    lng: 2,
+    biome: "forest",
+    shape: "circle",
+    rarity: "common",
+    scene: null,
+    seed: 1,
+    blurb: "",
+  };
   const textOnly = liveUpdateStatements("p", expected, { name: "Q" });
   assert.match(textOnly[1].text, /park_changed/);
   assert.ok(!textOnly.some((statement) => statement.text.includes("public.boundaries")), "a rename leaves the boundary alone");

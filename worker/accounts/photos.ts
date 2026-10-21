@@ -25,7 +25,14 @@ function validUuid(value: string): boolean {
 
 function responseError(error: unknown): Response {
   if (error instanceof HttpError) return json({ error: { code: error.code, message: error.message }, code: error.code, message: error.message }, error.status);
-  return json({ error: { code: "service_unavailable", message: "Private photo service is unavailable." }, code: "service_unavailable", message: "Private photo service is unavailable." }, 503);
+  return json(
+    {
+      error: { code: "service_unavailable", message: "Private photo service is unavailable." },
+      code: "service_unavailable",
+      message: "Private photo service is unavailable.",
+    },
+    503,
+  );
 }
 
 function serviceConfig(env: ProgressEnv): { baseUrl: URL; token: string } {
@@ -52,12 +59,7 @@ function serviceUrl(baseUrl: URL, path: string): URL {
   return target;
 }
 
-async function privateFetch(
-  env: ProgressEnv,
-  dependencies: PhotoDependencies,
-  path: string,
-  init: RequestInit,
-): Promise<Response> {
+async function privateFetch(env: ProgressEnv, dependencies: PhotoDependencies, path: string, init: RequestInit): Promise<Response> {
   const { baseUrl, token } = serviceConfig(env);
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
@@ -110,11 +112,29 @@ function contentTypeFromHeader(value: string | null): PhotoContentType | null {
 function hasValidMagic(bytes: Uint8Array, contentType: PhotoContentType): boolean {
   if (contentType === "image/jpeg") return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   if (contentType === "image/png") {
-    return bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
-      bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+    return (
+      bytes.length >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a
+    );
   }
-  return bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+  return (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  );
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -168,13 +188,16 @@ async function uploadPhoto(
   if (stored.status !== 204 || stored.headers.get("x-content-sha256")?.toLowerCase() !== sha256) {
     throw new HttpError(503, "service_unavailable", "Private photo service is unavailable.");
   }
-  if (!await store.markPhotoReady(auth.accountId, claimId, sha256)) {
+  if (!(await store.markPhotoReady(auth.accountId, claimId, sha256))) {
     throw new HttpError(410, "account_deleting", "This account is being deleted.");
   }
-  return json({
-    claimId,
-    photo: { status: "ready", sha256, sizeBytes: bytes.byteLength, contentType },
-  }, reservation.status === "reserved" ? 201 : 200);
+  return json(
+    {
+      claimId,
+      photo: { status: "ready", sha256, sizeBytes: bytes.byteLength, contentType },
+    },
+    reservation.status === "reserved" ? 201 : 200,
+  );
 }
 
 async function downloadPhoto(
@@ -206,7 +229,7 @@ async function downloadPhoto(
   } catch {
     throw new HttpError(503, "service_unavailable", "Private photo service is unavailable.");
   }
-  if (bytes.byteLength !== metadata.sizeBytes || !hasValidMagic(bytes, metadata.contentType) || await sha256Hex(bytes) !== metadata.sha256) {
+  if (bytes.byteLength !== metadata.sizeBytes || !hasValidMagic(bytes, metadata.contentType) || (await sha256Hex(bytes)) !== metadata.sha256) {
     throw new HttpError(503, "service_unavailable", "Private photo service is unavailable.");
   }
   const headers = new Headers({
@@ -222,15 +245,23 @@ async function downloadPhoto(
 function deletionResponseIsComplete(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return Object.keys(record).every((key) => key === "complete" || key === "deleted") &&
-    record.complete === true && Number.isSafeInteger(record.deleted) && (record.deleted as number) >= 0;
+  return (
+    Object.keys(record).every((key) => key === "complete" || key === "deleted") &&
+    record.complete === true &&
+    Number.isSafeInteger(record.deleted) &&
+    (record.deleted as number) >= 0
+  );
 }
 
 function deletionResponseIsIncomplete(value: unknown): boolean {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return Object.keys(record).every((key) => key === "complete" || key === "deleted") &&
-    record.complete === false && Number.isSafeInteger(record.deleted) && (record.deleted as number) >= 0;
+  return (
+    Object.keys(record).every((key) => key === "complete" || key === "deleted") &&
+    record.complete === false &&
+    Number.isSafeInteger(record.deleted) &&
+    (record.deleted as number) >= 0
+  );
 }
 
 export interface DeleteAccountDataArgs {
@@ -266,7 +297,9 @@ export async function deleteAccountData(
         return { complete: false };
       }
       let body: unknown;
-      try { body = JSON.parse(text); } catch {
+      try {
+        body = JSON.parse(text);
+      } catch {
         await store.recordPhotoDeletionFailure(args.receiptId.toLowerCase());
         return { complete: false };
       }
@@ -300,7 +333,8 @@ export async function handlePhotoRequest(
   if (request.method !== "GET" && request.method !== "PUT") {
     return json({ error: { code: "method_not_allowed", message: "Method not allowed." }, code: "method_not_allowed", message: "Method not allowed." }, 405);
   }
-  if (!auth || !validUuid(auth.accountId)) return json({ error: { code: "unauthorized", message: "Sign in is required." }, code: "unauthorized", message: "Sign in is required." }, 401);
+  if (!auth || !validUuid(auth.accountId))
+    return json({ error: { code: "unauthorized", message: "Sign in is required." }, code: "unauthorized", message: "Sign in is required." }, 401);
   const claimId = match[1].toLowerCase();
   if (!validUuid(claimId)) return json({ error: { code: "not_found", message: "Claim not found." }, code: "not_found", message: "Claim not found." }, 404);
   try {

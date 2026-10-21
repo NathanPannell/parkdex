@@ -92,11 +92,13 @@ function n(value: number): string {
 function patchSvg(id: string, slot: PatchSlot, clipId: string): string {
   const { x, y, r } = slot;
   const art = r * (1 - RIM);
-  return `<g class="flag-patch" data-badge="${id}">`
-    + `<clipPath id="${clipId}"><circle cx="${n(x)}" cy="${n(y)}" r="${n(art)}"/></clipPath>`
-    + `<circle cx="${n(x)}" cy="${n(y)}" r="${n(r)}" fill="${rimColour(id)}"/>`
-    + `<image href="${badgeArtUrl(id)}" x="${n(x - art)}" y="${n(y - art)}" width="${n(2 * art)}" height="${n(2 * art)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>`
-    + `</g>`;
+  return (
+    `<g class="flag-patch" data-badge="${id}">` +
+    `<clipPath id="${clipId}"><circle cx="${n(x)}" cy="${n(y)}" r="${n(art)}"/></clipPath>` +
+    `<circle cx="${n(x)}" cy="${n(y)}" r="${n(r)}" fill="${rimColour(id)}"/>` +
+    `<image href="${badgeArtUrl(id)}" x="${n(x - art)}" y="${n(y - art)}" width="${n(2 * art)}" height="${n(2 * art)}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})"/>` +
+    `</g>`
+  );
 }
 
 /** The patches as SVG inside `rect`, or "" for none. Unknown and repeated IDs are skipped. */

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
@@ -24,8 +24,11 @@ function timeAgo(at: string, now: number): string {
   return days === 1 ? "yesterday" : `${days} days ago`;
 }
 
-/** "@sam took Blueberry" for each park lost since the player last looked. */
-export function TakeoverMessages({ allowed }: { allowed: boolean }) {
+/**
+ * "@sam took Blueberry" for each park lost since the player last looked. While `held`, the sheet
+ * waits to open; once it is on screen it stays until dismissed.
+ */
+export function TakeoverMessages({ allowed, held = false }: { allowed: boolean; held?: boolean }) {
   const game = useGame();
   const content = useContent();
   const { dispatch } = useStore();
@@ -33,18 +36,28 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
   const latest = latestTakeoverAt(takeovers);
   // Hidden locally at once; the server catches up when the seen call lands.
   const [dismissedAt, setDismissedAt] = useState<string | null>(null);
-  const open = allowed && !!game.accountId && !!latest && latest !== dismissedAt;
+  const waiting = allowed && !!game.accountId && !!latest && latest !== dismissedAt;
+  const shownFor = useRef<string | null>(null);
+  const open = waiting && (!held || shownFor.current === latest);
+  shownFor.current = open ? latest : null;
 
   const dismiss = () => {
     if (!latest || !game.accountId) return;
     setDismissedAt(latest);
     buzz(10);
-    void markTakeoversSeen(game.accountId, latest).then(() => game.refresh()).catch(() => {
-      // Unseen messages come back on the next open, which is the right outcome offline.
-    });
+    void markTakeoversSeen(game.accountId, latest)
+      .then(() => game.refresh())
+      .catch(() => {
+        // Unseen messages come back on the next open, which is the right outcome offline.
+      });
   };
 
   const sorted = [...takeovers].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+  // The same park can be taken twice while away; it is still one park to take back.
+  const lostParks = [...new Set(sorted.map((takeover) => takeover.parkId))];
+  const singlePark = lostParks.length === 1 ? content?.parkById.get(lostParks[0]) : undefined;
+  const single = singlePark ? { parkId: singlePark.id, name: singlePark.short ?? singlePark.name } : null;
 
   // Seeing a lost park is the nudge to go and take it back, so open it on the map.
   const takeBack = (parkId: string) => {
@@ -57,7 +70,14 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
     <AnimatePresence>
       {open && (
         <>
-          <motion.div key="scrim" className="sheet-scrim takeover-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={dismiss} />
+          <motion.div
+            key="scrim"
+            className="sheet-scrim takeover-scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={dismiss}
+          />
           <motion.div
             key="sheet"
             className="sheet takeover-sheet"
@@ -86,11 +106,18 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
                   <motion.li key={`${takeover.parkId}:${takeover.at}`} className="takeover-row" variants={listItem}>
                     <Flag seed={takeover.byFlagSeed} size={44} className="is-waving" />
                     <span>
-                      <strong>@{takeover.byHandle} took {park?.short ?? park?.name ?? "one of your parks"}</strong>
+                      <strong>
+                        @{takeover.byHandle} took {park?.short ?? park?.name ?? "one of your parks"}
+                      </strong>
                       <em>{timeAgo(takeover.at, game.serverNow())}</em>
                     </span>
                     {park && (
-                      <motion.button whileTap={press} className="btn btn--sm btn--paper takeover-row__go" onClick={() => takeBack(takeover.parkId)} aria-label={`Show ${park.short} on the map`}>
+                      <motion.button
+                        whileTap={press}
+                        className="btn btn--sm btn--paper takeover-row__go"
+                        onClick={() => takeBack(takeover.parkId)}
+                        aria-label={`Show ${park.short} on the map`}
+                      >
                         <Icon name="map" size={16} />
                       </motion.button>
                     )}
@@ -99,8 +126,24 @@ export function TakeoverMessages({ allowed }: { allowed: boolean }) {
               })}
             </motion.ul>
             <div className="takeover-sheet__foot">
-              <p className="account-help">Visit a park again to take it back.</p>
-              <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>Got it</motion.button>
+              {/* One lost park: going after it is the obvious next step. Several: each row shows its park. */}
+              {single ? (
+                <>
+                  <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={() => takeBack(single.parkId)}>
+                    <Icon name="flag" size={18} /> Take back {single.name}
+                  </motion.button>
+                  <button className="arrival__later" onClick={dismiss}>
+                    Not now
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="account-help">Visit a park again to take it back.</p>
+                  <motion.button whileTap={press} className="btn btn--sun btn--block" onClick={dismiss}>
+                    Got it
+                  </motion.button>
+                </>
+              )}
             </div>
           </motion.div>
         </>

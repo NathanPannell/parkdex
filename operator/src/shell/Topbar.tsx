@@ -25,7 +25,12 @@ export function Topbar({ route, environment, menuOpen, onMenu }: { route: Resolv
       <Kip pose="avatar" size={30} className="topbar__kip" />
       <nav className="crumbs" aria-label="You are here">
         <span className="crumbs__section">{route?.section.label ?? "Operator"}</span>
-        {route?.child && <><Icon name="chevron" size={14} className="crumbs__sep" /><span className="crumbs__page">{route.child.label}</span></>}
+        {route?.child && (
+          <>
+            <Icon name="chevron" size={14} className="crumbs__sep" />
+            <span className="crumbs__page">{route.child.label}</span>
+          </>
+        )}
       </nav>
       <EnvBadge environment={environment} pinned={pinned} />
     </header>

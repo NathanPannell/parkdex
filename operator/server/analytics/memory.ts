@@ -7,7 +7,16 @@ import type { PostHogClient, QueryResult, TemplateParams } from "./posthog.js";
 import { buildTemplate, guardCustomQuery, posthogStatus } from "./posthog.js";
 import type { AnalyticsDependencies } from "./routes.js";
 import type {
-  AccountDetail, AccountQuery, AccountRow, AnalyticsStore, DeletionRow, EventCursor, EventFilter, EventRow, HistogramBucket, Overview,
+  AccountDetail,
+  AccountQuery,
+  AccountRow,
+  AnalyticsStore,
+  DeletionRow,
+  EventCursor,
+  EventFilter,
+  EventRow,
+  HistogramBucket,
+  Overview,
 } from "./types.js";
 
 /** In-memory analytics for tests and the local demo server. Never used by a deployment. */
@@ -96,17 +105,21 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   }
 
   private handleOf(accountId: string | null): string | null {
-    return accountId ? this.accounts.find((account) => account.id === accountId)?.handle ?? null : null;
+    return accountId ? (this.accounts.find((account) => account.id === accountId)?.handle ?? null) : null;
   }
 
   async overview(now: Date, days: number): Promise<Overview> {
     const t = now.getTime();
     const p = days * DAY;
-    const within = (value: string, from: number, to: number) => { const at = Date.parse(value); return at > t - from && at <= t - to; };
+    const within = (value: string, from: number, to: number) => {
+      const at = Date.parse(value);
+      return at > t - from && at <= t - to;
+    };
     const count = <T>(items: T[], test: (item: T) => boolean) => items.filter(test).length;
     const accounts = this.accounts;
     const visits = this.visits.filter((visit) => visit.outcome !== "imported");
-    const active = (from: number, to: number) => new Set(this.events.filter((event) => event.accountId && within(event.receivedAt, from, to)).map((event) => event.accountId)).size;
+    const active = (from: number, to: number) =>
+      new Set(this.events.filter((event) => event.accountId && within(event.receivedAt, from, to)).map((event) => event.accountId)).size;
     const dayList: string[] = [];
     for (let i = days - 1; i >= 0; i -= 1) dayList.push(localDay(t - i * DAY));
     const perDay = <T>(items: T[], at: (item: T) => string, test: (item: T) => boolean = () => true) => {
@@ -131,7 +144,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
       entry.players.add(visit.accountId);
       parkVisits.set(visit.parkId, entry);
     }
-    const outcome = (name: MemoryVisit["outcome"]) => ({ current: count(visits, (v) => v.outcome === name && within(v.visitedAt, p, 0)), previous: count(visits, (v) => v.outcome === name && within(v.visitedAt, 2 * p, p)) });
+    const outcome = (name: MemoryVisit["outcome"]) => ({
+      current: count(visits, (v) => v.outcome === name && within(v.visitedAt, p, 0)),
+      previous: count(visits, (v) => v.outcome === name && within(v.visitedAt, 2 * p, p)),
+    });
     return {
       generatedAt: now.toISOString(),
       days,
@@ -148,33 +164,55 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
         week: { current: active(7 * DAY, 0), previous: active(14 * DAY, 7 * DAY) },
         month: { current: active(30 * DAY, 0), previous: active(60 * DAY, 30 * DAY) },
       },
-      founded: !this.available.founders ? null : {
-        total: this.founded.length,
-        new7: count(this.founded, (f) => within(f.foundedAt, 7 * DAY, 0)),
-        period: { current: count(this.founded, (f) => within(f.foundedAt, p, 0)), previous: count(this.founded, (f) => within(f.foundedAt, 2 * p, p)) },
-      },
+      founded: !this.available.founders
+        ? null
+        : {
+            total: this.founded.length,
+            new7: count(this.founded, (f) => within(f.foundedAt, 7 * DAY, 0)),
+            period: { current: count(this.founded, (f) => within(f.foundedAt, p, 0)), previous: count(this.founded, (f) => within(f.foundedAt, 2 * p, p)) },
+          },
       visits: { planted: outcome("planted"), took: outcome("took"), held: outcome("held") },
-      photoChecks: !this.available.founders ? null : {
-        total: { current: checksNow.length, previous: count(this.photoChecks, (c) => within(c.createdAt, 2 * p, p)) },
-        approved: { current: count(checksNow, (c) => c.outcome === "approve"), previous: count(this.photoChecks, (c) => c.outcome === "approve" && within(c.createdAt, 2 * p, p)) },
-        rejected: count(checksNow, (c) => c.outcome === "reject"),
-        unsure: count(checksNow, (c) => c.outcome === "unsure"),
-        unavailable: count(checksNow, (c) => c.outcome === "unavailable"),
-      },
+      photoChecks: !this.available.founders
+        ? null
+        : {
+            total: { current: checksNow.length, previous: count(this.photoChecks, (c) => within(c.createdAt, 2 * p, p)) },
+            approved: {
+              current: count(checksNow, (c) => c.outcome === "approve"),
+              previous: count(this.photoChecks, (c) => c.outcome === "approve" && within(c.createdAt, 2 * p, p)),
+            },
+            rejected: count(checksNow, (c) => c.outcome === "reject"),
+            unsure: count(checksNow, (c) => c.outcome === "unsure"),
+            unavailable: count(checksNow, (c) => c.outcome === "unavailable"),
+          },
       feedbackOpen: this.feedbackOpen,
       series: {
         days: dayList,
         newAccounts: perDay(accounts, (a) => a.createdAt),
         activePlayers: activePerDay,
-        planted: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "planted"),
-        took: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "took"),
-        held: perDay(visits, (v) => v.visitedAt, (v) => v.outcome === "held"),
+        planted: perDay(
+          visits,
+          (v) => v.visitedAt,
+          (v) => v.outcome === "planted",
+        ),
+        took: perDay(
+          visits,
+          (v) => v.visitedAt,
+          (v) => v.outcome === "took",
+        ),
+        held: perDay(
+          visits,
+          (v) => v.visitedAt,
+          (v) => v.outcome === "held",
+        ),
         foundings: this.available.founders ? perDay(this.founded, (f) => f.foundedAt) : null,
       },
       topParks: [...parkVisits.entries()]
         .map(([parkId, entry]) => ({ parkId, name: this.parks.get(parkId) ?? parkId, visits: entry.visits, players: entry.players.size }))
-        .sort((a, b) => b.visits - a.visits || a.parkId.localeCompare(b.parkId)).slice(0, 10),
-      rejectionFlags: !this.available.founders ? [] : [...flags.entries()].map(([flag, total]) => ({ flag, count: total })).sort((a, b) => b.count - a.count || a.flag.localeCompare(b.flag)),
+        .sort((a, b) => b.visits - a.visits || a.parkId.localeCompare(b.parkId))
+        .slice(0, 10),
+      rejectionFlags: !this.available.founders
+        ? []
+        : [...flags.entries()].map(([flag, total]) => ({ flag, count: total })).sort((a, b) => b.count - a.count || a.flag.localeCompare(b.flag)),
       unavailable: unavailableNotes(this.available),
     };
   }
@@ -182,17 +220,31 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   private row(account: MemoryAccount, now: Date): AccountRow {
     const t = now.getTime();
     const tenures = this.tenures.filter((tenure) => tenure.holder === account.id && Date.parse(tenure.startedAt) <= t);
-    const score = tenures.reduce((sum, tenure) => {
-      const end = Math.min(tenure.endedAt ? Date.parse(tenure.endedAt) : Infinity, Date.parse(tenure.lastVisitAt) + FALL_MS, t);
-      return sum + wholeDays(Date.parse(tenure.startedAt), end) + tenure.bounty;
-    }, 0) + (this.available.founders ? this.founded.filter((park) => park.accountId === account.id).length * 10 : 0);
-    const lastEvent = this.events.filter((event) => event.accountId === account.id).map((event) => event.receivedAt).sort().at(-1) ?? null;
-    const lastSession = account.sessions.map((session) => session.createdAt).sort().at(-1) ?? null;
+    const score =
+      tenures.reduce((sum, tenure) => {
+        const end = Math.min(tenure.endedAt ? Date.parse(tenure.endedAt) : Infinity, Date.parse(tenure.lastVisitAt) + FALL_MS, t);
+        return sum + wholeDays(Date.parse(tenure.startedAt), end) + tenure.bounty;
+      }, 0) + (this.available.founders ? this.founded.filter((park) => park.accountId === account.id).length * 10 : 0);
+    const lastEvent =
+      this.events
+        .filter((event) => event.accountId === account.id)
+        .map((event) => event.receivedAt)
+        .sort()
+        .at(-1) ?? null;
+    const lastSession =
+      account.sessions
+        .map((session) => session.createdAt)
+        .sort()
+        .at(-1) ?? null;
     return {
       id: account.id,
       handle: account.handle,
       createdAt: account.createdAt,
-      lastActiveAt: [lastEvent, lastSession].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+      lastActiveAt:
+        [lastEvent, lastSession]
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1) ?? null,
       providers: [...(account.google ? ["google"] : []), ...(account.password ? ["email"] : [])],
       visits: this.visits.filter((visit) => visit.accountId === account.id && visit.outcome !== "imported").length,
       parksHeld: tenures.filter((tenure) => !tenure.endedAt && Date.parse(tenure.lastVisitAt) + FALL_MS > t).length,
@@ -208,7 +260,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
       .filter((account) => !search || account.id === search || account.email === search || Boolean(account.handle?.includes(search)))
       .filter((account) => !query.state || account.deletionState === query.state)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
-      .filter((account) => !query.cursor || account.createdAt < query.cursor.createdAt || (account.createdAt === query.cursor.createdAt && account.id < query.cursor.id))
+      .filter(
+        (account) =>
+          !query.cursor || account.createdAt < query.cursor.createdAt || (account.createdAt === query.cursor.createdAt && account.id < query.cursor.id),
+      )
       .slice(0, query.limit)
       .map((account) => this.row(account, now));
   }
@@ -216,17 +271,39 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   async getAccount(id: string, now: Date): Promise<AccountDetail | null> {
     const account = this.accounts.find((item) => item.id === id);
     if (!account) return null;
-    const receipt = this.receipts.filter((item) => item.accountId === id).sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt))[0];
+    const receipt = this.receipts
+      .filter((item) => item.accountId === id)
+      .sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.createdAt.localeCompare(a.createdAt))[0];
     return {
       ...this.row(account, now),
       maskedEmail: maskEmail(account.email),
       emailVerified: true,
       activeSessions: account.sessions.filter((session) => !session.revokedAt && Date.parse(session.expiresAt) > now.getTime()).length,
-      lastSignInAt: account.sessions.map((session) => session.createdAt).sort().at(-1) ?? null,
-      recentEvents: this.events.filter((event) => event.accountId === id).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).slice(0, 50),
-      recentVisits: this.visits.filter((visit) => visit.accountId === id).sort((a, b) => b.visitedAt.localeCompare(a.visitedAt)).slice(0, 20)
-        .map((visit) => ({ parkId: visit.parkId, parkName: this.parks.get(visit.parkId) ?? visit.parkId, visitedAt: visit.visitedAt, outcome: visit.outcome, points: visit.points })),
-      founded: !this.available.founders ? null : this.founded.filter((park) => park.accountId === id).map((park) => ({ parkId: park.parkId, parkName: this.parks.get(park.parkId) ?? park.parkId, foundedAt: park.foundedAt })),
+      lastSignInAt:
+        account.sessions
+          .map((session) => session.createdAt)
+          .sort()
+          .at(-1) ?? null,
+      recentEvents: this.events
+        .filter((event) => event.accountId === id)
+        .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
+        .slice(0, 50),
+      recentVisits: this.visits
+        .filter((visit) => visit.accountId === id)
+        .sort((a, b) => b.visitedAt.localeCompare(a.visitedAt))
+        .slice(0, 20)
+        .map((visit) => ({
+          parkId: visit.parkId,
+          parkName: this.parks.get(visit.parkId) ?? visit.parkId,
+          visitedAt: visit.visitedAt,
+          outcome: visit.outcome,
+          points: visit.points,
+        })),
+      founded: !this.available.founders
+        ? null
+        : this.founded
+            .filter((park) => park.accountId === id)
+            .map((park) => ({ parkId: park.parkId, parkName: this.parks.get(park.parkId) ?? park.parkId, foundedAt: park.foundedAt })),
       deletion: receipt ? { receiptId: receipt.receiptId, status: receipt.status, createdAt: receipt.createdAt } : null,
     };
   }
@@ -240,12 +317,16 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   }
 
   private matching(filter: EventFilter): EventRow[] {
-    return this.events.filter((event) =>
-      event.receivedAt >= filter.from && event.receivedAt < filter.to && filter.types.includes(event.type)
-      && (!filter.accountId || event.accountId === filter.accountId)
-      && (!filter.parkId || event.parkId === filter.parkId)
-      && (!filter.route || event.route === filter.route)
-      && (!filter.result || (filter.result === "ok" ? event.result === "ok" : event.result !== null && event.result !== "ok")));
+    return this.events.filter(
+      (event) =>
+        event.receivedAt >= filter.from &&
+        event.receivedAt < filter.to &&
+        filter.types.includes(event.type) &&
+        (!filter.accountId || event.accountId === filter.accountId) &&
+        (!filter.parkId || event.parkId === filter.parkId) &&
+        (!filter.route || event.route === filter.route) &&
+        (!filter.result || (filter.result === "ok" ? event.result === "ok" : event.result !== null && event.result !== "ok")),
+    );
   }
 
   async listEvents(filter: EventFilter, cursor: EventCursor | null, limit: number) {
@@ -261,9 +342,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
     for (const event of this.matching(filter)) {
       const date = new Date(event.receivedAt);
       // Hours are the same everywhere for a whole-hour zone offset; days follow Victoria.
-      const key = bucket === "hour"
-        ? new Date(Math.floor(date.getTime() / 3_600_000) * 3_600_000).toISOString()
-        : new Date(`${localDay(event.receivedAt)}T12:00:00Z`).toISOString();
+      const key =
+        bucket === "hour"
+          ? new Date(Math.floor(date.getTime() / 3_600_000) * 3_600_000).toISOString()
+          : new Date(`${localDay(event.receivedAt)}T12:00:00Z`).toISOString();
       const entry = buckets.get(key) ?? { at: key, count: 0, db: 0 };
       entry.count += 1;
       if ((DB_EVENT_TYPES as readonly string[]).includes(event.type)) entry.db += 1;
@@ -277,13 +359,21 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
   }
 
   async pendingDeletions(): Promise<DeletionRow[]> {
-    return this.receipts.filter((receipt) => receipt.status === "pending").map((receipt) => {
-      const account = this.accounts.find((item) => item.id === receipt.accountId);
-      return {
-        receiptId: receipt.receiptId, accountId: receipt.accountId, handle: account?.handle ?? null, createdAt: receipt.createdAt,
-        photoObjects: receipt.photoObjects, attempts: receipt.attempts, lastError: receipt.lastError, accountState: account?.deletionState ?? "gone",
-      };
-    });
+    return this.receipts
+      .filter((receipt) => receipt.status === "pending")
+      .map((receipt) => {
+        const account = this.accounts.find((item) => item.id === receipt.accountId);
+        return {
+          receiptId: receipt.receiptId,
+          accountId: receipt.accountId,
+          handle: account?.handle ?? null,
+          createdAt: receipt.createdAt,
+          photoObjects: receipt.photoObjects,
+          attempts: receipt.attempts,
+          lastError: receipt.lastError,
+          accountState: account?.deletionState ?? "gone",
+        };
+      });
   }
 
   async beginDeletion(accountId: string, receiptId: string, now: Date) {
@@ -324,7 +414,10 @@ export class MemoryAnalyticsStore implements AnalyticsStore {
  * out") succeeds when resumed, like a real retry after an outage.
  */
 export class MemoryAccountDeleter implements AccountDeleter {
-  constructor(private readonly store: MemoryAnalyticsStore, private readonly photoServiceUp: () => boolean = () => true) {}
+  constructor(
+    private readonly store: MemoryAnalyticsStore,
+    private readonly photoServiceUp: () => boolean = () => true,
+  ) {}
 
   async resume(receiptId: string): Promise<"pending" | "complete"> {
     const receipt = this.store.receipts.find((item) => item.receiptId === receiptId);
@@ -354,32 +447,81 @@ function uuid(next: () => number): string {
 }
 
 const DEMO_PARKS: [string, string][] = [
-  ["regional-thetis-lake", "Thetis Lake Regional Park"], ["municipal-beacon-hill", "Beacon Hill Park"],
-  ["regional-mount-douglas", "Mount Douglas Park"], ["provincial-goldstream", "Goldstream Provincial Park"],
-  ["regional-elk-beaver-lake", "Elk/Beaver Lake Regional Park"], ["regional-francis-king", "Francis/King Regional Park"],
-  ["municipal-cattle-point", "Cattle Point"], ["municipal-gonzales-beach", "Gonzales Beach Park"],
-  ["regional-east-sooke", "East Sooke Regional Park"], ["regional-witty-s-lagoon", "Witty's Lagoon Regional Park"],
-  ["regional-sooke-potholes", "Sooke Potholes Regional Park"], ["regional-mount-work", "Mount Work Regional Park"],
-  ["regional-island-view-beach", "Island View Beach Regional Park"], ["municipal-mystic-vale", "Mystic Vale"],
-  ["osm-way-118204551", "Cadboro-Gyro Park"], ["osm-way-24433920", "Summit Park"],
-  ["municipal-willows-beach", "Willows Beach Park"], ["regional-mill-hill", "Mill Hill Regional Park"],
-  ["provincial-french-beach", "French Beach Provincial Park"], ["municipal-dallas-road", "Dallas Road Waterfront"],
-  ["regional-lone-tree-hill", "Lone Tree Hill Regional Park"], ["municipal-mount-tolmie", "Mount Tolmie Park"],
-  ["regional-matheson-lake", "Matheson Lake Regional Park"], ["municipal-swan-lake", "Swan Lake Nature Sanctuary"],
-  ["provincial-gowlland-tod", "Gowlland Tod Provincial Park"], ["municipal-cedar-hill", "Cedar Hill Park"],
+  ["regional-thetis-lake", "Thetis Lake Regional Park"],
+  ["municipal-beacon-hill", "Beacon Hill Park"],
+  ["regional-mount-douglas", "Mount Douglas Park"],
+  ["provincial-goldstream", "Goldstream Provincial Park"],
+  ["regional-elk-beaver-lake", "Elk/Beaver Lake Regional Park"],
+  ["regional-francis-king", "Francis/King Regional Park"],
+  ["municipal-cattle-point", "Cattle Point"],
+  ["municipal-gonzales-beach", "Gonzales Beach Park"],
+  ["regional-east-sooke", "East Sooke Regional Park"],
+  ["regional-witty-s-lagoon", "Witty's Lagoon Regional Park"],
+  ["regional-sooke-potholes", "Sooke Potholes Regional Park"],
+  ["regional-mount-work", "Mount Work Regional Park"],
+  ["regional-island-view-beach", "Island View Beach Regional Park"],
+  ["municipal-mystic-vale", "Mystic Vale"],
+  ["osm-way-118204551", "Cadboro-Gyro Park"],
+  ["osm-way-24433920", "Summit Park"],
+  ["municipal-willows-beach", "Willows Beach Park"],
+  ["regional-mill-hill", "Mill Hill Regional Park"],
+  ["provincial-french-beach", "French Beach Provincial Park"],
+  ["municipal-dallas-road", "Dallas Road Waterfront"],
+  ["regional-lone-tree-hill", "Lone Tree Hill Regional Park"],
+  ["municipal-mount-tolmie", "Mount Tolmie Park"],
+  ["regional-matheson-lake", "Matheson Lake Regional Park"],
+  ["municipal-swan-lake", "Swan Lake Nature Sanctuary"],
+  ["provincial-gowlland-tod", "Gowlland Tod Provincial Park"],
+  ["municipal-cedar-hill", "Cedar Hill Park"],
 ];
 
 const HANDLES = [
-  "trailhound", "mossy_maddie", "salal_sam", "cedar_kid", "tidepool_tess", "garry_oak", "fernwalker", "otter_ollie",
-  "kip_fan_92", "lagoon_lou", "bluff_runner", "arbutus_ash", "heron_hana", "summit_sid", "drift_dana", "madrona_max",
-  "camas_cleo", "orca_ori", "trillium_tia", "eagle_eli", "pebble_pat", "sooke_sky", "beacon_bea", "foggy_finn",
-  "rain_rhea", "kelp_kai", "nettle_ned", "puddle_pia", "stump_stan", "willow_wren",
+  "trailhound",
+  "mossy_maddie",
+  "salal_sam",
+  "cedar_kid",
+  "tidepool_tess",
+  "garry_oak",
+  "fernwalker",
+  "otter_ollie",
+  "kip_fan_92",
+  "lagoon_lou",
+  "bluff_runner",
+  "arbutus_ash",
+  "heron_hana",
+  "summit_sid",
+  "drift_dana",
+  "madrona_max",
+  "camas_cleo",
+  "orca_ori",
+  "trillium_tia",
+  "eagle_eli",
+  "pebble_pat",
+  "sooke_sky",
+  "beacon_bea",
+  "foggy_finn",
+  "rain_rhea",
+  "kelp_kai",
+  "nettle_ned",
+  "puddle_pia",
+  "stump_stan",
+  "willow_wren",
 ];
 
 const ROUTES = [
-  "GET /api/content/snapshot", "GET /api/content/changes", "POST /api/game/visits", "GET /api/game/leaderboard", "GET /api/game/flags",
-  "GET /api/claims", "PUT /api/claims/:id", "PUT /api/claims/:id/photo", "POST /api/founders/photo-check", "POST /api/founders/found",
-  "GET /api/app-config", "POST /api/game/handle", "GET /api/account",
+  "GET /api/content/snapshot",
+  "GET /api/content/changes",
+  "POST /api/game/visits",
+  "GET /api/game/leaderboard",
+  "GET /api/game/flags",
+  "GET /api/claims",
+  "PUT /api/claims/:id",
+  "PUT /api/claims/:id/photo",
+  "POST /api/founders/photo-check",
+  "POST /api/founders/found",
+  "GET /api/app-config",
+  "POST /api/game/handle",
+  "GET /api/account",
 ];
 
 const FLAG_SETS = [["people"], ["not_park"], ["lighting"], ["people", "personal_info"], ["not_photo"], ["inappropriate"], ["lighting", "not_park"]];
@@ -393,14 +535,18 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
 
   for (let i = 0; i < 42; i += 1) {
     // Sign-ups lean recent, as after a launch.
-    const age = Math.floor((next() ** 1.7) * 60 * DAY) + 3_600_000;
+    const age = Math.floor(next() ** 1.7 * 60 * DAY) + 3_600_000;
     const handle = i < HANDLES.length ? HANDLES[i] : null;
     const id = uuid(next);
     const sessionStart = now - Math.floor(next() * Math.min(age, 20 * DAY));
     store.accounts.push({
-      id, handle, createdAt: at(age), deletionState: "active",
+      id,
+      handle,
+      createdAt: at(age),
+      deletionState: "active",
       email: `${handle ?? `player${i}`}@${pick(["gmail.com", "outlook.com", "shaw.ca", "telus.net"])}`,
-      google: next() > 0.08, password: next() < 0.1,
+      google: next() > 0.08,
+      password: next() < 0.1,
       sessions: [{ createdAt: new Date(sessionStart).toISOString(), expiresAt: new Date(sessionStart + 30 * DAY).toISOString(), revokedAt: null }],
     });
   }
@@ -408,12 +554,12 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
   const players = store.accounts.filter((account) => account.handle);
   const holders = new Map<string, MemoryTenure>();
   // Visits play forward in time so plants, holds and takes line up with tenures.
-  const visitTimes = Array.from({ length: 420 }, () => now - Math.floor((next() ** 1.25) * 58 * DAY)).sort((a, b) => a - b);
+  const visitTimes = Array.from({ length: 420 }, () => now - Math.floor(next() ** 1.25 * 58 * DAY)).sort((a, b) => a - b);
   for (const time of visitTimes) {
     // A few keen players do most of the visiting, and they often return to parks they hold.
-    const player = players[Math.floor((next() ** 1.6) * players.length)];
+    const player = players[Math.floor(next() ** 1.6 * players.length)];
     const own = [...holders.values()].filter((tenure) => tenure.holder === player.id && !tenure.endedAt);
-    const parkId = own.length && next() < 0.45 ? pick(own).parkId : DEMO_PARKS[Math.floor((next() ** 1.5) * DEMO_PARKS.length)][0];
+    const parkId = own.length && next() < 0.45 ? pick(own).parkId : DEMO_PARKS[Math.floor(next() ** 1.5 * DEMO_PARKS.length)][0];
     if (Date.parse(player.createdAt) > time) continue;
     if (store.visits.some((visit) => visit.accountId === player.id && visit.parkId === parkId && localDay(visit.visitedAt) === localDay(time))) continue;
     const open = holders.get(parkId);
@@ -421,7 +567,14 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
     let points = 0;
     if (!open || open.endedAt) {
       outcome = "planted";
-      const tenure = { parkId, holder: player.id, startedAt: new Date(time).toISOString(), lastVisitAt: new Date(time).toISOString(), endedAt: null, bounty: 0 };
+      const tenure = {
+        parkId,
+        holder: player.id,
+        startedAt: new Date(time).toISOString(),
+        lastVisitAt: new Date(time).toISOString(),
+        endedAt: null,
+        bounty: 0,
+      };
       store.tenures.push(tenure);
       holders.set(parkId, tenure);
     } else if (open.holder === player.id) {
@@ -431,7 +584,14 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
       outcome = "took";
       points = wholeDays(Date.parse(open.startedAt), time);
       open.endedAt = new Date(time).toISOString();
-      const tenure = { parkId, holder: player.id, startedAt: new Date(time).toISOString(), lastVisitAt: new Date(time).toISOString(), endedAt: null, bounty: points };
+      const tenure = {
+        parkId,
+        holder: player.id,
+        startedAt: new Date(time).toISOString(),
+        lastVisitAt: new Date(time).toISOString(),
+        endedAt: null,
+        bounty: points,
+      };
       store.tenures.push(tenure);
       holders.set(parkId, tenure);
     }
@@ -448,26 +608,49 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
     const roll = next();
     const outcome: MemoryPhotoCheck["outcome"] = roll < 0.62 ? "approve" : roll < 0.88 ? "reject" : roll < 0.97 ? "unsure" : "unavailable";
     store.photoChecks.push({
-      accountId: pick(players).id, createdAt: at(Math.floor((next() ** 1.3) * 50 * DAY)), outcome,
+      accountId: pick(players).id,
+      createdAt: at(Math.floor(next() ** 1.3 * 50 * DAY)),
+      outcome,
       flags: outcome === "reject" || outcome === "unsure" ? pick(FLAG_SETS) : [],
     });
   }
 
-  const gameTypes = ["flag_planted", "flag_taken", "flag_held", "visit_already_today", "leaderboard_viewed", "takeover_message_seen", "founder_photo_checked", "park_founded", "handle_set", "flag_fell"];
+  const gameTypes = [
+    "flag_planted",
+    "flag_taken",
+    "flag_held",
+    "visit_already_today",
+    "leaderboard_viewed",
+    "takeover_message_seen",
+    "founder_photo_checked",
+    "park_founded",
+    "handle_set",
+    "flag_fell",
+  ];
   const installations = store.accounts.map(() => uuid(next));
   for (let i = 0; i < 2600; i += 1) {
     const signedIn = next() < 0.72;
     // Engagement is uneven: most events come from a handful of accounts.
-    const index = Math.floor((next() ** 2.4) * store.accounts.length);
+    const index = Math.floor(next() ** 2.4 * store.accounts.length);
     const db = next() < 0.58;
     // Players without a handle have not joined the game yet, so only their queries show up.
     const account = signedIn && (db || store.accounts[index].handle) ? store.accounts[index] : null;
-    const received = now - Math.floor((next() ** 1.2) * 58 * DAY);
+    const received = now - Math.floor(next() ** 1.2 * 58 * DAY);
     if (account && Date.parse(account.createdAt) > received) continue;
     const type = db ? (next() < 0.8 ? "db_read" : "db_write") : pick(gameTypes);
-    const route = db ? pick(ROUTES) : type.startsWith("flag") || type === "visit_already_today" ? "POST /api/game/visits"
-      : type === "leaderboard_viewed" ? "GET /api/game/leaderboard" : type === "handle_set" ? "POST /api/game/handle"
-      : type === "takeover_message_seen" ? "POST /api/game/takeovers/seen" : type === "park_founded" ? "POST /api/founders/found" : "POST /api/founders/photo-check";
+    const route = db
+      ? pick(ROUTES)
+      : type.startsWith("flag") || type === "visit_already_today"
+        ? "POST /api/game/visits"
+        : type === "leaderboard_viewed"
+          ? "GET /api/game/leaderboard"
+          : type === "handle_set"
+            ? "POST /api/game/handle"
+            : type === "takeover_message_seen"
+              ? "POST /api/game/takeovers/seen"
+              : type === "park_founded"
+                ? "POST /api/founders/found"
+                : "POST /api/founders/photo-check";
     const parkId = !db && type !== "leaderboard_viewed" && type !== "handle_set" && type !== "takeover_message_seen" ? pick(DEMO_PARKS)[0] : null;
     const failed = db && next() < 0.015;
     store.events.push({
@@ -487,10 +670,15 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
       durationMs: db ? Math.floor(4 + next() ** 3 * 380) : null,
       result: db ? (failed ? pick(["57014", "23505", "error"]) : "ok") : null,
       parkId,
-      properties: db ? null : type === "founder_photo_checked"
-        ? { outcome: pick(["approve", "approve", "reject", "unsure"]), flags: pick(["", "people", "lighting"]) }
-        : type === "flag_taken" ? { points: Math.floor(next() * 9), previous_holder: pick(HANDLES) }
-        : type === "leaderboard_viewed" ? { rows: 30 } : { source: "visit" },
+      properties: db
+        ? null
+        : type === "founder_photo_checked"
+          ? { outcome: pick(["approve", "approve", "reject", "unsure"]), flags: pick(["", "people", "lighting"]) }
+          : type === "flag_taken"
+            ? { points: Math.floor(next() * 9), previous_holder: pick(HANDLES) }
+            : type === "leaderboard_viewed"
+              ? { rows: 30 }
+              : { source: "visit" },
     });
   }
 
@@ -499,7 +687,15 @@ export function seedDemoAnalytics(store: MemoryAnalyticsStore, now = Date.now(),
   if (stuck) {
     stuck.deletionState = "deleting";
     for (const session of stuck.sessions) session.revokedAt = at(2 * DAY + 3_600_000);
-    store.receipts.push({ receiptId: uuid(next), accountId: stuck.id, status: "pending", createdAt: at(2 * DAY + 3_600_000), photoObjects: 3, attempts: 2, lastError: "Private photo cleanup is incomplete." });
+    store.receipts.push({
+      receiptId: uuid(next),
+      accountId: stuck.id,
+      status: "pending",
+      createdAt: at(2 * DAY + 3_600_000),
+      photoObjects: 3,
+      attempts: 2,
+      lastError: "Private photo cleanup is incomplete.",
+    });
   }
   store.feedbackOpen = 7;
   return store;
@@ -525,27 +721,67 @@ export class DemoPostHogClient implements PostHogClient {
           const people = Math.floor(8 + i * 0.6 + next() * 6);
           return [day, people * Math.floor(30 + next() * 25), people];
         }),
-        hasMore: false, nextCursor: null,
+        hasMore: false,
+        nextCursor: null,
       };
     }
     if (name === "top_events") {
-      const names = ["$autocapture", "$pageview", "$screen", "found_park_started", "found_park_completed", "found_park_photo_rejected", "$pageleave", "$web_vitals"];
-      return { columns: ["event", "events", "people"], rows: names.map((event, i) => [event, Math.floor(4200 / (i + 1) + next() * 90), Math.floor(36 / (i * 0.4 + 1))]), hasMore: false, nextCursor: null };
+      const names = [
+        "$autocapture",
+        "$pageview",
+        "$screen",
+        "found_park_started",
+        "found_park_completed",
+        "found_park_photo_rejected",
+        "$pageleave",
+        "$web_vitals",
+      ];
+      return {
+        columns: ["event", "events", "people"],
+        rows: names.map((event, i) => [event, Math.floor(4200 / (i + 1) + next() * 90), Math.floor(36 / (i * 0.4 + 1))]),
+        hasMore: false,
+        nextCursor: null,
+      };
     }
     if (name === "taps" || name === "screens") {
       const screens = ["/map", "/park", "/leaderboard", "/found", "/profile", "/settings"];
       const labels = ["Plant flag", "Directions", "Leaderboard", "Found this park", "Take photo", "Use photo", "Close", "Sign in with Google", "Menu"];
-      if (name === "screens") return { columns: ["screen", "views", "people"], rows: screens.map((screen, i) => [screen, Math.floor(2600 / (i + 1)), Math.floor(38 / (i * 0.5 + 1))]), hasMore: false, nextCursor: null };
-      return { columns: ["screen", "label", "taps", "people"], rows: labels.map((label, i) => [screens[i % screens.length], label, Math.floor(1300 / (i + 1) + next() * 40), Math.floor(30 / (i * 0.3 + 1))]), hasMore: false, nextCursor: null };
+      if (name === "screens")
+        return {
+          columns: ["screen", "views", "people"],
+          rows: screens.map((screen, i) => [screen, Math.floor(2600 / (i + 1)), Math.floor(38 / (i * 0.5 + 1))]),
+          hasMore: false,
+          nextCursor: null,
+        };
+      return {
+        columns: ["screen", "label", "taps", "people"],
+        rows: labels.map((label, i) => [screens[i % screens.length], label, Math.floor(1300 / (i + 1) + next() * 40), Math.floor(30 / (i * 0.3 + 1))]),
+        hasMore: false,
+        nextCursor: null,
+      };
     }
     const before = params.before ? Date.parse(params.before) : t;
     const events = ["$autocapture", "$pageview", "$autocapture", "found_park_started", "$autocapture", "$pageleave"];
     const rows = Array.from({ length: 100 }, (_, i) => {
       const time = new Date(before - (i + 1) * Math.floor(40_000 + next() * 200_000)).toISOString();
       const event = params.event ?? pick(events, next);
-      return [time, event, params.distinctId ?? uuid(next), pick(["/map", "/park", "/leaderboard", "/found"], next), event === "$autocapture" ? pick(["Plant flag", "Directions", "Menu", "Close"], next) : null, "0.4.4+43", "android", "capacitor://localhost/map"];
+      return [
+        time,
+        event,
+        params.distinctId ?? uuid(next),
+        pick(["/map", "/park", "/leaderboard", "/found"], next),
+        event === "$autocapture" ? pick(["Plant flag", "Directions", "Menu", "Close"], next) : null,
+        "0.4.4+43",
+        "android",
+        "capacitor://localhost/map",
+      ];
     });
-    return { columns: ["timestamp", "event", "distinct_id", "screen", "label", "app_version", "platform", "url"], rows, hasMore: true, nextCursor: String(rows[rows.length - 1][0]) };
+    return {
+      columns: ["timestamp", "event", "distinct_id", "screen", "label", "app_version", "platform", "url"],
+      rows,
+      hasMore: true,
+      nextCursor: String(rows[rows.length - 1][0]),
+    };
   }
 
   async custom(text: unknown, limit: unknown): Promise<QueryResult> {

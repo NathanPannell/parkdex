@@ -15,10 +15,10 @@ describe("leaving the plant screen", () => {
     expect(canLeavePlant("playing")).toBe(false);
   });
 
-  it("ends the trip and opens the park on the map", () => {
+  it("ends the trip and settles the map on the park without opening its page", () => {
     expect(leavePlant("municipal-city-of-victoria-1442")).toEqual([
       { type: "trip", id: null },
-      { type: "focus", id: "municipal-city-of-victoria-1442" },
+      { type: "focus", id: "municipal-city-of-victoria-1442", open: false },
       { type: "go", screen: "map" },
     ]);
   });
@@ -31,7 +31,10 @@ describe("leaving the plant screen", () => {
   });
 
   it("still returns to the map when the park is unknown", () => {
-    expect(leavePlant(null)).toEqual([{ type: "trip", id: null }, { type: "go", screen: "map" }]);
+    expect(leavePlant(null)).toEqual([
+      { type: "trip", id: null },
+      { type: "go", screen: "map" },
+    ]);
   });
 
   it("lets Android back follow the open screen's phase", () => {

@@ -47,7 +47,7 @@ function Shelf() {
   const [seen, setSeen] = useState(() => readSeenBadges(accountId));
   const [open, setOpen] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const openBadge = open ? items.find((item) => item.id === open) ?? null : null;
+  const openBadge = open ? (items.find((item) => item.id === open) ?? null) : null;
   // The first earned badge brings Kip's Tip about sewing badges on (#172).
   useKipTip("badge-first", earned.length > 0);
   useEffect(() => setSeen(readSeenBadges(accountId)), [accountId]);
@@ -82,8 +82,14 @@ function Shelf() {
 
   return (
     <BadgeShelfView items={items} patches={patches} flagSeed={me.player?.flagSeed ?? me.flagSeed} seen={seen} onOpen={show}>
-      <BadgeSheet badge={openBadge} sewn={!!openBadge && patches.includes(openBadge.id)} full={patches.length >= MAX_PATCHES} saving={saving}
-        onToggle={(item) => void toggle(item)} onClose={() => setOpen(null)} />
+      <BadgeSheet
+        badge={openBadge}
+        sewn={!!openBadge && patches.includes(openBadge.id)}
+        full={patches.length >= MAX_PATCHES}
+        saving={saving}
+        onToggle={(item) => void toggle(item)}
+        onClose={() => setOpen(null)}
+      />
     </BadgeShelfView>
   );
 }
@@ -119,7 +125,9 @@ function BadgeSheet({ badge, sewn, full, saving, onToggle, onClose }: SheetProps
               <div className="sheet__handle" />
               <header className="dex-detail__head">
                 <div>
-                  <span className="eyebrow">{"★".repeat(RARITY[badge.rarity].stars)} {RARITY[badge.rarity].label} badge</span>
+                  <span className="eyebrow">
+                    {"★".repeat(RARITY[badge.rarity].stars)} {RARITY[badge.rarity].label} badge
+                  </span>
                   <h2 id="badge-detail-title">{badge.name}</h2>
                 </div>
                 <button className="park-sheet__close dex-detail__close" onClick={onClose} aria-label="Close">
@@ -127,14 +135,23 @@ function BadgeSheet({ badge, sewn, full, saving, onToggle, onClose }: SheetProps
                 </button>
               </header>
               <div className="dex-detail__body badge-detail__body">
-                <motion.div className="badge-detail__hero" initial={{ scale: 0.6, rotate: -8 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 420, damping: 18 }}>
+                <motion.div
+                  className="badge-detail__hero"
+                  initial={{ scale: 0.6, rotate: -8 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 18 }}
+                >
                   <AchievementBadge badge={badge} size={190} locked={!badge.unlocked} showName={badge.unlocked} />
                 </motion.div>
                 <p className="badge-detail__hint">{badge.hint}.</p>
                 <p className="badge-detail__status">
                   {badge.unlocked
-                    ? badge.unlockedAt ? `Earned ${dateLabel(badge.unlockedAt)}.` : "Earned."
-                    : progress ? `${progress} so far.` : "Not earned yet."}
+                    ? badge.unlockedAt
+                      ? `Earned ${dateLabel(badge.unlockedAt)}.`
+                      : "Earned."
+                    : progress
+                      ? `${progress} so far.`
+                      : "Not earned yet."}
                 </p>
                 {badge.unlocked && (
                   <div className="badge-detail__actions">

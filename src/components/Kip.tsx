@@ -1,20 +1,7 @@
 import { AnimatePresence, motion, type TargetAndTransition, type Transition } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 
-export type KipPose =
-  | "idle"
-  | "wave"
-  | "cheer"
-  | "talk"
-  | "sleep"
-  | "point"
-  | "camera"
-  | "celebrate"
-  | "map"
-  | "walk"
-  | "think"
-  | "peek"
-  | "avatar";
+export type KipPose = "idle" | "wave" | "cheer" | "talk" | "sleep" | "point" | "camera" | "celebrate" | "map" | "walk" | "think" | "peek" | "avatar";
 
 type Props = { pose?: KipPose; size?: number; flip?: boolean; style?: CSSProperties; className?: string };
 
@@ -50,7 +37,19 @@ const origin = ([x, y]: readonly [number, number]) => `${(x / 10.24).toFixed(2)}
 const part = (name: string) => `/art/kip/parts/${name}.webp`;
 const layer: CSSProperties = { position: "absolute", inset: 0, width: "100%", height: "100%", userSelect: "none", pointerEvents: "none" };
 
-function Part({ name, pivot, animate, transition, style }: { name: string; pivot?: readonly [number, number]; animate?: TargetAndTransition; transition?: Transition; style?: CSSProperties }) {
+function Part({
+  name,
+  pivot,
+  animate,
+  transition,
+  style,
+}: {
+  name: string;
+  pivot?: readonly [number, number];
+  animate?: TargetAndTransition;
+  transition?: Transition;
+  style?: CSSProperties;
+}) {
   return (
     <motion.img
       src={part(name)}
@@ -72,14 +71,23 @@ function KipRig({ talking }: { talking: boolean }) {
       <Part name="legs" />
       <Part name="wing-back" pivot={PIVOT.wingBack} animate={{ rotate: talking ? [0, 14, 0] : [0, 4, 0] }} transition={loop(talking ? 0.9 : 2.6)} />
       <Part name="body" />
-      <motion.div style={{ ...layer, transformOrigin: origin(PIVOT.head) }} animate={{ rotate: talking ? [0, 5, -3, 0] : [0, -4, 0, 3, 0] }} transition={loop(talking ? 1.2 : 4)}>
+      <motion.div
+        style={{ ...layer, transformOrigin: origin(PIVOT.head) }}
+        animate={{ rotate: talking ? [0, 5, -3, 0] : [0, -4, 0, 3, 0] }}
+        transition={loop(talking ? 1.2 : 4)}
+      >
         <Part name="head" />
         <Part name="eye-open" animate={{ opacity: [1, 1, 0, 1, 1] }} transition={blink} />
         <Part name="eye-closed" style={{ opacity: 0 }} animate={{ opacity: [0, 0, 1, 0, 0] }} transition={blink} />
         <Part name="bill-lower" pivot={PIVOT.bill} animate={{ rotate: talking ? [0, 16, 2, 12, 0] : 0 }} transition={talking ? loop(0.5) : { duration: 0.2 }} />
         <Part name="bill-upper" pivot={PIVOT.bill} animate={{ rotate: talking ? [0, -3, 0, -2, 0] : 0 }} transition={talking ? loop(0.5) : { duration: 0.2 }} />
       </motion.div>
-      <Part name="wing-front" pivot={PIVOT.wingFront} animate={{ rotate: talking ? [0, -30, -10, -34, 0] : [0, -6, 0] }} transition={loop(talking ? 1.3 : 2.6)} />
+      <Part
+        name="wing-front"
+        pivot={PIVOT.wingFront}
+        animate={{ rotate: talking ? [0, -30, -10, -34, 0] : [0, -6, 0] }}
+        transition={loop(talking ? 1.3 : 2.6)}
+      />
     </motion.div>
   );
 }

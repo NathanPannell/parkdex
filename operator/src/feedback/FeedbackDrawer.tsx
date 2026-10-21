@@ -27,7 +27,14 @@ const RETRY_RESULT: Record<string, string> = {
   requires_confirmation: "Check Resend first, then confirm the retry",
 };
 
-export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, onRestore }: {
+export function FeedbackDrawer({
+  reportId,
+  summary,
+  onClose,
+  onMove,
+  onUpdated,
+  onRestore,
+}: {
   reportId: string | null;
   summary: FeedbackReport | undefined;
   onClose(): void;
@@ -53,8 +60,13 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
     const controller = new AbortController();
     setState("loading");
     api<{ report: FeedbackReport }>(`/api/feedback/${encodeURIComponent(reportId)}`, { signal: controller.signal })
-      .then(({ report }) => { setDetail(report); setState("ready"); })
-      .catch(() => { if (!controller.signal.aborted) setState("error"); });
+      .then(({ report }) => {
+        setDetail(report);
+        setState("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setState("error");
+      });
     return () => controller.abort();
   }, [reportId, revision]);
 
@@ -77,7 +89,9 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
         setShot(objectUrl);
         setShotState("ready");
       })
-      .catch(() => { if (!controller.signal.aborted) setShotState("error"); });
+      .catch(() => {
+        if (!controller.signal.aborted) setShotState("error");
+      });
     return () => {
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -89,10 +103,12 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
     if (delivery.requiresConfirmation) {
       const ok = await confirm({
         title: "Send this email again?",
-        body: <>
-          <p>The last attempt was more than 24 hours ago and the provider never confirmed it, so a retry could send a second copy.</p>
-          <p>Check Resend and the {delivery.audience === "operator" ? "operator" : "player's"} mailbox first.</p>
-        </>,
+        body: (
+          <>
+            <p>The last attempt was more than 24 hours ago and the provider never confirmed it, so a retry could send a second copy.</p>
+            <p>Check Resend and the {delivery.audience === "operator" ? "operator" : "player's"} mailbox first.</p>
+          </>
+        ),
         confirmLabel: "Send again",
         icon: "mail",
       });
@@ -105,7 +121,9 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
         body: JSON.stringify({ audiences: [delivery.audience], confirmAmbiguousAfter24h: delivery.requiresConfirmation }),
       });
       const result = results[0];
-      toast.show(RETRY_RESULT[result?.status ?? ""] ?? "Retry finished", { tone: result?.status === "sent" || result?.status === "skipped" ? "info" : "error" });
+      toast.show(RETRY_RESULT[result?.status ?? ""] ?? "Retry finished", {
+        tone: result?.status === "sent" || result?.status === "skipped" ? "info" : "error",
+      });
       const fresh = await api<{ report: FeedbackReport }>(`/api/feedback/${encodeURIComponent(report.id)}`);
       setDetail(fresh.report);
       onUpdated?.(fresh.report);
@@ -130,7 +148,7 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
   const emailOff = health?.emailMode === "unconfigured";
   const deliveries = report?.emails ?? [];
   const replyTo = report?.contact && report.email && EMAIL.test(report.email) ? report.email : null;
-  const kind = report ? KINDS[report.kind] ?? KINDS.general : null;
+  const kind = report ? (KINDS[report.kind] ?? KINDS.general) : null;
   const appVersion = report ? appBuildLabel(report.context) : null;
   const archived = Boolean(report?.archivedAt);
 
@@ -139,21 +157,37 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
       <div className="drawer__head">
         {report && kind ? (
           <div>
-            <span className={`kind kind--${report.kind}`}><Icon name={kind.icon} size={14} /> {kind.label}</span>
+            <span className={`kind kind--${report.kind}`}>
+              <Icon name={kind.icon} size={14} /> {kind.label}
+            </span>
             <p className="muted drawer__received">Received {fullDate(report.createdAt)}</p>
           </div>
-        ) : <h2>Feedback report</h2>}
+        ) : (
+          <h2>Feedback report</h2>
+        )}
         <div className="drawer__actions">
-          {replyTo && <a className="button button--primary button--small" href={`mailto:${replyTo}`} title={`Reply to ${replyTo}`}><Icon name="mail" size={15} /> Reply</a>}
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
+          {replyTo && (
+            <a className="button button--primary button--small" href={`mailto:${replyTo}`} title={`Reply to ${replyTo}`}>
+              <Icon name="mail" size={15} /> Reply
+            </a>
+          )}
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
+            <Icon name="close" />
+          </button>
         </div>
       </div>
 
-      {state === "loading" && !report && <div className="drawer__state"><Spinner /> Opening report...</div>}
+      {state === "loading" && !report && (
+        <div className="drawer__state">
+          <Spinner /> Opening report...
+        </div>
+      )}
       {state === "error" && (
         <div className="drawer__state" role="alert">
           <p>This report could not be opened.</p>
-          <button type="button" className="button button--ghost" onClick={() => setRevision((value) => value + 1)}>Try again</button>
+          <button type="button" className="button button--ghost" onClick={() => setRevision((value) => value + 1)}>
+            Try again
+          </button>
         </div>
       )}
 
@@ -162,28 +196,40 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
           {report.archivedAt && (
             <div className="archived-note" role="status">
               <Icon name="inbox" size={18} />
-              <span>Archived {fullDate(report.archivedAt)}. Deleted for good on {fullDate(deletesOn(report.archivedAt))}.</span>
+              <span>
+                Archived {fullDate(report.archivedAt)}. Deleted for good on {fullDate(deletesOn(report.archivedAt))}.
+              </span>
               {onRestore && (
                 <button type="button" className="button button--small" onClick={() => void restore()} disabled={restoring}>
-                  {restoring ? <><Spinner small /> Restoring</> : <><Icon name="undo" size={15} /> Restore to Done</>}
+                  {restoring ? (
+                    <>
+                      <Spinner small /> Restoring
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="undo" size={15} /> Restore to Done
+                    </>
+                  )}
                 </button>
               )}
             </div>
           )}
-          {!archived && onMove && <div className="segmented" role="radiogroup" aria-label="Status">
-            {COLUMNS.map((column) => (
-              <button
-                key={column.status}
-                type="button"
-                role="radio"
-                aria-checked={report.status === column.status}
-                className={`segmented__item segmented__item--${column.status}${report.status === column.status ? " is-on" : ""}`}
-                onClick={() => onMove?.(report, column.status)}
-              >
-                {column.label}
-              </button>
-            ))}
-          </div>}
+          {!archived && onMove && (
+            <div className="segmented" role="radiogroup" aria-label="Status">
+              {COLUMNS.map((column) => (
+                <button
+                  key={column.status}
+                  type="button"
+                  role="radio"
+                  aria-checked={report.status === column.status}
+                  className={`segmented__item segmented__item--${column.status}${report.status === column.status ? " is-on" : ""}`}
+                  onClick={() => onMove?.(report, column.status)}
+                >
+                  {column.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <figure className="quote">
             <figcaption>{replyTo ? `${replyTo} wrote` : "The player wrote"}</figcaption>
@@ -191,18 +237,38 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
           </figure>
 
           <dl className="facts">
-            <div><dt>App</dt><dd>{appVersion ?? "Not sent"}</dd></div>
-            <div><dt>Device</dt><dd>{report.context.platform || "Unknown"}</dd></div>
-            <div><dt>Screen</dt><dd>{report.context.screen || "Unknown"}</dd></div>
-            <div><dt>Park</dt><dd>{report.context.parkName || "None"}</dd></div>
+            <div>
+              <dt>App</dt>
+              <dd>{appVersion ?? "Not sent"}</dd>
+            </div>
+            <div>
+              <dt>Device</dt>
+              <dd>{report.context.platform || "Unknown"}</dd>
+            </div>
+            <div>
+              <dt>Screen</dt>
+              <dd>{report.context.screen || "Unknown"}</dd>
+            </div>
+            <div>
+              <dt>Park</dt>
+              <dd>{report.context.parkName || "None"}</dd>
+            </div>
           </dl>
 
           {report.hasScreenshot && (
             <section className="panel" id="attachment">
               <h3>Screenshot</h3>
-              {shotState === "loading" && <div className="shot shot--loading"><Spinner small /> Loading screenshot...</div>}
+              {shotState === "loading" && (
+                <div className="shot shot--loading">
+                  <Spinner small /> Loading screenshot...
+                </div>
+              )}
               {shotState === "error" && <p className="muted">The screenshot could not be loaded.</p>}
-              {shotState === "ready" && shot && <a href={shot} target="_blank" rel="noreferrer"><img className="shot" src={shot} alt="Screenshot attached to this report" /></a>}
+              {shotState === "ready" && shot && (
+                <a href={shot} target="_blank" rel="noreferrer">
+                  <img className="shot" src={shot} alt="Screenshot attached to this report" />
+                </a>
+              )}
             </section>
           )}
 
@@ -214,13 +280,32 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
                   <li key={delivery.audience}>
                     <span>{delivery.audience === "operator" ? "Copy to you" : "Receipt to player"}</span>
                     <span className={`status-pill status-pill--${delivery.requiresConfirmation ? "confirm" : delivery.status}`}>{deliveryLabel(delivery)}</span>
-                    <span className="muted">{delivery.sentAt ? `Sent ${fullDate(delivery.sentAt)}` : delivery.lastAttemptAt ? `Tried ${fullDate(delivery.lastAttemptAt)}${delivery.attempts > 1 ? ` (${delivery.attempts} attempts)` : ""}` : "Not sent yet"}</span>
+                    <span className="muted">
+                      {delivery.sentAt
+                        ? `Sent ${fullDate(delivery.sentAt)}`
+                        : delivery.lastAttemptAt
+                          ? `Tried ${fullDate(delivery.lastAttemptAt)}${delivery.attempts > 1 ? ` (${delivery.attempts} attempts)` : ""}`
+                          : "Not sent yet"}
+                    </span>
                     {delivery.lastError && <span className="delivery-error">{delivery.lastError}</span>}
                     {(delivery.canRetry || delivery.requiresConfirmation) && (
                       <span className="delivery-retry">
-                        <button type="button" className="button button--ghost button--small" onClick={() => void retry(delivery)} disabled={retrying !== null || emailOff}
-                          title={emailOff ? "Email retry needs RESEND_API_KEY on this deployment" : undefined}>
-                          {retrying === delivery.audience ? <><Spinner small /> Sending</> : <><Icon name="refresh" size={14} /> {delivery.requiresConfirmation ? "Check, then retry" : "Retry"}</>}
+                        <button
+                          type="button"
+                          className="button button--ghost button--small"
+                          onClick={() => void retry(delivery)}
+                          disabled={retrying !== null || emailOff}
+                          title={emailOff ? "Email retry needs RESEND_API_KEY on this deployment" : undefined}
+                        >
+                          {retrying === delivery.audience ? (
+                            <>
+                              <Spinner small /> Sending
+                            </>
+                          ) : (
+                            <>
+                              <Icon name="refresh" size={14} /> {delivery.requiresConfirmation ? "Check, then retry" : "Retry"}
+                            </>
+                          )}
                         </button>
                         {emailOff && <span className="muted">Email retry is not set up on this deployment.</span>}
                       </span>
@@ -228,7 +313,9 @@ export function FeedbackDrawer({ reportId, summary, onClose, onMove, onUpdated, 
                   </li>
                 ))}
               </ul>
-            ) : <p className="muted">No emails for this report.</p>}
+            ) : (
+              <p className="muted">No emails for this report.</p>
+            )}
           </section>
         </div>
       )}

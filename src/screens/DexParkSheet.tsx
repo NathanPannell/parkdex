@@ -74,24 +74,37 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
               <div className="dex-detail__body">
                 <div className="dex-detail__hero">
-                  {cover
-                    ? (
-                      <button className="viewer-open dex-detail__hero-open" onClick={() => viewer.open(photos.findIndex((photo) => photo.claimId === cover.claimId))} aria-label={`Show your photo of ${park.name} full screen`}>
-                        <CroppedPhoto blob={cover.blob} crop={cover.crop} alt={`Your photo of ${park.name}`} />
-                      </button>
-                    )
-                    : <Badge park={park} size={170} state={visit ? "earned" : "silhouette"} remoteArt={false} />}
+                  {cover ? (
+                    <button
+                      className="viewer-open dex-detail__hero-open"
+                      onClick={() => viewer.open(photos.findIndex((photo) => photo.claimId === cover.claimId))}
+                      aria-label={`Show your photo of ${park.name} full screen`}
+                    >
+                      <CroppedPhoto blob={cover.blob} crop={cover.crop} alt={`Your photo of ${park.name}`} />
+                    </button>
+                  ) : (
+                    <Badge park={park} size={170} state={visit ? "earned" : "silhouette"} remoteArt={false} />
+                  )}
                 </div>
 
                 {cover && (
                   <div className="dex-detail__photo-actions">
-                    <button className="btn btn--sm btn--paper" onClick={() => { sfx.tap(); setRecropping(cover); }}>
+                    <button
+                      className="btn btn--sm btn--paper"
+                      onClick={() => {
+                        sfx.tap();
+                        setRecropping(cover);
+                      }}
+                    >
                       <Icon name="corners" size={16} /> Re-crop
                     </button>
                     <button
                       className={`btn btn--sm ${confirmRemove ? "btn--sun" : "btn--paper"}`}
                       onClick={() => {
-                        if (!confirmRemove) { setConfirmRemove(true); return; }
+                        if (!confirmRemove) {
+                          setConfirmRemove(true);
+                          return;
+                        }
                         setConfirmRemove(false);
                         void onRemove(cover.claimId).then(() => toast("Photo removed from your Dex", "ink"), fail);
                       }}
@@ -103,7 +116,9 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
                 {tile.photos.length > 1 && (
                   <div className="dex-detail__strip-wrap">
-                    <h3>Your photos <span>Tap one to see it full screen</span></h3>
+                    <h3>
+                      Your photos <span>Tap one to see it full screen</span>
+                    </h3>
                     <ul className="dex-detail__strip">
                       {tile.photos.map((photo, index) => (
                         <li key={photo.claimId}>
@@ -113,7 +128,11 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
                             onClick={() => viewer.open(index)}
                           >
                             <CroppedPhoto blob={photo.blob} crop={photo.crop} alt="" />
-                            {photo.claimId === cover?.claimId && <span className="dex-detail__cover-mark"><Icon name="check" size={14} stroke={3} /></span>}
+                            {photo.claimId === cover?.claimId && (
+                              <span className="dex-detail__cover-mark">
+                                <Icon name="check" size={14} stroke={3} />
+                              </span>
+                            )}
                           </button>
                         </li>
                       ))}
@@ -123,9 +142,18 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
                 {visit ? (
                   <dl className="dex-detail__visits">
-                    <div><dt>Visits</dt><dd>{visitCountLabel(visit.days.length)}</dd></div>
-                    <div><dt>First visit</dt><dd>{dateLabel(visit.firstVisitAt)}</dd></div>
-                    <div><dt>Last visit</dt><dd>{dateLabel(visit.lastVisitAt)}</dd></div>
+                    <div>
+                      <dt>Visits</dt>
+                      <dd>{visitCountLabel(visit.days.length)}</dd>
+                    </div>
+                    <div>
+                      <dt>First visit</dt>
+                      <dd>{dateLabel(visit.firstVisitAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Last visit</dt>
+                      <dd>{dateLabel(visit.lastVisitAt)}</dd>
+                    </div>
                   </dl>
                 ) : (
                   <p className="account-help">You haven't visited this park yet. Go there and plant your flag to add it to your Dex.</p>
@@ -134,12 +162,20 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
 
               <div className="dex-detail__cta">
                 {visit && (
-                  <button className="btn btn--block btn--glow" onClick={() => { sfx.pop(); startPhotoCapture(); setAdding(true); }}>
+                  <button
+                    className="btn btn--block btn--glow"
+                    onClick={() => {
+                      sfx.pop();
+                      startPhotoCapture();
+                      setAdding(true);
+                    }}
+                  >
                     <Icon name="camera" /> {tile.photos.length ? "Add another photo" : "Add a photo"}
                   </button>
                 )}
                 <button className={`btn ${visit ? "btn--paper btn--icon" : "btn--block"}`} onClick={() => onShowOnMap(park.id)} aria-label="Show on the map">
-                  <Icon name="map" />{visit ? null : " Show on the map"}
+                  <Icon name="map" />
+                  {visit ? null : " Show on the map"}
                 </button>
               </div>
             </motion.section>
@@ -149,18 +185,33 @@ export function DexParkSheet({ tile, onClose, onSetCover, onRecrop, onRemove, on
       {park && <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} onSaved={onSaved} />}
       {/* The whole photo as taken, not the crop. */}
       <FullscreenViewer
-        slides={photos.map((photo) => ({ key: photo.claimId, blob: photo.blob, alt: `Your photo of ${park?.name ?? "this park"} from ${dateLabel(photo.claimedAt)}`, caption: dateLabel(photo.claimedAt) }))}
+        slides={photos.map((photo) => ({
+          key: photo.claimId,
+          blob: photo.blob,
+          alt: `Your photo of ${park?.name ?? "this park"} from ${dateLabel(photo.claimedAt)}`,
+          caption: dateLabel(photo.claimedAt),
+        }))}
         index={tile ? viewer.index : null}
         onStep={viewer.step}
         onClose={viewer.close}
         label={`Your photos of ${park?.name ?? "this park"}`}
-        actions={(slide) => slide.key === cover?.claimId
-          ? <span className="fullscreen-viewer__cover-mark"><Icon name="check" size={16} stroke={3} /> Cover photo</span>
-          : (
-            <button className="btn btn--sm btn--paper" onClick={() => { sfx.pop(); void onSetCover(slide.key).catch(fail); }}>
+        actions={(slide) =>
+          slide.key === cover?.claimId ? (
+            <span className="fullscreen-viewer__cover-mark">
+              <Icon name="check" size={16} stroke={3} /> Cover photo
+            </span>
+          ) : (
+            <button
+              className="btn btn--sm btn--paper"
+              onClick={() => {
+                sfx.pop();
+                void onSetCover(slide.key).catch(fail);
+              }}
+            >
               <Icon name="image" size={16} /> Make it the cover
             </button>
-          )}
+          )
+        }
       />
       <RecropPhoto
         blob={recropping?.blob ?? null}

@@ -8,7 +8,11 @@ export function SectionTabs({ section, path }: { section: SectionId; path: strin
   const current = (owner && childFor(owner, path)?.path) ?? "";
   return (
     <div className="section-tabs">
-      <Tabs label="Pages in this section" value={current} items={children.map((child) => ({ id: child.path, label: child.label, icon: child.icon, href: child.path }))} />
+      <Tabs
+        label="Pages in this section"
+        value={current}
+        items={children.map((child) => ({ id: child.path, label: child.label, icon: child.icon, href: child.path }))}
+      />
     </div>
   );
 }

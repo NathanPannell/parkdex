@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build the reproducible Vancouver Island provincial and regional park bundle."""
+
 from __future__ import annotations
 
 import argparse
@@ -93,12 +94,15 @@ def _source_inventory(source_dir: Path) -> dict[str, dict[str, Any]]:
 
 
 def _short_name(name: str) -> str:
-    return re.sub(
-        r"\s+(?:(?:regional|provincial|marine|nature|heritage|ecological|national)\s+)?park$",
-        "",
-        name.strip(),
-        flags=re.IGNORECASE,
-    ).strip() or name.strip()
+    return (
+        re.sub(
+            r"\s+(?:(?:regional|provincial|marine|nature|heritage|ecological|national)\s+)?park$",
+            "",
+            name.strip(),
+            flags=re.IGNORECASE,
+        ).strip()
+        or name.strip()
+    )
 
 
 def _new_presentation(
@@ -172,8 +176,7 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     if len(selected_ids) != EXPECTED_SELECTED:
         raise importer.ParkImportError("Final island scope must contain exactly 270 IDs after the explicit mainland exclusion")
     selected = set(selected_ids)
-    category_counts = {category: sum(catalogue_list[park_id]["category"] == category for park_id in selected_ids)
-                       for category in ("provincial", "regional")}
+    category_counts = {category: sum(catalogue_list[park_id]["category"] == category for park_id in selected_ids) for category in ("provincial", "regional")}
     if category_counts != {"provincial": 134, "regional": 136}:
         raise importer.ParkImportError(f"Unexpected selected category counts: {category_counts}")
 
@@ -202,7 +205,12 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         raise importer.ParkImportError("Rarity research must provide exactly one reviewed entry for each of the 271 candidates")
     rarity_by_id = {park_id: rarity_all[park_id] for park_id in selected_ids}
     for park_id, item in rarity_by_id.items():
-        if not isinstance(item, dict) or item.get("rarity") not in importer.RARITIES or not isinstance(item.get("rationale"), str) or not item["rationale"].strip():
+        if (
+            not isinstance(item, dict)
+            or item.get("rarity") not in importer.RARITIES
+            or not isinstance(item.get("rationale"), str)
+            or not item["rationale"].strip()
+        ):
             raise importer.ParkImportError(f"Rarity research for {park_id} must include a supported rarity and rationale")
 
     baseline = read_json(source["targetSnapshot"], "revision-26 target snapshot")
@@ -217,12 +225,9 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     if len(existing_ids) != EXPECTED_EXISTING or len(new_ids) != EXPECTED_NEW:
         raise importer.ParkImportError(f"Pinned target overlap must be 26 existing and 244 new, got {len(existing_ids)} and {len(new_ids)}")
     existing_rarity_change_ids = [
-        park_id for park_id in catalogue_order
-        if park_id in existing_ids and baseline_parks[park_id].get("rarity") != rarity_by_id[park_id]["rarity"]
+        park_id for park_id in catalogue_order if park_id in existing_ids and baseline_parks[park_id].get("rarity") != rarity_by_id[park_id]["rarity"]
     ]
-    existing_rarity_changed_scene_count = sum(
-        baseline_parks[park_id].get("scene") is not None for park_id in existing_rarity_change_ids
-    )
+    existing_rarity_changed_scene_count = sum(baseline_parks[park_id].get("scene") is not None for park_id in existing_rarity_change_ids)
     if len(existing_rarity_change_ids) != 7 or existing_rarity_changed_scene_count != 4:
         raise importer.ParkImportError("Pinned rarity review and revision-26 snapshot must yield seven actual rarity changes, four with existing scenes")
     audited_overlaps = {item["id"] for item in audit.get("targetOverlap", {}).get("exactStableIdOverlaps", [])}
@@ -251,23 +256,26 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         if source_summary["polygonCount"] != target_summary["polygonCount"] or source_summary["holeCount"] != target_summary["holeCount"]:
             raise importer.ParkImportError(f"Geometry preservation override {park_id} changes polygon or hole counts")
         from shapely.geometry import shape
+
         source_shape = shape(source_geometry)
         target_shape = shape(normalized_target)
         symmetric_difference_area = source_shape.symmetric_difference(target_shape).area
         relative_difference = symmetric_difference_area / source_shape.area if source_shape.area else 1.0
         replacement = {"type": "Feature", "properties": source_feature["properties"], "geometry": target_geometry}
         selected_feature_by_id[park_id] = replacement
-        preservation_records.append({
-            "parkId": park_id,
-            "baselineRevision": baseline["revision"],
-            "sourceLegacyGeometrySha256": sha256(importer.canonical_bytes(source_geometry)),
-            "preservedTargetGeometrySha256": sha256(importer.canonical_bytes(target_geometry)),
-            "sourceLegacyGeometrySummary": source_summary,
-            "preservedTargetGeometrySummary": target_summary,
-            "symmetricDifferenceAreaDegreesSquared": symmetric_difference_area,
-            "relativeSymmetricDifference": relative_difference,
-            "rationale": rationale,
-        })
+        preservation_records.append(
+            {
+                "parkId": park_id,
+                "baselineRevision": baseline["revision"],
+                "sourceLegacyGeometrySha256": sha256(importer.canonical_bytes(source_geometry)),
+                "preservedTargetGeometrySha256": sha256(importer.canonical_bytes(target_geometry)),
+                "sourceLegacyGeometrySummary": source_summary,
+                "preservedTargetGeometrySummary": target_summary,
+                "symmetricDifferenceAreaDegreesSquared": symmetric_difference_area,
+                "relativeSymmetricDifference": relative_difference,
+                "rationale": rationale,
+            }
+        )
     selected_features = [selected_feature_by_id[feature["properties"]["id"]] for feature in source_selected_features]
     output_boundary_records = importer.parse_boundary_source({"type": "FeatureCollection", "features": selected_features})
     if set(output_boundary_records) != selected:
@@ -286,7 +294,9 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     if set(biome_reviews) != unbundled_metadata_new_ids:
         missing = sorted(unbundled_metadata_new_ids - set(biome_reviews))
         extra = sorted(set(biome_reviews) - unbundled_metadata_new_ids)
-        raise importer.ParkImportError(f"Biome review must exactly cover {len(unbundled_metadata_new_ids)} new parks without bundled metadata; missing={missing[:5]}, extra={extra[:5]}")
+        raise importer.ParkImportError(
+            f"Biome review must exactly cover {len(unbundled_metadata_new_ids)} new parks without bundled metadata; missing={missing[:5]}, extra={extra[:5]}"
+        )
     for park_id, item in biome_reviews.items():
         if not isinstance(item, dict) or set(item) not in ({"biome", "rationale", "sources"}, {"biome", "rationale", "sources", "uncertain"}):
             raise importer.ParkImportError(f"Biome review for {park_id} must contain biome, rationale, sources, and optional uncertain")
@@ -324,9 +334,9 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         raise importer.ParkImportError("Route review contains missing or duplicate park IDs")
     metadata_candidate_ids = new_ids & set(park_metadata) & set(drive_rows)
     local_route_ids = {
-        park_id for park_id in metadata_candidate_ids
-        if isinstance(drive_rows[park_id].get("drive"), list)
-        and any(route is not None for route in drive_rows[park_id]["drive"])
+        park_id
+        for park_id in metadata_candidate_ids
+        if isinstance(drive_rows[park_id].get("drive"), list) and any(route is not None for route in drive_rows[park_id]["drive"])
     }
     reviewed_route_ids = new_ids & set(route_by_id)
     if local_route_ids & reviewed_route_ids:
@@ -336,7 +346,8 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
         raise importer.ParkImportError("A park metadata row lacks its paired drive metadata")
     reviewed_unknown_count = sum(
         isinstance(item.get("importProposal"), dict) and item["importProposal"].get("accessUnknown") is True
-        for item in route_by_id.values() if item.get("id") in new_ids
+        for item in route_by_id.values()
+        if item.get("id") in new_ids
     )
     if len(local_route_ids) != 94 or len(reviewed_route_ids) != 51 or len(unknown_route_ids) != 99 or reviewed_unknown_count != 18:
         raise importer.ParkImportError("Access-source split changed from 94 routed metadata, 51 reviewed routes, and 99 explicitly unknown new parks")
@@ -394,7 +405,8 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     rarity_review = {
         "parks": {
             park_id: {"rarity": rarity_by_id[park_id]["rarity"], "rationale": rarity_by_id[park_id]["rationale"].strip()}
-            for park_id in catalogue_order if park_id in existing_ids
+            for park_id in catalogue_order
+            if park_id in existing_ids
         }
     }
     new_review_file = {"parks": new_review}
@@ -422,10 +434,13 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
     }
     output_files: dict[str, bytes] = {}
     output_files["selection.json"] = write_json(bundle_dir / "selection.json", selection)
-    output_files["boundaries.geojson"] = write_json(bundle_dir / "boundaries.geojson", {
-        "type": "FeatureCollection",
-        "features": selected_features,
-    })
+    output_files["boundaries.geojson"] = write_json(
+        bundle_dir / "boundaries.geojson",
+        {
+            "type": "FeatureCollection",
+            "features": selected_features,
+        },
+    )
     output_files["catalogue.json"] = write_json(bundle_dir / "catalogue.json", selected_catalogue)
     output_files["rarity-review.json"] = write_json(bundle_dir / "rarity-review.json", rarity_review)
     output_files["new-park-review.json"] = write_json(bundle_dir / "new-park-review.json", new_review_file)
@@ -469,10 +484,7 @@ def build_bundle(bundle_dir: Path) -> dict[str, Any]:
             "existingRarityChangedSceneCount": existing_rarity_changed_scene_count,
             "expectedParkCountAfterImport": len(baseline_parks) + len(new_ids),
         },
-        "outputs": {
-            name: {"bytes": len(raw), "sha256": sha256(raw)}
-            for name, raw in output_files.items()
-        },
+        "outputs": {name: {"bytes": len(raw), "sha256": sha256(raw)} for name, raw in output_files.items()},
         "counts": {
             "features": len(selected_features),
             "catalogueEntries": len(selected_catalogue),

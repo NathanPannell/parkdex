@@ -25,9 +25,18 @@ function seedReports(store: MemoryFeedbackStore, count: number, status: "new" | 
   for (let index = offset; index < offset + count; index += 1) {
     const id = `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
     store.reports.set(id, {
-      id, submissionId: id, kind: "idea", message: `Report ${index}`, email: null, contact: false,
+      id,
+      submissionId: id,
+      kind: "idea",
+      message: `Report ${index}`,
+      email: null,
+      contact: false,
       context: { version: "1", platform: "web", screen: "map", parkId: null, parkName: null },
-      createdAt: new Date(base - index * 1000).toISOString(), hasScreenshot: false, status, emails: [], screenshot: null,
+      createdAt: new Date(base - index * 1000).toISOString(),
+      hasScreenshot: false,
+      status,
+      emails: [],
+      screenshot: null,
     });
   }
 }
@@ -36,9 +45,12 @@ test("feedback lists in stable 30-row pages and a cursor cannot cross filters", 
   const feedback = new MemoryFeedbackStore();
   seedReports(feedback, 31);
   const api = createDashboardApi(stores(feedback));
-  const first = await (await api(request("/api/feedback?status=reviewing"), env)).json() as { reports: { id: string }[]; nextCursor: string };
+  const first = (await (await api(request("/api/feedback?status=reviewing"), env)).json()) as { reports: { id: string }[]; nextCursor: string };
   assert.equal(first.reports.length, 30);
-  const second = await (await api(request(`/api/feedback?status=reviewing&cursor=${encodeURIComponent(first.nextCursor)}`), env)).json() as { reports: { id: string }[]; nextCursor: null };
+  const second = (await (await api(request(`/api/feedback?status=reviewing&cursor=${encodeURIComponent(first.nextCursor)}`), env)).json()) as {
+    reports: { id: string }[];
+    nextCursor: null;
+  };
   assert.equal(second.reports.length, 1);
   assert.equal(second.nextCursor, null);
   assert.equal(new Set([...first.reports, ...second.reports].map((report) => report.id)).size, 31);
@@ -51,7 +63,10 @@ test("moving a card saves its status, and writes must come from the dashboard or
   seedReports(feedback, 1, "new");
   const api = createDashboardApi(stores(feedback));
   const id = "00000000-0000-4000-8000-000000000001";
-  assert.equal((await api(request(`/api/feedback/${id}`, { method: "PATCH", body: { status: "planned" }, origin: "https://evil.example.test" }), env)).status, 403);
+  assert.equal(
+    (await api(request(`/api/feedback/${id}`, { method: "PATCH", body: { status: "planned" }, origin: "https://evil.example.test" }), env)).status,
+    403,
+  );
   assert.equal((await api(request(`/api/feedback/${id}`, { method: "PATCH", body: { status: "planned" }, origin: null }), env)).status, 403);
   assert.equal(feedback.reports.get(id)?.status, "new");
   const moved = await api(request(`/api/feedback/${id}`, { method: "PATCH", body: { status: "planned" } }), env);
@@ -100,7 +115,10 @@ test("the board follows the staging toggle and counts what waits in the other da
   const feedback = new MemoryFeedbackStore();
   const api = createDashboardApi({
     feedbackStore: () => feedback,
-    feedbackArchive: (scoped) => { seen.push(String(scoped.DATABASE_URL)); return feedback; },
+    feedbackArchive: (scoped) => {
+      seen.push(String(scoped.DATABASE_URL));
+      return feedback;
+    },
     feedbackCounts: async (scoped) => ({ new: scoped.DASHBOARD_ENVIRONMENT === "staging" ? 2 : 5 }),
   });
   const both = { ...env, DATABASE_URL: "postgres://prod", DASHBOARD_ENVIRONMENT: "production", STAGING_DATABASE_URL: "postgres://staging" };
@@ -109,9 +127,12 @@ test("the board follows the staging toggle and counts what waits in the other da
   }
   assert.deepEqual(seen, ["postgres://prod", "postgres://staging", "postgres://prod"]);
 
-  const fromProduction = await (await api(request("/api/feedback/other-database"), both)).json() as { environment: string; feedback: { new: number } };
+  const fromProduction = (await (await api(request("/api/feedback/other-database"), both)).json()) as { environment: string; feedback: { new: number } };
   assert.deepEqual([fromProduction.environment, fromProduction.feedback.new], ["staging", 2]);
-  const fromStaging = await (await api(request("/api/feedback/other-database", { cookie: "parkdex_operator_db=staging" }), both)).json() as { environment: string; feedback: { new: number } };
+  const fromStaging = (await (await api(request("/api/feedback/other-database", { cookie: "parkdex_operator_db=staging" }), both)).json()) as {
+    environment: string;
+    feedback: { new: number };
+  };
   assert.deepEqual([fromStaging.environment, fromStaging.feedback.new], ["production", 5]);
   assert.deepEqual(await (await api(request("/api/feedback/other-database"), { ...both, STAGING_DATABASE_URL: undefined })).json(), { available: false });
   const unconfigured = await api(request("/api/feedback", { cookie: "parkdex_operator_db=staging" }), { ...both, STAGING_DATABASE_URL: undefined });
@@ -132,13 +153,13 @@ test("clear done archives every done report, and the board and its counts leave 
 
   const cleared = await api(request("/api/feedback/clear-done", { method: "POST" }), env);
   assert.equal(cleared.status, 200);
-  const body = await cleared.json() as { archived: number; ids: string[]; more: boolean };
+  const body = (await cleared.json()) as { archived: number; ids: string[]; more: boolean };
   assert.deepEqual([body.archived, body.ids.sort(), body.more], [3, [id(3), id(4), id(5)], false]);
-  const board = await (await api(request("/api/feedback?status=closed"), env)).json() as { reports: unknown[] };
+  const board = (await (await api(request("/api/feedback?status=closed"), env)).json()) as { reports: unknown[] };
   assert.equal(board.reports.length, 0);
-  const all = await (await api(request("/api/feedback"), env)).json() as { reports: { id: string }[] };
+  const all = (await (await api(request("/api/feedback"), env)).json()) as { reports: { id: string }[] };
   assert.deepEqual(all.reports.map((report) => report.id).sort(), [id(1), id(2)]);
-  const detail = await (await api(request(`/api/feedback/${id(3)}`), env)).json() as { report: { status: string; archivedAt: string | null } };
+  const detail = (await (await api(request(`/api/feedback/${id(3)}`), env)).json()) as { report: { status: string; archivedAt: string | null } };
   assert.equal(detail.report.status, "closed");
   assert.ok(detail.report.archivedAt, "an archived report still opens from an email link, marked archived");
   assert.deepEqual(await (await api(request("/api/feedback/clear-done", { method: "POST" }), env)).json(), { archived: 0, ids: [], more: false });
@@ -150,17 +171,23 @@ test("the archive is searchable and pages most recently archived first", async (
   feedback.reports.get(id(7))!.message = "The 50% off sign at Cattle Point";
   [...feedback.reports.keys()].forEach((key, index) => feedback.archived.set(key, new Date(Date.UTC(2026, 9, 1, 0, index)).toISOString()));
   const api = createDashboardApi(stores(feedback));
-  const first = await (await api(request("/api/feedback/archive"), env)).json() as { reports: { id: string }[]; nextCursor: string; total: number };
+  const first = (await (await api(request("/api/feedback/archive"), env)).json()) as { reports: { id: string }[]; nextCursor: string; total: number };
   assert.equal(first.reports.length, 30);
   assert.equal(first.total, 33);
   assert.equal(first.reports[0].id, id(33), "newest archive first");
-  const second = await (await api(request(`/api/feedback/archive?cursor=${encodeURIComponent(first.nextCursor)}`), env)).json() as { reports: { id: string }[]; nextCursor: null };
-  assert.deepEqual(second.reports.map((report) => report.id), [id(3), id(2), id(1)]);
+  const second = (await (await api(request(`/api/feedback/archive?cursor=${encodeURIComponent(first.nextCursor)}`), env)).json()) as {
+    reports: { id: string }[];
+    nextCursor: null;
+  };
+  assert.deepEqual(
+    second.reports.map((report) => report.id),
+    [id(3), id(2), id(1)],
+  );
   assert.equal(second.nextCursor, null);
-  const found = await (await api(request("/api/feedback/archive?q=cattle"), env)).json() as { reports: { id: string }[]; total: number };
+  const found = (await (await api(request("/api/feedback/archive?q=cattle"), env)).json()) as { reports: { id: string }[]; total: number };
   assert.deepEqual([found.reports.map((report) => report.id), found.total], [[id(7)], 1]);
   // A board cursor cannot page the archive, and searches stay short and plain.
-  const boardCursor = (await (await api(request("/api/feedback?status=closed"), env)).json() as { nextCursor: string | null }).nextCursor;
+  const boardCursor = ((await (await api(request("/api/feedback?status=closed"), env)).json()) as { nextCursor: string | null }).nextCursor;
   assert.equal(boardCursor, null, "everything is archived, so the board is empty");
   assert.equal((await api(request(`/api/feedback/archive?q=${"x".repeat(101)}`), env)).status, 400);
   assert.equal((await api(request("/api/feedback/archive?q=a%00b"), env)).status, 400);
@@ -172,14 +199,20 @@ test("restore puts archived reports back in Done and refuses bad ids", async () 
   seedReports(feedback, 2, "closed");
   feedback.archived.set(id(1), new Date().toISOString());
   const api = createDashboardApi(stores(feedback));
-  assert.equal((await api(request("/api/feedback/archive/restore", { method: "POST", body: { ids: [id(1)] }, origin: "https://evil.example.test" }), env)).status, 403);
+  assert.equal(
+    (await api(request("/api/feedback/archive/restore", { method: "POST", body: { ids: [id(1)] }, origin: "https://evil.example.test" }), env)).status,
+    403,
+  );
   for (const body of [{}, { ids: [] }, { ids: ["nope"] }, { ids: [id(1)], extra: true }, { ids: Array.from({ length: 501 }, (_, n) => id(n + 1)) }]) {
     assert.equal((await api(request("/api/feedback/archive/restore", { method: "POST", body }), env)).status, 400, JSON.stringify(body).slice(0, 60));
   }
   const restored = await api(request("/api/feedback/archive/restore", { method: "POST", body: { ids: [id(1), id(1).toUpperCase(), id(2)] } }), env);
   assert.deepEqual(await restored.json(), { restored: [id(1)] }, "only archived reports move, once each");
-  const board = await (await api(request("/api/feedback?status=closed"), env)).json() as { reports: { id: string }[] };
-  assert.deepEqual(board.reports.map((report) => report.id), [id(1), id(2)]);
+  const board = (await (await api(request("/api/feedback?status=closed"), env)).json()) as { reports: { id: string }[] };
+  assert.deepEqual(
+    board.reports.map((report) => report.id),
+    [id(1), id(2)],
+  );
 });
 
 test("the other database note counts only reports still on the board", async () => {
@@ -189,6 +222,6 @@ test("the other database note counts only reports still on the board", async () 
   feedback.archived.set(id(3), new Date().toISOString());
   const api = createDashboardApi(stores(feedback));
   const both = { ...env, DATABASE_URL: "postgres://prod", DASHBOARD_ENVIRONMENT: "production", STAGING_DATABASE_URL: "postgres://staging" };
-  const note = await (await api(request("/api/feedback/other-database"), both)).json() as { feedback: Record<string, number> };
+  const note = (await (await api(request("/api/feedback/other-database"), both)).json()) as { feedback: Record<string, number> };
   assert.deepEqual(note.feedback, { new: 2, closed: 1 });
 });

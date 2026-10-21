@@ -3,7 +3,13 @@ import pkolsFeature from "./__fixtures__/pkols-legacy-boundary.v1.json";
 import { arrivalPoint, insideBoundary, type Boundary, type LngLat } from "./geo";
 
 function ring(minLng: number, minLat: number, maxLng: number, maxLat: number): LngLat[] {
-  return [[minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat]];
+  return [
+    [minLng, minLat],
+    [maxLng, minLat],
+    [maxLng, maxLat],
+    [minLng, maxLat],
+    [minLng, minLat],
+  ];
 }
 
 function boundary(...polygons: LngLat[][][]): Boundary {
@@ -43,10 +49,7 @@ describe("insideBoundary", () => {
 
 describe("arrivalPoint", () => {
   it("uses the nearest secondary region and returns a point outside its holes", () => {
-    const park = boundary(
-      [ring(-10, -10, 10, 10)],
-      [ring(20, 0, 24, 4), ring(20.5, 0.5, 23.5, 3.5)],
-    );
+    const park = boundary([ring(-10, -10, 10, 10)], [ring(20, 0, 24, 4), ring(20.5, 0.5, 23.5, 3.5)]);
     const from: LngLat = [19.99, 2];
 
     const arrival = arrivalPoint(park, from);
@@ -57,10 +60,7 @@ describe("arrivalPoint", () => {
   });
 
   it("finds a valid point when the origin is inside the nearest region's hole", () => {
-    const park = boundary(
-      [ring(-10, -10, 10, 10)],
-      [ring(20, 0, 24, 4), ring(20.5, 0.5, 23.5, 3.5)],
-    );
+    const park = boundary([ring(-10, -10, 10, 10)], [ring(20, 0, 24, 4), ring(20.5, 0.5, 23.5, 3.5)]);
 
     const arrival = arrivalPoint(park, [22, 2]);
 
@@ -70,7 +70,15 @@ describe("arrivalPoint", () => {
   });
 
   it("finds an interior point near a concave notch", () => {
-    const concave: LngLat[] = [[0, 0], [4, 0], [4, 1], [1, 1], [1, 4], [0, 4], [0, 0]];
+    const concave: LngLat[] = [
+      [0, 0],
+      [4, 0],
+      [4, 1],
+      [1, 1],
+      [1, 4],
+      [0, 4],
+      [0, 0],
+    ];
     const park = boundary([concave]);
 
     const arrival = arrivalPoint(park, [2, 2]);

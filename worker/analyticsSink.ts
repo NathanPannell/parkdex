@@ -141,10 +141,13 @@ export async function sendPosthogBatch(context: RequestContext, config: PosthogC
   await response.arrayBuffer().catch(() => undefined);
 }
 
-export function createAnalyticsSink(env: AnalyticsEnv, options: {
-  writeRows?: (rows: Record<string, unknown>[]) => Promise<void>;
-  fetch?: typeof fetch;
-} = {}): AnalyticsSink | null {
+export function createAnalyticsSink(
+  env: AnalyticsEnv,
+  options: {
+    writeRows?: (rows: Record<string, unknown>[]) => Promise<void>;
+    fetch?: typeof fetch;
+  } = {},
+): AnalyticsSink | null {
   const writeRows = options.writeRows ?? (env.DATABASE_URL ? createPostgresEventWriter(env.DATABASE_URL) : null);
   const posthog = posthogConfig(env);
   if (!writeRows && !posthog) return null;
@@ -164,11 +167,7 @@ export function createAnalyticsSink(env: AnalyticsEnv, options: {
  * Hand the request's events to the sink after the response. With waitUntil the platform keeps
  * the function alive until the write settles; without it the write still runs in the background.
  */
-export function flushRequestAnalytics(
-  context: RequestContext,
-  sink: AnalyticsSink | null,
-  waitUntil?: (promise: Promise<unknown>) => void,
-): void {
+export function flushRequestAnalytics(context: RequestContext, sink: AnalyticsSink | null, waitUntil?: (promise: Promise<unknown>) => void): void {
   if (!sink || context.events.length === 0) return;
   let work: Promise<void>;
   try {
@@ -184,20 +183,27 @@ export function flushRequestAnalytics(
 }
 
 /** Run one request inside its analytics context and flush that context once the work settles. */
-export async function withRequestAnalytics<T>(input: {
-  method: string | undefined;
-  path: string;
-  header(name: string): string | null | undefined;
-  env: Record<string, string | undefined>;
-  sink(): AnalyticsSink | null;
-  waitUntil?: (promise: Promise<unknown>) => void;
-}, work: () => Promise<T>): Promise<T> {
+export async function withRequestAnalytics<T>(
+  input: {
+    method: string | undefined;
+    path: string;
+    header(name: string): string | null | undefined;
+    env: Record<string, string | undefined>;
+    sink(): AnalyticsSink | null;
+    waitUntil?: (promise: Promise<unknown>) => void;
+  },
+  work: () => Promise<T>,
+): Promise<T> {
   const context = createRequestContext(input);
   try {
     return await runWithRequestContext(context, work);
   } finally {
     let sink: AnalyticsSink | null = null;
-    try { sink = input.sink(); } catch { /* Without a sink the request simply goes unrecorded. */ }
+    try {
+      sink = input.sink();
+    } catch {
+      /* Without a sink the request simply goes unrecorded. */
+    }
     flushRequestAnalytics(context, sink, input.waitUntil);
   }
 }

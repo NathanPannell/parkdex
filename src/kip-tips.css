@@ -83,7 +83,9 @@
   height: 8px;
   border-radius: 99px;
   background: rgba(20, 35, 28, 0.22);
-  transition: width 0.2s, background 0.2s;
+  transition:
+    width 0.2s,
+    background 0.2s;
 }
 
 .kip-tip__dots span.is-current {

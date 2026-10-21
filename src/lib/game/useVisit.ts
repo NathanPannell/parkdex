@@ -24,69 +24,101 @@ export function useVisit() {
   const holderOf = useCallback((parkId: string): ParkHolder => parkHolder(parkId, flags, myHandle, heldParks), [flags, myHandle, heldParks]);
   // One visit per park counts each day, so a second one is never offered.
   const visitedToday = useCallback((parkId: string) => signedIn && hasVisitedToday(game.me, parkId, game.serverNow()), [game, signedIn]);
-  // Crews (#171): where the player stands with the park's protected hour, from the map's flags.
+  // Where the player stands with the park's protected hour (#170, every build), from the map's flags.
   const crewOf = useCallback(
-    (parkId: string): CrewPhase => crewPhase({ enabled: crew.enabled && signedIn, flag: flags?.get(parkId), myHandle, me: game.me, now: game.serverNow() }),
+    (parkId: string): CrewPhase =>
+      crewPhase({ enabled: crew.enabled && signedIn, flag: flags?.get(parkId), myHandle, me: signedIn ? game.me : null, now: game.serverNow() }),
     [crew.enabled, flags, game, myHandle, signedIn],
   );
   // A scanned code waits on the join card; standing in its park, the big button joins.
   const joinReady = useCallback((parkId: string) => !!crew.join && (crew.join.parkId === null || crew.join.parkId === parkId), [crew.join]);
 
-  const goPlant = useCallback((parkId: string) => {
-    dispatch({ type: "trip", id: parkId });
-    dispatch({ type: "select", id: null });
-    dispatch({ type: "go", screen: "plant" });
-  }, [dispatch]);
-
-  /** Joins a crew from the join card or the big button: sign in, pick a handle, then the join scene. */
-  const startJoin = useCallback((parkId: string, code: string) => {
-    const join = () => {
-      crew.beginJoin(code, parkId);
-      goPlant(parkId);
-    };
-    const step = nextVisitStep(signedIn, game.me);
-    if (step === "sign-in") {
+  const goPlant = useCallback(
+    (parkId: string) => {
+      dispatch({ type: "trip", id: parkId });
       dispatch({ type: "select", id: null });
-      dispatch({ type: "go", screen: "account" });
-    } else if (step === "pick-handle") {
-      game.openHandleSheet({ onDone: join });
-    } else {
-      join();
-    }
-  }, [crew, dispatch, game, goPlant, signedIn]);
-
-  const start = useCallback((parkId: string) => {
-    if (crew.join && joinReady(parkId)) {
-      startJoin(parkId, crew.join.code);
-      return;
-    }
-    if (visitedToday(parkId)) {
-      buzz(20);
-      toast("You visited this park today. Come back tomorrow.", "kip");
-      return;
-    }
-    const phase = crewOf(parkId);
-    if (phase.kind === "outsider" && phase.logged) {
-      buzz(20);
-      toast(`Visit logged. Come back after ${formatClockTime(phase.until)} to take this park.`, "kip");
-      return;
-    }
-    const step = nextVisitStep(signedIn, game.me);
-    if (step === "sign-in") {
-      dispatch({ type: "select", id: null });
-      dispatch({ type: "go", screen: "account" });
-    } else if (step === "pick-handle") {
-      game.openHandleSheet({ onDone: () => goPlant(parkId) });
-    } else {
-      goPlant(parkId);
-    }
-  }, [crew.join, crewOf, dispatch, game, goPlant, joinReady, signedIn, startJoin, toast, visitedToday]);
-
-  const labelFor = useCallback((parkId: string) => visitLabel(signedIn, holderOf(parkId), visitedToday(parkId), crewOf(parkId)), [crewOf, holderOf, signedIn, visitedToday]);
-  const shortLabelFor = useCallback(
-    (parkId: string) => (signedIn ? visitShortLabel(holderOf(parkId), visitedToday(parkId), crewOf(parkId), joinReady(parkId)) : joinReady(parkId) ? "Join" : "Plant!"),
-    [crewOf, holderOf, joinReady, signedIn, visitedToday],
+      dispatch({ type: "go", screen: "plant" });
+    },
+    [dispatch],
   );
 
-  return { signedIn, holderOf, visitedToday, crewOf, start, startJoin, labelFor, shortLabelFor };
+  /** Joins a crew from the join card or the big button: sign in, pick a handle, then the join scene. */
+  const startJoin = useCallback(
+    (parkId: string, code: string) => {
+      const join = () => {
+        crew.beginJoin(code, parkId);
+        goPlant(parkId);
+      };
+      const step = nextVisitStep(signedIn, game.me);
+      if (step === "sign-in") {
+        // After signing in, the map picks the join up again.
+        dispatch({ type: "signInFor", resume: { kind: "join", parkId, code } });
+      } else if (step === "pick-handle") {
+        game.openHandleSheet({ onDone: join });
+      } else {
+        join();
+      }
+    },
+    [crew, dispatch, game, goPlant, signedIn],
+  );
+
+  const start = useCallback(
+    (parkId: string) => {
+      if (crew.join && joinReady(parkId)) {
+        startJoin(parkId, crew.join.code);
+        return;
+      }
+      if (visitedToday(parkId)) {
+        buzz(20);
+        toast("You visited this park today. Come back tomorrow.", "kip");
+        return;
+      }
+      const phase = crewOf(parkId);
+      if (phase.kind === "outsider" && phase.logged) {
+        buzz(20);
+        toast(`Visit logged. Come back after ${formatClockTime(phase.until)} to take this park.`, "kip");
+        return;
+      }
+      const step = nextVisitStep(signedIn, game.me);
+      if (step === "sign-in") {
+        // After signing in, the map picks the visit up again.
+        dispatch({ type: "signInFor", resume: { kind: "visit", parkId } });
+      } else if (step === "pick-handle") {
+        game.openHandleSheet({ onDone: () => goPlant(parkId) });
+      } else {
+        goPlant(parkId);
+      }
+    },
+    [crew.join, crewOf, dispatch, game, goPlant, joinReady, signedIn, startJoin, toast, visitedToday],
+  );
+
+  // During someone's protected hour, joining their crew is the way in, so the bottom bar's big
+  // button opens the scanner. The "Log visit" buttons on the arrival card and park page use `start`.
+  const joinsByScanning = useCallback(
+    (parkId: string) => crew.enabled && signedIn && crewOf(parkId).kind === "outsider" && !visitedToday(parkId),
+    [crew.enabled, crewOf, signedIn, visitedToday],
+  );
+  const primary = useCallback(
+    (parkId: string) => {
+      if (!crew.join && joinsByScanning(parkId)) crew.openScanner(parkId);
+      else start(parkId);
+    },
+    [crew, joinsByScanning, start],
+  );
+
+  const labelFor = useCallback(
+    (parkId: string) => visitLabel(signedIn, holderOf(parkId), visitedToday(parkId), crewOf(parkId)),
+    [crewOf, holderOf, signedIn, visitedToday],
+  );
+  const shortLabelFor = useCallback(
+    (parkId: string) =>
+      signedIn
+        ? visitShortLabel(holderOf(parkId), visitedToday(parkId), crewOf(parkId), joinReady(parkId) || joinsByScanning(parkId))
+        : joinReady(parkId)
+          ? "Join"
+          : "Plant!",
+    [crewOf, holderOf, joinReady, joinsByScanning, signedIn, visitedToday],
+  );
+
+  return { signedIn, holderOf, visitedToday, crewOf, start, primary, startJoin, labelFor, shortLabelFor };
 }

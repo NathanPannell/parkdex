@@ -13,7 +13,9 @@ function loadRegions(): Promise<string[]> {
   const key = document.cookie;
   if (!cached || cached.key !== key) {
     const regions = api<{ regions: string[] }>("/api/parks/regions").then((result) => result.regions);
-    regions.catch(() => { cached = null; });
+    regions.catch(() => {
+      cached = null;
+    });
     cached = { key, regions };
   }
   return cached.regions;
@@ -24,8 +26,16 @@ export function RegionSelect({ value, onChange, disabled }: { value: string; onC
 
   useEffect(() => {
     let active = true;
-    loadRegions().then((list) => { if (active) setRegions(list); }).catch(() => { if (active) setRegions([]); });
-    return () => { active = false; };
+    loadRegions()
+      .then((list) => {
+        if (active) setRegions(list);
+      })
+      .catch(() => {
+        if (active) setRegions([]);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const options = regions ?? [];
@@ -34,7 +44,11 @@ export function RegionSelect({ value, onChange, disabled }: { value: string; onC
     <select value={value} disabled={disabled || !regions} onChange={(event) => onChange(event.target.value)}>
       <option value="">{regions ? "No region" : "Loading regions..."}</option>
       {unknown && <option value={value}>{value} (not used by any live park)</option>}
-      {options.map((region) => <option key={region} value={region}>{region}</option>)}
+      {options.map((region) => (
+        <option key={region} value={region}>
+          {region}
+        </option>
+      ))}
     </select>
   );
 }

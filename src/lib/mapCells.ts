@@ -24,7 +24,9 @@ let indexPromise: Promise<CellIndex> | null = null;
 export function loadCellIndex(load: () => Promise<unknown> = fetchIndex): Promise<CellIndex> {
   if (!indexPromise) {
     indexPromise = load().then(parseCellIndex);
-    indexPromise.catch(() => { indexPromise = null; });
+    indexPromise.catch(() => {
+      indexPromise = null;
+    });
   }
   return indexPromise;
 }
@@ -60,7 +62,13 @@ export function cellRing(key: string): MapPoint[] {
   const lng = (tx: number) => (tx / scale) * 360 - 180;
   const lat = (ty: number) => (180 / Math.PI) * Math.atan(Math.sinh(Math.PI - (2 * Math.PI * ty) / scale));
   const [west, east, north, south] = [lng(x), lng(x + 1), lat(y), lat(y + 1)];
-  return [[west, north], [east, north], [east, south], [west, south], [west, north]];
+  return [
+    [west, north],
+    [east, north],
+    [east, south],
+    [west, south],
+    [west, north],
+  ];
 }
 
 /** Squares within one step of a point: the visitor's square and its eight neighbours. */
@@ -136,8 +144,13 @@ export function squareLabels(index: CellIndex, parks: readonly { lng: number; la
       const size = formatMegabytes(bytesForChunks(index, chunkIdsForCells(index, [key])));
       return {
         type: "Feature",
-        properties: { key, label: parkCount ? `${size}
-${parkCount} ${parkCount === 1 ? "park" : "parks"}` : size },
+        properties: {
+          key,
+          label: parkCount
+            ? `${size}
+${parkCount} ${parkCount === 1 ? "park" : "parks"}`
+            : size,
+        },
         geometry: { type: "Point", coordinates: [(ring[0][0] + ring[2][0]) / 2, (ring[0][1] + ring[2][1]) / 2] },
       };
     }),

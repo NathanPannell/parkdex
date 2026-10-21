@@ -1,12 +1,7 @@
 import { apiEnvironment, apiUrl } from "../apiPointer";
 import { App } from "@capacitor/app";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import {
-  hasRawUrlCredentials,
-  hasUrlCredentials,
-  isSecureUserDataApiOrigin,
-  resolveUserDataApiOrigin,
-} from "../userDataDestination";
+import { hasRawUrlCredentials, hasUrlCredentials, isSecureUserDataApiOrigin, resolveUserDataApiOrigin } from "../userDataDestination";
 
 export { KIP_PRODUCTION_ORIGIN, KIP_STAGING_ORIGIN } from "../userDataDestination";
 
@@ -42,7 +37,9 @@ const recentAuthLinkDigests = new Set<string>();
 
 export class NativeSessionOriginMismatchError extends Error {
   constructor() {
-    super("This saved Parkdex session needs a new sign-in before it can sync with this app environment. Your saved progress stays on this device. Sign in again here to sync it.");
+    super(
+      "This saved Parkdex session needs a new sign-in before it can sync with this app environment. Your saved progress stays on this device. Sign in again here to sync it.",
+    );
     this.name = "NativeSessionOriginMismatchError";
   }
 }
@@ -58,10 +55,7 @@ export function resolveGoogleWebClientId(explicitClientId?: string | null): stri
   return clientId.length > 0 ? clientId : null;
 }
 
-export async function requestNativeGoogleIdToken(options: {
-  nonce: string;
-  serverClientId?: string | null;
-}): Promise<string> {
+export async function requestNativeGoogleIdToken(options: { nonce: string; serverClientId?: string | null }): Promise<string> {
   assertAndroidNativeIdentityAvailable();
   const nonce = options.nonce;
   const serverClientId = resolveGoogleWebClientId(options.serverClientId);
@@ -79,8 +73,7 @@ export async function requestNativeGoogleIdToken(options: {
 
 export async function persistNativeSession(session: ServerAccountSession): Promise<void> {
   assertAndroidNativeIdentityAvailable();
-  if (typeof session.sessionToken !== "string" || !session.sessionToken.trim()
-      || session.sessionToken !== session.sessionToken.trim()) {
+  if (typeof session.sessionToken !== "string" || !session.sessionToken.trim() || session.sessionToken !== session.sessionToken.trim()) {
     throw new Error("The server did not return a valid native session.");
   }
   const expiresAt = expiryToEpochMillis(session.expiresAt);
@@ -97,8 +90,7 @@ export async function readNativeSession(expectedApiOrigin = getAuthApiOrigin()):
     return null;
   }
   if (stored.requiresReauth) throw new NativeSessionOriginMismatchError();
-  if (typeof stored.token !== "string" || !stored.token.trim()
-      || typeof stored.expiresAt !== "number" || !Number.isFinite(stored.expiresAt)) return null;
+  if (typeof stored.token !== "string" || !stored.token.trim() || typeof stored.expiresAt !== "number" || !Number.isFinite(stored.expiresAt)) return null;
   if (stored.expiresAt <= Date.now()) {
     throw new NativeSessionOriginMismatchError();
   }
@@ -115,23 +107,16 @@ export async function clearNativeSession(clearCredentialState = true): Promise<v
 }
 
 /** Sends native auth requests without WebView cookies or caller-supplied bearer tokens. */
-export async function nativeAuthFetch(
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-  fetcher: typeof fetch = globalThis.fetch,
-): Promise<Response> {
+export async function nativeAuthFetch(input: RequestInfo | URL, init: RequestInit = {}, fetcher: typeof fetch = globalThis.fetch): Promise<Response> {
   assertAndroidNativeIdentityAvailable();
   const apiOrigin = getAuthApiOrigin();
   const session = await readNativeSession(apiOrigin);
   const rawUrl = typeof Request !== "undefined" && input instanceof Request ? input.url : String(input);
   const requestUrl = new URL(rawUrl, apiOrigin);
-  if (requestUrl.protocol !== "https:" || requestUrl.origin !== apiOrigin || hasUrlCredentials(requestUrl) ||
-      hasRawUrlCredentials(rawUrl) || requestUrl.hash) {
+  if (requestUrl.protocol !== "https:" || requestUrl.origin !== apiOrigin || hasUrlCredentials(requestUrl) || hasRawUrlCredentials(rawUrl) || requestUrl.hash) {
     throw new Error("Native account requests must use the configured account API origin.");
   }
-  const headers = new Headers(
-    typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
-  );
+  const headers = new Headers(typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined);
   new Headers(init.headers).forEach((value, name) => headers.set(name, value));
   headers.delete("Authorization");
   headers.delete("Cookie");
@@ -171,7 +156,9 @@ export async function listenForNativeAuthLinks(handler: AuthLinkHandler): Promis
 
   let listener: AppUrlOpenListener | undefined;
   try {
-    listener = await App.addListener("appUrlOpen", ({ url }) => { void forward(url); });
+    listener = await App.addListener("appUrlOpen", ({ url }) => {
+      void forward(url);
+    });
     const launchUrl = await App.getLaunchUrl();
     await forward(launchUrl?.url);
   } catch (error) {
@@ -242,9 +229,12 @@ function getAuthLinkOrigin(): string {
 }
 
 function getAuthApiOrigin(): string {
-  const configured = apiUrl((import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim()
-    || (import.meta.env.VITE_APP_URL ?? "").trim()
-    || (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim()) ?? "";
+  const configured =
+    apiUrl(
+      (import.meta.env.VITE_ACCOUNT_API_URL ?? "").trim() ||
+        (import.meta.env.VITE_APP_URL ?? "").trim() ||
+        (import.meta.env.VITE_PREVIEW_API_ORIGIN ?? "").trim(),
+    ) ?? "";
   return resolveUserDataApiOrigin(configured, {
     native: true,
     environment: apiEnvironment(),
@@ -254,11 +244,14 @@ function getAuthApiOrigin(): string {
 
 export function isApprovedKipOrigin(origin: string): boolean {
   try {
-    return isSecureUserDataApiOrigin(origin) && resolveUserDataApiOrigin(origin, {
-      native: true,
-      environment: apiEnvironment(),
-      previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
-    }) === origin;
+    return (
+      isSecureUserDataApiOrigin(origin) &&
+      resolveUserDataApiOrigin(origin, {
+        native: true,
+        environment: apiEnvironment(),
+        previewOrigin: import.meta.env.VITE_PREVIEW_API_ORIGIN,
+      }) === origin
+    );
   } catch {
     return false;
   }

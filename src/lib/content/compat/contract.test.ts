@@ -20,9 +20,13 @@ function response() {
   let body = "";
   return {
     statusCode: 0,
-    get body() { return body; },
+    get body() {
+      return body;
+    },
     setHeader() {},
-    end(value?: string) { body = value ?? ""; },
+    end(value?: string) {
+      body = value ?? "";
+    },
   };
 }
 

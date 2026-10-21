@@ -1,7 +1,6 @@
 import { motion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 import { Icon } from "./Icon";
-import { useKipTip } from "../lib/kipTips";
 import { clampCrop, CROP_ASPECT, cropFrameSize, largestCrop, panCrop, roundCrop, zoomCrop, type PhotoCrop } from "../lib/photoCrop";
 import type { OriginalPhoto } from "../lib/photoEncode";
 
@@ -33,15 +32,15 @@ const KEY_ZOOM = 1.15;
  * retake starts again from the largest fit.
  */
 export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, initialCrop = null, retakeLabel = "Retake", aspect = CROP_ASPECT }: Props) {
-  const [crop, setCrop] = useState<PhotoCrop>(() => (initialCrop ? clampCrop(initialCrop, photo.width, photo.height, aspect) : largestCrop(photo.width, photo.height, aspect)));
+  const [crop, setCrop] = useState<PhotoCrop>(() =>
+    initialCrop ? clampCrop(initialCrop, photo.width, photo.height, aspect) : largestCrop(photo.width, photo.height, aspect),
+  );
   const [frame, setFrame] = useState(() => cropFrameSize(326, 488, aspect));
   const stage = useRef<HTMLDivElement>(null);
   const frameEl = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, Point>());
   const latest = useRef(crop);
   latest.current = crop;
-  // The first crop explains itself once (#172).
-  useKipTip("photo-crop", true);
 
   useLayoutEffect(() => {
     const element = stage.current;
@@ -155,7 +154,9 @@ export function PhotoCropper({ photo, caption, busy, error, onRetake, onUse, ini
       </div>
       <div className="cropper__bottom">
         <span className="cropper__caption">{caption}</span>
-        <div className="cropper__hint" role={error ? "alert" : undefined}>{error ?? (busy ? "Getting your photo ready…" : "Pinch to zoom. Drag to move.")}</div>
+        <div className="cropper__hint" role={error ? "alert" : undefined}>
+          {error ?? (busy ? "Getting your photo ready…" : "Pinch to zoom. Drag to move.")}
+        </div>
         <div className="review__actions">
           <button className="btn btn--paper" onClick={onRetake} disabled={busy}>
             <Icon name={retakeLabel === "Retake" ? "refresh" : "close"} size={18} /> {retakeLabel}

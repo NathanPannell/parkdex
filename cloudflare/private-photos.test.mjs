@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import {
-  AccountPhotos,
-  createPhotoWorker,
-  PHOTO_DELETE_PAGE_SIZE,
-  PHOTO_MAX_BYTES,
-} from "./private-photos.mjs";
+import { AccountPhotos, createPhotoWorker, PHOTO_DELETE_PAGE_SIZE, PHOTO_MAX_BYTES } from "./private-photos.mjs";
 
 const ACCOUNT_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_ACCOUNT_ID = "22222222-2222-4222-8222-222222222222";
@@ -438,11 +433,12 @@ test("daily retention runs only when configured and never logs its secret", asyn
 
   const invalidUrlWorker = createPhotoWorker({ fetchImpl: async () => assert.fail("invalid endpoint must not receive the secret") });
   assert.throws(
-    () => invalidUrlWorker.scheduled(
-      {},
-      { KIP_ENVIRONMENT: "staging", RETENTION_URL: "https://untrusted.example/api/retention/interactions/purge", KIP_RETENTION_SECRET: TOKEN },
-      { waitUntil: () => {} },
-    ),
+    () =>
+      invalidUrlWorker.scheduled(
+        {},
+        { KIP_ENVIRONMENT: "staging", RETENTION_URL: "https://untrusted.example/api/retention/interactions/purge", KIP_RETENTION_SECRET: TOKEN },
+        { waitUntil: () => {} },
+      ),
     /Retention endpoint configuration is invalid/,
   );
 
@@ -481,15 +477,16 @@ test("production retention accepts only the production Parkdex endpoint", async 
   assert.equal(requests[0].url, "https://web.parkdex.app/api/retention/interactions/purge");
 
   assert.throws(
-    () => h.worker.scheduled(
-      {},
-      {
-        KIP_ENVIRONMENT: "production",
-        RETENTION_URL: "https://staging.web.parkdex.app/api/retention/interactions/purge",
-        KIP_RETENTION_SECRET: TOKEN,
-      },
-      { waitUntil: () => {} },
-    ),
+    () =>
+      h.worker.scheduled(
+        {},
+        {
+          KIP_ENVIRONMENT: "production",
+          RETENTION_URL: "https://staging.web.parkdex.app/api/retention/interactions/purge",
+          KIP_RETENTION_SECRET: TOKEN,
+        },
+        { waitUntil: () => {} },
+      ),
     /Retention endpoint configuration is invalid/,
   );
 });
@@ -515,7 +512,10 @@ test("daily retention drains a bounded backlog and fails when it stops making pr
   );
   await pending[0];
   assert.equal(requests.length, 2);
-  assert.equal(requests.every((item) => item.options.redirect === "manual"), true);
+  assert.equal(
+    requests.every((item) => item.options.redirect === "manual"),
+    true,
+  );
 
   const stalled = createPhotoWorker({
     fetchImpl: async () => Response.json({ deleted: 0, authDeleted: 0, remainingExpired: 3 }),

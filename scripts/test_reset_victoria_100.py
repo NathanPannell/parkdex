@@ -85,11 +85,17 @@ def make_fixture(base: Path):
         else:
             park_id = f"test-victoria-park-{rank:03d}"
             name, category, region = f"Test Victoria Park {rank}", "municipal", "Southern Vancouver Island"
-        ranked.append({
-            "rank": rank, "id": park_id, "name": name,
-            "current_official_name": name, "category": category, "region": region,
-            "feature_source_url": f"https://parks.example.test/{rank}",
-        })
+        ranked.append(
+            {
+                "rank": rank,
+                "id": park_id,
+                "name": name,
+                "current_official_name": name,
+                "category": category,
+                "region": region,
+                "feature_source_url": f"https://parks.example.test/{rank}",
+            }
+        )
     historical = json.dumps(ranked, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     corrected_records = json.loads(historical)
     corrected_records[68]["corrected_note"] = "Identity verified from the source records."
@@ -106,10 +112,17 @@ def make_fixture(base: Path):
             park.update({"name": ranked_park["name"], "category": ranked_park["category"], "region": ranked_park["region"]})
         else:
             park = {
-                "id": ranked_park["id"], "name": ranked_park["name"], "short": ranked_park["name"][:40],
-                "category": ranked_park["category"], "region": ranked_park["region"],
-                "lat": 48.4 + rank / 10000, "lng": -123.3 - rank / 10000,
-                "biome": "forest", "shape": "circle", "rarity": "common", "seed": rank,
+                "id": ranked_park["id"],
+                "name": ranked_park["name"],
+                "short": ranked_park["name"][:40],
+                "category": ranked_park["category"],
+                "region": ranked_park["region"],
+                "lat": 48.4 + rank / 10000,
+                "lng": -123.3 - rank / 10000,
+                "biome": "forest",
+                "shape": "circle",
+                "rarity": "common",
+                "seed": rank,
                 "blurb": reset.SKELETON_BLURB,
             }
         park["scene"] = None
@@ -122,18 +135,23 @@ def make_fixture(base: Path):
     for rank, park in enumerate(parks, start=1):
         x = -123.5 + rank / 10000
         y = 48.3 + rank / 10000
-        boundaries.append({
-            "type": "Feature",
-            "properties": {"id": park["id"], "biome": park["biome"]},
-            "geometry": {"type": "MultiPolygon", "coordinates": [[[[x, y], [x + 0.001, y], [x + 0.001, y + 0.001], [x, y]]]]},
-        })
+        boundaries.append(
+            {
+                "type": "Feature",
+                "properties": {"id": park["id"], "biome": park["biome"]},
+                "geometry": {"type": "MultiPolygon", "coordinates": [[[[x, y], [x + 0.001, y], [x + 0.001, y + 0.001], [x, y]]]]},
+            }
+        )
 
     hubs = [{"name": f"Hub {position}", "lng": -123.4 + position / 100, "lat": 48.4 + position / 100} for position in range(8)]
     settings = [{"parkId": park["id"], "walkM": float(rank)} for rank, park in enumerate(parks, start=1)]
     routes = [
-        {"parkId": park["id"], "hubPosition": position,
-         "distanceKm": None if rank == 100 and position == 7 else rank / 10,
-         "durationMin": None if rank == 100 and position == 7 else rank / 5}
+        {
+            "parkId": park["id"],
+            "hubPosition": position,
+            "distanceKm": None if rank == 100 and position == 7 else rank / 10,
+            "durationMin": None if rank == 100 and position == 7 else rank / 5,
+        }
         for rank, park in enumerate(parks, start=1)
         for position in range(8)
     ]
@@ -141,17 +159,20 @@ def make_fixture(base: Path):
         "rankedList": {"path": f".codex/kip-100-rollout-qa/{reset.RANKED_SOURCE_NAME}", "sha256": corrected_sha},
         "originalRankedList": {"path": f".codex/outputs/{reset.RANKED_SOURCE_NAME}", "sha256": original_sha},
         "geometry": [
-            {"parkId": park["id"], "sourceUrl": f"https://parks.example.test/geometry/{rank}",
-             "sourceId": f"fixture-{rank}", "sha256": "a" * 64}
+            {"parkId": park["id"], "sourceUrl": f"https://parks.example.test/geometry/{rank}", "sourceId": f"fixture-{rank}", "sha256": "a" * 64}
             for rank, park in enumerate(parks, start=1)
         ],
         "drive": {
             "hubs": {"sourceUrl": "https://routes.example.test/hubs", "sha256": "b" * 64},
             "routes": {"sourceUrl": "https://routes.example.test/table", "sha256": "c" * 64},
         },
-        "rank69": {"decision": "Verified identity fixture.", "sources": [
-            "https://parks.example.test/rank69-a", "https://parks.example.test/rank69-b",
-        ]},
+        "rank69": {
+            "decision": "Verified identity fixture.",
+            "sources": [
+                "https://parks.example.test/rank69-a",
+                "https://parks.example.test/rank69-b",
+            ],
+        },
     }
     bundle = {
         "schema": reset.BUNDLE_SCHEMA,
@@ -182,11 +203,20 @@ def make_marker(seed, target, revision):
 def make_queued_jobs(seed):
     return {
         rank: {
-            "park_id": park["id"], "state": "queued", "lease_token": None,
-            "lease_expires_at": None, "attempt_count": 0, "frozen_research": None,
-            "selected_art": None, "publication_result": None, "published_at": None,
-            "last_error": None, "render_calls_started": 0, "run_manifest_path": None,
-            "run_manifest_sha256": None, "render_call_log": [],
+            "park_id": park["id"],
+            "state": "queued",
+            "lease_token": None,
+            "lease_expires_at": None,
+            "attempt_count": 0,
+            "frozen_research": None,
+            "selected_art": None,
+            "publication_result": None,
+            "published_at": None,
+            "last_error": None,
+            "render_calls_started": 0,
+            "run_manifest_path": None,
+            "run_manifest_sha256": None,
+            "render_call_log": [],
         }
         for rank, park in enumerate(seed.parks, start=1)
     }
@@ -199,8 +229,7 @@ def make_public_export(state, target):
     tables["drive_hubs"] = [{"position": position, "name": row[0], "lng": row[1], "lat": row[2]} for position, row in state.hubs.items()]
     tables["park_drive_settings"] = [{"park_id": park_id, "walk_m": walk_m} for park_id, walk_m in state.settings.items()]
     tables["park_drive"] = [
-        {"park_id": park_id, "hub_position": position, "distance_km": route[0], "duration_min": route[1]}
-        for (park_id, position), route in state.routes.items()
+        {"park_id": park_id, "hub_position": position, "distance_km": route[0], "duration_min": route[1]} for (park_id, position), route in state.routes.items()
     ]
     tables["content_clock"] = [{"singleton": True, "revision": state.revision, "retention_floor": 0, "last_transaction_id": None}]
     tables["content_map"] = [] if state.map_pointer is None else [state.map_pointer]
@@ -258,11 +287,13 @@ class ResetVictoria100Tests(unittest.TestCase):
     def test_rejects_rank_69_stale_cy_hampson_identity(self) -> None:
         records = json.loads(self.ranked_path.read_text(encoding="utf-8"))
         original = json.loads(self.original_ranked_path.read_text(encoding="utf-8"))
-        records[68].update({
-            "id": reset.UNRESOLVED_RANK_69_ID,
-            "name": "Bazan Bay Park",
-            "current_official_name": "Cy Hampson Park",
-        })
+        records[68].update(
+            {
+                "id": reset.UNRESOLVED_RANK_69_ID,
+                "name": "Bazan Bay Park",
+                "current_official_name": "Cy Hampson Park",
+            }
+        )
         original[68]["id"] = reset.UNRESOLVED_RANK_69_ID
         original[68]["name"] = "Bazan Bay Park"
         original[68]["current_official_name"] = "Cy Hampson Park"
@@ -310,17 +341,21 @@ class ResetVictoria100Tests(unittest.TestCase):
         state.marker = make_marker(self.seed, self.target, 11)
         state.jobs = make_queued_jobs(self.seed)
         park_id = state.jobs[1]["park_id"]
-        state.jobs[1].update({
-            "state": "published",
-            "published_at": "2026-09-27T12:00:00Z",
-            "publication_result": {"revision": 13},
-            "selected_art": {
-                "local_path": "runs/beacon-hill.webp", "sha256": "d" * 64, "byte_size": 128,
-                "scene_slug": "beacon-hill-park",
-                "expected": {"blurb": reset.SKELETON_BLURB, "rarity": "common", "scene": None},
-                "desired": {"blurb": "A completed park story.", "rarity": "rare", "scene": "beacon-hill-park"},
-            },
-        })
+        state.jobs[1].update(
+            {
+                "state": "published",
+                "published_at": "2026-09-27T12:00:00Z",
+                "publication_result": {"revision": 13},
+                "selected_art": {
+                    "local_path": "runs/beacon-hill.webp",
+                    "sha256": "d" * 64,
+                    "byte_size": 128,
+                    "scene_slug": "beacon-hill-park",
+                    "expected": {"blurb": reset.SKELETON_BLURB, "rarity": "common", "scene": None},
+                    "desired": {"blurb": "A completed park story.", "rarity": "rare", "scene": "beacon-hill-park"},
+                },
+            }
+        )
         state.parks[park_id]["scene"] = "beacon-hill-park"
         state.parks[park_id]["blurb"] = "A completed park story."
         self.assertEqual(reset.classify_state(state, self.seed, self.target), "published-replay")
@@ -369,19 +404,32 @@ class ResetVictoria100Tests(unittest.TestCase):
         self.assertEqual(conn.marker_params, (self.seed.bundle_sha256, self.seed.ranked_sha256, 41, "staging", None, "staging.neon.tech"))
         sql = [statement for statement, _ in conn.calls]
         self.assertEqual(sum(statement.startswith("INSERT INTO public.park_drive (") for statement in sql), 800)
-        self.assertTrue(all(statement.startswith(("SET CONSTRAINTS", "DELETE FROM public.", "INSERT INTO public."))
-                            or statement.startswith("SELECT revision FROM public.content_clock") for statement in sql))
-        touched_tables = {match for statement in sql for match in (
-            re_search_table(statement),
-        ) if match}
-        self.assertEqual(touched_tables, {
-            "parks", "boundaries", "park_drive", "park_drive_settings", "drive_hubs",
-            "park_enrichment_jobs", "park_enrichment_rollout", "content_clock",
-        })
+        self.assertTrue(
+            all(
+                statement.startswith(("SET CONSTRAINTS", "DELETE FROM public.", "INSERT INTO public."))
+                or statement.startswith("SELECT revision FROM public.content_clock")
+                for statement in sql
+            )
+        )
+        touched_tables = {match for statement in sql for match in (re_search_table(statement),) if match}
+        self.assertEqual(
+            touched_tables,
+            {
+                "parks",
+                "boundaries",
+                "park_drive",
+                "park_drive_settings",
+                "drive_hubs",
+                "park_enrichment_jobs",
+                "park_enrichment_rollout",
+                "content_clock",
+            },
+        )
 
 
 def re_search_table(statement: str):
     import re
+
     match = re.match(r"(?:DELETE FROM|INSERT INTO) public\.([a-z_]+)", statement)
     if match:
         return match.group(1)

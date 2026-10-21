@@ -4,6 +4,7 @@ Uses the Cloudflare REST API (also used by Wrangler) so no S3 key is needed.
 Credentials come from CLOUDFLARE_API_TOKEN or an explicitly supplied Wrangler
 config file. Existing objects must already match; this tool never overwrites them.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,12 +46,19 @@ def snapshot_objects(directory):
         if len(data) != item["byte_size"] or sha256(data) != item["sha256"]:
             raise ValueError("Snapshot bytes changed: " + item["path"])
         objects.append((item, path))
-    objects.append(({
-        "path": "manifest.json", "key": prefix + "manifest.json",
-        "url": origin + "/" + prefix + "manifest.json",
-        "sha256": sha256(manifest_bytes), "byte_size": len(manifest_bytes),
-        "content_type": "application/json",
-    }, directory / "manifest.json"))
+    objects.append(
+        (
+            {
+                "path": "manifest.json",
+                "key": prefix + "manifest.json",
+                "url": origin + "/" + prefix + "manifest.json",
+                "sha256": sha256(manifest_bytes),
+                "byte_size": len(manifest_bytes),
+                "content_type": "application/json",
+            },
+            directory / "manifest.json",
+        )
+    )
     return manifest, objects
 
 
@@ -123,9 +131,13 @@ def main():
             if len(results) % 20 == 0:
                 print(json.dumps({"verified_objects": len(results), "total": len(objects)}), flush=True)
     results.append(fn(objects[-1]))
-    report = {"command": args.command, "version": manifest["version"], "object_count": len(objects),
-              "total_bytes": sum(item["byte_size"] for item, _ in objects),
-              "objects": sorted(results, key=lambda x: x["path"])}
+    report = {
+        "command": args.command,
+        "version": manifest["version"],
+        "object_count": len(objects),
+        "total_bytes": sum(item["byte_size"] for item, _ in objects),
+        "objects": sorted(results, key=lambda x: x["path"]),
+    }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({key: value for key, value in report.items() if key != "objects"}))

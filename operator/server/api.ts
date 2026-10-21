@@ -99,7 +99,7 @@ function health(request: Request, env: DashboardEnv): Response {
   const staging = cookie(request, DATABASE_COOKIE) === "staging" && Boolean(env.STAGING_DATABASE_URL);
   return json({
     ok: true,
-    environment: staging ? "staging" : env.DASHBOARD_ENVIRONMENT ?? "unknown",
+    environment: staging ? "staging" : (env.DASHBOARD_ENVIRONMENT ?? "unknown"),
     canSwitch: Boolean(env.STAGING_DATABASE_URL),
     emailMode: env.EMAIL_MODE === "disabled" ? "disabled" : env.RESEND_API_KEY ? "resend" : "unconfigured",
   });
@@ -121,13 +121,15 @@ export function createDashboardApi(dependencies: DashboardDependencies = {}, sec
       const context: SectionContext = {
         url,
         path,
-        get env() { return selected ??= selectDatabase(request, baseEnv); },
+        get env() {
+          return (selected ??= selectDatabase(request, baseEnv));
+        },
         baseEnv,
         otherEnv: otherDatabase(request, baseEnv),
         dependencies,
         requireSameOrigin: () => requireSameOrigin(request),
       };
-      return await section.route(request, context) ?? notFound();
+      return (await section.route(request, context)) ?? notFound();
     } catch (error) {
       return errorResponse(error);
     }

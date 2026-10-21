@@ -21,7 +21,7 @@ Evidence must use sequentially decoded video frames with actual encoded presenta
 
 ## Transport contract
 
-Feedback text, optional email, screenshots, interaction identifiers, account credentials and private photos must use approved destinations with HTTPS in deployed builds. Redirects must not silently forward private request bodies or credentials. Valid same-origin web routes and explicit native staging/production configuration must continue to work. Isolated preview identities and credentials must stay separate from persistent environments.
+Feedback text, optional email, screenshots, interaction identifiers, account credentials and private photos must use approved destinations with HTTPS in deployed builds. Redirects must not silently forward private request bodies or credentials. Valid same-origin web routes and explicit native staging/production configuration must continue to work. Test and CI credentials must stay separate from persistent environments.
 
 Native bearer sessions are bound to the API origin that issued them. An older unbound session requires sign-in again, while the saved account's local parks and photos remain accessible. A session from another environment must never be sent to the current environment. The reauthentication state must survive process restarts.
 
@@ -39,4 +39,4 @@ An Android preview package is built only after the isolated deployment exists. S
 - Destination and redirect rejection: adversarial URL tests plus valid deployed feedback/auth/photo journeys.
 - Exact candidate preview and merged staging revision: local checks, independent review, browser evidence and Android APK provenance.
 
-The delivery owner keeps an external resource journal, retains the isolated preview through staging verification, then proves every owned preview resource absent. Production promotion is separate.
+The delivery owner verifies the exact staging SHA after merge (`docs/delivery.md`). Production promotion is separate.

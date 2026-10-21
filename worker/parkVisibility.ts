@@ -17,12 +17,17 @@ function missingTable(error: unknown): boolean {
 export async function hiddenParks(sql: SqlClient, parkIds: readonly string[]): Promise<Map<string, HiddenPark>> {
   if (!parkIds.length) return new Map();
   try {
-    const rows = await sql.query(HIDDEN_PARKS_SQL, [[...new Set(parkIds)]]) as Array<Record<string, unknown>>;
-    return new Map(rows.map((row) => [String(row.park_id), {
-      parkId: String(row.park_id),
-      reason: String(row.reason),
-      source: row.source === "operator" ? "operator" : "category",
-    }]));
+    const rows = (await sql.query(HIDDEN_PARKS_SQL, [[...new Set(parkIds)]])) as Array<Record<string, unknown>>;
+    return new Map(
+      rows.map((row) => [
+        String(row.park_id),
+        {
+          parkId: String(row.park_id),
+          reason: String(row.reason),
+          source: row.source === "operator" ? "operator" : "category",
+        },
+      ]),
+    );
   } catch (error) {
     if (missingTable(error)) return new Map();
     throw error;

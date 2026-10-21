@@ -3,8 +3,12 @@ import test from "node:test";
 import { foundingFailure, foundingStatements, type FoundingPlan } from "./founding.ts";
 
 const common = {
-  accountId: "11111111-1111-4111-8111-111111111111", attemptId: "22222222-2222-4222-8222-222222222222", visitId: "33333333-3333-4333-8333-333333333333",
-  at: "2026-10-10T18:00:00.000Z", photo: { sha256: "a".repeat(64), base64: "AAAA", width: 16, height: 12 }, moderation: { version: 1 },
+  accountId: "11111111-1111-4111-8111-111111111111",
+  attemptId: "22222222-2222-4222-8222-222222222222",
+  visitId: "33333333-3333-4333-8333-333333333333",
+  at: "2026-10-10T18:00:00.000Z",
+  photo: { sha256: "a".repeat(64), base64: "AAAA", width: 16, height: 12 },
+  moderation: { version: 1 },
 };
 const existing: FoundingPlan = { kind: "existing", ...common, parkId: "municipal-beacon-hill-park", osm: { type: "way", id: 7 } };
 const REQUEST = "44444444-4444-4444-8444-444444444444";
@@ -47,9 +51,15 @@ test("a reviewed founding locks and approves its request, skips the visit and ru
 
 test("guards raised in the transaction map to founding results", () => {
   const cases: Array<[string, string]> = [
-    ["review_not_pending", "review_not_pending"], ["account_unavailable", "account_unavailable"], ["already_founded", "already_founded"],
-    ["duplicate key value violates unique constraint \"parks_pkey\"", "already_founded"], ["park_exists", "park_exists"], ["park_hidden", "park_hidden"],
-    ["park_missing", "park_missing"], ["draft_changed", "blocked"], ["visit_conflict", "visit_failed"],
+    ["review_not_pending", "review_not_pending"],
+    ["account_unavailable", "account_unavailable"],
+    ["already_founded", "already_founded"],
+    ['duplicate key value violates unique constraint "parks_pkey"', "already_founded"],
+    ["park_exists", "park_exists"],
+    ["park_hidden", "park_hidden"],
+    ["park_missing", "park_missing"],
+    ["draft_changed", "blocked"],
+    ["visit_conflict", "visit_failed"],
   ];
   for (const [message, status] of cases) assert.equal(foundingFailure(new Error(message)), status, message);
   assert.equal(foundingFailure(new Error("connection reset")), null);

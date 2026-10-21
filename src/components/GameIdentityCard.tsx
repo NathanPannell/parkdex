@@ -16,7 +16,9 @@ export function GameIdentityCard() {
 
   return (
     <section className="account-card card account-section" aria-labelledby="game-identity-title" style={handleFit(player?.handle)}>
-      <span className="eyebrow" id="game-identity-title">Your flag</span>
+      <span className="eyebrow" id="game-identity-title">
+        Your flag
+      </span>
       <div className="game-identity">
         {player ? (
           <button className="viewer-open" onClick={() => setViewingFlag(true)} aria-label={`Show the flag of @${player.handle} full screen`}>
@@ -31,7 +33,9 @@ export function GameIdentityCard() {
             {player
               ? `${formatPoints(game.me?.score ?? 0)} · ${game.me?.parks.length ?? 0} ${game.me?.parks.length === 1 ? "park" : "parks"} held`
               : unavailable
-                ? game.status === "offline" ? "Connect to the internet to see your flag." : game.error ?? "Your flag is unavailable right now."
+                ? game.status === "offline"
+                  ? "Connect to the internet to see your flag."
+                  : (game.error ?? "Your flag is unavailable right now.")
                 : "Pick a handle to get your flag and start planting."}
           </span>
         </div>
@@ -40,10 +44,12 @@ export function GameIdentityCard() {
         <button className="btn btn--paper btn--sm" onClick={() => void game.refresh()}>
           <Icon name="refresh" size={18} /> Try again
         </button>
-      ) : game.status === "ready" && (
-        <button className={`btn btn--sm ${player ? "btn--paper" : "btn--sun"}`} onClick={() => game.openHandleSheet()}>
-          {player ? "Change handle" : "Pick your handle"}
-        </button>
+      ) : (
+        game.status === "ready" && (
+          <button className={`btn btn--sm ${player ? "btn--paper" : "btn--sun"}`} onClick={() => game.openHandleSheet()}>
+            {player ? "Change handle" : "Pick your handle"}
+          </button>
+        )
       )}
       <MyFlagViewer open={viewingFlag} onClose={() => setViewingFlag(false)} />
     </section>

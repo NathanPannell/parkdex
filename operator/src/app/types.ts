@@ -98,4 +98,10 @@ export type SetupItem = { id: string; title: string; status: "done" | "todo" | "
 export type UpdateCheck = { channel: Channel; nativeBuild: number; endpoint: string; status: number; answer: unknown; expected: unknown; matches: boolean };
 
 /** POST /api/app/updates/move */
-export type MoveResult = { outcome: "confirmed" | "cdn_pending"; pointer: BundlePointer; previous: BundlePointer | null; action: OtaPublish["action"]; message: string };
+export type MoveResult = {
+  outcome: "confirmed" | "cdn_pending";
+  pointer: BundlePointer;
+  previous: BundlePointer | null;
+  action: OtaPublish["action"];
+  message: string;
+};

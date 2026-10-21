@@ -6,6 +6,7 @@ import { buzz, sfx } from "../lib/feedback";
 import { GameError, handleProblem, normalizeHandle, type GamePlayer } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
 import { handleFit } from "../lib/game/handleFit";
+import { clearLocalHandle, readLocalFlagSeed, readLocalHandle } from "../lib/game/localHandle";
 import { press, shake } from "../lib/motion";
 import "../game.css";
 import "../game-ui.css";
@@ -34,8 +35,9 @@ export function HandleSheet() {
   const request = game.handleRequest;
   const existing = game.me?.player ?? null;
   // The server sends the account's flag seed before a handle exists, so the flag can show now.
-  const previewSeed = existing?.flagSeed ?? game.me?.flagSeed ?? null;
-  const [value, setValue] = useState(existing?.handle ?? "");
+  // A flag already shown on the map before sign-in is the one the account keeps.
+  const previewSeed = existing?.flagSeed ?? readLocalFlagSeed() ?? game.me?.flagSeed ?? null;
+  const [value, setValue] = useState(existing?.handle ?? readLocalHandle() ?? "");
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,10 +73,12 @@ export function HandleSheet() {
     setError(null);
     try {
       const player = await game.saveHandle(handle);
+      clearLocalHandle();
       sfx.pop();
       buzz([20, 40, 20]);
-      // A first handle reveals the flag; a renamed player already knows theirs.
-      if (existing) finish(player);
+      // A first handle reveals the flag, unless the player is on their way to plant it: the
+      // plant screen shows it going up. A renamed player already knows theirs.
+      if (existing || request?.onDone) finish(player);
       else setRevealed(player);
     } catch (caught) {
       setError(saveErrorMessage(caught, handle));
@@ -104,36 +108,68 @@ export function HandleSheet() {
         </button>
         <AnimatePresence mode="wait" initial={false}>
           {revealed ? (
-            <motion.div key="reveal" className="handle-sheet__body handle-reveal" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <motion.div
+              key="reveal"
+              className="handle-sheet__body handle-reveal"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
               <span className="eyebrow">Your flag</span>
-              <h2 id="handle-title" style={handleFit(revealed.handle)}>Meet your flag, @{revealed.handle}</h2>
-              <motion.div className="handle-reveal__flag" initial={{ scale: 0.3, rotate: -14 }} animate={{ scale: 1, rotate: -3 }} transition={{ type: "spring", stiffness: 260, damping: 13 }}>
+              <h2 id="handle-title" style={handleFit(revealed.handle)}>
+                Meet your flag, @{revealed.handle}
+              </h2>
+              <motion.div
+                className="handle-reveal__flag"
+                initial={{ scale: 0.3, rotate: -14 }}
+                animate={{ scale: 1, rotate: -3 }}
+                transition={{ type: "spring", stiffness: 260, damping: 13 }}
+              >
                 <Flag seed={revealed.flagSeed} size={176} label={`Flag of @${revealed.handle}`} />
               </motion.div>
               <p className="handle-sheet__help">It's yours for good. Everyone sees it on the parks you hold.</p>
               <button className="btn btn--sun btn--block" onClick={() => finish(revealed)}>
-                {request?.onDone ? "Plant your flag" : "Done"}
+                Done
               </button>
             </motion.div>
           ) : (
-            <motion.form key="pick" className="handle-sheet__body" onSubmit={(event) => void submit(event)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -10 }}>
+            <motion.form
+              key="pick"
+              className="handle-sheet__body"
+              onSubmit={(event) => void submit(event)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
               <span className="eyebrow">{existing ? "Your handle" : "Before you plant"}</span>
               <h2 id="handle-title">{existing ? "Change your handle" : "Pick your handle"}</h2>
               <div className="handle-sheet__preview" style={handleFit(handle || "yourname")}>
                 <Flag seed={previewSeed} size={84} label={previewSeed ? "Your flag" : undefined} className={previewSeed ? "is-waving" : undefined} />
                 <span>
-                  <motion.strong key={handle.length} initial={{ scale: 1.08 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 600, damping: 20 }}>@{handle || "yourname"}</motion.strong>
+                  <motion.strong
+                    key={handle.length}
+                    initial={{ scale: 1.08 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 600, damping: 20 }}
+                  >
+                    @{handle || "yourname"}
+                  </motion.strong>
                   <em>{existing ? "Your flag stays the same." : previewSeed ? "This flag comes with it." : "Your flag comes with it."}</em>
                 </span>
               </div>
-              <label className="fb-label" htmlFor="handle-input">Handle</label>
+              <label className="fb-label" htmlFor="handle-input">
+                Handle
+              </label>
               <motion.div className="handle-input" animate={field}>
                 <span aria-hidden="true">@</span>
                 <input
                   id="handle-input"
                   className="fb-input"
                   value={value}
-                  onChange={(event) => { setValue(event.target.value); setError(null); }}
+                  onChange={(event) => {
+                    setValue(event.target.value);
+                    setError(null);
+                  }}
                   onBlur={() => setTouched(true)}
                   maxLength={21}
                   autoComplete="off"
@@ -150,7 +186,11 @@ export function HandleSheet() {
               <p id="handle-help" className={`handle-sheet__help ${touched && problem ? "is-error" : ""}`}>
                 {touched && problem ? problem : "3 to 20 letters, numbers or underscores. Friends see it on the map and the leaderboard."}
               </p>
-              {error && <p className="handle-sheet__error" role="alert">{error}</p>}
+              {error && (
+                <p className="handle-sheet__error" role="alert">
+                  {error}
+                </p>
+              )}
               <motion.button whileTap={press} className="btn btn--sun btn--block" type="submit" disabled={busy || (touched && !!problem)}>
                 {busy ? "Saving…" : existing ? "Save handle" : "Use this handle"}
               </motion.button>

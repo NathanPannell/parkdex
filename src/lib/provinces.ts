@@ -5,9 +5,7 @@ import type { LngLat } from "./geo";
  * Where a player starts: their own position anywhere in a supported province (CONTENT_AREAS),
  * and the Victoria demo spot only when they are outside every one or share no location.
  */
-export type OnboardingStart =
-  | { kind: "located"; point: LngLat }
-  | { kind: "demo"; message: string };
+export type OnboardingStart = { kind: "located"; point: LngLat } | { kind: "demo"; message: string };
 
 export const OUTSIDE_PROVINCES_MESSAGE = "Parkdex is in British Columbia and Nova Scotia for now. Using a demo spot in Victoria.";
 export const NO_LOCATION_MESSAGE = "No location, no problem. Using a demo spot in Victoria.";

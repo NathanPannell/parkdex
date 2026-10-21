@@ -53,12 +53,15 @@ describe("product analytics", () => {
     await startProductAnalytics({ key: KEY, host: "https://us.i.posthog.com" }, load);
     await startProductAnalytics({ key: "phc_otherKey1234567890", host: "https://eu.i.posthog.com" }, load);
     expect(load).toHaveBeenCalledTimes(1);
-    expect(sdk.init).toHaveBeenCalledWith(KEY, expect.objectContaining({
-      api_host: "https://us.i.posthog.com",
-      person_profiles: "identified_only",
-      autocapture: true,
-      bootstrap: { distinctID: INSTALLATION },
-    }));
+    expect(sdk.init).toHaveBeenCalledWith(
+      KEY,
+      expect.objectContaining({
+        api_host: "https://us.i.posthog.com",
+        person_profiles: "identified_only",
+        autocapture: true,
+        bootstrap: { distinctID: INSTALLATION },
+      }),
+    );
     expect(sdk.register).toHaveBeenCalledWith(expect.objectContaining({ environment: "production", app_version: "0.1.0", bundle_id: "abc1234" }));
   });
 
@@ -82,7 +85,11 @@ describe("product analytics", () => {
   });
 
   it("a failing SDK load leaves the app unaffected", async () => {
-    await expect(startProductAnalytics({ key: KEY, host: "https://us.i.posthog.com" }, async () => { throw new Error("offline"); })).resolves.toBeUndefined();
+    await expect(
+      startProductAnalytics({ key: KEY, host: "https://us.i.posthog.com" }, async () => {
+        throw new Error("offline");
+      }),
+    ).resolves.toBeUndefined();
     expect(() => setProductAnalyticsAccount(ACCOUNT)).not.toThrow();
   });
 });

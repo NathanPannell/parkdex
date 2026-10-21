@@ -35,10 +35,17 @@ class ParkVisibilityPlanTests(unittest.TestCase):
         plan = visibility.build_plan("hide", ["community", "municipal"], "Less dense map.", IDENTITY, STATE)
         self.assertEqual(plan["parkIds"], ["municipal-a", "municipal-b", "community-a"])
         self.assertEqual(plan["exemptPlayerProposals"], ["osm-way-1"])
-        self.assertEqual(plan["counts"]["municipal"], {
-            "parks": 4, "change": 2, "changeServedToReaders1And2": 1, "keptVisibleAsPlayerProposals": 1, "alreadyHidden": 1,
-            "keptVisibleBelowReaderFloor": 0,
-        })
+        self.assertEqual(
+            plan["counts"]["municipal"],
+            {
+                "parks": 4,
+                "change": 2,
+                "changeServedToReaders1And2": 1,
+                "keptVisibleAsPlayerProposals": 1,
+                "alreadyHidden": 1,
+                "keptVisibleBelowReaderFloor": 0,
+            },
+        )
         self.assertEqual(plan["planSha256"], visibility.plan_digest(plan))
 
     def test_reader_floor_scope_hides_only_parks_newer_readers_get(self):

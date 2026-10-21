@@ -1,7 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_BACKUP_PHOTO_BYTES } from "./accounts/photoBackupRendition";
 import { largestCrop, PARK_COVER_ASPECT } from "./photoCrop";
-import { base64Bytes, encodePhoto, fitWithin, jpegBase64, MAX_ORIGINAL_EDGE, MAX_PHOTO_BYTES, MAX_PHOTO_EDGE, ORIGINAL_QUALITY, originalFromBlob, PHOTO_QUALITY, prepareOriginal } from "./photoEncode";
+import {
+  base64Bytes,
+  encodePhoto,
+  fitWithin,
+  jpegBase64,
+  MAX_ORIGINAL_EDGE,
+  MAX_PHOTO_BYTES,
+  MAX_PHOTO_EDGE,
+  ORIGINAL_QUALITY,
+  originalFromBlob,
+  PHOTO_QUALITY,
+  prepareOriginal,
+} from "./photoEncode";
 
 describe("fitWithin", () => {
   it("scales the long edge down to 1,280 px and keeps the shape", () => {
@@ -87,7 +99,9 @@ describe("encoding applies the crop", () => {
 
   it("keeps the upload size limit for a 16:9 cover too", () => {
     installCanvas(MAX_PHOTO_BYTES + 1);
-    expect(() => encodePhoto({ source, width: 2048, height: 1536 }, { crop: largestCrop(2048, 1536, PARK_COVER_ASPECT), aspect: PARK_COVER_ASPECT })).toThrow(/too large/);
+    expect(() => encodePhoto({ source, width: 2048, height: 1536 }, { crop: largestCrop(2048, 1536, PARK_COVER_ASPECT), aspect: PARK_COVER_ASPECT })).toThrow(
+      /too large/,
+    );
   });
 
   it("keeps the upload size limit: steps quality down, then refuses", () => {
@@ -129,10 +143,13 @@ describe("a photo from the browser's camera capture", () => {
     const bitmapOptions: unknown[] = [];
     const transforms: unknown[] = [];
     const sizes: Array<[number, number]> = [];
-    vi.stubGlobal("createImageBitmap", vi.fn(async (_blob: Blob, options: unknown) => {
-      bitmapOptions.push(options);
-      return { ...decoded, close: vi.fn() };
-    }));
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async (_blob: Blob, options: unknown) => {
+        bitmapOptions.push(options);
+        return { ...decoded, close: vi.fn() };
+      }),
+    );
     vi.stubGlobal("document", {
       createElement: vi.fn(() => {
         const canvas = {

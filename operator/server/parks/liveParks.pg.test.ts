@@ -8,7 +8,15 @@ import { createSqlLiveParkStore, type LivePark, type LiveParkStore } from "./liv
 // Runs live park edits against the real content triggers. Point OPERATOR_PARKS_TEST_DATABASE_URL
 // at a disposable loopback database named kip_qa_* (separate from the drafts test database).
 const DSN = process.env.OPERATOR_PARKS_TEST_DATABASE_URL;
-const square = (x: number): [number, number][][] => [[[x, 48.4], [x + 0.01, 48.4], [x + 0.01, 48.41], [x, 48.41], [x, 48.4]]];
+const square = (x: number): [number, number][][] => [
+  [
+    [x, 48.4],
+    [x + 0.01, 48.4],
+    [x + 0.01, 48.41],
+    [x, 48.41],
+    [x, 48.4],
+  ],
+];
 
 let pool: import("pg").Pool;
 let parks: LiveParkStore;
@@ -38,7 +46,10 @@ async function current(): Promise<LivePark> {
 
 test("live parks read back with their boundary and region list", { skip: !DSN }, async () => {
   const listed = await parks.list();
-  assert.deepEqual(listed.map((park) => park.id), ["regional-thetis-lake"]);
+  assert.deepEqual(
+    listed.map((park) => park.id),
+    ["regional-thetis-lake"],
+  );
   const park = await parks.get("regional-thetis-lake");
   assert.equal(park?.geometry?.coordinates.length, 2);
   assert.deepEqual(await parks.regions(), ["Capital Region"]);
@@ -47,10 +58,19 @@ test("live parks read back with their boundary and region list", { skip: !DSN },
 test("a text and pin edit is one content revision and leaves the boundary alone", { skip: !DSN }, async () => {
   const before = await revision();
   const boundaryBefore = (await pool.query("SELECT feature FROM public.boundaries WHERE park_id = 'regional-thetis-lake'")).rows[0].feature;
-  const result = await parks.update("regional-thetis-lake", await current(), { name: "Thetis Lake Park", blurb: "Two lakes.", rarity: "rare", lat: 48.481, lng: -123.468 });
+  const result = await parks.update("regional-thetis-lake", await current(), {
+    name: "Thetis Lake Park",
+    blurb: "Two lakes.",
+    rarity: "rare",
+    lat: 48.481,
+    lng: -123.468,
+  });
   assert.equal(result, before + 1);
   const row = (await pool.query("SELECT name, blurb, rarity, lat, lng FROM public.parks WHERE id = 'regional-thetis-lake'")).rows[0];
-  assert.deepEqual({ ...row, lat: Number(row.lat), lng: Number(row.lng) }, { name: "Thetis Lake Park", blurb: "Two lakes.", rarity: "rare", lat: 48.481, lng: -123.468 });
+  assert.deepEqual(
+    { ...row, lat: Number(row.lat), lng: Number(row.lng) },
+    { name: "Thetis Lake Park", blurb: "Two lakes.", rarity: "rare", lat: 48.481, lng: -123.468 },
+  );
   assert.deepEqual((await pool.query("SELECT feature FROM public.boundaries WHERE park_id = 'regional-thetis-lake'")).rows[0].feature, boundaryBefore);
 });
 
@@ -83,7 +103,18 @@ test("a stale edit is refused and changes nothing", { skip: !DSN }, async () => 
 
 test("an invalid boundary is rolled back by the content checks", { skip: !DSN }, async () => {
   const before = await revision();
-  const broken: MultiPolygon = { type: "MultiPolygon", coordinates: [[[[-123.5, 48.4], [-123.49, 48.4], [-123.5, 48.4]]]] };
+  const broken: MultiPolygon = {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [-123.5, 48.4],
+          [-123.49, 48.4],
+          [-123.5, 48.4],
+        ],
+      ],
+    ],
+  };
   await assert.rejects(parks.update("regional-thetis-lake", await current(), { geometry: broken }));
   assert.equal(await revision(), before);
 });

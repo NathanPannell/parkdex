@@ -38,14 +38,16 @@ async function fixture(scene: string, sceneBytes: ArrayBuffer): Promise<Fixture>
     ["map/island/000.bin", bytes("x")],
     ["map/fonts/Test Font/0-255.pbf", bytes("font")],
   ]);
-  const inventoryFiles = await Promise.all([...contents].map(async ([path, content]) => ({
-    path,
-    byte_size: content.byteLength,
-    sha256: await sha256Hex(content),
-  })));
+  const inventoryFiles = await Promise.all(
+    [...contents].map(async ([path, content]) => ({
+      path,
+      byte_size: content.byteLength,
+      sha256: await sha256Hex(content),
+    })),
+  );
   const inventory = inventoryFiles
     .map(({ path, byte_size, sha256 }) => ({ byte_size, path, sha256 }))
-    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   const releaseId = await sha256Hex(bytes(JSON.stringify(inventory)));
   const files = inventoryFiles.map(({ path, byte_size, sha256 }) => ({
     path,
@@ -221,19 +223,27 @@ describe("restoreArchivedScene", () => {
     }) as unknown as typeof fetch;
     await expect(restoreArchivedScene(archive.releaseId, "coast-a", store, redirectingFetch)).rejects.toThrow(/redirected/);
 
-    const oversizedFetch = vi.fn(async () => new Response("{}", {
-      status: 200,
-      headers: { "content-type": "application/json", "content-length": String(2 * 1024 * 1024 + 1) },
-    })) as unknown as typeof fetch;
+    const oversizedFetch = vi.fn(
+      async () =>
+        new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json", "content-length": String(2 * 1024 * 1024 + 1) },
+        }),
+    ) as unknown as typeof fetch;
     await expect(restoreArchivedScene(archive.releaseId, "coast-a", store, oversizedFetch)).rejects.toThrow(/exceeds the permitted size/);
 
-    const oversizedStreamFetch = vi.fn(async () => new Response(new Uint8Array(2 * 1024 * 1024 + 1), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    })) as unknown as typeof fetch;
+    const oversizedStreamFetch = vi.fn(
+      async () =>
+        new Response(new Uint8Array(2 * 1024 * 1024 + 1), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ) as unknown as typeof fetch;
     await expect(restoreArchivedScene(archive.releaseId, "coast-a", store, oversizedStreamFetch)).rejects.toThrow(/exceeds the permitted size/);
 
-    const malformedFetch = vi.fn(async () => responseFor(JSON.stringify({ ...archive.manifest, cdnOrigin: "https://evil.example" }), "application/json")) as unknown as typeof fetch;
+    const malformedFetch = vi.fn(async () =>
+      responseFor(JSON.stringify({ ...archive.manifest, cdnOrigin: "https://evil.example" }), "application/json"),
+    ) as unknown as typeof fetch;
     await expect(restoreArchivedScene(archive.releaseId, "coast-a", store, malformedFetch)).rejects.toThrow(/CDN origin/);
     expect(await store.listArchivedScenes()).toEqual([]);
   });
@@ -241,8 +251,9 @@ describe("restoreArchivedScene", () => {
   it("repairs a pinned descriptor whose bytes were lost before an interrupted restore", async () => {
     const archive = await fixture("coast-a", imageBytes("recovered"));
     const fetcher = fetchArchive(archive);
-    const file = (archive.manifest.files as { path: string; key: string; url: string; sha256: string; byte_size: number; content_type: string }[])
-      .find((entry) => entry.path === archive.scenePath)!;
+    const file = (archive.manifest.files as { path: string; key: string; url: string; sha256: string; byte_size: number; content_type: string }[]).find(
+      (entry) => entry.path === archive.scenePath,
+    )!;
     await store.retainArchivedScene({ releaseId: archive.releaseId, scene: "coast-a", file });
     expect(await store.getArchivedScene(archive.releaseId, "coast-a")).toBeDefined();
 

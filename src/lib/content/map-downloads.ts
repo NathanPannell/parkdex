@@ -1,12 +1,6 @@
 import { findTile, PMTiles, zxyToTileId } from "pmtiles";
 import { mapFolder, type ContentRuntime, type ContentSnapshot, type MapPoint } from "./contracts";
-import {
-  getAllowedMapChunks,
-  getRegisteredMapSnapshot,
-  mapChunkPath,
-  RuntimeChunkSource,
-  setAllowedMapChunks,
-} from "../offlineTiles";
+import { getAllowedMapChunks, getRegisteredMapSnapshot, mapChunkPath, RuntimeChunkSource, setAllowedMapChunks } from "../offlineTiles";
 
 const VIEWPORT_WIDTH = 390;
 const VIEWPORT_HEIGHT = 844;
@@ -211,7 +205,10 @@ async function chunksForTileIdRanges(
 }
 
 function cellsBounds(cells: Tile[]): MapBounds {
-  let west = 180, south = 90, east = -180, north = -90;
+  let west = 180,
+    south = 90,
+    east = -180,
+    north = -90;
   for (const { z, x, y } of cells) {
     const scale = 2 ** z;
     west = Math.min(west, (x / scale) * 360 - 180);
@@ -222,11 +219,7 @@ function cellsBounds(cells: Tile[]): MapBounds {
   return [west, south, east, north];
 }
 
-function readySnapshot(
-  runtime: ContentRuntime,
-  releaseId: string,
-  snapshotOverride?: ContentSnapshot,
-): ContentSnapshot {
+function readySnapshot(runtime: ContentRuntime, releaseId: string, snapshotOverride?: ContentSnapshot): ContentSnapshot {
   if (snapshotOverride) {
     if (snapshotOverride.releaseId !== releaseId) throw new Error(`Content snapshot ${releaseId} does not match the requested release`);
     return snapshotOverride;
@@ -254,10 +247,10 @@ function addViewportTiles(tiles: Map<string, Tile>, point: MapPoint, zoom: numbe
   const worldScale = 2 ** zoom;
   const halfWidth = (VIEWPORT_WIDTH * viewportScale) / (TILE_SIZE * 2 ** (START_ZOOM - zoom)) / 2;
   const halfHeight = (VIEWPORT_HEIGHT * viewportScale) / (TILE_SIZE * 2 ** (START_ZOOM - zoom)) / 2;
-  const minX = Math.floor((centerX * worldScale) - halfWidth);
-  const maxX = Math.floor((centerX * worldScale) + halfWidth);
-  const minY = Math.floor((centerY * worldScale) - halfHeight);
-  const maxY = Math.floor((centerY * worldScale) + halfHeight);
+  const minX = Math.floor(centerX * worldScale - halfWidth);
+  const maxX = Math.floor(centerX * worldScale + halfWidth);
+  const minY = Math.floor(centerY * worldScale - halfHeight);
+  const maxY = Math.floor(centerY * worldScale + halfHeight);
   for (let x = minX; x <= maxX; x += 1) {
     for (let y = minY; y <= maxY; y += 1) {
       addTileIfInBounds(tiles, zoom, x, y);

@@ -317,7 +317,9 @@
 
 /* Nearby cards for your own parks wear a gold ring. */
 .nearby__card.is-mine {
-  box-shadow: 0 0 0 3px var(--sun), var(--pop);
+  box-shadow:
+    0 0 0 3px var(--sun),
+    var(--pop);
 }
 
 /* The text block stays a column when a bounty chip follows it. */
@@ -338,4 +340,41 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ---------- A player tapped on the leaderboard ---------- */
+
+.player-sheet__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.player-sheet__stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  padding: 10px 8px;
+  border: 2.5px solid var(--ink);
+  border-radius: var(--r-md);
+  background: var(--paper-2);
+}
+
+.player-sheet__stats dt {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.player-sheet__stats dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.player-sheet__friend {
+  margin: 0;
 }

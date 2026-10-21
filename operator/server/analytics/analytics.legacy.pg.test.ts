@@ -10,9 +10,9 @@ import { createSqlAnalyticsStore } from "./store.ts";
 import type { AccountRow, AnalyticsStore } from "./types.ts";
 
 // Production can run a release behind staging. This database gets every deploy migration except
-// founders_001 to founders_003 (so no kip_founders schema), like production before the founders release, and
-// the analytics pages must still load. Point OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL at a
-// fresh loopback database named kip_qa_*.
+// founders_001 to founders_003 (so no kip_founders schema) and the game migrations that build on
+// them, like production before the founders release, and the analytics pages must still load.
+// Point OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL at a fresh loopback database named kip_qa_*.
 const DSN = process.env.OPERATOR_ANALYTICS_LEGACY_TEST_DATABASE_URL;
 const ROOT = new URL("../../../", import.meta.url);
 const ORIGIN = "https://operator.example.test";
@@ -23,6 +23,14 @@ const FOUNDER_REVIEWS = "database/migrations/founders_002_reviews.sql";
 const PARK_REMOVED = "database/migrations/founders_003_park_removed.sql";
 // Hourly points (#169) build on founders_001, so a database without founders predates them too.
 const GAME_POINTS = "database/migrations/game_002_points.sql";
+// Crews (#170) read game_002's day_bonus, and badges (#175) call crews' kip_game.holdings, so neither
+// can apply without hourly points either.
+const GAME_CREWS = "database/migrations/game_003_crews.sql";
+const GAME_BADGES = "database/migrations/game_004_badges.sql";
+// Adding crewmates as friends reads crews' crew_members, so it cannot apply without crews either.
+const CREWMATES = "database/migrations/social_002_crewmates.sql";
+const RECENT_CREWMATES = "database/migrations/social_003_recent_crewmates.sql";
+const NOT_YET_DEPLOYED = new Set([FOUNDERS, FOUNDER_REVIEWS, PARK_REMOVED, GAME_POINTS, GAME_CREWS, GAME_BADGES, CREWMATES, RECENT_CREWMATES]);
 
 let pool: import("pg").Pool;
 let runner: SqlRunner;
@@ -33,7 +41,13 @@ const ids = { ada: randomUUID(), ben: randomUUID() };
 
 async function inventory(): Promise<string[]> {
   const config = JSON.parse(await readFile(new URL("deployment.json", ROOT), "utf8"));
-  return [config.migrationPath, ...config.contentSync.supportingMigrationPaths, ...config.optionalMigrationPaths, ...config.contentSync.migrationPaths, ...config.independentMigrationPaths];
+  return [
+    config.migrationPath,
+    ...config.contentSync.supportingMigrationPaths,
+    ...config.optionalMigrationPaths,
+    ...config.contentSync.migrationPaths,
+    ...config.independentMigrationPaths,
+  ];
 }
 
 async function account(id: string, email: string, createdAt: string, handle: string) {
@@ -47,7 +61,7 @@ async function account(id: string, email: string, createdAt: string, handle: str
 
 before(async () => {
   if (!DSN) return;
-  const migrations = (await inventory()).filter((file) => file !== FOUNDERS && file !== FOUNDER_REVIEWS && file !== PARK_REMOVED && file !== GAME_POINTS);
+  const migrations = (await inventory()).filter((file) => !NOT_YET_DEPLOYED.has(file));
   const opened = await openTestDatabase(DSN, migrations);
   pool = opened.pool;
   runner = opened.runner;
@@ -83,7 +97,14 @@ test("the overview loads without founder tiles and says why", { skip: !DSN }, as
   const api = createDashboardApi({ analyticsStore: () => store });
   const response = await api(new Request(`${ORIGIN}/api/analytics/overview?days=30`), { DATABASE_URL: DSN });
   assert.equal(response.status, 200);
-  const { overview } = await response.json() as { overview: Record<string, unknown> & { accounts: { total: number }; visits: { planted: { current: number }; took: { current: number } }; series: { foundings: unknown; took: number[] }; players: { week: { current: number } } } };
+  const { overview } = (await response.json()) as {
+    overview: Record<string, unknown> & {
+      accounts: { total: number };
+      visits: { planted: { current: number }; took: { current: number } };
+      series: { foundings: unknown; took: number[] };
+      players: { week: { current: number } };
+    };
+  };
   assert.equal(overview.accounts.total, 2);
   assert.deepEqual([overview.visits.planted.current, overview.visits.took.current], [1, 1]);
   assert.equal(overview.players.week.current, 1);
@@ -91,7 +112,10 @@ test("the overview loads without founder tiles and says why", { skip: !DSN }, as
   assert.equal(overview.photoChecks, null);
   assert.deepEqual(overview.rejectionFlags, []);
   assert.equal(overview.series.foundings, null);
-  assert.equal(overview.series.took.reduce((sum, value) => sum + value, 0), 1);
+  assert.equal(
+    overview.series.took.reduce((sum, value) => sum + value, 0),
+    1,
+  );
   assert.deepEqual(overview.unavailable, ["founders not deployed"]);
 });
 
@@ -99,7 +123,7 @@ test("accounts and events load, with scores from game_001 and no founded count",
   const api = createDashboardApi({ analyticsStore: () => store });
   const list = await api(new Request(`${ORIGIN}/api/analytics/accounts`), { DATABASE_URL: DSN });
   assert.equal(list.status, 200);
-  const { accounts, unavailable } = await list.json() as { accounts: AccountRow[]; unavailable: string[] };
+  const { accounts, unavailable } = (await list.json()) as { accounts: AccountRow[]; unavailable: string[] };
   assert.deepEqual(unavailable, ["founders not deployed"]);
   const scores = (await pool.query("SELECT account_id::text, score, parks_held FROM kip_game.player_scores($1)", [now.toISOString()])).rows;
   for (const score of scores) {
@@ -111,8 +135,11 @@ test("accounts and events load, with scores from game_001 and no founded count",
   assert.equal(((await detail.json()) as { account: { founded: unknown } }).account.founded, null);
   const events = await api(new Request(`${ORIGIN}/api/analytics/events?from=${encodeURIComponent(ago(30 * DAY))}`), { DATABASE_URL: DSN });
   assert.equal(events.status, 200);
-  const page = await events.json() as { events: { type: string }[]; unavailable: string[] };
-  assert.deepEqual(page.events.map((event) => event.type), ["flag_taken"]);
+  const page = (await events.json()) as { events: { type: string }[]; unavailable: string[] };
+  assert.deepEqual(
+    page.events.map((event) => event.type),
+    ["flag_taken"],
+  );
   assert.deepEqual(page.unavailable, ["founders not deployed"]);
 });
 

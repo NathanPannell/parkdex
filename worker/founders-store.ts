@@ -102,7 +102,7 @@ function iso(value: unknown): string {
 }
 
 function jsonValue(value: unknown): unknown {
-  return typeof value === "string" ? JSON.parse(value) as unknown : value;
+  return typeof value === "string" ? (JSON.parse(value) as unknown) : value;
 }
 
 function textArray(value: unknown): string[] {
@@ -117,7 +117,7 @@ function missingRelation(error: unknown): boolean {
 }
 
 export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersStore {
-  const rows = async (text: string, params: unknown[]) => await sql.query(text, params) as Array<Record<string, unknown>>;
+  const rows = async (text: string, params: unknown[]) => (await sql.query(text, params)) as Array<Record<string, unknown>>;
 
   async function founders(parkIds: string[]): Promise<Map<string, FounderInfo>> {
     if (!parkIds.length) return new Map();
@@ -129,11 +129,16 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
          WHERE f.park_id = ANY($1::text[])`,
         [[...new Set(parkIds)]],
       );
-      return new Map(found.map((row) => [String(row.park_id), {
-        handle: row.handle === null || row.handle === undefined ? null : String(row.handle),
-        foundedAt: iso(row.founded_at),
-        photoSha256: String(row.photo_sha256),
-      }]));
+      return new Map(
+        found.map((row) => [
+          String(row.park_id),
+          {
+            handle: row.handle === null || row.handle === undefined ? null : String(row.handle),
+            foundedAt: iso(row.founded_at),
+            photoSha256: String(row.photo_sha256),
+          },
+        ]),
+      );
     } catch (error) {
       // A database without founders_001 has no founders.
       if (missingRelation(error)) return new Map();
@@ -150,13 +155,20 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
          WHERE p.id = ANY($1::text[])`,
         [[...new Set(parkIds)]],
       );
-      return new Map(found.map((row) => {
-        const geometry = jsonValue(row.geometry) as MultiPolygon | null;
-        return [String(row.id), {
-          id: String(row.id), name: String(row.name), category: String(row.category ?? "park"),
-          boundary: geometry && geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates) && geometry.coordinates.length ? geometry : null,
-        }];
-      }));
+      return new Map(
+        found.map((row) => {
+          const geometry = jsonValue(row.geometry) as MultiPolygon | null;
+          return [
+            String(row.id),
+            {
+              id: String(row.id),
+              name: String(row.name),
+              category: String(row.category ?? "park"),
+              boundary: geometry && geometry.type === "MultiPolygon" && Array.isArray(geometry.coordinates) && geometry.coordinates.length ? geometry : null,
+            },
+          ];
+        }),
+      );
     },
 
     async hidden(parkIds) {
@@ -206,20 +218,30 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
       const row = founded[0];
       const visit = row ? jsonValue(row.visit) : null;
       // The badges the founding unlocked (#175), for a replay. None before game_004_badges.sql.
-      const badges = row ? await rows("SELECT kip_game.visit_badges($1::uuid, $2::uuid) AS badges", [accountId, visitId])
-        .then((found) => badgeUnlocksFromJson(jsonValue(found[0]?.badges)))
-        .catch(() => []) : [];
+      const badges = row
+        ? await rows("SELECT kip_game.visit_badges($1::uuid, $2::uuid) AS badges", [accountId, visitId])
+            .then((found) => badgeUnlocksFromJson(jsonValue(found[0]?.badges)))
+            .catch(() => [])
+        : [];
       return {
-        founded: row ? {
-          parkId: String(row.park_id), parkName: String(row.name), photoSha256: String(row.photo_sha256),
-          founderPoints: Number(row.founder_points), visit: visit ? visitFromJson(visit) : null, badges,
-        } : null,
-        check: checks[0] ? {
-          outcome: String(checks[0].outcome) as CheckRecord["outcome"],
-          flags: textArray(checks[0].flags),
-          photoSha256: String(checks[0].photo_sha256),
-          keptAt: checks[0].kept_at === null || checks[0].kept_at === undefined ? null : iso(checks[0].kept_at),
-        } : null,
+        founded: row
+          ? {
+              parkId: String(row.park_id),
+              parkName: String(row.name),
+              photoSha256: String(row.photo_sha256),
+              founderPoints: Number(row.founder_points),
+              visit: visit ? visitFromJson(visit) : null,
+              badges,
+            }
+          : null,
+        check: checks[0]
+          ? {
+              outcome: String(checks[0].outcome) as CheckRecord["outcome"],
+              flags: textArray(checks[0].flags),
+              photoSha256: String(checks[0].photo_sha256),
+              keptAt: checks[0].kept_at === null || checks[0].kept_at === undefined ? null : iso(checks[0].kept_at),
+            }
+          : null,
       };
     },
 
@@ -227,21 +249,48 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
       const check = {
         text: `INSERT INTO kip_founders.photo_checks (id, account_id, attempt_id, park_id, osm_type, osm_id, created_at, outcome, flags, photo_sha256, moderation)
           VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::timestamptz, $8, $9::text[], $10, $11::jsonb)`,
-        params: [input.id, input.accountId, input.attemptId, input.parkId, input.osm?.type ?? null, input.osm?.id ?? null, input.at,
-          input.outcome, input.flags, input.photoSha256, input.moderation ? JSON.stringify(input.moderation) : null],
+        params: [
+          input.id,
+          input.accountId,
+          input.attemptId,
+          input.parkId,
+          input.osm?.type ?? null,
+          input.osm?.id ?? null,
+          input.at,
+          input.outcome,
+          input.flags,
+          input.photoSha256,
+          input.moderation ? JSON.stringify(input.moderation) : null,
+        ],
       };
       if (!input.keep) {
         await rows(check.text, check.params);
         return;
       }
       const { keep } = input;
-      await db.transaction([check, {
-        text: `INSERT INTO kip_founders.check_photos (check_id, account_id, attempt_id, created_at, park_name, osm_feature, latitude, longitude, accuracy_m,
+      await db.transaction([
+        check,
+        {
+          text: `INSERT INTO kip_founders.check_photos (check_id, account_id, attempt_id, created_at, park_name, osm_feature, latitude, longitude, accuracy_m,
             photo_sha256, photo_bytes, photo_width, photo_height)
           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::timestamptz, $5, $6::jsonb, $7, $8, $9, $10, decode($11, 'base64'), $12, $13)`,
-        params: [input.id, input.accountId, input.attemptId, input.at, keep.parkName.slice(0, 200), keep.osmFeature ? JSON.stringify(keep.osmFeature) : null,
-          keep.position.lat, keep.position.lng, keep.position.accuracyM, keep.photo.sha256, keep.photo.base64, keep.photo.width, keep.photo.height],
-      }]);
+          params: [
+            input.id,
+            input.accountId,
+            input.attemptId,
+            input.at,
+            keep.parkName.slice(0, 200),
+            keep.osmFeature ? JSON.stringify(keep.osmFeature) : null,
+            keep.position.lat,
+            keep.position.lng,
+            keep.position.accuracyM,
+            keep.photo.sha256,
+            keep.photo.base64,
+            keep.photo.width,
+            keep.photo.height,
+          ],
+        },
+      ]);
     },
 
     async foundOsm(input) {
@@ -256,10 +305,10 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
 
     async cover(parkId, sha256) {
       try {
-        const found = await rows(
-          "SELECT encode(photo_bytes, 'base64') AS photo FROM kip_founders.parks WHERE park_id = $1 AND photo_sha256 = $2",
-          [parkId, sha256],
-        );
+        const found = await rows("SELECT encode(photo_bytes, 'base64') AS photo FROM kip_founders.parks WHERE park_id = $1 AND photo_sha256 = $2", [
+          parkId,
+          sha256,
+        ]);
         return found[0] ? new Uint8Array(Buffer.from(String(found[0].photo), "base64")) : null;
       } catch (error) {
         if (missingRelation(error)) return null;
@@ -302,13 +351,15 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
       const check = checks[0];
       return {
         request: requests[0] ? { id: String(requests[0].id), status: String(requests[0].status) as ReviewStatus } : null,
-        check: check ? {
-          outcome: String(check.outcome) as CheckRecord["outcome"],
-          flags: textArray(check.flags),
-          parkId: String(check.park_id),
-          osm: check.osm_type ? { type: String(check.osm_type), id: Number(check.osm_id) } : null,
-          kept: check.kept === true,
-        } : null,
+        check: check
+          ? {
+              outcome: String(check.outcome) as CheckRecord["outcome"],
+              flags: textArray(check.flags),
+              parkId: String(check.park_id),
+              osm: check.osm_type ? { type: String(check.osm_type), id: Number(check.osm_id) } : null,
+              kept: check.kept === true,
+            }
+          : null,
       };
     },
 
@@ -319,13 +370,23 @@ export function createSqlFoundersStore(sql: SqlClient, db: SqlRunner): FoundersS
           // One account's requests are counted and checked one at a time.
           { text: "SELECT pg_advisory_xact_lock(hashtextextended('kip_founders.review:' || $1, 0))", params: [input.accountId] },
           guard("NOT EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE attempt_id = $1::uuid)", "review_exists", [input.attemptId]),
-          guard("EXISTS (SELECT 1 FROM kip_founders.check_photos WHERE account_id = $1::uuid AND attempt_id = $2::uuid)", "review_expired", [input.accountId, input.attemptId]),
+          guard("EXISTS (SELECT 1 FROM kip_founders.check_photos WHERE account_id = $1::uuid AND attempt_id = $2::uuid)", "review_expired", [
+            input.accountId,
+            input.attemptId,
+          ]),
           guard("NOT EXISTS (SELECT 1 FROM kip_founders.parks WHERE park_id = $1)", "already_founded", [input.parkId]),
-          guard("NOT EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE account_id = $1::uuid AND park_id = $2 AND status = 'pending')", "review_pending", [input.accountId, input.parkId]),
+          guard(
+            "NOT EXISTS (SELECT 1 FROM kip_founders.review_requests WHERE account_id = $1::uuid AND park_id = $2 AND status = 'pending')",
+            "review_pending",
+            [input.accountId, input.parkId],
+          ),
           // Requests since the start of today in Victoria.
-          guard(`(SELECT count(*) FROM kip_founders.review_requests WHERE account_id = $1::uuid
-              AND created_at >= (kip_game.local_day($2::timestamptz)::timestamp AT TIME ZONE 'America/Vancouver')) < $3`, "review_limit",
-          [input.accountId, input.at, input.perDay]),
+          guard(
+            `(SELECT count(*) FROM kip_founders.review_requests WHERE account_id = $1::uuid
+              AND created_at >= (kip_game.local_day($2::timestamptz)::timestamp AT TIME ZONE 'America/Vancouver')) < $3`,
+            "review_limit",
+            [input.accountId, input.at, input.perDay],
+          ),
           {
             text: `INSERT INTO kip_founders.review_requests (id, account_id, attempt_id, check_id, park_id, osm_type, osm_id, park_name, osm_feature,
                 latitude, longitude, accuracy_m, photo_bytes, photo_sha256, photo_width, photo_height, outcome, flags, moderation, checked_at, created_at)

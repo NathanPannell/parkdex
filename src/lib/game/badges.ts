@@ -130,7 +130,7 @@ export function readSeenBadges(accountId: string): Set<string> {
 export function markBadgesSeen(accountId: string, ids: Iterable<string>): void {
   try {
     const parsed: unknown = JSON.parse(storage()?.getItem(SEEN_KEY) ?? "null");
-    const all = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    const all = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
     const next = new Set([...readSeenBadges(accountId), ...ids]);
     storage()?.setItem(SEEN_KEY, JSON.stringify({ ...all, [accountId]: [...next] }));
   } catch {

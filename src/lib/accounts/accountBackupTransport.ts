@@ -1,10 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import {
-  abortNativeAccountBackupRequest,
-  getContentConnectivity,
-  nativeAccountBackupRequest,
-  subscribeContentConnectivity,
-} from "../content/transport";
+import { abortNativeAccountBackupRequest, getContentConnectivity, nativeAccountBackupRequest, subscribeContentConnectivity } from "../content/transport";
 import { isAccountBackupAvailable, mapAccountBackupConnectivity } from "./accountBackupConnectivity";
 import { isDevLoopbackHttp } from "../userDataDestination";
 
@@ -34,15 +29,29 @@ export function assertAccountBackupRequest(url: URL, method: string, approvedApi
   try {
     const configured = new URL(approvedApiOrigin);
     devLoopback = isDevLoopbackHttp(configured) && !configured.search && !configured.hash && ["", "/"].includes(configured.pathname);
-    if ((configured.protocol !== "https:" && !devLoopback) || configured.username || configured.password || configured.search || configured.hash ||
-        (configured.port && configured.port !== "443" && !devLoopback) || !["", "/"].includes(configured.pathname)) throw new Error();
+    if (
+      (configured.protocol !== "https:" && !devLoopback) ||
+      configured.username ||
+      configured.password ||
+      configured.search ||
+      configured.hash ||
+      (configured.port && configured.port !== "443" && !devLoopback) ||
+      !["", "/"].includes(configured.pathname)
+    )
+      throw new Error();
     apiOrigin = configured.origin;
   } catch {
     throw new Error("Account backup requires a configured HTTPS API origin.");
   }
 
-  if ((url.protocol !== "https:" && !devLoopback) || url.origin !== apiOrigin || url.username || url.password || url.href.includes("#") ||
-      (url.port && url.port !== "443" && !devLoopback)) {
+  if (
+    (url.protocol !== "https:" && !devLoopback) ||
+    url.origin !== apiOrigin ||
+    url.username ||
+    url.password ||
+    url.href.includes("#") ||
+    (url.port && url.port !== "443" && !devLoopback)
+  ) {
     throw new Error("Account backup must use the configured HTTPS account API.");
   }
 
@@ -82,11 +91,7 @@ export function assertAccountBackupRequest(url: URL, method: string, approvedApi
 }
 
 /** Route account claims and private photos through the platform's account backup policy. */
-export async function accountBackupFetch(
-  input: RequestInfo | URL,
-  init: RequestInit,
-  approvedApiOrigin: string,
-): Promise<Response> {
+export async function accountBackupFetch(input: RequestInfo | URL, init: RequestInit, approvedApiOrigin: string): Promise<Response> {
   const sourceRequest = typeof Request !== "undefined" && input instanceof Request ? input : undefined;
   const rawUrl = sourceRequest?.url ?? String(input);
   const url = new URL(rawUrl, approvedApiOrigin);
@@ -112,21 +117,16 @@ export async function accountBackupFetch(
 function assertAccountBackupContentType(headers: Headers, route: RouteKind, method: string): void {
   if (method !== "PUT") return;
   const contentType = headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
-  const allowed = route === "claim" || route === "display" ? contentType === "application/json" :
-    ["image/jpeg", "image/png", "image/webp"].includes(contentType ?? "");
+  const allowed =
+    route === "claim" || route === "display" ? contentType === "application/json" : ["image/jpeg", "image/png", "image/webp"].includes(contentType ?? "");
   if (!allowed) throw new TypeError("The account backup content type is not approved for this route.");
 }
 
-async function readRequestBody(
-  input: RequestInfo | URL,
-  init: RequestInit,
-  method: string,
-  signal: AbortSignal | null,
-): Promise<Uint8Array> {
+async function readRequestBody(input: RequestInfo | URL, init: RequestInit, method: string, signal: AbortSignal | null): Promise<Uint8Array> {
   if (signal?.aborted) throw signal.reason ?? abortError();
   if (method === "GET") {
     const sourceRequest = typeof Request !== "undefined" && input instanceof Request ? input : undefined;
-    if (init.body != null || sourceRequest?.body !== null && sourceRequest?.body !== undefined) {
+    if (init.body != null || (sourceRequest?.body !== null && sourceRequest?.body !== undefined)) {
       throw new TypeError("Account backup GET requests cannot contain a body.");
     }
     return new Uint8Array(0);
@@ -165,7 +165,11 @@ async function readRequestBody(
     void reader.cancel(error).catch(() => {});
     throw error;
   } finally {
-    try { reader.releaseLock(); } catch { /* A failed body stream may keep its reader locked. */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* A failed body stream may keep its reader locked. */
+    }
   }
 
   const result = new Uint8Array(total);
@@ -318,8 +322,11 @@ async function nativeAccountBackupFetch(
   try {
     const nativeResponse = await Promise.race([pending, aborted]);
     if (callerSignal?.aborted) throw callerSignal.reason ?? abortError();
-    if (nativeResponse.status < 200 || nativeResponse.status > 599 ||
-        (nativeResponse.status >= 300 && nativeResponse.status < 400 && nativeResponse.status !== 304)) {
+    if (
+      nativeResponse.status < 200 ||
+      nativeResponse.status > 599 ||
+      (nativeResponse.status >= 300 && nativeResponse.status < 400 && nativeResponse.status !== 304)
+    ) {
       throw new Error("Account backup redirects are not permitted.");
     }
     const bytes = decodeBase64(nativeResponse.bodyBase64);
@@ -368,7 +375,11 @@ async function readBoundedResponseBody(response: Response, abort: (reason: unkno
     void reader.cancel(error).catch(() => {});
     throw error;
   } finally {
-    try { reader.releaseLock(); } catch { /* A failed response stream may keep its reader locked. */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* A failed response stream may keep its reader locked. */
+    }
   }
 
   const result = new ArrayBuffer(byteLength);

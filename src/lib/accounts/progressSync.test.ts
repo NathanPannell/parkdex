@@ -15,12 +15,24 @@ vi.mock("../content/transport", () => ({
 
 class MemoryStorage {
   private values = new Map<string, string>();
-  get length() { return this.values.size; }
-  clear() { this.values.clear(); }
-  getItem(key: string) { return this.values.get(key) ?? null; }
-  key(index: number) { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string) { this.values.delete(key); }
-  setItem(key: string, value: string) { this.values.set(String(key), String(value)); }
+  get length() {
+    return this.values.size;
+  }
+  clear() {
+    this.values.clear();
+  }
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+  key(index: number) {
+    return [...this.values.keys()][index] ?? null;
+  }
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
+  setItem(key: string, value: string) {
+    this.values.set(String(key), String(value));
+  }
 }
 
 const DB_NAMES = ["parkdex-personal-v1", "parkdex"];
@@ -39,8 +51,19 @@ function deleteDatabase(name: string) {
 
 function park(id = "cedar-point", name = "Cedar Point Park"): Park {
   return {
-    id, name, short: "Cedar Point", category: "regional", region: "Victoria", lat: 48.4, lng: -123.3,
-    biome: "coast", shape: "circle", rarity: "common", seed: 7, blurb: "A calm shore walk.", scene: "cedar-point",
+    id,
+    name,
+    short: "Cedar Point",
+    category: "regional",
+    region: "Victoria",
+    lat: 48.4,
+    lng: -123.3,
+    biome: "coast",
+    shape: "circle",
+    rarity: "common",
+    seed: 7,
+    blurb: "A calm shore walk.",
+    scene: "cedar-point",
   };
 }
 
@@ -54,8 +77,13 @@ function jsonResponse(value: unknown, status = 200) {
 
 function remoteClaim(claimId = REMOTE_ID, parkValue = park(), photo: unknown = { status: "missing" }) {
   return {
-    claimId, parkId: parkValue.id, claimedAt: "2025-04-03T12:34:56.000Z", parkSnapshot: parkValue,
-    contentReleaseId: "release-17", createdAt: "2025-04-03T12:34:57.000Z", photo,
+    claimId,
+    parkId: parkValue.id,
+    claimedAt: "2025-04-03T12:34:56.000Z",
+    parkSnapshot: parkValue,
+    contentReleaseId: "release-17",
+    createdAt: "2025-04-03T12:34:57.000Z",
+    photo,
   };
 }
 
@@ -71,7 +99,10 @@ function installPhotoConversionBrowser() {
   let urlCount = 0;
   const NativeURL = globalThis.URL;
   class ConversionURL extends NativeURL {
-    static createObjectURL(_blob: Blob | MediaSource) { urlCount += 1; return `blob:test-photo-${urlCount}`; }
+    static createObjectURL(_blob: Blob | MediaSource) {
+      urlCount += 1;
+      return `blob:test-photo-${urlCount}`;
+    }
     static revokeObjectURL(_url: string) {}
   }
   class ConversionImage {
@@ -79,7 +110,9 @@ function installPhotoConversionBrowser() {
     naturalHeight = 800;
     onload: (() => void) | null = null;
     onerror: (() => void) | null = null;
-    set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    set src(_value: string) {
+      queueMicrotask(() => this.onload?.());
+    }
   }
   const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
   vi.stubGlobal("URL", ConversionURL);
@@ -89,10 +122,16 @@ function installPhotoConversionBrowser() {
       width: 0,
       height: 0,
       getContext: () => ({ fillStyle: "", fillRect() {}, drawImage() {} }),
-      toBlob(callback: BlobCallback, type = "image/jpeg") { callback(new Blob([jpegBytes.slice().buffer as ArrayBuffer], { type })); },
+      toBlob(callback: BlobCallback, type = "image/jpeg") {
+        callback(new Blob([jpegBytes.slice().buffer as ArrayBuffer], { type }));
+      },
     }),
   });
-  return { get urlCount() { return urlCount; } };
+  return {
+    get urlCount() {
+      return urlCount;
+    },
+  };
 }
 
 function makeSession(accountId: string, fetchAuthenticated: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>, isCurrent?: () => boolean) {
@@ -137,7 +176,12 @@ describe("account progress sync", () => {
     const inFlight = new Map<string, Promise<number>>();
     const rerunRequested = new Set<string>();
     let finish!: (value: number) => void;
-    const run = vi.fn(() => new Promise<number>((resolve) => { finish = resolve; }));
+    const run = vi.fn(
+      () =>
+        new Promise<number>((resolve) => {
+          finish = resolve;
+        }),
+    );
     const rerun = vi.fn();
     const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
     const duplicate = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
@@ -158,9 +202,15 @@ describe("account progress sync", () => {
     let calls = 0;
     const run = vi.fn(() => {
       calls += 1;
-      return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
+      return calls === 1
+        ? new Promise<number>((resolve) => {
+            finishFirst = resolve;
+          })
+        : Promise.resolve(calls);
     });
-    const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
+    const rerun = () => {
+      void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    };
     const first = sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
     expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
     expect(sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, true, rerun)).toBe(first);
@@ -181,9 +231,15 @@ describe("account progress sync", () => {
     let calls = 0;
     const run = vi.fn(() => {
       calls += 1;
-      return calls === 1 ? new Promise<number>((resolve) => { finishFirst = resolve; }) : Promise.resolve(calls);
+      return calls === 1
+        ? new Promise<number>((resolve) => {
+            finishFirst = resolve;
+          })
+        : Promise.resolve(calls);
     });
-    const rerun = () => { void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun); };
+    const rerun = () => {
+      void sync.coalesceProgressSync(inFlight, rerunRequested, "session-a", run, false, rerun);
+    };
     expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: false })).toEqual({ connected: true, allowed: true });
     expect(connectivityPolicy.mapAccountBackupConnectivity({ connected: true, wifi: true })).toEqual({ connected: true, allowed: true });
     expect(sync.shouldScheduleAccountBackup(null, { connected: true, allowed: true })).toBe(false);
@@ -209,12 +265,22 @@ describe("account progress sync", () => {
   it("persists a successful outbound timestamp only after durable storage succeeds", async () => {
     const sync = await import("./progressSync");
     const successful = {
-      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-      fullPullCompleted: true, savedClaimCount: 1, claimsPending: 0, photosPending: 0, issues: [],
+      ownerKey: `account:${ACCOUNT_A}`,
+      claimsUploaded: 1,
+      photosUploaded: 0,
+      claimsRestored: 0,
+      photosRestored: 0,
+      fullPullCompleted: true,
+      savedClaimCount: 1,
+      claimsPending: 0,
+      photosPending: 0,
+      issues: [],
     } satisfies ProgressSyncResult;
     const restoreOnly = { ...successful, claimsUploaded: 0, claimsRestored: 1 };
     const get = vi.fn(async () => 99);
-    const failSet = vi.fn(async () => { throw new Error("storage failed"); });
+    const failSet = vi.fn(async () => {
+      throw new Error("storage failed");
+    });
 
     expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 50, { get, set: failSet }, 100)).toBe(50);
     expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, restoreOnly, 50, { get, set: failSet }, 100)).toBe(50);
@@ -222,7 +288,9 @@ describe("account progress sync", () => {
     expect(get).not.toHaveBeenCalled();
 
     let durable = 75;
-    const set = vi.fn(async (_accountId: string, timestamp: number) => { durable = Math.max(durable, timestamp); });
+    const set = vi.fn(async (_accountId: string, timestamp: number) => {
+      durable = Math.max(durable, timestamp);
+    });
     const read = vi.fn(async () => durable);
     expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 50, { get: read, set }, 200)).toBe(200);
     expect(await sync.persistSuccessfulOutboundBackupTimestamp(ACCOUNT_A, successful, 200, { get: read, set }, 150)).toBe(200);
@@ -261,19 +329,29 @@ describe("account progress sync", () => {
     let durable: number | null = null;
     const storage = {
       get: vi.fn(async () => durable),
-      set: vi.fn(async (_accountId: string, timestamp: number) => { durable = Math.max(durable ?? 0, timestamp); }),
+      set: vi.fn(async (_accountId: string, timestamp: number) => {
+        durable = Math.max(durable ?? 0, timestamp);
+      }),
     };
     const timestamp = await sync.persistLastCompleteSyncTimestamp(ACCOUNT_A, result, null, storage, async () => true, 10_000);
     expect(timestamp).toBe(10_000);
     expect(durable).toBe(10_000);
-    expect((await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A }))).toHaveLength(5);
+    expect(await personal.listPersonalClaims({ kind: "account", accountId: ACCOUNT_A })).toHaveLength(5);
   });
 
   it("does not persist Last synced for partial pulls, pending photos, issues, empty accounts, or invalid sessions", async () => {
     const sync = await import("./progressSync");
     const complete = {
-      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 0, photosUploaded: 0, claimsRestored: 5, photosRestored: 0,
-      fullPullCompleted: true, savedClaimCount: 5, claimsPending: 0, photosPending: 0, issues: [],
+      ownerKey: `account:${ACCOUNT_A}`,
+      claimsUploaded: 0,
+      photosUploaded: 0,
+      claimsRestored: 5,
+      photosRestored: 0,
+      fullPullCompleted: true,
+      savedClaimCount: 5,
+      claimsPending: 0,
+      photosPending: 0,
+      issues: [],
     } satisfies ProgressSyncResult;
     const ineligible = [
       { ...complete, fullPullCompleted: false },
@@ -287,9 +365,7 @@ describe("account progress sync", () => {
 
     const set = vi.fn(async () => {});
     const get = vi.fn(async () => 10);
-    const invalidSessionOrRuntime = await sync.persistLastCompleteSyncTimestamp(
-      ACCOUNT_A, complete, 10, { get, set }, async () => false, 20,
-    );
+    const invalidSessionOrRuntime = await sync.persistLastCompleteSyncTimestamp(ACCOUNT_A, complete, 10, { get, set }, async () => false, 20);
     expect(invalidSessionOrRuntime).toBe(10);
     expect(set).not.toHaveBeenCalled();
     expect(get).not.toHaveBeenCalled();
@@ -297,29 +373,48 @@ describe("account progress sync", () => {
 
   it("leaves Last synced unchanged when claim pagination fails partway through", async () => {
     const sync = await import("./progressSync");
-    const result = await sync.syncProgress(makeSession(ACCOUNT_A, async (input) => {
-      const url = requestUrl(input);
-      if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim()], nextCursor: "one-more-page" });
-      if (url === "/api/claims?cursor=one-more-page") return jsonResponse({ error: "temporarily unavailable" }, 503);
-      throw new Error(`Unexpected request: ${url}`);
-    }));
+    const result = await sync.syncProgress(
+      makeSession(ACCOUNT_A, async (input) => {
+        const url = requestUrl(input);
+        if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim()], nextCursor: "one-more-page" });
+        if (url === "/api/claims?cursor=one-more-page") return jsonResponse({ error: "temporarily unavailable" }, 503);
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
     const set = vi.fn(async () => {});
 
     expect(result.fullPullCompleted).toBe(false);
     expect(result.savedClaimCount).toBe(1);
     expect(result.issues.some((issue) => issue.operation === "claim-restore")).toBe(true);
-    expect(await sync.persistLastCompleteSyncTimestamp(ACCOUNT_A, result, 50, {
-      get: async () => 50,
-      set,
-    }, async () => true, 100)).toBe(50);
+    expect(
+      await sync.persistLastCompleteSyncTimestamp(
+        ACCOUNT_A,
+        result,
+        50,
+        {
+          get: async () => 50,
+          set,
+        },
+        async () => true,
+        100,
+      ),
+    ).toBe(50);
     expect(set).not.toHaveBeenCalled();
   });
 
   it("does not advance the successful-backup timestamp while persistent photo issues remain", async () => {
     const sync = await import("./progressSync");
     const successful = {
-      ownerKey: `account:${ACCOUNT_A}`, claimsUploaded: 1, photosUploaded: 0, claimsRestored: 0, photosRestored: 0,
-      fullPullCompleted: true, savedClaimCount: 1, claimsPending: 0, photosPending: 0, issues: [],
+      ownerKey: `account:${ACCOUNT_A}`,
+      claimsUploaded: 1,
+      photosUploaded: 0,
+      claimsRestored: 0,
+      photosRestored: 0,
+      fullPullCompleted: true,
+      savedClaimCount: 1,
+      claimsPending: 0,
+      photosPending: 0,
+      issues: [],
     } satisfies ProgressSyncResult;
     const unsupported = {
       ...successful,
@@ -375,25 +470,32 @@ describe("account progress sync", () => {
     const owner = { kind: "account" as const, accountId: ACCOUNT_A };
     const local = await personal.createPersonalClaim(owner, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" });
     const attempts: string[] = [];
-    const offline = sync.syncProgress(makeSession(ACCOUNT_A, async (input, init) => {
-      const url = requestUrl(input);
-      if (init?.method === "PUT") { attempts.push(url); throw new TypeError("offline"); }
-      return jsonResponse({ claims: [], nextCursor: null });
-    }));
+    const offline = sync.syncProgress(
+      makeSession(ACCOUNT_A, async (input, init) => {
+        const url = requestUrl(input);
+        if (init?.method === "PUT") {
+          attempts.push(url);
+          throw new TypeError("offline");
+        }
+        return jsonResponse({ claims: [], nextCursor: null });
+      }),
+    );
     const first = await offline;
     expect(first.claimsPending).toBe(1);
     expect(sync.canPersistLastCompleteSync(first)).toBe(false);
     expect((await personal.listPersonalClaims(owner))[0].syncState).toBe("pending");
 
-    const retried = await sync.syncProgress(makeSession(ACCOUNT_A, async (input, init) => {
-      const url = requestUrl(input);
-      if (init?.method === "PUT") {
-        attempts.push(url);
-        const payload = JSON.parse(String(init.body));
-        return jsonResponse({ claim: { claimId: local.claimId, ...payload, photo: { status: "missing" } } }, 201);
-      }
-      return jsonResponse({ claims: [], nextCursor: null });
-    }));
+    const retried = await sync.syncProgress(
+      makeSession(ACCOUNT_A, async (input, init) => {
+        const url = requestUrl(input);
+        if (init?.method === "PUT") {
+          attempts.push(url);
+          const payload = JSON.parse(String(init.body));
+          return jsonResponse({ claim: { claimId: local.claimId, ...payload, photo: { status: "missing" } } }, 201);
+        }
+        return jsonResponse({ claims: [], nextCursor: null });
+      }),
+    );
     expect(attempts).toEqual([`/api/claims/${local.claimId}`, `/api/claims/${local.claimId}`]);
     expect(retried.claimsUploaded).toBe(1);
     expect(retried.claimsPending).toBe(0);
@@ -424,7 +526,11 @@ describe("account progress sync", () => {
     };
     const first = await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
     expect(first.claimsRestored).toBe(1);
-    expect((await personal.listPersonalClaims(owner))[0]).toMatchObject({ parkId: "retired-park", parkSnapshot: { name: "Retired Park" }, syncState: "acknowledged" });
+    expect((await personal.listPersonalClaims(owner))[0]).toMatchObject({
+      parkId: "retired-park",
+      parkSnapshot: { name: "Retired Park" },
+      syncState: "acknowledged",
+    });
     expect(await personal.getPullCursor(owner)).toBe("stable-anchor");
 
     await sync.syncProgress(makeSession(ACCOUNT_A, fetcher));
@@ -493,7 +599,6 @@ describe("account progress sync", () => {
   it("stops remaining private photo restores when the account backup transport goes offline", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
-    const owner = { kind: "account" as const, accountId: ACCOUNT_A };
     const savedPhoto = png(7);
     const metadata = {
       status: "ready",
@@ -507,7 +612,10 @@ describe("account progress sync", () => {
     const fetcher = async (input: RequestInfo | URL) => {
       const url = requestUrl(input);
       if (url === "/api/claims") {
-        return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata), remoteClaim(secondRemoteId, park("maple-cove", "Maple Cove Park"), metadata)], nextCursor: "photos-after-first-page" });
+        return jsonResponse({
+          claims: [remoteClaim(REMOTE_ID, park(), metadata), remoteClaim(secondRemoteId, park("maple-cove", "Maple Cove Park"), metadata)],
+          nextCursor: "photos-after-first-page",
+        });
       }
       if (url === "/api/claims?cursor=photos-after-first-page") return jsonResponse({ claims: [], nextCursor: null });
       if (url.endsWith("/photo")) {
@@ -547,20 +655,26 @@ describe("account progress sync", () => {
       }
       if (method === "PUT" && url === `/api/claims/${local.claimId}/photo`) {
         const photo = await personal.getPersonalPhoto(owner, local.claimId);
-        return jsonResponse({ claimId: local.claimId, photo: { status: "ready", sha256: photo!.sha256, sizeBytes: photo!.sizeBytes, contentType: photo!.contentType } }, 201);
+        return jsonResponse(
+          { claimId: local.claimId, photo: { status: "ready", sha256: photo!.sha256, sizeBytes: photo!.sizeBytes, contentType: photo!.contentType } },
+          201,
+        );
       }
       if (method === "GET" && url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), photoMetadata)], nextCursor: "one" });
       if (method === "GET" && url === "/api/claims?cursor=one") return jsonResponse({ claims: [], nextCursor: null });
-      if (method === "GET" && url === `/api/claims/${REMOTE_ID}/photo`) return new Response(await remotePhoto.arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
+      if (method === "GET" && url === `/api/claims/${REMOTE_ID}/photo`)
+        return new Response(await remotePhoto.arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
       if (method === "PUT" && url === `/api/claims/${local.claimId}/display`) {
         displays.push({ url, body: JSON.parse(String(init?.body)) });
         return jsonResponse({ display: { claimId: local.claimId, ...JSON.parse(String(init?.body)), updatedAt: "2026-06-04T10:00:00.000Z" } });
       }
       if (method === "GET" && url === "/api/claims/display") {
-        return jsonResponse({ displays: [
-          { claimId: REMOTE_ID, crop: remoteCrop, coverAt: "2026-06-04T10:00:00.000Z", removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
-          { claimId: "not-a-claim", crop: remoteCrop, coverAt: null, removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
-        ] });
+        return jsonResponse({
+          displays: [
+            { claimId: REMOTE_ID, crop: remoteCrop, coverAt: "2026-06-04T10:00:00.000Z", removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
+            { claimId: "not-a-claim", crop: remoteCrop, coverAt: null, removed: false, updatedAt: "2026-06-04T10:00:00.000Z" },
+          ],
+        });
       }
       throw new Error(`Unexpected request: ${method} ${url}`);
     };
@@ -570,7 +684,11 @@ describe("account progress sync", () => {
     expect(calls.slice(-2)).toEqual([`PUT /api/claims/${local.claimId}/display`, "GET /api/claims/display"]);
     expect(displays).toEqual([{ url: `/api/claims/${local.claimId}/display`, body: { crop, coverAt: null, removed: false } }]);
     expect(personal.photoDisplayPending((await personal.getPersonalPhoto(owner, local.claimId))!)).toBe(false);
-    expect(await personal.getPersonalPhoto(owner, REMOTE_ID)).toMatchObject({ crop: remoteCrop, coverAt: "2026-06-04T10:00:00.000Z", backupState: "backed-up" });
+    expect(await personal.getPersonalPhoto(owner, REMOTE_ID)).toMatchObject({
+      crop: remoteCrop,
+      coverAt: "2026-06-04T10:00:00.000Z",
+      backupState: "backed-up",
+    });
 
     // Nothing pending on the next pass: no display upload, and an older server without the route is fine.
     calls.length = 0;
@@ -610,7 +728,10 @@ describe("account progress sync", () => {
       if (method === "PUT" && url === `/api/claims/${local.claimId}/photo`) {
         const photo = await personal.getPersonalPhoto(owner, local.claimId);
         if (!photo) throw new Error("Test upload photo missing.");
-        return jsonResponse({ claimId: local.claimId, photo: { status: "ready", sha256: photo.sha256, sizeBytes: photo.sizeBytes, contentType: photo.contentType } }, 201);
+        return jsonResponse(
+          { claimId: local.claimId, photo: { status: "ready", sha256: photo.sha256, sizeBytes: photo.sizeBytes, contentType: photo.contentType } },
+          201,
+        );
       }
       if (method === "GET" && url === "/api/claims") {
         return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park("retired-park", "Retired Park"), photoMetadata)], nextCursor: "revision-one" });
@@ -653,7 +774,8 @@ describe("account progress sync", () => {
         shouldDropConnection = false;
         throw new TypeError("connection dropped");
       }
-      if (url === "/api/claims?cursor=revision-one") return jsonResponse({ claims: [remoteClaim(secondId, park("maple-cove", "Maple Cove"))], nextCursor: "revision-two" });
+      if (url === "/api/claims?cursor=revision-one")
+        return jsonResponse({ claims: [remoteClaim(secondId, park("maple-cove", "Maple Cove"))], nextCursor: "revision-two" });
       if (url === "/api/claims?cursor=revision-two") return jsonResponse({ claims: [], nextCursor: null });
       throw new Error(`Unexpected URL: ${url}`);
     };
@@ -678,15 +800,17 @@ describe("account progress sync", () => {
     const claimA = await personal.createPersonalClaim(ownerA, { park: park("cedar-point", "A claim") });
     const claimB = await personal.createPersonalClaim(ownerB, { park: park("maple-cove", "B claim") });
     const sentIds: string[] = [];
-    await sync.syncProgress(makeSession(ACCOUNT_B, async (input, init) => {
-      const url = requestUrl(input);
-      if (init?.method === "PUT") {
-        sentIds.push(url.split("/").at(-1)!);
-        const payload = JSON.parse(String(init.body));
-        return jsonResponse({ claim: { claimId: claimB.claimId, ...payload, photo: { status: "missing" } } }, 201);
-      }
-      return jsonResponse({ claims: [], nextCursor: null });
-    }));
+    await sync.syncProgress(
+      makeSession(ACCOUNT_B, async (input, init) => {
+        const url = requestUrl(input);
+        if (init?.method === "PUT") {
+          sentIds.push(url.split("/").at(-1)!);
+          const payload = JSON.parse(String(init.body));
+          return jsonResponse({ claim: { claimId: claimB.claimId, ...payload, photo: { status: "missing" } } }, 201);
+        }
+        return jsonResponse({ claims: [], nextCursor: null });
+      }),
+    );
     expect(sentIds).toEqual([claimB.claimId]);
     expect((await personal.listPersonalClaims(ownerA))[0].syncState).toBe("pending");
     expect((await personal.listPersonalClaims(ownerB))[0].syncState).toBe("acknowledged");
@@ -718,13 +842,15 @@ describe("account progress sync", () => {
   it("automatically adopts reserved guest claims and finalizes them after server acknowledgement", async () => {
     const personal = await import("./personalStore");
     const sync = await import("./progressSync");
-    const guestClaim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" });
+    const guestClaim = await personal.createPersonalClaim(
+      { kind: "guest" },
+      { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" },
+    );
     expect(await personal.reserveGuestClaimsForAccount(ACCOUNT_A)).toBe(1);
     const owner = { kind: "account" as const, accountId: ACCOUNT_A };
 
     let shouldFail = true;
-    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
+    const fetcher = async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "PUT") {
         if (shouldFail) throw new TypeError("offline");
         const payload = JSON.parse(String(init.body));
@@ -793,11 +919,21 @@ describe("account progress sync", () => {
 
   it("keeps the guest collection intact when an account has a conflicting claim with the same UUID", async () => {
     const personal = await import("./personalStore");
-    const guest = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" });
+    const guest = await personal.createPersonalClaim(
+      { kind: "guest" },
+      { park: park(), claimedAt: "2025-04-03T12:34:56.000Z", contentReleaseId: "release-17" },
+    );
     const accountOwner = { kind: "account" as const, accountId: ACCOUNT_A };
-    await personal.commitRemotePage(accountOwner, [personal.validateRemoteClaim({
-      ...remoteClaim(guest.claimId), claimedAt: "2025-04-04T12:34:56.000Z",
-    })], "existing-account-revision");
+    await personal.commitRemotePage(
+      accountOwner,
+      [
+        personal.validateRemoteClaim({
+          ...remoteClaim(guest.claimId),
+          claimedAt: "2025-04-04T12:34:56.000Z",
+        }),
+      ],
+      "existing-account-revision",
+    );
     await expect(personal.reserveGuestClaimsForAccount(ACCOUNT_A)).rejects.toThrow("conflicts");
     expect((await personal.listPersonalClaims({ kind: "guest" }))[0].claimId).toBe(guest.claimId);
     expect((await personal.listPersonalClaims(accountOwner))[0].claimedAt).toBe("2025-04-04T12:34:56.000Z");
@@ -817,7 +953,10 @@ describe("account progress sync", () => {
       if (url.endsWith("/photo") && init?.method === "PUT") {
         photoAttempts += 1;
         if (photoAttempts === 1) throw new TypeError("offline");
-        return jsonResponse({ claimId: local.claimId, photo: { status: "ready", sha256: photo.sha256, sizeBytes: photo.sizeBytes, contentType: photo.contentType } }, 201);
+        return jsonResponse(
+          { claimId: local.claimId, photo: { status: "ready", sha256: photo.sha256, sizeBytes: photo.sizeBytes, contentType: photo.contentType } },
+          201,
+        );
       }
       if (init?.method === "PUT") {
         claimAttempts += 1;
@@ -879,8 +1018,11 @@ describe("account progress sync", () => {
     expect(uploads.find((upload) => upload.claimId === newClaim.claimId)).toMatchObject({ contentType: "image/png" });
     expect(backupSource).toMatchObject({ sha256: uploads.find((upload) => upload.claimId === guestClaim.claimId)?.sha256, contentType: "image/jpeg" });
     expect(savedPhoto).toMatchObject({
-      claimId: guestClaim.claimId, contentType: "image/svg+xml", sizeBytes: originalBlob.size,
-      backupState: "backed-up", backupRendition: { sourceSha256: await personal.hashPhoto(originalBlob) },
+      claimId: guestClaim.claimId,
+      contentType: "image/svg+xml",
+      sizeBytes: originalBlob.size,
+      backupState: "backed-up",
+      backupRendition: { sourceSha256: await personal.hashPhoto(originalBlob) },
     });
     expect(await savedPhoto?.blob.text()).toBe(legacySvg);
     expect((await personal.listPersonalClaims(accountOwner)).map((claim) => claim.claimId)).toContain(guestClaim.claimId);
@@ -897,9 +1039,7 @@ describe("account progress sync", () => {
     const owner = { kind: "account" as const, accountId: ACCOUNT_A };
     const originalBlob = new Blob([sceneSvg(park())], { type: "image/svg+xml" });
     const guestClaim = await personal.createPersonalClaim({ kind: "guest" }, { park: park(), photo: originalBlob });
-    const reorderedSnapshot = Object.fromEntries(
-      Object.entries(park()).sort(([left], [right]) => left.localeCompare(right)),
-    ) as Park;
+    const reorderedSnapshot = Object.fromEntries(Object.entries(park()).sort(([left], [right]) => left.localeCompare(right))) as Park;
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("parkdex-personal-v1");
       request.onsuccess = () => resolve(request.result);
@@ -912,7 +1052,10 @@ describe("account progress sync", () => {
         const request = store.get(["guest", guestClaim.claimId]);
         request.onsuccess = () => {
           const stored = request.result;
-          if (!stored) { reject(new Error("Legacy guest claim missing.")); return; }
+          if (!stored) {
+            reject(new Error("Legacy guest claim missing."));
+            return;
+          }
           stored.parkSnapshot = reorderedSnapshot;
           store.put(stored);
         };
@@ -921,7 +1064,9 @@ describe("account progress sync", () => {
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error);
       });
-    } finally { db.close(); }
+    } finally {
+      db.close();
+    }
     await personal.reserveGuestClaimsForAccount(ACCOUNT_A);
 
     const uploadedClaimIds: string[] = [];
@@ -1091,16 +1236,18 @@ describe("account progress sync", () => {
     const digest = await personal.hashPhoto(good);
     const metadata = { status: "ready", sha256: digest, sizeBytes: good.size, contentType: "image/png" };
     let requestCount = 0;
-    const result = await sync.syncProgress(makeSession(ACCOUNT_A, async (input) => {
-      const url = requestUrl(input);
-      if (url.startsWith("/api/claims?cursor=")) return jsonResponse({ claims: [], nextCursor: null });
-      if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata)], nextCursor: "restore-anchor" });
-      if (url.endsWith("/photo")) {
-        requestCount += 1;
-        return new Response(await png(2).arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
-      }
-      throw new Error(`Unexpected URL: ${url}`);
-    }));
+    const result = await sync.syncProgress(
+      makeSession(ACCOUNT_A, async (input) => {
+        const url = requestUrl(input);
+        if (url.startsWith("/api/claims?cursor=")) return jsonResponse({ claims: [], nextCursor: null });
+        if (url === "/api/claims") return jsonResponse({ claims: [remoteClaim(REMOTE_ID, park(), metadata)], nextCursor: "restore-anchor" });
+        if (url.endsWith("/photo")) {
+          requestCount += 1;
+          return new Response(await png(2).arrayBuffer(), { status: 200, headers: { "Content-Type": "image/png" } });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
     expect(requestCount).toBe(1);
     expect(result.photosRestored).toBe(0);
     expect(result.issues.some((issue) => issue.operation === "photo-restore")).toBe(true);

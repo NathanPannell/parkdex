@@ -41,18 +41,30 @@ export function useSaveDexPhoto() {
   const { dispatch } = useStore();
   const content = useContent();
   const owner = useProgressOwner();
-  return useCallback(async (park: Park, captured: CapturedPhoto) => {
-    if (!owner) throw new Error("Your photos can't be saved right now. Try again in a moment.");
-    const claim = await createPersonalClaim(owner, {
-      park, photo: captured.original.blob, crop: captured.crop, contentReleaseId: content?.releaseId ?? null,
-    });
-    dispatch({
-      type: "claim", ownerKey: progressOwnerKey(owner)!, id: park.id, claimId: claim.claimId, at: claim.claimedAt,
-      photo: "", parkSnapshot: claim.parkSnapshot!, contentReleaseId: claim.contentReleaseId,
-    });
-    if (owner.kind === "account" && auth.phase === "authenticated") void auth.syncBackup({ retryAfterFlight: true });
-    return claim;
-  }, [auth, content?.releaseId, dispatch, owner]);
+  return useCallback(
+    async (park: Park, captured: CapturedPhoto) => {
+      if (!owner) throw new Error("Your photos can't be saved right now. Try again in a moment.");
+      const claim = await createPersonalClaim(owner, {
+        park,
+        photo: captured.original.blob,
+        crop: captured.crop,
+        contentReleaseId: content?.releaseId ?? null,
+      });
+      dispatch({
+        type: "claim",
+        ownerKey: progressOwnerKey(owner)!,
+        id: park.id,
+        claimId: claim.claimId,
+        at: claim.claimedAt,
+        photo: "",
+        parkSnapshot: claim.parkSnapshot!,
+        contentReleaseId: claim.contentReleaseId,
+      });
+      if (owner.kind === "account" && auth.phase === "authenticated") void auth.syncBackup({ retryAfterFlight: true });
+      return claim;
+    },
+    [auth, content?.releaseId, dispatch, owner],
+  );
 }
 
 /** Everything My Dex shows: visits from the server and this device, and this device's photos. */
@@ -61,8 +73,8 @@ export function useDex(active: boolean) {
   const { state } = useStore();
   const owner = useProgressOwner();
   const ownerKey = progressOwnerKey(owner);
-  const accountId = auth.phase === "authenticated" ? auth.account?.id ?? null : null;
-  const [server, setServer] = useState<ServerDexPark[] | null>(() => (accountId ? remembered.get(accountId) ?? null : null));
+  const accountId = auth.phase === "authenticated" ? (auth.account?.id ?? null) : null;
+  const [server, setServer] = useState<ServerDexPark[] | null>(() => (accountId ? (remembered.get(accountId) ?? null) : null));
   const [serverStatus, setServerStatus] = useState<"idle" | "loading" | "ready" | "offline">("idle");
   const [claims, setClaims] = useState<LocalDexClaim[]>([]);
   const [photos, setPhotos] = useState<DexPhoto[]>([]);
@@ -74,23 +86,36 @@ export function useDex(active: boolean) {
   useEffect(() => {
     if (!owner || !ownerKey) return;
     let live = true;
-    void Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)]).then(([savedClaims, savedPhotos]) => {
-      if (!live || latestOwner.current !== ownerKey) return;
-      const byClaim = new Map(savedClaims.map((claim) => [claim.claimId, claim]));
-      setClaims(savedClaims.map((claim) => ({ claimId: claim.claimId, parkId: claim.parkId, claimedAt: claim.claimedAt, parkSnapshot: claim.parkSnapshot })));
-      setPhotos(savedPhotos.flatMap((photo): DexPhoto[] => {
-        const claim = byClaim.get(photo.claimId);
-        if (!claim || !(photo.blob instanceof Blob)) return [];
-        return [{
-          claimId: photo.claimId, parkId: claim.parkId, claimedAt: claim.claimedAt, blob: photo.blob,
-          crop: photo.crop ?? null, coverAt: photo.coverAt ?? null, removed: photo.removed === true,
-        }];
-      }));
-      setLocalReady(true);
-    }).catch(() => {
-      if (live) setLocalReady(true);
-    });
-    return () => { live = false; };
+    void Promise.all([listPersonalClaims(owner), listPersonalPhotos(owner)])
+      .then(([savedClaims, savedPhotos]) => {
+        if (!live || latestOwner.current !== ownerKey) return;
+        const byClaim = new Map(savedClaims.map((claim) => [claim.claimId, claim]));
+        setClaims(savedClaims.map((claim) => ({ claimId: claim.claimId, parkId: claim.parkId, claimedAt: claim.claimedAt, parkSnapshot: claim.parkSnapshot })));
+        setPhotos(
+          savedPhotos.flatMap((photo): DexPhoto[] => {
+            const claim = byClaim.get(photo.claimId);
+            if (!claim || !(photo.blob instanceof Blob)) return [];
+            return [
+              {
+                claimId: photo.claimId,
+                parkId: claim.parkId,
+                claimedAt: claim.claimedAt,
+                blob: photo.blob,
+                crop: photo.crop ?? null,
+                coverAt: photo.coverAt ?? null,
+                removed: photo.removed === true,
+              },
+            ];
+          }),
+        );
+        setLocalReady(true);
+      })
+      .catch(() => {
+        if (live) setLocalReady(true);
+      });
+    return () => {
+      live = false;
+    };
   }, [owner, ownerKey, auth.progressRevision, state.claimRevision, localRevision]);
 
   const refreshServer = useCallback(async () => {
@@ -107,22 +132,23 @@ export function useDex(active: boolean) {
   }, [accountId]);
 
   useEffect(() => {
-    setServer(accountId ? remembered.get(accountId) ?? null : null);
+    setServer(accountId ? (remembered.get(accountId) ?? null) : null);
     if (active && accountId) void refreshServer();
   }, [accountId, active, refreshServer, auth.progressRevision]);
 
   const visits = useMemo<Map<string, DexVisit>>(() => mergeVisits(server ?? [], claims), [server, claims]);
 
-  const change = useCallback(async (work: (owner: ProgressOwner) => Promise<unknown>) => {
-    if (!owner) return;
-    await work(owner);
-    setLocalRevision((value) => value + 1);
-    if (owner.kind === "account" && auth.phase === "authenticated") void auth.syncBackup({ retryAfterFlight: true });
-  }, [auth, owner]);
+  const change = useCallback(
+    async (work: (owner: ProgressOwner) => Promise<unknown>) => {
+      if (!owner) return;
+      await work(owner);
+      setLocalRevision((value) => value + 1);
+      if (owner.kind === "account" && auth.phase === "authenticated") void auth.syncBackup({ retryAfterFlight: true });
+    },
+    [auth, owner],
+  );
 
-  const status: DexStatus = !accountId
-    ? (localReady ? "guest" : "loading")
-    : server ? "ready" : serverStatus === "offline" ? "offline" : "loading";
+  const status: DexStatus = !accountId ? (localReady ? "guest" : "loading") : server ? "ready" : serverStatus === "offline" ? "offline" : "loading";
 
   return {
     status,

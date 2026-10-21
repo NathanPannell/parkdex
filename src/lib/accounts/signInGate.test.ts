@@ -40,7 +40,15 @@ function accountModel(gate: SignInGate | null) {
     refreshes.push(serverAccountId);
     if (shouldReopenAccount(open ? "authenticated" : "guest", open, serverAccountId)) open = serverAccountId;
   };
-  return { signIn, resume, setup, refreshes, get open() { return open; } };
+  return {
+    signIn,
+    resume,
+    setup,
+    refreshes,
+    get open() {
+      return open;
+    },
+  };
 }
 
 describe("sign-in and a resume racing it", () => {
@@ -84,7 +92,9 @@ describe("sign-in gate", () => {
     const run = gate.run(() => failing.promise).catch(() => "failed");
     expect(gate.active).toBe(true);
     let settled = false;
-    const waiting = gate.settled().then(() => { settled = true; });
+    const waiting = gate.settled().then(() => {
+      settled = true;
+    });
     await tick();
     expect(settled).toBe(false);
     failing.reject(new Error("bad password"));
@@ -99,7 +109,9 @@ describe("sign-in gate", () => {
     const second = deferred<void>();
     void gate.run(() => first.promise);
     let settled = false;
-    const waiting = gate.settled().then(() => { settled = true; });
+    const waiting = gate.settled().then(() => {
+      settled = true;
+    });
     void gate.run(() => second.promise);
     first.resolve();
     await tick();

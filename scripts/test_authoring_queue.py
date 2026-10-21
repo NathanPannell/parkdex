@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Focused unit and opt-in local PostgreSQL tests for the authoring queue."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,13 +33,15 @@ def _research_fixture(directory: Path, park_id: str = "test-park") -> dict:
         path = directory / f"photo-{index}.jpg"
         content = f"photo {index}".encode("ascii")
         path.write_bytes(content)
-        refs.append({
-            "google_search_url": f"https://www.google.com/search?tbm=isch&q=park+{index}",
-            "image_url": f"https://images.example.test/{index}.jpg",
-            "source_url": f"https://parks.example.test/{index}",
-            "local_path": str(path),
-            "sha256": hashlib.sha256(content).hexdigest(),
-        })
+        refs.append(
+            {
+                "google_search_url": f"https://www.google.com/search?tbm=isch&q=park+{index}",
+                "image_url": f"https://images.example.test/{index}.jpg",
+                "source_url": f"https://parks.example.test/{index}",
+                "local_path": str(path),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        )
     dossier = directory / "dossier.md"
     dossier.write_text("Verified park dossier.\n", encoding="utf-8")
     return {
@@ -70,18 +73,18 @@ class AuthoringQueueUnitTests(unittest.TestCase):
             def cursor(self):
                 return Cursor()
 
-        staging_url = (f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_HOST}/"
-                       "parkdex_kip?sslmode=require")
+        staging_url = f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_HOST}/parkdex_kip?sslmode=require"
         queue.verify_target(Connection(), "staging", None, queue.CLONED_STAGING_HOST, staging_url)
-        old_main_url = (f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_SOURCE_HOST}/"
-                        "parkdex_kip?sslmode=require")
+        old_main_url = f"postgresql://parkdex_kip_owner:secret@{queue.CLONED_STAGING_SOURCE_HOST}/parkdex_kip?sslmode=require"
         with self.assertRaisesRegex(queue.QueueError, "current Neon staging endpoint"):
             queue.verify_target(Connection(), "staging", None, queue.CLONED_STAGING_SOURCE_HOST, old_main_url)
 
     def test_database_identity_requires_expected_target_host_and_role(self) -> None:
         identity = queue.parse_database_identity(
             "postgresql://parkdex_kip_owner:secret@db.example.test/parkdex_kip",
-            "staging", None, "db.example.test",
+            "staging",
+            None,
+            "db.example.test",
         )
         self.assertEqual(identity["host"], "db.example.test")
         for database_url, target, target_id, host in (
@@ -143,9 +146,7 @@ class AuthoringQueueUnitTests(unittest.TestCase):
 
     @unittest.skipUnless(BEACON_RECORD.is_file(), "prepared Beacon Hill artifacts are not present")
     def test_beacon_prepared_record_hashes_all_five_calls_and_selected_webp(self) -> None:
-        record, record_sha, calls, selected = queue._prepared_generation_records(
-            BEACON_RECORD, 1, "municipal-city-of-victoria-1442"
-        )
+        record, record_sha, calls, selected = queue._prepared_generation_records(BEACON_RECORD, 1, "municipal-city-of-victoria-1442")
         self.assertEqual(record["origin"], "prequeue-prepared")
         self.assertEqual(record_sha, hashlib.sha256(BEACON_RECORD.read_bytes()).hexdigest())
         self.assertEqual(len(calls), 5)
@@ -278,11 +279,19 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                         phase = "initial" if call_index <= 3 else "correction"
                         manifest = queue.render_manifest_for(2, call_index)
                         manifest.parent.mkdir(parents=True, exist_ok=True)
-                        manifest.write_text(json.dumps({
-                            "rank": 2, "park_id": second[0], "call_index": call_index,
-                            "phase": phase, "prompt": f"Exact test prompt for call {call_index}.",
-                            "image_inputs": [{"order": 1, "role": "identity photo", "local_path": str(image_path), "sha256": image_sha}],
-                        }), encoding="utf-8")
+                        manifest.write_text(
+                            json.dumps(
+                                {
+                                    "rank": 2,
+                                    "park_id": second[0],
+                                    "call_index": call_index,
+                                    "phase": phase,
+                                    "prompt": f"Exact test prompt for call {call_index}.",
+                                    "image_inputs": [{"order": 1, "role": "identity photo", "local_path": str(image_path), "sha256": image_sha}],
+                                }
+                            ),
+                            encoding="utf-8",
+                        )
                         checkpoint = queue.checkpoint_render(self.conn, 2, second_token, manifest)
                         self.assertEqual(checkpoint["outcome"], "checkpointed")
                         self.assertEqual(checkpoint["render_calls_started"], call_index)
@@ -292,9 +301,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                     with self.assertRaises(queue.QueueError):
                         queue.freeze_research(self.conn, 2, stale, second_research)
                     with self.conn.cursor() as cursor:
-                        cursor.execute(
-                            "UPDATE public.park_enrichment_jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE rank=2"
-                        )
+                        cursor.execute("UPDATE public.park_enrichment_jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE rank=2")
                     reclaimed = queue.claim_one(self.conn)
                     self.assertEqual(reclaimed["outcome"], "reclaimed")
                     self.assertEqual(reclaimed["job"]["rank"], 2)
@@ -305,16 +312,12 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                         cursor.execute("SELECT frozen_research FROM public.park_enrichment_jobs WHERE rank=2")
                         self.assertEqual(queue._json_value(cursor.fetchone()[0]), second_research)
 
-                    failed_retry = queue.fail_job(
-                        self.conn, 2, reclaimed["job"]["lease_token"], "transient test failure", permanent=False
-                    )
+                    failed_retry = queue.fail_job(self.conn, 2, reclaimed["job"]["lease_token"], "transient test failure", permanent=False)
                     self.assertEqual(failed_retry["state"], "queued")
                     third_attempt = queue.claim_one(self.conn)
                     self.assertEqual(third_attempt["job"]["rank"], 2)
                     self.assertEqual(third_attempt["job"]["attempt_count"], 3)
-                    exhausted = queue.fail_job(
-                        self.conn, 2, third_attempt["job"]["lease_token"], "third test failure", permanent=False
-                    )
+                    exhausted = queue.fail_job(self.conn, 2, third_attempt["job"]["lease_token"], "third test failure", permanent=False)
                     self.assertEqual(exhausted["state"], "needs_attention")
                     self.assertEqual(exhausted["render_calls_started"], 2)
                     self.assertEqual(exhausted["run_manifest_sha256"], call_two_hash)
@@ -359,10 +362,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
         advisory_locked = False
         try:
             with self.conn.cursor() as cursor:
-                cursor.execute(
-                    f'CREATE TEMP TABLE "{snapshot_name}" ON COMMIT PRESERVE ROWS AS '
-                    "SELECT * FROM public.park_enrichment_jobs"
-                )
+                cursor.execute(f'CREATE TEMP TABLE "{snapshot_name}" ON COMMIT PRESERVE ROWS AS SELECT * FROM public.park_enrichment_jobs')
             self.conn.commit()
             snapshot_created = True
 
@@ -431,10 +431,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                                 (renewal_app,),
                             )
                             renewal_waiting = cursor.fetchone()[0]
-                            cursor.execute(
-                                "SELECT lease_expires_at <= clock_timestamp() "
-                                "FROM public.park_enrichment_jobs WHERE rank = 1"
-                            )
+                            cursor.execute("SELECT lease_expires_at <= clock_timestamp() FROM public.park_enrichment_jobs WHERE rank = 1")
                             expired = cursor.fetchone()[0]
                         self.conn.commit()
                         if renewal_waiting and expired:
@@ -450,8 +447,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                     while time.monotonic() < claim_deadline:
                         with self.conn.cursor() as cursor:
                             cursor.execute(
-                                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
-                                "WHERE application_name = %s AND state = 'active' AND wait_event_type = 'Lock')",
+                                "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = %s AND state = 'active' AND wait_event_type = 'Lock')",
                                 (claim_app,),
                             )
                             claim_waiting = cursor.fetchone()[0]
@@ -484,9 +480,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                            AND lease_token IS NOT NULL AND lease_expires_at > clock_timestamp()"""
                 )
                 self.assertEqual(cursor.fetchone()[0], 1)
-                cursor.execute(
-                    "SELECT state, lease_token IS NOT NULL FROM public.park_enrichment_jobs WHERE rank = 2"
-                )
+                cursor.execute("SELECT state, lease_token IS NOT NULL FROM public.park_enrichment_jobs WHERE rank = 2")
                 self.assertEqual(cursor.fetchone(), ("queued", False))
             self.conn.commit()
         finally:
@@ -501,9 +495,7 @@ class AuthoringQueuePostgresTests(unittest.TestCase):
                     cursor.execute(f'DROP TRIGGER IF EXISTS "{trigger_name}" ON public.park_enrichment_jobs')
                     cursor.execute(f'DROP FUNCTION IF EXISTS public."{function_name}"()')
                     cursor.execute("DELETE FROM public.park_enrichment_jobs")
-                    cursor.execute(
-                        f'INSERT INTO public.park_enrichment_jobs SELECT * FROM "{snapshot_name}"'
-                    )
+                    cursor.execute(f'INSERT INTO public.park_enrichment_jobs SELECT * FROM "{snapshot_name}"')
                     cursor.execute(f'DROP TABLE "{snapshot_name}"')
                 self.conn.commit()
 

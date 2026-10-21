@@ -20,19 +20,41 @@ def snapshot(count: int, positions: int = 5) -> dict:
     for index in range(count):
         park_id = f"regional-park-{index:04d}"
         lng, lat = -128 + (index % 12), 48 + (index // 12) % 10
-        parks.append({"id": park_id, "name": f"Park {index}", "short": f"P{index}", "category": "regional", "region": "BC",
-                      "lat": lat + 0.005, "lng": lng + 0.005, "biome": "forest", "shape": "circle", "rarity": "common",
-                      "scene": None, "seed": index, "blurb": "A park.", "googleMapsUrl": None, "trailheadLat": None, "trailheadLng": None})
+        parks.append(
+            {
+                "id": park_id,
+                "name": f"Park {index}",
+                "short": f"P{index}",
+                "category": "regional",
+                "region": "BC",
+                "lat": lat + 0.005,
+                "lng": lng + 0.005,
+                "biome": "forest",
+                "shape": "circle",
+                "rarity": "common",
+                "scene": None,
+                "seed": index,
+                "blurb": "A park.",
+                "googleMapsUrl": None,
+                "trailheadLat": None,
+                "trailheadLng": None,
+            }
+        )
         geometry = square(lng, lat)
         if positions > 5:
             ring = [[lng + 0.001 * i, lat + 0.0001 * (i % 2)] for i in range(positions - 1)]
             geometry = {"type": "MultiPolygon", "coordinates": [[[*ring, ring[0]]]]}
         features.append({"type": "Feature", "properties": {"id": park_id, "biome": "forest"}, "geometry": geometry})
         drive[park_id] = {"drive": [None], "walkM": 0}
-    return {"schema": "parkdex.content-sync/v1", "revision": 42, "parks": parks,
-            "boundaries": {"type": "FeatureCollection", "features": features},
-            "drive": {"hubs": [{"name": "Downtown", "lng": -123.36, "lat": 48.42}], "parks": drive},
-            "assets": [], "map": None}
+    return {
+        "schema": "parkdex.content-sync/v1",
+        "revision": 42,
+        "parks": parks,
+        "boundaries": {"type": "FeatureCollection", "features": features},
+        "drive": {"hubs": [{"name": "Downtown", "lng": -123.36, "lat": 48.42}], "parks": drive},
+        "assets": [],
+        "map": None,
+    }
 
 
 class ContentCatalogueTests(unittest.TestCase):
@@ -77,7 +99,9 @@ class ContentCatalogueTests(unittest.TestCase):
     def test_written_release_reloads_and_detects_tampering(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / "release"
-            summary = catalogue.write_release(catalogue.build_release(snapshot(20)), out, {"host": "127.0.0.1", "port": 5432, "database": "kip_qa_x", "environment": "local-qa"})
+            summary = catalogue.write_release(
+                catalogue.build_release(snapshot(20)), out, {"host": "127.0.0.1", "port": 5432, "database": "kip_qa_x", "environment": "local-qa"}
+            )
             self.assertEqual(summary["parkCount"], 20)
             manifest, pointer = catalogue.load_release(out)
             self.assertEqual(manifest["version"], pointer["version"])

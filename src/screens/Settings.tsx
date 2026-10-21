@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { Flag } from "../components/Flag";
 import { Icon } from "../components/Icon";
 import { useGame } from "../lib/game/GameProvider";
@@ -16,8 +16,6 @@ import { OFFLINE_DOWNLOADS } from "../lib/content/contracts";
 import { summarizeLocalStorage } from "../lib/localStorageSummary";
 import { useAuth } from "../lib/accounts/AuthProvider";
 import { settingsAccountSubtitle } from "../lib/accounts/backupPresentation";
-import { kipTipsEnabled, replayKipTips, setKipTipsEnabled, subscribeKipTips } from "../lib/kipTips";
-import { useToast } from "../components/Toast";
 
 /** App settings, separate from the account page. */
 export function Settings({ tabbed = false }: { tabbed?: boolean }) {
@@ -26,23 +24,30 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
   const game = useGame();
   const player = game.me?.player ?? null;
   const runtime = useContentRuntime();
-  const toast = useToast();
-  const tipsOn = useSyncExternalStore(subscribeKipTips, kipTipsEnabled, kipTipsEnabled);
   // Saved squares return with offline downloads (#199).
-  const [savedSquares] = useState(() => OFFLINE_DOWNLOADS ? readSavedSquares().length : 0);
+  const [savedSquares] = useState(() => (OFFLINE_DOWNLOADS ? readSavedSquares().length : 0));
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
 
   useEffect(() => {
     let live = true;
-    void summarizeLocalStorage(runtime).then((summary) => { if (live) setUsedBytes(summary.totalBytes); }).catch(() => {});
-    return () => { live = false; };
+    void summarizeLocalStorage(runtime)
+      .then((summary) => {
+        if (live) setUsedBytes(summary.totalBytes);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [runtime]);
 
-  const downloadsLine = [
-    savedSquares ? `${savedSquares} map ${savedSquares === 1 ? "square" : "squares"} saved` : null,
-    usedBytes !== null ? `${formatMegabytes(usedBytes)} on this phone` : null,
-  ].filter(Boolean).join(" · ") || "Maps and park content on this phone";
-  const accountLine = settingsAccountSubtitle(auth.phase, auth.backup.phase, !!(auth.backup.lastSyncedAt ?? auth.backup.updatedAt));
+  const downloadsLine =
+    [
+      savedSquares ? `${savedSquares} map ${savedSquares === 1 ? "square" : "squares"} saved` : null,
+      usedBytes !== null ? `${formatMegabytes(usedBytes)} on this phone` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Maps and park content on this phone";
+  const accountLine = settingsAccountSubtitle(auth.phase, auth.backup.phase, !!(auth.backup.lastSyncedAt ?? auth.backup.updatedAt), !!auth.account?.guest);
 
   return (
     <motion.main
@@ -80,14 +85,27 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
           <Flag seed={player?.flagSeed ?? game.me?.flagSeed ?? null} size={64} patches={game.me?.flagPatches} className="is-waving" />
           <span className="settings-flag__text">
             <strong>{player ? `@${player.handle}` : "Your flag"}</strong>
-            <span>{player ? `${formatPoints(game.me?.score ?? 0)} · see your flags` : auth.phase === "authenticated" ? "Pick a handle to fly it" : "Sign in to get your own flag"}</span>
+            <span>
+              {player
+                ? `${formatPoints(game.me?.score ?? 0)} · see your flags`
+                : auth.phase === "authenticated"
+                  ? "Pick a handle to fly it"
+                  : "Sign in to get your own flag"}
+            </span>
           </span>
           <Icon name="next" size={18} />
         </motion.button>
 
         <motion.section className="account-card card account-section" aria-label="Settings" variants={listParent} initial="hidden" animate="show">
-          <motion.button variants={listItem} whileTap={press} className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "account" })}>
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="link" size={20} /></span>
+          <motion.button
+            variants={listItem}
+            whileTap={press}
+            className="account-setting account-setting--button"
+            onClick={() => dispatch({ type: "go", screen: "account" })}
+          >
+            <span className="account-setting__icon" aria-hidden="true">
+              <Icon name="link" size={20} />
+            </span>
             <span className="account-setting__text">
               <strong>Account &amp; backup</strong>
               <span>{accountLine}</span>
@@ -95,7 +113,9 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
             <Icon name="next" size={18} />
           </motion.button>
           <motion.label variants={listItem} className="account-setting account-setting--row">
-            <span className="account-setting__icon" aria-hidden="true"><Icon name={state.muted ? "mute" : "sound"} size={20} /></span>
+            <span className="account-setting__icon" aria-hidden="true">
+              <Icon name={state.muted ? "mute" : "sound"} size={20} />
+            </span>
             <span className="account-setting__text">
               <strong>Sound effects</strong>
               <span>{state.muted ? "Off" : "On"}</span>
@@ -109,38 +129,15 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
               aria-label="Sound effects"
             />
           </motion.label>
-          <motion.label variants={listItem} className="account-setting account-setting--row">
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="bulb" size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Kip's Tips</strong>
-              <span>{tipsOn ? "On" : "Off"}</span>
-            </span>
-            <input
-              type="checkbox"
-              role="switch"
-              className="account-switch"
-              checked={tipsOn}
-              onChange={() => setKipTipsEnabled(!tipsOn)}
-              aria-label="Kip's Tips"
-            />
-          </motion.label>
           <motion.button
             variants={listItem}
             whileTap={press}
             className="account-setting account-setting--button"
-            onClick={() => {
-              replayKipTips();
-              toast("Kip's Tips will show again", "kip");
-            }}
+            onClick={() => dispatch({ type: "go", screen: "downloads" })}
           >
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="refresh" size={20} /></span>
-            <span className="account-setting__text">
-              <strong>Replay Kip's Tips</strong>
-              <span>See each tip again when it comes up</span>
+            <span className="account-setting__icon" aria-hidden="true">
+              <Icon name="download" size={20} />
             </span>
-          </motion.button>
-          <motion.button variants={listItem} whileTap={press} className="account-setting account-setting--button" onClick={() => dispatch({ type: "go", screen: "downloads" })}>
-            <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
             <span className="account-setting__text">
               <strong>Manage downloads</strong>
               <span>{downloadsLine}</span>
@@ -151,7 +148,11 @@ export function Settings({ tabbed = false }: { tabbed?: boolean }) {
 
         <WebAppSettings />
 
-        <p className="account-policy-link"><a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">Parkdex Privacy Policy</a></p>
+        <p className="account-policy-link">
+          <a href="https://parkdex.app/privacy/" target="_blank" rel="noopener noreferrer">
+            Parkdex Privacy Policy
+          </a>
+        </p>
       </div>
     </motion.main>
   );

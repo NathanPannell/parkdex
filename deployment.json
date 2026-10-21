@@ -3,10 +3,9 @@
   "repository": "NathanPannell/parkdex-kip",
   "stagingBranch": "staging",
   "productionBranch": "main",
-  "vercelProjectName": "parkdex-kip",
+  "vercelProjectName": "parkdex",
   "vercelProjectIdEnvironment": "VERCEL_STAGING_PROJECT_ID",
   "productionVercelProjectIdEnvironment": "VERCEL_PRODUCTION_PROJECT_ID",
-  "vercelPreviewProjectIdEnvironment": "VERCEL_PREVIEW_PROJECT_ID",
   "vercelTeamIdEnvironment": "VERCEL_ORG_ID",
   "vercelTokenEnvironment": "VERCEL_TOKEN",
   "stagingAlias": "staging.web.parkdex.app",
@@ -48,7 +47,10 @@
     "database/migrations/game_003_crews.sql",
     "database/migrations/game_004_badges.sql",
     "database/migrations/game_005_dex.sql",
-    "database/migrations/founders_004_boundary_boxes.sql"
+    "database/migrations/founders_004_boundary_boxes.sql",
+    "database/migrations/social_002_crewmates.sql",
+    "database/migrations/social_003_recent_crewmates.sql",
+    "database/migrations/accounts_002_guests.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -86,8 +88,7 @@
     ],
     "legacyImporterPath": "scripts/import_legacy_parks.py",
     "legacyImporterTestPath": "scripts/test_import_legacy_parks.py",
-    "pythonRequirementsPath": "database/delivery-test-requirements.txt",
-    "previewClockTable": "content_clock"
+    "pythonRequirementsPath": "database/delivery-test-requirements.txt"
   },
   "runtimeOptionalKeys": [
     "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
@@ -110,9 +111,6 @@
   "apiEntrypoint": "api/feedback-api.ts",
   "healthPath": "/api/health",
   "releasePath": "/release.json",
-  "previewDatabaseInitSource": "parent-schema",
-  "previewExpiryHours": 72,
-  "previewEmailMode": "disabled",
   "stagingEmailMode": "resend",
   "productionEmailMode": "resend",
   "runtimeSecretBundleEnvironment": "KIP_STAGING_RUNTIME_JSON",

@@ -4,7 +4,13 @@ import type { Boundary, LngLat } from "./geo";
 
 // A square of side `deg` degrees anchored at Victoria's latitude.
 function square(lng: number, lat: number, deg: number): LngLat[] {
-  return [[lng, lat], [lng + deg, lat], [lng + deg, lat + deg], [lng, lat + deg], [lng, lat]];
+  return [
+    [lng, lat],
+    [lng + deg, lat],
+    [lng + deg, lat + deg],
+    [lng, lat + deg],
+    [lng, lat],
+  ];
 }
 
 describe("boundaryAreaKm2", () => {

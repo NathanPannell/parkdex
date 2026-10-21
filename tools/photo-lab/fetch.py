@@ -9,6 +9,7 @@ is then prepared the way the app prepares an upload (src/lib/photoEncode.ts): or
 applied, fitted within 1,280 px, and re-encoded as JPEG at quality 82, stepping down when the
 file would be over 1.5 MB. The images are not committed; see tools/photo-lab/README.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,11 +63,18 @@ def get(url: str) -> bytes:
 def commons_info(titles: list[str]) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for start in range(0, len(titles), 40):
-        chunk = titles[start:start + 40]
-        query = urllib.parse.urlencode({
-            "action": "query", "titles": "|".join(chunk), "prop": "imageinfo", "iiprop": "url|sha1",
-            "iiurlwidth": str(MAX_EDGE), "format": "json", "formatversion": "2",
-        })
+        chunk = titles[start : start + 40]
+        query = urllib.parse.urlencode(
+            {
+                "action": "query",
+                "titles": "|".join(chunk),
+                "prop": "imageinfo",
+                "iiprop": "url|sha1",
+                "iiurlwidth": str(MAX_EDGE),
+                "format": "json",
+                "formatversion": "2",
+            }
+        )
         body = json.loads(get(f"{API}?{query}"))
         normalized = {item["to"]: item["from"] for item in body["query"].get("normalized", [])}
         for page in body["query"]["pages"]:
@@ -118,6 +126,7 @@ def encode(image: Image.Image) -> bytes:
 
 def motion_blur(image: Image.Image, length: int, angle: float) -> Image.Image:
     import math
+
     dx, dy = math.cos(math.radians(angle)), -math.sin(math.radians(angle))
     accumulated: Image.Image | None = None
     for index in range(length):

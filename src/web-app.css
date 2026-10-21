@@ -8,8 +8,8 @@
   place-items: center;
   padding: max(env(safe-area-inset-top), 16px) max(env(safe-area-inset-right), 24px) max(env(safe-area-inset-bottom), 16px) max(env(safe-area-inset-left), 24px);
   overflow: auto;
-  background: radial-gradient(1200px 700px at 20% 10%, #ffe2c2 0, transparent 60%),
-    radial-gradient(900px 700px at 90% 90%, #cfeedd 0, transparent 60%), #fbefdc;
+  background:
+    radial-gradient(1200px 700px at 20% 10%, #ffe2c2 0, transparent 60%), radial-gradient(900px 700px at 90% 90%, #cfeedd 0, transparent 60%), #fbefdc;
   color: var(--ink);
 }
 

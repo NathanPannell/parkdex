@@ -22,11 +22,15 @@ export function WebAppSettings() {
           variants={listItem}
           whileTap={press}
           className="account-setting account-setting--button"
-          onClick={() => void promptInstall().then((outcome) => {
-            if (outcome === "accepted") toast("Parkdex is on your home screen", "kip");
-          })}
+          onClick={() =>
+            void promptInstall().then((outcome) => {
+              if (outcome === "accepted") toast("Parkdex is on your home screen", "kip");
+            })
+          }
         >
-          <span className="account-setting__icon" aria-hidden="true"><Icon name="download" size={20} /></span>
+          <span className="account-setting__icon" aria-hidden="true">
+            <Icon name="download" size={20} />
+          </span>
           <span className="account-setting__text">
             <strong>Install Parkdex</strong>
             <span>Full screen, from your home screen</span>
@@ -36,7 +40,9 @@ export function WebAppSettings() {
       )}
       {install === "apple-hint" && (
         <motion.div variants={listItem} className="account-setting" style={{ cursor: "default" }}>
-          <span className="account-setting__icon" aria-hidden="true"><Icon name="share" size={20} /></span>
+          <span className="account-setting__icon" aria-hidden="true">
+            <Icon name="share" size={20} />
+          </span>
           <span className="account-setting__text">
             <strong>Install Parkdex</strong>
             <span>Tap Share, then Add to Home Screen</span>
@@ -45,7 +51,9 @@ export function WebAppSettings() {
       )}
       {fullscreen && (
         <motion.button variants={listItem} whileTap={press} className="account-setting account-setting--button" onClick={() => void enterFullscreen()}>
-          <span className="account-setting__icon" aria-hidden="true"><Icon name="corners" size={20} /></span>
+          <span className="account-setting__icon" aria-hidden="true">
+            <Icon name="corners" size={20} />
+          </span>
           <span className="account-setting__text">
             <strong>Go full screen</strong>
             <span>Hide the browser bars</span>

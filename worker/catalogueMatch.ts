@@ -37,8 +37,13 @@ function publishedId(feature: { type: string; id: number }): string {
 
 export function nameKey(name: string | null): string {
   if (!name) return "";
-  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
-    .split(/[^a-z0-9]+/).filter((word) => word && !GENERIC_WORDS.has(word)).join(" ");
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word && !GENERIC_WORDS.has(word))
+    .join(" ");
 }
 
 /**
@@ -46,17 +51,24 @@ export function nameKey(name: string | null): string {
  * same name: "Steveston Park" and "Steveston Town Square Park" are two parks.
  */
 function sameName(a: string | null, b: string | null): boolean {
-  const left = nameKey(a), right = nameKey(b);
+  const left = nameKey(a),
+    right = nameKey(b);
   if (!left || !right) return false;
   const words = (key: string) => [...new Set(key.split(" "))].sort().join(" ");
   return left === right || words(left) === words(right);
 }
 
 function bounds(geometry: MultiPolygon): [number, number, number, number] {
-  let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
+  let west = Infinity,
+    south = Infinity,
+    east = -Infinity,
+    north = -Infinity;
   for (const [outer] of geometry.coordinates) {
     for (const [lng, lat] of outer) {
-      west = Math.min(west, lng); south = Math.min(south, lat); east = Math.max(east, lng); north = Math.max(north, lat);
+      west = Math.min(west, lng);
+      south = Math.min(south, lat);
+      east = Math.max(east, lng);
+      north = Math.max(north, lat);
     }
   }
   return [west, south, east, north];
@@ -68,12 +80,17 @@ function bounds(geometry: MultiPolygon): [number, number, number, number] {
  * park, count; neighbours that only touch do not.
  */
 function shareArea(a: MultiPolygon, b: MultiPolygon): boolean {
-  const boxA = bounds(a), boxB = bounds(b);
-  const west = Math.max(boxA[0], boxB[0]), south = Math.max(boxA[1], boxB[1]), east = Math.min(boxA[2], boxB[2]), north = Math.min(boxA[3], boxB[3]);
+  const boxA = bounds(a),
+    boxB = bounds(b);
+  const west = Math.max(boxA[0], boxB[0]),
+    south = Math.max(boxA[1], boxB[1]),
+    east = Math.min(boxA[2], boxB[2]),
+    north = Math.min(boxA[3], boxB[3]);
   if (west >= east || south >= north) return false;
   const smaller = Math.min(multiPolygonArea(a), multiPolygonArea(b));
   if (smaller <= 0) return false;
-  const cellM2 = ((east - west) * M_PER_DEG_LNG_EQUATOR * Math.cos((((south + north) / 2) * Math.PI) / 180) * (north - south) * M_PER_DEG_LAT) / OVERLAP_GRID ** 2;
+  const cellM2 =
+    ((east - west) * M_PER_DEG_LNG_EQUATOR * Math.cos((((south + north) / 2) * Math.PI) / 180) * (north - south) * M_PER_DEG_LAT) / OVERLAP_GRID ** 2;
   let shared = 0;
   for (let i = 0; i < OVERLAP_GRID; i += 1) {
     for (let j = 0; j < OVERLAP_GRID; j += 1) {
@@ -108,9 +125,7 @@ export function catalogueMatch(feature: OsmFeature, parks: CataloguePark[]): Cat
   }
   for (const park of parks) {
     if (!sameName(feature.name, park.name)) continue;
-    const same = park.boundary
-      ? shareArea(feature.geometry, park.boundary)
-      : distanceToMultiPolygon([park.lng, park.lat], feature.geometry) <= NAME_MATCH_M;
+    const same = park.boundary ? shareArea(feature.geometry, park.boundary) : distanceToMultiPolygon([park.lng, park.lat], feature.geometry) <= NAME_MATCH_M;
     if (same) return { parkId: park.id, name: park.name };
   }
   return null;

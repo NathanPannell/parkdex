@@ -10,7 +10,13 @@ import publish_content
 class PublishTests(unittest.TestCase):
     def setUp(self):
         self.data = b"unchanged asset"
-        self.item = {"path": "art/badge.webp", "key": "releases/version/art/badge.webp", "sha256": hashlib.sha256(self.data).hexdigest(), "byte_size": len(self.data), "content_type": "image/webp"}
+        self.item = {
+            "path": "art/badge.webp",
+            "key": "releases/version/art/badge.webp",
+            "sha256": hashlib.sha256(self.data).hexdigest(),
+            "byte_size": len(self.data),
+            "content_type": "image/webp",
+        }
 
     def response(self, status, data=b""):
         response = Mock(status_code=status, content=data, ok=status < 400)

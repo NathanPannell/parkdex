@@ -43,10 +43,7 @@ def in_ring(point: tuple[float, float], ring: list[list[float]]) -> bool:
 
 def legacy_inside(point: tuple[float, float], geometry: dict) -> bool:
     polygons = [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
-    return any(
-        in_ring(point, polygon[0]) and not any(in_ring(point, hole) for hole in polygon[1:])
-        for polygon in polygons
-    )
+    return any(in_ring(point, polygon[0]) and not any(in_ring(point, hole) for hole in polygon[1:]) for polygon in polygons)
 
 
 def polygon_parts(geometry):
@@ -88,17 +85,18 @@ def normalize(feature: dict) -> tuple[dict, dict]:
         selected = legacy_inside(point, source)
         if selected:
             included.append(face)
-        decisions.append({
-            "probe": list(point),
-            "included": selected,
-            "area": face.area,
-            "faceSha256": digest(mapping(face)),
-        })
+        decisions.append(
+            {
+                "probe": list(point),
+                "included": selected,
+                "area": face.area,
+                "faceSha256": digest(mapping(face)),
+            }
+        )
     rebuilt = unary_union(included)
     if rebuilt.is_empty or not rebuilt.is_valid or rebuilt.geom_type not in ("Polygon", "MultiPolygon"):
         raise ValueError(f"{feature['properties']['id']}: invalid rebuilt geometry")
-    if not all(rebuilt.covers(face.representative_point()) == decision["included"]
-               for face, decision in zip(faces, decisions)):
+    if not all(rebuilt.covers(face.representative_point()) == decision["included"] for face, decision in zip(faces, decisions)):
         raise ValueError(f"{feature['properties']['id']}: face membership changed")
     result_geometry = mapping(MultiPolygon(polygon_parts(rebuilt)))
     result_geometry = json.loads(json.dumps(result_geometry))
@@ -121,12 +119,14 @@ def normalize(feature: dict) -> tuple[dict, dict]:
     if not valid_parts:
         repaired = make_valid(original)
         repair_polygons = []
+
         def collect(value):
             if value.geom_type == "Polygon":
                 repair_polygons.append(value)
             elif hasattr(value, "geoms"):
                 for child in value.geoms:
                     collect(child)
+
         collect(repaired)
         independent_difference_area = unary_union(repair_polygons).symmetric_difference(rebuilt).area
         if independent_difference_area > 1e-18:

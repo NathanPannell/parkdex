@@ -128,9 +128,7 @@ export function evaluatePhoto(photo: ManifestPhoto, result: RunPhotoResult | und
   const decision = decideLab(result.answers, settings);
   const expected = photo.expected.outcome;
   const agreement: Agreement = expected === "either" || expected === decision.outcome ? "agree" : "disagree";
-  const rightReason = expected === "reject" && decision.outcome === "reject"
-    ? decision.flags.some((flag) => photo.expected.flags.includes(flag))
-    : null;
+  const rightReason = expected === "reject" && decision.outcome === "reject" ? decision.flags.some((flag) => photo.expected.flags.includes(flag)) : null;
   return {
     id: photo.id,
     decision,
@@ -148,13 +146,35 @@ function ratio(numerator: number, denominator: number): number | null {
 export function summarize(manifest: Manifest, run: Pick<RunFile, "results">, settings: LabSettings): { photos: PhotoEvaluation[]; summary: Summary } {
   const photos = manifest.photos.map((photo) => evaluatePhoto(photo, run.results[photo.id], settings));
   const confusion = Object.fromEntries((["approve", "reject", "either"] as const).map((row) => [row, { approve: 0, reject: 0 }])) as Summary["confusion"];
-  const scores = new Map<PhotoFlag, FlagScore>(PHOTO_FLAGS.map((flag) => [flag, {
-    flag, truePositive: 0, falsePositive: 0, falseNegative: 0, trueNegative: 0, precision: null, recall: null,
-    covered: !manifest.notCovered.includes(flag),
-  }]));
+  const scores = new Map<PhotoFlag, FlagScore>(
+    PHOTO_FLAGS.map((flag) => [
+      flag,
+      {
+        flag,
+        truePositive: 0,
+        falsePositive: 0,
+        falseNegative: 0,
+        trueNegative: 0,
+        precision: null,
+        recall: null,
+        covered: !manifest.notCovered.includes(flag),
+      },
+    ]),
+  );
   const summary: Summary = {
-    scored: 0, correct: 0, accuracy: null, errors: 0, confusion, falseApprovals: [], falseRejections: [],
-    badBlocked: 0, badTotal: 0, goodApproved: 0, goodTotal: 0, rightReason: 0, flags: [],
+    scored: 0,
+    correct: 0,
+    accuracy: null,
+    errors: 0,
+    confusion,
+    falseApprovals: [],
+    falseRejections: [],
+    badBlocked: 0,
+    badTotal: 0,
+    goodApproved: 0,
+    goodTotal: 0,
+    rightReason: 0,
+    flags: [],
   };
   manifest.photos.forEach((photo, index) => {
     const evaluation = photos[index];

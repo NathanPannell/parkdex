@@ -22,10 +22,13 @@ def write_bundle(path: Path, *, signed=True, manifest=True):
 class ReleaseNotesTests(unittest.TestCase):
     def test_reads_each_language_block(self):
         notes = publish_play.parse_release_notes("<en-GB>\nFound a park.\n- Reviews.\n</en-GB>\n<fr-CA>Parc.</fr-CA>\n")
-        self.assertEqual(notes, [
-            {"language": "en-GB", "text": "Found a park.\n- Reviews."},
-            {"language": "fr-CA", "text": "Parc."},
-        ])
+        self.assertEqual(
+            notes,
+            [
+                {"language": "en-GB", "text": "Found a park.\n- Reviews."},
+                {"language": "fr-CA", "text": "Parc."},
+            ],
+        )
 
     def test_refuses_missing_empty_long_and_repeated_notes(self):
         for text in ("Just text", "<en-GB>  </en-GB>", f"<en-GB>{'x' * 501}</en-GB>", "<en-GB>a</en-GB><en-GB>b</en-GB>"):
@@ -56,17 +59,22 @@ class BundleTests(unittest.TestCase):
             aab.with_name("build-provenance.json").write_text(json.dumps({"applicationId": "app.other"}), encoding="utf-8")
             with self.assertRaises(publish_play.PublishError):
                 publish_play.read_provenance(aab)
-            aab.with_name("build-provenance.json").write_text(
-                "﻿" + json.dumps({"applicationId": "app.parkdex", "versionCode": 16}), encoding="utf-8")
+            aab.with_name("build-provenance.json").write_text("﻿" + json.dumps({"applicationId": "app.parkdex", "versionCode": 16}), encoding="utf-8")
             self.assertEqual(publish_play.read_provenance(aab)["versionCode"], 16)
 
 
 class ReleaseTests(unittest.TestCase):
     def test_release_body_names_the_version(self):
         notes = [{"language": "en-GB", "text": "Hi"}]
-        self.assertEqual(publish_play.release_body(16, notes, "completed", "1.4.0"), {
-            "name": "16 (1.4.0)", "versionCodes": ["16"], "status": "completed", "releaseNotes": notes,
-        })
+        self.assertEqual(
+            publish_play.release_body(16, notes, "completed", "1.4.0"),
+            {
+                "name": "16 (1.4.0)",
+                "versionCodes": ["16"],
+                "status": "completed",
+                "releaseNotes": notes,
+            },
+        )
         self.assertEqual(publish_play.release_body(16, notes, "draft", None)["name"], "16")
 
     def test_production_needs_explicit_flag(self):

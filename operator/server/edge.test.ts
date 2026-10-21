@@ -42,7 +42,7 @@ after(async () => {
 function call(handler: (request: Request) => Promise<Response>, path: string, init: RequestInit = {}) {
   const [subPath, query = ""] = path.split("?");
   const url = `${ORIGIN}/api?__path=${encodeURIComponent(subPath)}${query ? `&${query}` : ""}`;
-  return handler(new Request(url, { ...init, headers: { origin: ORIGIN, ...init.headers as Record<string, string> } }));
+  return handler(new Request(url, { ...init, headers: { origin: ORIGIN, ...(init.headers as Record<string, string>) } }));
 }
 
 test("the strict fetch refuses what the Edge runtime refuses", async () => {
@@ -51,16 +51,35 @@ test("the strict fetch refuses what the Edge runtime refuses", async () => {
   await assert.rejects(strict("https://example.test/", { redirect: "error" }), TypeError);
   await assert.rejects(strict("https://example.test/", { keepalive: true }), TypeError);
   assert.equal((await strict("https://example.test/", { redirect: "manual" })).status, 200);
-  assert.deepEqual(strict.violations.map((item) => item.field), ["cache", "redirect", "keepalive"]);
+  assert.deepEqual(
+    strict.violations.map((item) => item.field),
+    ["cache", "redirect", "keepalive"],
+  );
 });
 
 test("the built Edge Function reaches Cloudflare, the CDN and both update endpoints without refused fetch fields", async () => {
   const cloud = new FakeBundleCloud();
   cloud.put(`app-bundles/${SHA}.zip`, new Uint8Array(64));
-  cloud.put(pointerKey("staging"), `${JSON.stringify({
-    schema: APP_BUNDLE_POINTER_SCHEMA, channel: "staging", generation: 1, version: bundleVersion(COMMIT, SHA), bundleUrl: bundleUrlFor(CDN_ORIGIN, SHA),
-    sha256: SHA, byteSize: 64, minimumNativeBuild: 12, maximumNativeBuild: 12, sourceCommit: COMMIT, publishedAt: "2026-10-01T00:00:00.000Z",
-  }, null, 2)}\n`);
+  cloud.put(
+    pointerKey("staging"),
+    `${JSON.stringify(
+      {
+        schema: APP_BUNDLE_POINTER_SCHEMA,
+        channel: "staging",
+        generation: 1,
+        version: bundleVersion(COMMIT, SHA),
+        bundleUrl: bundleUrlFor(CDN_ORIGIN, SHA),
+        sha256: SHA,
+        byteSize: 64,
+        minimumNativeBuild: 12,
+        maximumNativeBuild: 12,
+        sourceCommit: COMMIT,
+        publishedAt: "2026-10-01T00:00:00.000Z",
+      },
+      null,
+      2,
+    )}\n`,
+  );
   const strict = strictEdgeFetch(cloud.fetch);
   globalThis.fetch = strict as typeof fetch;
   const handler = createEdgeHandler(env);
@@ -72,10 +91,14 @@ test("the built Edge Function reaches Cloudflare, the CDN and both update endpoi
   // No database on this deployment: the checklist says why instead of failing quietly.
   assert.match(items.history.detail, /not configured/);
 
-  const overview = await (await call(handler, "app/updates")).json() as { channels: { state: string }[]; bundles: unknown[]; cloudflare: { error: string | null } };
+  const overview = (await (await call(handler, "app/updates")).json()) as {
+    channels: { state: string }[];
+    bundles: unknown[];
+    cloudflare: { error: string | null };
+  };
   assert.deepEqual([overview.channels.map((view) => view.state), overview.bundles.length, overview.cloudflare.error], [["live", "none"], 1, null]);
 
-  const check = await (await call(handler, "app/updates/check?channel=staging&build=12")).json() as { status: number; matches: boolean };
+  const check = (await (await call(handler, "app/updates/check?channel=staging&build=12")).json()) as { status: number; matches: boolean };
   assert.deepEqual([check.status, check.matches], [200, true]);
 
   const moved = await call(handler, "app/updates/move", {

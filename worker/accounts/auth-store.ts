@@ -6,10 +6,13 @@ export type StoredTransport = "web" | "native";
 
 export interface AccountSummary {
   id: string;
+  /** Empty for a guest account until Google upgrades it. */
   email: string;
   emailVerified: boolean;
   displayName: string | null;
   providers: AccountProvider[];
+  /** A device-held account with no email or password yet; Google sign-in upgrades it in place. */
+  guest?: boolean;
 }
 
 export interface AccountCredentials extends AccountSummary {
@@ -88,11 +91,19 @@ export interface AccountAuthStore {
   clearRateLimit(action: string, scopeHash: string): Promise<void>;
   recordSecurityEvent(eventType: string, scopeHash: string | null, outcome: string): Promise<void>;
   createAccount(input: CreateAccountInput): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
+  createGuestAccount(
+    accountId: string,
+    session: SessionInsert,
+  ): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
   findAccountByEmail(email: string): Promise<AccountCredentials | null>;
   findAccountById(accountId: string): Promise<AccountCredentials | null>;
-  createSession(accountId: string, session: SessionInsert): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
+  createSession(
+    accountId: string,
+    session: SessionInsert,
+  ): Promise<{ account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string } | null>;
   findSession(tokenHash: string): Promise<StoredSession | null>;
-  rotateSession(sessionId: string, previousTokenHash: string, session: SessionInsert, now: string): Promise<string | null>;
+  /** `renewWindowMs`: how close to expiry a session must be before it can rotate (7 days unless given). */
+  rotateSession(sessionId: string, previousTokenHash: string, session: SessionInsert, now: string, renewWindowMs?: number): Promise<string | null>;
   revokeSession(sessionId: string, tokenHash: string, now: string): Promise<boolean>;
   issueActionToken(accountId: string, purpose: "verification" | "password_reset", tokenHash: string, expiresAt: string): Promise<boolean>;
   hasValidActionToken(tokenHash: string, purpose: "verification" | "password_reset", now: string): Promise<boolean>;
@@ -102,12 +113,27 @@ export interface AccountAuthStore {
   consumeGoogleChallenge(nonceHash: string, now: string): Promise<GoogleChallengeRecord | null>;
   completeGoogleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult>;
   completeGoogleReauthentication(input: { subject: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<boolean>;
-  completeGoogleLink(input: { subject: string; email: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<GoogleLinkResult>;
+  completeGoogleLink(input: {
+    subject: string;
+    email: string;
+    accountId: string;
+    sessionId: string;
+    tokenHash: string;
+    now: string;
+  }): Promise<GoogleLinkResult>;
   confirmPasswordReauthentication(accountId: string, sessionId: string, tokenHash: string, now: string): Promise<boolean>;
   beginDeletion(accountId: string, sessionId: string, tokenHash: string, receiptId: string, now: string): Promise<string | null>;
   findDeletionReceipt(receiptId: string): Promise<DeletionReceipt | null>;
   completeDeletion(receiptId: string, now: string): Promise<boolean>;
   purgeRetention(now: string, auditCutoff: string, rateLimitCutoff: string, batchLimit: number): Promise<{ deleted: number; remainingExpired: number }>;
+  /**
+   * Marks guest accounts nobody can open any more for deletion and returns their receipts. A guest is
+   * abandoned once it has no live session and nothing about it (creation, a session's revocation or
+   * expiry) happened after `cutoff`.
+   */
+  markAbandonedGuestsForDeletion(cutoff: string, now: string, limit: number): Promise<string[]>;
+  /** Receipts of guest deletions that started but whose private data isn't gone yet. */
+  pendingGuestDeletionReceipts(limit: number): Promise<string[]>;
 }
 
 type Row = Record<string, unknown>;
@@ -117,6 +143,7 @@ const ACCOUNT_COLUMNS = `
   a.normalized_email AS email,
   (a.email_verified_at IS NOT NULL) AS email_verified,
   a.display_name,
+  (a.normalized_email IS NULL) AS guest,
   COALESCE((
     SELECT json_agg(p.provider ORDER BY p.provider)
     FROM (
@@ -138,17 +165,20 @@ function nullableString(value: unknown): string | null {
 function accountSummary(row: Row): AccountSummary {
   let rawProviders = row.providers;
   if (typeof rawProviders === "string") {
-    try { rawProviders = JSON.parse(rawProviders) as unknown; } catch { rawProviders = []; }
+    try {
+      rawProviders = JSON.parse(rawProviders) as unknown;
+    } catch {
+      rawProviders = [];
+    }
   }
-  const providers = Array.isArray(rawProviders)
-    ? rawProviders.filter((value): value is AccountProvider => value === "email" || value === "google")
-    : [];
+  const providers = Array.isArray(rawProviders) ? rawProviders.filter((value): value is AccountProvider => value === "email" || value === "google") : [];
   return {
     id: stringValue(row.account_id ?? row.id),
     email: stringValue(row.email),
     emailVerified: row.email_verified === true,
     displayName: nullableString(row.display_name),
     providers: [...new Set(providers)],
+    guest: row.guest === true,
   };
 }
 
@@ -171,12 +201,12 @@ function createdSession(row: Row): { account: AccountSummary; sessionId: string;
 
 export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStore {
   const sql = database(databaseUrl);
-  const query = async (text: string, params: unknown[] = []): Promise<Row[]> =>
-    await sql.query(text, params) as unknown as Row[];
+  const query = async (text: string, params: unknown[] = []): Promise<Row[]> => (await sql.query(text, params)) as unknown as Row[];
 
   return {
     async reserveRateLimit(action, scopeHash, limit, windowMs) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH attempted AS (
           INSERT INTO kip_account.rate_limits (action, scope_hash, window_started_at, attempt_count)
           VALUES ($1, $2, now(), 1)
@@ -200,7 +230,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
               (SELECT window_started_at FROM attempted),
               (SELECT window_started_at FROM kip_account.rate_limits WHERE action = $1 AND scope_hash = $2)
             ) + ($4::double precision * interval '1 millisecond') - now()
-          )))::integer) AS retry_after_seconds`, [action, scopeHash, limit, windowMs]);
+          )))::integer) AS retry_after_seconds`,
+        [action, scopeHash, limit, windowMs],
+      );
       return { allowed: rows[0]?.allowed === true, retryAfterSeconds: Number(rows[0]?.retry_after_seconds ?? 1) };
     },
 
@@ -209,13 +241,17 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
     },
 
     async recordSecurityEvent(eventType, scopeHash, outcome) {
-      await query(`
+      await query(
+        `
         INSERT INTO kip_account.security_events (id, event_type, scope_hash, outcome)
-        VALUES ($1::uuid, $2, $3, $4)`, [crypto.randomUUID(), eventType, scopeHash, outcome]);
+        VALUES ($1::uuid, $2, $3, $4)`,
+        [crypto.randomUUID(), eventType, scopeHash, outcome],
+      );
     },
 
     async createAccount(input) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH created_account AS (
           INSERT INTO kip_account.accounts (id, normalized_email, password_hash, display_name)
           VALUES ($1::uuid, $2, $3, $4)
@@ -242,35 +278,78 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           json_build_array('email') AS providers,
           s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
         FROM created_account c
-        JOIN created_session s ON s.account_id = c.id`, [
-        input.accountId, input.email, input.passwordHash, input.displayName,
-        input.session.id, input.session.tokenHash, input.session.csrfHash, input.session.transport,
-        input.session.expiresAt, input.session.absoluteExpiresAt,
-        input.verificationTokenHash, input.verificationExpiresAt,
-      ]);
+        JOIN created_session s ON s.account_id = c.id`,
+        [
+          input.accountId,
+          input.email,
+          input.passwordHash,
+          input.displayName,
+          input.session.id,
+          input.session.tokenHash,
+          input.session.csrfHash,
+          input.session.transport,
+          input.session.expiresAt,
+          input.session.absoluteExpiresAt,
+          input.verificationTokenHash,
+          input.verificationExpiresAt,
+        ],
+      );
+      return rows[0] ? createdSession(rows[0]) : null;
+    },
+
+    async createGuestAccount(accountId, session) {
+      const rows = await query(
+        `
+        WITH created_account AS (
+          INSERT INTO kip_account.accounts (id, normalized_email, password_hash, display_name)
+          VALUES ($1::uuid, NULL, NULL, NULL)
+          RETURNING id
+        ),
+        created_session AS (
+          INSERT INTO kip_account.sessions (
+            id, account_id, token_hash, csrf_hash, transport, expires_at, absolute_expires_at
+          )
+          SELECT $2::uuid, id, $3, $4, $5, $6::timestamptz, $7::timestamptz
+          FROM created_account
+          RETURNING id AS session_id, account_id, expires_at, absolute_expires_at
+        )
+        SELECT c.id::text AS account_id, NULL AS email, false AS email_verified, NULL AS display_name,
+          true AS guest, json_build_array() AS providers,
+          s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
+        FROM created_account c
+        JOIN created_session s ON s.account_id = c.id`,
+        [accountId, session.id, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, session.absoluteExpiresAt],
+      );
       return rows[0] ? createdSession(rows[0]) : null;
     },
 
     async findAccountByEmail(email) {
-      const rows = await query(`
+      const rows = await query(
+        `
         SELECT ${ACCOUNT_COLUMNS}, a.password_hash, a.deletion_state
         FROM kip_account.accounts a
         WHERE a.normalized_email = $1
-        LIMIT 1`, [email]);
+        LIMIT 1`,
+        [email],
+      );
       return rows[0] ? credentials(rows[0]) : null;
     },
 
     async findAccountById(accountId) {
-      const rows = await query(`
+      const rows = await query(
+        `
         SELECT ${ACCOUNT_COLUMNS}, a.password_hash, a.deletion_state
         FROM kip_account.accounts a
         WHERE a.id = $1::uuid
-        LIMIT 1`, [accountId]);
+        LIMIT 1`,
+        [accountId],
+      );
       return rows[0] ? credentials(rows[0]) : null;
     },
 
     async createSession(accountId, session) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH created_session AS (
           INSERT INTO kip_account.sessions (
             id, account_id, token_hash, csrf_hash, transport, expires_at, absolute_expires_at
@@ -282,15 +361,15 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
         )
         SELECT ${ACCOUNT_COLUMNS}, s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
         FROM created_session s
-        JOIN kip_account.accounts a ON a.id = s.account_id`, [
-        session.id, session.tokenHash, session.csrfHash, session.transport,
-        session.expiresAt, session.absoluteExpiresAt, accountId,
-      ]);
+        JOIN kip_account.accounts a ON a.id = s.account_id`,
+        [session.id, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, session.absoluteExpiresAt, accountId],
+      );
       return rows[0] ? createdSession(rows[0]) : null;
     },
 
     async findSession(tokenHash) {
-      const rows = await query(`
+      const rows = await query(
+        `
         SELECT ${ACCOUNT_COLUMNS}, s.id::text AS session_id, s.token_hash, s.csrf_hash, s.transport,
           s.expires_at, s.absolute_expires_at, s.reauthenticated_at
         FROM kip_account.sessions s
@@ -300,7 +379,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           AND s.expires_at > now()
           AND s.absolute_expires_at > now()
           AND a.deletion_state = 'active'
-        LIMIT 1`, [tokenHash]);
+        LIMIT 1`,
+        [tokenHash],
+      );
       if (!rows[0]) return null;
       const row = rows[0];
       return {
@@ -315,8 +396,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
       };
     },
 
-    async rotateSession(sessionId, previousTokenHash, session, now) {
-      const rows = await query(`
+    async rotateSession(sessionId, previousTokenHash, session, now, renewWindowMs = 7 * 24 * 60 * 60 * 1000) {
+      const rows = await query(
+        `
         UPDATE kip_account.sessions s SET
           token_hash = $3,
           csrf_hash = $4,
@@ -329,26 +411,29 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           AND s.revoked_at IS NULL
           AND s.expires_at > $7::timestamptz
           AND s.absolute_expires_at > $7::timestamptz
-          AND s.expires_at <= $7::timestamptz + interval '7 days'
+          AND s.expires_at <= $7::timestamptz + ($8::double precision * interval '1 millisecond')
           AND a.deletion_state = 'active'
-        RETURNING s.expires_at`, [
-        sessionId, previousTokenHash, session.tokenHash, session.csrfHash, session.transport,
-        session.expiresAt, now,
-      ]);
+        RETURNING s.expires_at`,
+        [sessionId, previousTokenHash, session.tokenHash, session.csrfHash, session.transport, session.expiresAt, now, renewWindowMs],
+      );
       return rows[0] ? stringValue(rows[0].expires_at) : null;
     },
 
     async revokeSession(sessionId, tokenHash, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         UPDATE kip_account.sessions
         SET revoked_at = $3::timestamptz
         WHERE id = $1::uuid AND token_hash = $2 AND revoked_at IS NULL
-        RETURNING id`, [sessionId, tokenHash, now]);
+        RETURNING id`,
+        [sessionId, tokenHash, now],
+      );
       return rows.length > 0;
     },
 
     async issueActionToken(accountId, purpose, tokenHash, expiresAt) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH target AS MATERIALIZED (
           SELECT id FROM kip_account.accounts
           WHERE id = $1::uuid AND deletion_state = 'active'
@@ -365,23 +450,29 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           SELECT $3, id, $2, $4::timestamptz FROM target
           RETURNING account_id
         )
-        SELECT EXISTS(SELECT 1 FROM issued) AS issued`, [accountId, purpose, tokenHash, expiresAt]);
+        SELECT EXISTS(SELECT 1 FROM issued) AS issued`,
+        [accountId, purpose, tokenHash, expiresAt],
+      );
       return rows[0]?.issued === true;
     },
 
     async hasValidActionToken(tokenHash, purpose, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         SELECT EXISTS (
           SELECT 1 FROM kip_account.action_tokens t
           JOIN kip_account.accounts a ON a.id = t.account_id
           WHERE t.token_hash = $1 AND t.purpose = $2 AND t.used_at IS NULL
             AND t.expires_at > $3::timestamptz AND a.deletion_state = 'active'
-        ) AS valid`, [tokenHash, purpose, now]);
+        ) AS valid`,
+        [tokenHash, purpose, now],
+      );
       return rows[0]?.valid === true;
     },
 
     async consumeVerificationToken(tokenHash, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH consumed AS (
           UPDATE kip_account.action_tokens t SET used_at = $2::timestamptz
           FROM kip_account.accounts a
@@ -393,12 +484,15 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           WHERE a.id IN (SELECT account_id FROM consumed)
           RETURNING a.id
         )
-        SELECT EXISTS(SELECT 1 FROM verified) AS confirmed`, [tokenHash, now]);
+        SELECT EXISTS(SELECT 1 FROM verified) AS confirmed`,
+        [tokenHash, now],
+      );
       return rows[0]?.confirmed === true;
     },
 
     async consumePasswordResetToken(tokenHash, passwordHash, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH consumed AS (
           UPDATE kip_account.action_tokens t SET used_at = $3::timestamptz
           FROM kip_account.accounts a
@@ -415,23 +509,29 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           WHERE s.account_id IN (SELECT id FROM updated) AND s.revoked_at IS NULL
           RETURNING s.id
         )
-        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`, [tokenHash, passwordHash, now]);
+        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`,
+        [tokenHash, passwordHash, now],
+      );
       return rows[0]?.confirmed === true;
     },
 
     async createGoogleChallenge(input) {
-      await query(`
+      await query(
+        `
         INSERT INTO kip_account.google_challenges (nonce_hash, purpose, transport, account_id, session_id, expires_at)
-        VALUES ($1, $2, $3, $4::uuid, $5::uuid, $6::timestamptz)`, [
-        input.nonceHash, input.purpose, input.transport, input.accountId, input.sessionId, input.expiresAt,
-      ]);
+        VALUES ($1, $2, $3, $4::uuid, $5::uuid, $6::timestamptz)`,
+        [input.nonceHash, input.purpose, input.transport, input.accountId, input.sessionId, input.expiresAt],
+      );
     },
 
     async consumeGoogleChallenge(nonceHash, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         UPDATE kip_account.google_challenges SET consumed_at = $2::timestamptz
         WHERE nonce_hash = $1 AND consumed_at IS NULL AND expires_at > $2::timestamptz
-        RETURNING purpose, transport, account_id::text AS account_id, session_id::text AS session_id`, [nonceHash, now]);
+        RETURNING purpose, transport, account_id::text AS account_id, session_id::text AS session_id`,
+        [nonceHash, now],
+      );
       if (!rows[0]) return null;
       const row = rows[0];
       return {
@@ -444,12 +544,21 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
 
     async completeGoogleSignIn(input) {
       const params = [
-        input.subject, input.email, input.accountId, input.displayName,
-        input.session.id, input.session.tokenHash, input.session.csrfHash, input.session.transport,
-        input.session.expiresAt, input.session.absoluteExpiresAt, input.now,
+        input.subject,
+        input.email,
+        input.accountId,
+        input.displayName,
+        input.session.id,
+        input.session.tokenHash,
+        input.session.csrfHash,
+        input.session.transport,
+        input.session.expiresAt,
+        input.session.absoluteExpiresAt,
+        input.now,
       ];
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const rows = await query(`
+        const rows = await query(
+          `
           WITH subject_lock AS MATERIALIZED (
             SELECT pg_advisory_xact_lock(hashtextextended('kip-google-sub:' || $1, 0))
           ),
@@ -516,7 +625,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             WHEN EXISTS (SELECT 1 FROM created_account) AND NOT EXISTS (SELECT 1 FROM created_identity) THEN 'retry'
             ELSE 'retry'
           END AS status,
-          (SELECT to_jsonb(account_data) FROM account_data LIMIT 1) AS result`, params);
+          (SELECT to_jsonb(account_data) FROM account_data LIMIT 1) AS result`,
+          params,
+        );
         const row = rows[0];
         if (!row) return { status: "retry" };
         const status = stringValue(row.status);
@@ -532,17 +643,21 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           };
         }
         if (status !== "retry") return { status: status as "email_conflict" | "account_unavailable" };
-        await query(`
+        await query(
+          `
           DELETE FROM kip_account.accounts a
           WHERE a.id = $1::uuid AND a.password_hash IS NULL
             AND NOT EXISTS (SELECT 1 FROM kip_account.google_identities g WHERE g.account_id = a.id)
-            AND NOT EXISTS (SELECT 1 FROM kip_account.sessions s WHERE s.account_id = a.id)`, [input.accountId]);
+            AND NOT EXISTS (SELECT 1 FROM kip_account.sessions s WHERE s.account_id = a.id)`,
+          [input.accountId],
+        );
       }
       return { status: "retry" };
     },
 
     async completeGoogleReauthentication(input) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH identity AS MATERIALIZED (
           SELECT a.id FROM kip_account.google_identities g
           JOIN kip_account.accounts a ON a.id = g.account_id
@@ -555,15 +670,16 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             AND s.absolute_expires_at > $5::timestamptz
           RETURNING s.id
         )
-        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`, [
-        input.subject, input.accountId, input.sessionId, input.tokenHash, input.now,
-      ]);
+        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`,
+        [input.subject, input.accountId, input.sessionId, input.tokenHash, input.now],
+      );
       return rows[0]?.confirmed === true;
     },
 
     async completeGoogleLink(input) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const rows = await query(`
+        const rows = await query(
+          `
           WITH subject_lock AS MATERIALIZED (
             SELECT pg_advisory_xact_lock(hashtextextended('kip-google-sub:' || $1, 0))
           ),
@@ -571,12 +687,13 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2, 0)) FROM subject_lock
           ),
           target AS MATERIALIZED (
-            SELECT a.id, a.deletion_state FROM kip_account.accounts a
+            SELECT a.id, a.deletion_state, (a.normalized_email IS NULL) AS guest FROM kip_account.accounts a
             JOIN kip_account.sessions s ON s.account_id = a.id
             WHERE a.id = $3::uuid AND s.id = $4::uuid AND s.token_hash = $5
               AND a.deletion_state = 'active' AND s.revoked_at IS NULL
               AND s.expires_at > $6::timestamptz AND s.absolute_expires_at > $6::timestamptz
-              AND s.reauthenticated_at >= $6::timestamptz - interval '5 minutes'
+              -- A guest has nothing to reauthenticate with: its session is its only credential.
+              AND (a.normalized_email IS NULL OR s.reauthenticated_at >= $6::timestamptz - interval '5 minutes')
               AND EXISTS (SELECT 1 FROM email_lock)
           ),
           existing_subject AS MATERIALIZED (
@@ -593,6 +710,21 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
               AND (NOT EXISTS (SELECT 1 FROM email_owner) OR EXISTS (SELECT 1 FROM email_owner WHERE id = t.id))
             ON CONFLICT (provider, subject) DO NOTHING
             RETURNING account_id
+          ),
+          -- Upgrading a guest in place: it takes the Google email, and its long guest sessions
+          -- shorten to an ordinary account's limits.
+          upgraded AS (
+            UPDATE kip_account.accounts a SET normalized_email = $2, email_verified_at = $6::timestamptz, updated_at = $6::timestamptz
+            FROM target t
+            WHERE a.id = t.id AND t.guest AND EXISTS (SELECT 1 FROM inserted)
+            RETURNING a.id
+          ),
+          shortened AS (
+            UPDATE kip_account.sessions s SET
+              absolute_expires_at = LEAST(s.absolute_expires_at, $6::timestamptz + interval '90 days'),
+              expires_at = LEAST(s.expires_at, $6::timestamptz + interval '30 days')
+            WHERE s.account_id IN (SELECT id FROM upgraded) AND s.revoked_at IS NULL
+            RETURNING s.id
           )
           SELECT CASE
             WHEN NOT EXISTS (SELECT 1 FROM target) THEN 'retry'
@@ -601,7 +733,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             WHEN EXISTS (SELECT 1 FROM email_owner WHERE id <> $3::uuid) THEN 'email_conflict'
             WHEN EXISTS (SELECT 1 FROM inserted) THEN 'ok'
             ELSE 'retry'
-          END AS status`, [input.subject, input.email, input.accountId, input.sessionId, input.tokenHash, input.now]);
+          END AS status`,
+          [input.subject, input.email, input.accountId, input.sessionId, input.tokenHash, input.now],
+        );
         const status = stringValue(rows[0]?.status);
         if (status !== "retry") return status as GoogleLinkResult;
       }
@@ -609,25 +743,29 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
     },
 
     async confirmPasswordReauthentication(accountId, sessionId, tokenHash, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         UPDATE kip_account.sessions s SET reauthenticated_at = $4::timestamptz
         FROM kip_account.accounts a
         WHERE s.id = $2::uuid AND s.account_id = $1::uuid AND s.token_hash = $3
           AND s.account_id = a.id AND a.deletion_state = 'active'
           AND s.revoked_at IS NULL AND s.expires_at > $4::timestamptz AND s.absolute_expires_at > $4::timestamptz
-        RETURNING s.id`, [accountId, sessionId, tokenHash, now]);
+        RETURNING s.id`,
+        [accountId, sessionId, tokenHash, now],
+      );
       return rows.length > 0;
     },
 
     async beginDeletion(accountId, sessionId, tokenHash, receiptId, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH eligible AS MATERIALIZED (
           SELECT a.id FROM kip_account.accounts a
           JOIN kip_account.sessions current_session ON current_session.account_id = a.id
           WHERE a.id = $1::uuid AND current_session.id = $2::uuid AND current_session.token_hash = $3
             AND a.deletion_state = 'active' AND current_session.revoked_at IS NULL
             AND current_session.expires_at > $5::timestamptz AND current_session.absolute_expires_at > $5::timestamptz
-            AND current_session.reauthenticated_at >= $5::timestamptz - interval '5 minutes'
+            AND (a.normalized_email IS NULL OR current_session.reauthenticated_at >= $5::timestamptz - interval '5 minutes')
           FOR UPDATE OF a
         ), marked AS (
           UPDATE kip_account.accounts a SET deletion_state = 'deleting', updated_at = $5::timestamptz
@@ -642,14 +780,19 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           SELECT $4::uuid, id FROM marked
           RETURNING receipt_id, account_id
         )
-        SELECT receipt_id::text AS receipt_id FROM receipt`, [accountId, sessionId, tokenHash, receiptId, now]);
+        SELECT receipt_id::text AS receipt_id FROM receipt`,
+        [accountId, sessionId, tokenHash, receiptId, now],
+      );
       return rows[0] ? stringValue(rows[0].receipt_id) : null;
     },
 
     async findDeletionReceipt(receiptId) {
-      const rows = await query(`
+      const rows = await query(
+        `
         SELECT receipt_id::text AS receipt_id, account_id::text AS account_id, status
-        FROM kip_account.account_deletion_receipts WHERE receipt_id = $1::uuid LIMIT 1`, [receiptId]);
+        FROM kip_account.account_deletion_receipts WHERE receipt_id = $1::uuid LIMIT 1`,
+        [receiptId],
+      );
       if (!rows[0]) return null;
       return {
         receiptId: stringValue(rows[0].receipt_id),
@@ -659,7 +802,8 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
     },
 
     async completeDeletion(receiptId, now) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH receipt AS MATERIALIZED (
           SELECT account_id, status FROM kip_account.account_deletion_receipts
           WHERE receipt_id = $1::uuid FOR UPDATE
@@ -676,12 +820,68 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             ))
           RETURNING r.receipt_id
         )
-        SELECT EXISTS(SELECT 1 FROM completed) OR EXISTS(SELECT 1 FROM receipt WHERE status = 'complete') AS complete`, [receiptId, now]);
+        SELECT EXISTS(SELECT 1 FROM completed) OR EXISTS(SELECT 1 FROM receipt WHERE status = 'complete') AS complete`,
+        [receiptId, now],
+      );
       return rows[0]?.complete === true;
     },
 
+    async markAbandonedGuestsForDeletion(cutoff, now, limit) {
+      const rows = await query(
+        `
+        WITH candidates AS MATERIALIZED (
+          SELECT a.id FROM kip_account.accounts a
+          WHERE a.normalized_email IS NULL AND a.deletion_state = 'active'
+            AND a.created_at < $1::timestamptz
+            AND NOT EXISTS (
+              SELECT 1 FROM kip_account.sessions s
+              WHERE s.account_id = a.id AND s.revoked_at IS NULL
+                AND s.expires_at > $2::timestamptz AND s.absolute_expires_at > $2::timestamptz
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM kip_account.sessions s
+              WHERE s.account_id = a.id
+                AND COALESCE(s.revoked_at, LEAST(s.expires_at, s.absolute_expires_at)) >= $1::timestamptz
+            )
+          ORDER BY a.created_at
+          LIMIT $3
+          FOR UPDATE OF a SKIP LOCKED
+        ), marked AS (
+          UPDATE kip_account.accounts a SET deletion_state = 'deleting', updated_at = $2::timestamptz
+          WHERE a.id IN (SELECT id FROM candidates) AND a.deletion_state = 'active' AND a.normalized_email IS NULL
+          RETURNING a.id
+        ), revoked AS (
+          UPDATE kip_account.sessions s SET revoked_at = $2::timestamptz
+          WHERE s.account_id IN (SELECT id FROM marked) AND s.revoked_at IS NULL
+          RETURNING s.id
+        ), receipts AS (
+          INSERT INTO kip_account.account_deletion_receipts (receipt_id, account_id)
+          SELECT gen_random_uuid(), id FROM marked
+          RETURNING receipt_id
+        )
+        SELECT receipt_id::text AS receipt_id FROM receipts`,
+        [cutoff, now, limit],
+      );
+      return rows.map((row) => stringValue(row.receipt_id));
+    },
+
+    async pendingGuestDeletionReceipts(limit) {
+      const rows = await query(
+        `
+        SELECT r.receipt_id::text AS receipt_id
+        FROM kip_account.account_deletion_receipts r
+        JOIN kip_account.accounts a ON a.id = r.account_id
+        WHERE r.status = 'pending' AND a.deletion_state = 'deleting' AND a.normalized_email IS NULL
+        ORDER BY r.created_at
+        LIMIT $1`,
+        [limit],
+      );
+      return rows.map((row) => stringValue(row.receipt_id));
+    },
+
     async purgeRetention(now, auditCutoff, rateLimitCutoff, batchLimit) {
-      const rows = await query(`
+      const rows = await query(
+        `
         WITH expired_sessions AS MATERIALIZED (
           SELECT count(*)::bigint AS total FROM kip_account.sessions
           WHERE COALESCE(revoked_at, absolute_expires_at) < $2::timestamptz
@@ -739,7 +939,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
           GREATEST((SELECT total FROM expired_tokens) - (SELECT count(*) FROM deleted_tokens), 0) +
           GREATEST((SELECT total FROM expired_challenges) - (SELECT count(*) FROM deleted_challenges), 0) +
           GREATEST((SELECT total FROM expired_events) - (SELECT count(*) FROM deleted_events), 0) +
-          GREATEST((SELECT total FROM expired_limits) - (SELECT count(*) FROM deleted_limits), 0) AS remaining_expired`, [now, auditCutoff, rateLimitCutoff, batchLimit]);
+          GREATEST((SELECT total FROM expired_limits) - (SELECT count(*) FROM deleted_limits), 0) AS remaining_expired`,
+        [now, auditCutoff, rateLimitCutoff, batchLimit],
+      );
       return {
         deleted: Number(rows[0]?.deleted ?? 0),
         remainingExpired: Number(rows[0]?.remaining_expired ?? 0),

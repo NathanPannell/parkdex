@@ -15,7 +15,6 @@ import {
   type CatalogueChunkRef,
   type Connectivity,
   type ContentChannel,
-  type ContentChangeBatch,
   type ContentEnvironment,
   type ContentFile,
   type ContentMapInventory,
@@ -178,8 +177,7 @@ export function mapAnchorFor(inside: MapPoint | null, last: MapPoint | null): Ma
 }
 
 function validMapPoint(point: MapPoint | null): point is MapPoint {
-  return point !== null && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
-    point[0] >= -180 && point[0] <= 180 && point[1] >= -90 && point[1] <= 90;
+  return point !== null && Number.isFinite(point[0]) && Number.isFinite(point[1]) && point[0] >= -180 && point[0] <= 180 && point[1] >= -90 && point[1] <= 90;
 }
 
 function distanceKm(a: MapPoint, b: MapPoint) {
@@ -271,7 +269,9 @@ class ContentRuntimeController implements ContentRuntime {
   // Saved content is still being opened; offline or settings states wait until it has been tried.
   private startupSettled = false;
   private markStoreOpen!: () => void;
-  private readonly storeOpen = new Promise<void>((resolve) => { this.markStoreOpen = resolve; });
+  private readonly storeOpen = new Promise<void>((resolve) => {
+    this.markStoreOpen = resolve;
+  });
   private stopped = false;
   private closePromise: Promise<void> | null = null;
   private lastDiscoveryAt = Number.NEGATIVE_INFINITY;
@@ -322,10 +322,11 @@ class ContentRuntimeController implements ContentRuntime {
 
   constructor(private readonly options: ContentRuntimeOptions) {
     const fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
-    this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) => fetcher(input, init).catch((error: unknown) => {
-      if (isContentTransportPaused(error)) this.pausedWorkPending = true;
-      throw error;
-    })) as typeof fetch;
+    this.fetcher = ((input: RequestInfo | URL, init?: RequestInit) =>
+      fetcher(input, init).catch((error: unknown) => {
+        if (isContentTransportPaused(error)) this.pausedWorkPending = true;
+        throw error;
+      })) as typeof fetch;
     this.environment = options.environment;
     if (options.lastLocation && validMapPoint(options.lastLocation)) this.lastLocation = [options.lastLocation[0], options.lastLocation[1]];
     this.scheduler = new ContentDownloadScheduler(this.currentPolicy());
@@ -541,7 +542,7 @@ class ContentRuntimeController implements ContentRuntime {
           file = await restoreLegacyArchivedScene(releaseId, scene, this.options.store, this.fetcher, controller.signal);
         } else {
           if (!response.ok) throw new Error(`Archived scene lookup returned HTTP ${response.status}`);
-          const value = await response.json() as unknown;
+          const value = (await response.json()) as unknown;
           if (!value || typeof value !== "object" || Array.isArray(value)) throw new ContentValidationError("Archived scene lookup has an invalid shape");
           const record = value as Record<string, unknown>;
           if (Object.keys(record).sort().join("\0") !== ["file", "schema"].join("\0") || record.schema !== "parkdex.scene-asset/v1") {
@@ -634,20 +635,22 @@ class ContentRuntimeController implements ContentRuntime {
       throw new ContentUnavailableOfflineError("map details are waiting for verified badge art");
     }
     if (!this.connectivity().connected) throw new ContentUnavailableOfflineError(path);
-    if (this.hasSyncApi() && path.startsWith("map/") &&
-      (!this.syncState?.map || manifest.version !== this.syncState.map.version)) {
+    if (this.hasSyncApi() && path.startsWith("map/") && (!this.syncState?.map || manifest.version !== this.syncState.map.version)) {
       throw new ContentUnavailableOfflineError(path);
     }
     const effectivePurpose = isMapChunk(path) && purpose !== "nearby" && purpose !== "update" ? "bulk" : purpose;
     this.incrementInFlight(file.sha256);
     try {
-      await this.scheduler.enqueue({
-      key: file.sha256,
-      path: file.path,
-      purpose: effectivePurpose,
-      priority: requestPriority(effectivePurpose, file.path),
-      run: (downloadSignal) => this.downloadFile(file, downloadSignal, effectivePurpose),
-      }, signal);
+      await this.scheduler.enqueue(
+        {
+          key: file.sha256,
+          path: file.path,
+          purpose: effectivePurpose,
+          priority: requestPriority(effectivePurpose, file.path),
+          run: (downloadSignal) => this.downloadFile(file, downloadSignal, effectivePurpose),
+        },
+        signal,
+      );
       this.verifiedHashes.add(key);
       this.localFileSizes.set(file.sha256, file.byte_size);
       this.refreshProgress();
@@ -708,7 +711,7 @@ class ContentRuntimeController implements ContentRuntime {
     const manifest = release?.manifest ?? this.syncManifests.get(releaseId);
     if (!manifest) return false;
     const file = fileByPath(manifest, path);
-    return this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)) || await this.hasVerifiedLocalFile(file);
+    return this.verifiedHashes.has(fileKey(file.sha256, file.byte_size)) || (await this.hasVerifiedLocalFile(file));
   }
 
   async deleteMapChunk(releaseId: string, path: string): Promise<void> {
@@ -838,7 +841,10 @@ class ContentRuntimeController implements ContentRuntime {
         await this.refreshMapReadiness(activeSnapshot);
       } else {
         this.refreshLocalFileIndexInBackground();
-        this.setStatus({ phase: this.connectivity().connected ? "downloading" : "error", error: this.connectivity().connected ? null : "Connect to the internet to download park content." });
+        this.setStatus({
+          phase: this.connectivity().connected ? "downloading" : "error",
+          error: this.connectivity().connected ? null : "Connect to the internet to download park content.",
+        });
       }
       if (this.connectivity().connected && this.foreground) await this.checkCurrentRelease(true);
       else if (!this.status.snapshot) this.setStatus({ phase: "error", error: "Connect to the internet to download park content." });
@@ -945,11 +951,12 @@ class ContentRuntimeController implements ContentRuntime {
       const needsRepair = cacheNeedsRepair || this.syncCacheInvalid || this.sourceMismatch;
       this.setStatus({
         phase: this.status.snapshot ? phaseForActive(this.connectivity().connected) : this.connectivity().connected ? "error" : "offline",
-        error: !this.status.snapshot && needsRepair
-          ? "Saved park content needs repair. Connect to the internet to restore it."
-          : !this.status.snapshot && !this.connectivity().connected
-            ? "Connect to the internet to download park content."
-            : null,
+        error:
+          !this.status.snapshot && needsRepair
+            ? "Saved park content needs repair. Connect to the internet to restore it."
+            : !this.status.snapshot && !this.connectivity().connected
+              ? "Connect to the internet to download park content."
+              : null,
         syncStage: !this.status.snapshot && needsRepair ? "error" : waitingForWifi ? "waiting-for-wifi" : "idle",
         waitingForWifi: this.waitingForBulkWifi || this.waitingForUpdateWifi,
       });
@@ -1198,10 +1205,18 @@ class ContentRuntimeController implements ContentRuntime {
     this.setStatus({ syncStage: "downloading" });
     const index = parseCatalogueIndex(parseJsonBytes(await this.fetchCatalogueFile(catalogueIndexFile(pointer), signal)), pointer);
     // Only the boundaries near the player download now; the rest load when the player looks at them.
-    const parkPoints = new Map((index.body.parks as { id?: unknown; lng?: unknown; lat?: unknown }[])
-      .filter((park) => typeof park?.id === "string" && typeof park.lng === "number" && typeof park.lat === "number")
-      .map((park) => [park.id as string, { lng: park.lng as number, lat: park.lat as number }]));
-    const near = new Set(chunksNear(index.chunks.map((chunk) => ({ ...chunk, bbox: chunk.bbox ?? null })), parkPoints, this.guideAnchor()));
+    const parkPoints = new Map(
+      (index.body.parks as { id?: unknown; lng?: unknown; lat?: unknown }[])
+        .filter((park) => typeof park?.id === "string" && typeof park.lng === "number" && typeof park.lat === "number")
+        .map((park) => [park.id as string, { lng: park.lng as number, lat: park.lat as number }]),
+    );
+    const near = new Set(
+      chunksNear(
+        index.chunks.map((chunk) => ({ ...chunk, bbox: chunk.bbox ?? null })),
+        parkPoints,
+        this.guideAnchor(),
+      ),
+    );
     const wanted = index.chunks.filter((chunk) => near.has(chunk.path));
     const features = new Map<string, unknown[]>();
     let next = 0;
@@ -1230,7 +1245,13 @@ class ContentRuntimeController implements ContentRuntime {
     return bytes;
   }
 
-  private async commitContentSnapshot(next: ContentSyncState, previous: ContentSyncState | null, expectedCursor: ContentSyncCursor | null, signal: AbortSignal, resetCursor = false): Promise<void> {
+  private async commitContentSnapshot(
+    next: ContentSyncState,
+    previous: ContentSyncState | null,
+    expectedCursor: ContentSyncCursor | null,
+    signal: AbortSignal,
+    resetCursor = false,
+  ): Promise<void> {
     const sourceId = this.configuredSourceId();
     const candidate = this.withBuildMap(validateContentSyncState({ ...next, sourceId }));
     await this.retainChangedClaimedScenes(previous, candidate);
@@ -1294,10 +1315,14 @@ class ContentRuntimeController implements ContentRuntime {
     if (signal.aborted) abort();
     else signal.addEventListener("abort", abort, { once: true });
     try {
-      await Promise.all(missing.map((file) => this.scheduleFileDownload(file, "update", controller.signal).catch((error) => {
-        controller.abort(error);
-        throw error;
-      })));
+      await Promise.all(
+        missing.map((file) =>
+          this.scheduleFileDownload(file, "update", controller.signal).catch((error) => {
+            controller.abort(error);
+            throw error;
+          }),
+        ),
+      );
     } finally {
       signal.removeEventListener("abort", abort);
     }
@@ -1313,13 +1338,16 @@ class ContentRuntimeController implements ContentRuntime {
     if (!this.canDownloadContent()) throw this.contentUnavailableError();
     this.incrementInFlight(file.sha256);
     try {
-      await this.scheduler.enqueue({
-        key: file.sha256,
-        path: file.path,
-        purpose,
-        priority: requestPriority(purpose, file.path),
-        run: (downloadSignal) => this.downloadFile(file, downloadSignal, purpose),
-      }, signal);
+      await this.scheduler.enqueue(
+        {
+          key: file.sha256,
+          path: file.path,
+          purpose,
+          priority: requestPriority(purpose, file.path),
+          run: (downloadSignal) => this.downloadFile(file, downloadSignal, purpose),
+        },
+        signal,
+      );
       this.verifiedHashes.add(key);
       this.localFileSizes.set(file.sha256, file.byte_size);
       this.refreshProgress();
@@ -1387,14 +1415,16 @@ class ContentRuntimeController implements ContentRuntime {
     });
     // Read badge art concurrently: one at a time over the native bridge held the
     // map behind the loading card for many seconds on every cold start.
-    await Promise.all(sceneFiles.map(async (file) => {
-      remoteSceneUrls.set(file.path, file.url);
-      if (!(await this.hasVerifiedLocalFile(file))) {
-        if (required.has(file.path)) throw new Error(`Required park badge art is missing: ${file.path}`);
-        return;
-      }
-      assetUrls.set(file.path, await this.localFileUrl(file));
-    }));
+    await Promise.all(
+      sceneFiles.map(async (file) => {
+        remoteSceneUrls.set(file.path, file.url);
+        if (!(await this.hasVerifiedLocalFile(file))) {
+          if (required.has(file.path)) throw new Error(`Required park badge art is missing: ${file.path}`);
+          return;
+        }
+        assetUrls.set(file.path, await this.localFileUrl(file));
+      }),
+    );
     let retained: RetainedPark[] = [];
     try {
       retained = await this.options.store.getRetainedParks();
@@ -1406,7 +1436,8 @@ class ContentRuntimeController implements ContentRuntime {
     const claimedForVerification = new Set(this.options.claimedParkIds());
     const retainedSceneUrls = new Map<string, string>();
     for (const entry of retained) {
-      if (!entry?.park || typeof entry.park.id !== "string" || !claimedForVerification.has(entry.park.id) || currentIds.has(entry.park.id) || !entry.sceneFile) continue;
+      if (!entry?.park || typeof entry.park.id !== "string" || !claimedForVerification.has(entry.park.id) || currentIds.has(entry.park.id) || !entry.sceneFile)
+        continue;
       try {
         if (await this.hasVerifiedLocalFile(entry.sceneFile)) retainedSceneUrls.set(entry.park.id, await this.localFileUrl(entry.sceneFile));
       } catch {
@@ -1416,13 +1447,9 @@ class ContentRuntimeController implements ContentRuntime {
     this.syncState = validated;
     const fullMapReady = false;
     const claimedAtPublication = new Set(this.options.claimedParkIds());
-    const retiredParks = retained
-      .filter((entry) => claimedAtPublication.has(entry.park.id) && !currentIds.has(entry.park.id))
-      .map((entry) => entry.park);
+    const retiredParks = retained.filter((entry) => claimedAtPublication.has(entry.park.id) && !currentIds.has(entry.park.id)).map((entry) => entry.park);
     const parkById = new Map([...validated.parks, ...retiredParks].map((park) => [park.id, park]));
-    const publishedRetainedSceneUrls = new Map(
-      [...retainedSceneUrls].filter(([parkId]) => claimedAtPublication.has(parkId) && !currentIds.has(parkId)),
-    );
+    const publishedRetainedSceneUrls = new Map([...retainedSceneUrls].filter(([parkId]) => claimedAtPublication.has(parkId) && !currentIds.has(parkId)));
     const snapshot: ContentSnapshot = {
       releaseId,
       generation: validated.revision,
@@ -1438,12 +1465,20 @@ class ContentRuntimeController implements ContentRuntime {
       retainedSceneUrls: publishedRetainedSceneUrls,
     };
     this.artworkReadyReleases.add(releaseId);
-    const glyphFiles = inventory?.files.filter((file) => file.path.startsWith("map/fonts/")) ?? legacy?.manifest.files.filter((file) => file.path.startsWith("map/fonts/")) ?? [];
+    const glyphFiles =
+      inventory?.files.filter((file) => file.path.startsWith("map/fonts/")) ??
+      legacy?.manifest.files.filter((file) => file.path.startsWith("map/fonts/")) ??
+      [];
     const hasMapManifest = !!(inventory || legacy);
-    const glyphChecks = await Promise.all(glyphFiles.map(async (file) => {
-      try { return await this.hasVerifiedLocalFile(file); }
-      catch { return false; }
-    }));
+    const glyphChecks = await Promise.all(
+      glyphFiles.map(async (file) => {
+        try {
+          return await this.hasVerifiedLocalFile(file);
+        } catch {
+          return false;
+        }
+      }),
+    );
     const allGlyphsVerified = hasMapManifest && glyphFiles.length > 0 && glyphChecks.every(Boolean);
     const mapDetailReady = hasMapManifest && allGlyphsVerified;
     const previousReleaseId = this.status.snapshot?.releaseId;
@@ -1457,7 +1492,15 @@ class ContentRuntimeController implements ContentRuntime {
       }
     }
     beforePublish?.();
-    this.setStatus({ snapshot, phase, syncStage: "idle", fullMapReady, mapDetailReady, error, waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi });
+    this.setStatus({
+      snapshot,
+      phase,
+      syncStage: "idle",
+      fullMapReady,
+      mapDetailReady,
+      error,
+      waitingForWifi: this.waitingForUpdateWifi || this.waitingForBulkWifi,
+    });
     if (retainedProjectionRevision !== this.retainedProjectionRevision) this.refreshClaimedParks();
     void this.hydrateCachedMapChunks(validated, releaseId).catch(() => {});
     this.scheduleNearbyArt();
@@ -1479,9 +1522,11 @@ class ContentRuntimeController implements ContentRuntime {
       await this.refreshLocalSceneUrls();
       if (results.every((result) => result.status === "fulfilled")) this.nearbyArtAnchor = point;
     })();
-    this.nearbyArtPromise = work.catch(() => {}).finally(() => {
-      this.nearbyArtPromise = null;
-    });
+    this.nearbyArtPromise = work
+      .catch(() => {})
+      .finally(() => {
+        this.nearbyArtPromise = null;
+      });
   }
 
   /** Swap CDN art for saved copies that finished downloading after the catalogue was shown. */
@@ -1519,7 +1564,7 @@ class ContentRuntimeController implements ContentRuntime {
       .map((entry) => ({ parkId: entry.park.id, file: entry.sceneFile! }));
     const retainedUrls = await this.verifyFilesBounded(retainedFiles, 6, async ({ file }) => {
       try {
-        return await this.hasVerifiedLocalFile(file) ? await this.localFileUrl(file) : null;
+        return (await this.hasVerifiedLocalFile(file)) ? await this.localFileUrl(file) : null;
       } catch {
         return null;
       }
@@ -1553,8 +1598,11 @@ class ContentRuntimeController implements ContentRuntime {
     this.setStatus({ mapDetailReady: glyphsVerified });
     const chunks = mapChunkFiles(manifest);
     const checked = await this.verifyFilesBounded(chunks, 6, async (file) => {
-      try { return await this.hasVerifiedLocalFile(file) ? file : null; }
-      catch { return null; }
+      try {
+        return (await this.hasVerifiedLocalFile(file)) ? file : null;
+      } catch {
+        return null;
+      }
     });
     if (!this.isCurrentCachedSnapshot(state, releaseId)) return;
     const allowed = chunkIndices(checked.filter((file): file is ContentFile => file !== null));
@@ -1580,13 +1628,17 @@ class ContentRuntimeController implements ContentRuntime {
   }
 
   private isCurrentCachedSnapshot(state: ContentSyncState, releaseId: string): boolean {
-    return !this.stopped && this.status.snapshot?.releaseId === releaseId &&
-      this.syncState?.revision === state.revision && this.syncState.sourceId === state.sourceId;
+    return (
+      !this.stopped &&
+      this.status.snapshot?.releaseId === releaseId &&
+      this.syncState?.revision === state.revision &&
+      this.syncState.sourceId === state.sourceId
+    );
   }
 
   private async getLegacyMapRelease(): Promise<StoredRelease | null> {
     try {
-      const id = this.legacyMapReleaseId ?? await this.options.store.getActiveId();
+      const id = this.legacyMapReleaseId ?? (await this.options.store.getActiveId());
       if (!id) return null;
       const stored = await this.options.store.getRelease(id);
       if (!stored) return null;
@@ -1602,7 +1654,7 @@ class ContentRuntimeController implements ContentRuntime {
   private async getVerifiedMapInventory(version: string): Promise<ContentMapInventory | null> {
     let cached: ContentMapInventory | null;
     try {
-      cached = this.mapInventories.get(version) ?? await this.options.store.getMapInventory(version);
+      cached = this.mapInventories.get(version) ?? (await this.options.store.getMapInventory(version));
     } catch {
       return null;
     }
@@ -1638,17 +1690,19 @@ class ContentRuntimeController implements ContentRuntime {
     this.mapSyncVersion = pointer.version;
     const work = this.runMapSync(pointer, controller.signal);
     this.mapSyncPromise = work;
-    void work.catch(() => {
-      // Map inventory and chunks are optional for catalogue activation.
-    }).finally(() => {
-      if (this.mapSyncPromise === work) this.mapSyncPromise = null;
-      if (this.mapAbort === controller) this.mapAbort = null;
-      this.updateWaitingStatus();
-      if (this.mapRetryRequested && !this.stopped && this.foreground && this.canDownloadContent() && this.syncState?.map?.version === pointer.version) {
-        this.mapRetryRequested = false;
-        this.startMapSync();
-      }
-    });
+    void work
+      .catch(() => {
+        // Map inventory and chunks are optional for catalogue activation.
+      })
+      .finally(() => {
+        if (this.mapSyncPromise === work) this.mapSyncPromise = null;
+        if (this.mapAbort === controller) this.mapAbort = null;
+        this.updateWaitingStatus();
+        if (this.mapRetryRequested && !this.stopped && this.foreground && this.canDownloadContent() && this.syncState?.map?.version === pointer.version) {
+          this.mapRetryRequested = false;
+          this.startMapSync();
+        }
+      });
   }
 
   private async runMapSync(pointer: ContentMapPointer, signal: AbortSignal): Promise<void> {
@@ -1688,8 +1742,14 @@ class ContentRuntimeController implements ContentRuntime {
   private publishMapInventory(pointer: ContentMapPointer, inventory: ContentMapInventory): void {
     const state = this.syncState;
     const current = this.status.snapshot;
-    if (!state || !current || state.map?.version !== pointer.version || current.generation !== state.revision ||
-      !this.artworkReadyReleases.has(current.releaseId)) return;
+    if (
+      !state ||
+      !current ||
+      state.map?.version !== pointer.version ||
+      current.generation !== state.revision ||
+      !this.artworkReadyReleases.has(current.releaseId)
+    )
+      return;
     this.mapInventories.set(inventory.version, inventory);
     const manifest: ContentManifest = {
       ...current.manifest,
@@ -1736,9 +1796,9 @@ class ContentRuntimeController implements ContentRuntime {
 
   private contentUnavailableError(): Error {
     const connected = this.connectivity().connected;
-    const error = new Error(connected
-      ? "Park content downloads are unavailable in the current network settings."
-      : "Content downloads are unavailable while offline.");
+    const error = new Error(
+      connected ? "Park content downloads are unavailable in the current network settings." : "Content downloads are unavailable while offline.",
+    );
     error.name = connected ? "ContentDownloadUnavailableError" : "ContentOfflineError";
     return error;
   }
@@ -1749,7 +1809,7 @@ class ContentRuntimeController implements ContentRuntime {
 
   private scheduleSyncRetry(): void {
     if (this.syncRetryTimer || this.stopped || !this.foreground || !this.canDownloadContent()) return;
-    const delay = Math.min(SYNC_RETRY_BASE_MS * (2 ** this.syncRetryAttempt), SYNC_RETRY_MAX_MS);
+    const delay = Math.min(SYNC_RETRY_BASE_MS * 2 ** this.syncRetryAttempt, SYNC_RETRY_MAX_MS);
     this.syncRetryAttempt += 1;
     this.syncRetryTimer = globalThis.setTimeout(() => {
       this.syncRetryTimer = null;
@@ -1916,10 +1976,14 @@ class ContentRuntimeController implements ContentRuntime {
     if (outerSignal?.aborted) abortBatch();
     else outerSignal?.addEventListener("abort", abortBatch, { once: true });
     try {
-      await Promise.all(files.map((file) => this.ensureFile(releaseId, file.path, purpose, batch.signal).catch((error) => {
-        batch.abort(error);
-        throw error;
-      })));
+      await Promise.all(
+        files.map((file) =>
+          this.ensureFile(releaseId, file.path, purpose, batch.signal).catch((error) => {
+            batch.abort(error);
+            throw error;
+          }),
+        ),
+      );
     } catch (error) {
       batch.abort(error);
       throw error;
@@ -1939,14 +2003,17 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.verifiedHashes.has(key)) return true;
     let check = this.localFileCheckPromises.get(key);
     if (!check) {
-      check = this.options.store.hasFile(file.sha256, file.byte_size).then((exists) => {
-        if (exists) {
-          this.verifiedHashes.add(key);
-          this.localFileSizes.set(file.sha256, file.byte_size);
-          this.refreshProgress();
-        }
-        return exists;
-      }).finally(() => this.localFileCheckPromises.delete(key));
+      check = this.options.store
+        .hasFile(file.sha256, file.byte_size)
+        .then((exists) => {
+          if (exists) {
+            this.verifiedHashes.add(key);
+            this.localFileSizes.set(file.sha256, file.byte_size);
+            this.refreshProgress();
+          }
+          return exists;
+        })
+        .finally(() => this.localFileCheckPromises.delete(key));
       this.localFileCheckPromises.set(key, check);
     }
     return check;
@@ -2149,8 +2216,13 @@ class ContentRuntimeController implements ContentRuntime {
     if (!isPointInsideContentBounds(point)) return;
     if (!force && this.nearbyAnchor?.releaseId === snapshot.releaseId && distanceKm(this.nearbyAnchor.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
     const activeRequest = this.nearbyRequest;
-    if (!force && activeRequest?.releaseId === snapshot.releaseId && !activeRequest.controller.signal.aborted &&
-      distanceKm(activeRequest.point, point) < LOCATION_MOVE_THRESHOLD_KM) return;
+    if (
+      !force &&
+      activeRequest?.releaseId === snapshot.releaseId &&
+      !activeRequest.controller.signal.aborted &&
+      distanceKm(activeRequest.point, point) < LOCATION_MOVE_THRESHOLD_KM
+    )
+      return;
     if (this.nearbyTimer !== undefined) globalThis.clearTimeout(this.nearbyTimer);
     this.nearbyAbort?.abort();
     const controller = new AbortController();
@@ -2161,26 +2233,38 @@ class ContentRuntimeController implements ContentRuntime {
     this.nearbyTimer = globalThis.setTimeout(() => {
       this.nearbyTimer = undefined;
       const currentSnapshot = this.status.snapshot;
-      if (this.nearbyRequest !== request || signal.aborted || !currentSnapshot || currentSnapshot.releaseId !== request.releaseId ||
-        !this.artworkReadyReleases.has(currentSnapshot.releaseId) || (this.hasSyncApi() && !this.status.mapDetailReady) ||
-        this.stopped || !this.foreground || !this.connectivity().connected) {
+      if (
+        this.nearbyRequest !== request ||
+        signal.aborted ||
+        !currentSnapshot ||
+        currentSnapshot.releaseId !== request.releaseId ||
+        !this.artworkReadyReleases.has(currentSnapshot.releaseId) ||
+        (this.hasSyncApi() && !this.status.mapDetailReady) ||
+        this.stopped ||
+        !this.foreground ||
+        !this.connectivity().connected
+      ) {
         if (this.nearbyRequest === request) this.nearbyRequest = null;
         return;
       }
       // With offline downloads, the visitor's own square downloads on any connection and the
       // squares around it wait for Wi-Fi. Without them, only the view around the visitor is kept.
       const area = OFFLINE_DOWNLOADS
-        ? prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot)
-          .then(() => prefetchMapArea(this, request.releaseId, point, "surrounding", signal, currentSnapshot))
-        : prefetchMapArea(this, request.releaseId, point, "starter", signal, currentSnapshot)
-          .then((result) => this.keepOnlyNearMapChunks(request.releaseId, result.chunkIds, currentSnapshot.manifest.files));
-      const work = area.then(() => {
-        if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
-          this.nearbyAnchor = { releaseId: request.releaseId, point };
-        }
-      }).catch((error) => {
-        if (!this.stopped && (error as Error)?.name !== "AbortError") this.updateWaitingStatus();
-      });
+        ? prefetchMapArea(this, request.releaseId, point, "nearby", signal, currentSnapshot).then(() =>
+            prefetchMapArea(this, request.releaseId, point, "surrounding", signal, currentSnapshot),
+          )
+        : prefetchMapArea(this, request.releaseId, point, "starter", signal, currentSnapshot).then((result) =>
+            this.keepOnlyNearMapChunks(request.releaseId, result.chunkIds, currentSnapshot.manifest.files),
+          );
+      const work = area
+        .then(() => {
+          if (this.nearbyRequest === request && !signal.aborted && this.status.snapshot?.releaseId === request.releaseId) {
+            this.nearbyAnchor = { releaseId: request.releaseId, point };
+          }
+        })
+        .catch((error) => {
+          if (!this.stopped && (error as Error)?.name !== "AbortError") this.updateWaitingStatus();
+        });
       this.nearbyPromise = work;
       void work.finally(() => {
         if (this.nearbyRequest === request) {
@@ -2293,7 +2377,9 @@ class ContentRuntimeController implements ContentRuntime {
     const sizes = new Map(next.catalogue!.chunks.map((chunk) => [chunk.path, chunk.byte_size]));
     const keep = new Set([...this.nearGuideChunks, ...paths]);
     next = evictCatalogueChunks(next, chunksToEvict(next.catalogue!.loaded, sizes, keep));
-    const changed = next.boundaries.features.length !== before.boundaries.features.length || loaded.size > 0 ||
+    const changed =
+      next.boundaries.features.length !== before.boundaries.features.length ||
+      loaded.size > 0 ||
       next.catalogue!.loaded.length !== before.catalogue!.loaded.length;
     if (changed) await this.persistSyncState(next);
     this.syncState = next;
@@ -2359,7 +2445,7 @@ class ContentRuntimeController implements ContentRuntime {
     const retained = await store.getRetainedParks();
     const archived = await store.listArchivedScenes();
     const protectedHashes = [
-      ...retained.flatMap((entry) => entry.sceneFile ? [entry.sceneFile.sha256] : []),
+      ...retained.flatMap((entry) => (entry.sceneFile ? [entry.sceneFile.sha256] : [])),
       ...archived.map((scene) => scene.file.sha256),
       ...[...this.inFlightHashes].filter(([, count]) => count > 0).map(([hash]) => hash),
     ];
@@ -2451,13 +2537,15 @@ class ContentRuntimeController implements ContentRuntime {
     this.bulkControllers.set(releaseId, controller);
     const task = this.runBulkMap(releaseId, controller.signal);
     this.bulkPromises.set(releaseId, task);
-    void task.catch((error) => {
-      if (!this.stopped) this.setStatus({ error: this.status.snapshot ? null : errorText(error) });
-    }).finally(() => {
-      if (this.bulkPromises.get(releaseId) === task) this.bulkPromises.delete(releaseId);
-      if (this.bulkControllers.get(releaseId) === controller) this.bulkControllers.delete(releaseId);
-      this.updateWaitingStatus();
-    });
+    void task
+      .catch((error) => {
+        if (!this.stopped) this.setStatus({ error: this.status.snapshot ? null : errorText(error) });
+      })
+      .finally(() => {
+        if (this.bulkPromises.get(releaseId) === task) this.bulkPromises.delete(releaseId);
+        if (this.bulkControllers.get(releaseId) === controller) this.bulkControllers.delete(releaseId);
+        this.updateWaitingStatus();
+      });
   }
 
   /**
@@ -2533,9 +2621,11 @@ class ContentRuntimeController implements ContentRuntime {
     if (this.localFileIndexPromise) return;
     const work = this.refreshLocalFileIndex();
     this.localFileIndexPromise = work;
-    void work.catch(() => {}).finally(() => {
-      if (this.localFileIndexPromise === work) this.localFileIndexPromise = null;
-    });
+    void work
+      .catch(() => {})
+      .finally(() => {
+        if (this.localFileIndexPromise === work) this.localFileIndexPromise = null;
+      });
   }
 
   private trackFile(file: ContentFile): void {
@@ -2578,7 +2668,10 @@ class ContentRuntimeController implements ContentRuntime {
     const activeId = await this.options.store.getActiveId();
     const releases = await this.options.store.listReleases();
     const active = activeId ? await this.options.store.getRelease(activeId) : undefined;
-    const candidates = releases.filter((release) => release.id !== activeId && (release.readiness === "candidate" || release.readiness === "complete" || release.readiness === "starter"))
+    const candidates = releases
+      .filter(
+        (release) => release.id !== activeId && (release.readiness === "candidate" || release.readiness === "complete" || release.readiness === "starter"),
+      )
       .sort((a, b) => b.channel.generation - a.channel.generation);
     const candidate = candidates[0];
     if (!candidate) return;
@@ -2593,7 +2686,7 @@ class ContentRuntimeController implements ContentRuntime {
     const activeId = await this.options.store.getActiveId();
     const releases = await this.options.store.listReleases();
     const protectedIds = new Set<string>([activeId ?? "", this.pendingActivationId ?? "", ...this.candidatePromises.keys()]);
-    const activeGeneration = activeId ? releases.find((release) => release.id === activeId)?.channel.generation ?? 0 : 0;
+    const activeGeneration = activeId ? (releases.find((release) => release.id === activeId)?.channel.generation ?? 0) : 0;
     for (const release of releases) {
       const stagedForActivation = release.readiness === "candidate" || release.readiness === "starter" || release.readiness === "complete";
       const stillCurrent = !this.latestChannel || this.latestChannel.releaseId === release.id;
