@@ -1219,6 +1219,54 @@ export async function purgeAuthRetention(env: AuthEnvironment, dependencies: Aut
   );
 }
 
+// A guest nobody can open any more (it left, uninstalled, or went a year without opening Parkdex)
+// is deleted 30 days later, so its @handle, flags and private photos don't stay forever.
+export const ABANDONED_GUEST_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+// Each run resumes up to this many stuck deletions and marks up to this many new ones, and stops
+// starting deletions after the time budget so the retention request stays well inside its 60 s.
+const ABANDONED_GUEST_BATCH_LIMIT = 10;
+const ABANDONED_GUEST_TIME_BUDGET_MS = 20_000;
+
+/**
+ * Deletes abandoned guest accounts through the ordinary deletion path (private data first, then
+ * the account, whose rows cascade). Deletions an earlier run left pending are resumed first. Runs
+ * with the daily retention job, never on its own timer.
+ */
+export async function purgeAbandonedGuests(
+  env: AuthEnvironment,
+  dependencies: AuthDependencies = {},
+  limit = ABANDONED_GUEST_BATCH_LIMIT,
+): Promise<{ deleted: number; pending: number }> {
+  if (!env.DATABASE_URL && !dependencies.createStore) {
+    throw new HttpError(503, "service_unavailable", "Account authentication is unavailable.");
+  }
+  const store = getStore(env, dependencies);
+  const now = nowValue(dependencies);
+  const startedAt = Date.now();
+  // Stuck deletions and new ones have separate allowances, so deletions that keep failing never
+  // stop new abandoned guests from being marked.
+  const resumed = await store.pendingGuestDeletionReceipts(limit);
+  const marked = await store.markAbandonedGuestsForDeletion(new Date(now - ABANDONED_GUEST_GRACE_MS).toISOString(), new Date(now).toISOString(), limit);
+  let deleted = 0;
+  let pending = 0;
+  for (const receiptId of [...resumed, ...marked]) {
+    // A marked guest left for later is resumed on the next run.
+    if (Date.now() - startedAt > ABANDONED_GUEST_TIME_BUDGET_MS) {
+      pending += 1;
+      continue;
+    }
+    try {
+      const result = await resumeAccountDeletion(receiptId, env, dependencies);
+      if (result.complete) deleted += 1;
+      else pending += 1;
+    } catch {
+      pending += 1;
+    }
+  }
+  if (marked.length) await store.recordSecurityEvent("guest_abandoned", null, `marked_${marked.length}`).catch(() => undefined);
+  return { deleted, pending };
+}
+
 export async function handleAuthRequest(request: Request, env: AuthEnvironment, dependencies: AuthDependencies = {}): Promise<Response | null> {
   try {
     return await routeAuth(request, env, dependencies);

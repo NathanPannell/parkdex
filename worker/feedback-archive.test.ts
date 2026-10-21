@@ -30,6 +30,7 @@ test("the daily retention run also deletes archived feedback and expired foundin
       founding.push(now);
       return { deleted: 4, remainingExpired: 1 };
     },
+    purgeAbandonedGuests: async () => ({ deleted: 5, pending: 1 }),
   });
   const response = await worker.fetch(
     new Request(`${origin}/api/retention/interactions/purge`, { method: "POST", headers: { authorization: `Bearer ${SECRET}` } }),
@@ -46,6 +47,29 @@ test("the daily retention run also deletes archived feedback and expired foundin
   assert.deepEqual(cutoffs, ["2026-07-11T12:00:00.000Z"]);
   // Founding photos kept for a manual review ride on the same run and report their own backlog.
   assert.deepEqual([body.foundingPhotosDeleted, body.foundingPhotosRemainingExpired, founding], [4, 1, [NOW]]);
+  // Abandoned guest accounts are deleted on the same run (worker/accounts/auth.ts).
+  assert.deepEqual([body.abandonedGuestsDeleted, body.abandonedGuestsPending], [5, 1]);
+});
+
+test("a guest-cleanup failure doesn't fail the retention run", async () => {
+  const worker = createFeedbackWorker({
+    now: () => NOW,
+    interactions: { now: () => NOW, createStore: () => ({ purgeExpired: async () => ({ deleted: 3, remainingExpired: 0 }) }) as unknown as InteractionStore },
+    auth: { now: () => NOW, createStore: () => ({ purgeRetention: async () => ({ deleted: 1, remainingExpired: 0 }) }) as unknown as AccountAuthStore },
+    purgeArchivedFeedback: async () => ({ deleted: 0, remainingExpired: 0 }),
+    purgeFoundingPhotos: async () => ({ deleted: 0, remainingExpired: 0 }),
+    purgeAbandonedGuests: async () => {
+      throw new Error("neon hiccup");
+    },
+  });
+  const response = await worker.fetch(
+    new Request(`${origin}/api/retention/interactions/purge`, { method: "POST", headers: { authorization: `Bearer ${SECRET}` } }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as Record<string, unknown>;
+  assert.equal(body.deleted, 3);
+  assert.equal(body.abandonedGuestsFailed, true);
 });
 
 test("feedback is not purged without the retention secret", async () => {
