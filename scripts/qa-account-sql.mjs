@@ -320,6 +320,61 @@ try {
   const guestReceipt = randomUUID();
   assert.equal(await store.beginDeletion(doomedGuestId, doomedSession.id, doomedSession.tokenHash, guestReceipt, now()), guestReceipt);
   log("guest deletion without reauthentication", "PASS");
+
+  // Abandoned guests: no live session and nothing recent for 30 days.
+  const day = 86400e3;
+  const ago = (days) => new Date(Date.now() - days * day).toISOString();
+  const makeGuest = async (sessionExpiresDaysAgo) => {
+    const id = randomUUID();
+    const s = {
+      ...session("native"),
+      expiresAt: new Date(Date.now() + 365 * day).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 3650 * day).toISOString(),
+    };
+    await store.createGuestAccount(id, s);
+    await pool.query("UPDATE kip_account.accounts SET created_at = $2 WHERE id = $1", [id, ago(60)]);
+    if (sessionExpiresDaysAgo !== null) await pool.query("UPDATE kip_account.sessions SET expires_at = $2 WHERE id = $1", [s.id, ago(sessionExpiresDaysAgo)]);
+    return id;
+  };
+  const abandonedGuest = await makeGuest(40);
+  const liveGuest = await makeGuest(null);
+  const recentGuest = await makeGuest(10);
+  // Left (signed out) 10 days ago: its session was revoked recently even though it would have expired long ago.
+  const leftRecently = await makeGuest(40);
+  await pool.query("UPDATE kip_account.sessions SET revoked_at = $2 WHERE account_id = $1", [leftRecently, ago(10)]);
+  const sessionlessGuest = randomUUID();
+  await store.createGuestAccount(sessionlessGuest, session("native"));
+  await pool.query("DELETE FROM kip_account.sessions WHERE account_id = $1", [sessionlessGuest]);
+  await pool.query("UPDATE kip_account.accounts SET created_at = $2 WHERE id = $1", [sessionlessGuest, ago(60)]);
+  const newSessionless = randomUUID();
+  await store.createGuestAccount(newSessionless, session("native"));
+  await pool.query("DELETE FROM kip_account.sessions WHERE account_id = $1", [newSessionless]);
+  await pool.query("UPDATE kip_account.accounts SET created_at = $2 WHERE id = $1", [accountId, ago(60)]);
+
+  const abandonedReceipts = await store.markAbandonedGuestsForDeletion(ago(30), now(), 50);
+  assert.equal(abandonedReceipts.length, 2, "the expired guest and the sessionless old guest");
+  const markedIds = (
+    await pool.query("SELECT account_id::text AS id FROM kip_account.account_deletion_receipts WHERE receipt_id = ANY($1::uuid[])", [abandonedReceipts])
+  ).rows
+    .map((row) => row.id)
+    .sort();
+  assert.deepEqual(markedIds, [abandonedGuest, sessionlessGuest].sort());
+  for (const kept of [liveGuest, recentGuest, leftRecently, newSessionless, accountId]) {
+    assert.equal((await store.findAccountById(kept))?.deletionState, "active", "live, recent, new and emailed accounts stay");
+  }
+  assert.equal(
+    (await pool.query("SELECT count(*)::int AS n FROM kip_account.sessions WHERE account_id = $1 AND revoked_at IS NULL", [abandonedGuest])).rows[0].n,
+    0,
+  );
+  // An earlier guest deletion above is still pending too; both are picked up for resuming.
+  const pendingBefore = await store.pendingGuestDeletionReceipts(50);
+  for (const receipt of abandonedReceipts) assert.ok(pendingBefore.includes(receipt));
+  assert.deepEqual(await store.markAbandonedGuestsForDeletion(ago(30), now(), 50), [], "a guest already being deleted isn't marked twice");
+  for (const receipt of abandonedReceipts) assert.equal(await store.completeDeletion(receipt, now()), true);
+  assert.equal(await store.findAccountById(abandonedGuest), null);
+  const pendingAfter = await store.pendingGuestDeletionReceipts(50);
+  for (const receipt of abandonedReceipts) assert.ok(!pendingAfter.includes(receipt));
+  log("abandoned guests marked, kept and deleted", "PASS");
 } finally {
   await pool.end();
 }

@@ -126,6 +126,14 @@ export interface AccountAuthStore {
   findDeletionReceipt(receiptId: string): Promise<DeletionReceipt | null>;
   completeDeletion(receiptId: string, now: string): Promise<boolean>;
   purgeRetention(now: string, auditCutoff: string, rateLimitCutoff: string, batchLimit: number): Promise<{ deleted: number; remainingExpired: number }>;
+  /**
+   * Marks guest accounts nobody can open any more for deletion and returns their receipts. A guest is
+   * abandoned once it has no live session and nothing about it (creation, a session's revocation or
+   * expiry) happened after `cutoff`.
+   */
+  markAbandonedGuestsForDeletion(cutoff: string, now: string, limit: number): Promise<string[]>;
+  /** Receipts of guest deletions that started but whose private data isn't gone yet. */
+  pendingGuestDeletionReceipts(limit: number): Promise<string[]>;
 }
 
 type Row = Record<string, unknown>;
@@ -816,6 +824,59 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
         [receiptId, now],
       );
       return rows[0]?.complete === true;
+    },
+
+    async markAbandonedGuestsForDeletion(cutoff, now, limit) {
+      const rows = await query(
+        `
+        WITH candidates AS MATERIALIZED (
+          SELECT a.id FROM kip_account.accounts a
+          WHERE a.normalized_email IS NULL AND a.deletion_state = 'active'
+            AND a.created_at < $1::timestamptz
+            AND NOT EXISTS (
+              SELECT 1 FROM kip_account.sessions s
+              WHERE s.account_id = a.id AND s.revoked_at IS NULL
+                AND s.expires_at > $2::timestamptz AND s.absolute_expires_at > $2::timestamptz
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM kip_account.sessions s
+              WHERE s.account_id = a.id
+                AND COALESCE(s.revoked_at, LEAST(s.expires_at, s.absolute_expires_at)) >= $1::timestamptz
+            )
+          ORDER BY a.created_at
+          LIMIT $3
+          FOR UPDATE OF a SKIP LOCKED
+        ), marked AS (
+          UPDATE kip_account.accounts a SET deletion_state = 'deleting', updated_at = $2::timestamptz
+          WHERE a.id IN (SELECT id FROM candidates) AND a.deletion_state = 'active' AND a.normalized_email IS NULL
+          RETURNING a.id
+        ), revoked AS (
+          UPDATE kip_account.sessions s SET revoked_at = $2::timestamptz
+          WHERE s.account_id IN (SELECT id FROM marked) AND s.revoked_at IS NULL
+          RETURNING s.id
+        ), receipts AS (
+          INSERT INTO kip_account.account_deletion_receipts (receipt_id, account_id)
+          SELECT gen_random_uuid(), id FROM marked
+          RETURNING receipt_id
+        )
+        SELECT receipt_id::text AS receipt_id FROM receipts`,
+        [cutoff, now, limit],
+      );
+      return rows.map((row) => stringValue(row.receipt_id));
+    },
+
+    async pendingGuestDeletionReceipts(limit) {
+      const rows = await query(
+        `
+        SELECT r.receipt_id::text AS receipt_id
+        FROM kip_account.account_deletion_receipts r
+        JOIN kip_account.accounts a ON a.id = r.account_id
+        WHERE r.status = 'pending' AND a.deletion_state = 'deleting' AND a.normalized_email IS NULL
+        ORDER BY r.created_at
+        LIMIT $1`,
+        [limit],
+      );
+      return rows.map((row) => stringValue(row.receipt_id));
     },
 
     async purgeRetention(now, auditCutoff, rateLimitCutoff, batchLimit) {

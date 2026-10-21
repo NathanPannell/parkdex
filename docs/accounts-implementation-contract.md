@@ -69,6 +69,10 @@ A player who picks a @handle at onboarding plays without signing in, as a guest 
 - **Upgrade:** Google upgrades a guest in place through the `link` purpose. It needs no reauthentication, and the account keeps its ID, handle, flag, points and backups. The account takes the verified Google email, and its sessions shorten to an ordinary account's limits (30 days sliding, 90 days total).
 - **Conflicts:** a Google subject or email that already belongs to another account is refused with `account_conflict`, and the guest is left unchanged.
 - **Deletion:** a guest deletes its account without reauthenticating. Leaving a guest account (sign-out) loses it for good, and the Account screen says so.
+- **Abandoned guests:** a guest nobody can open any more is deleted 30 days later. That covers a guest that left, was uninstalled, or went a year without opening Parkdex.
+  - **Rule:** no live session, and nothing about the account happened in the last 30 days (its creation, or a session's revocation or expiry).
+  - **How:** the daily retention run (`purgeAbandonedGuests`) uses the ordinary deletion path, resuming up to 10 stuck deletions and starting up to 10 new ones within 20 seconds. A failure there never fails the rest of the retention run. Private photos go first, then the account, and its @handle, flags and points cascade with it. A deletion left pending is resumed on the next run.
+  - **Why 30 days:** a guest's session is its only credential, so nobody can reopen the account once it has none. The grace period only covers clock skew and in-flight requests, and keeps the handle reserved for a month in case the player comes back to look for it.
 
 ## Durable local claims and account boundaries
 

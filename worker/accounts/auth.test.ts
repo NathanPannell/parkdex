@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { handleAuthRequest, resumeAccountDeletion, type AuthDependencies, type AuthEnvironment, type GoogleIdentityClaims } from "./auth.ts";
+import {
+  handleAuthRequest,
+  purgeAbandonedGuests,
+  resumeAccountDeletion,
+  type AuthDependencies,
+  type AuthEnvironment,
+  type GoogleIdentityClaims,
+} from "./auth.ts";
 import type {
   AccountAuthStore,
   AccountCredentials,
@@ -53,6 +60,7 @@ class MemoryAuthStore implements AccountAuthStore {
   readonly receipts = new Map<string, DeletionReceipt>();
   readonly events: Array<{ eventType: string; scopeHash: string | null; outcome: string }> = [];
   readonly rates = new Map<string, number>();
+  readonly createdAt = new Map<string, string>();
 
   async reserveRateLimit(action: string, scopeHash: string, limit: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
     const key = `${action}:${scopeHash}`;
@@ -353,6 +361,37 @@ class MemoryAuthStore implements AccountAuthStore {
     this.accounts.delete(receipt.accountId);
     this.receipts.set(receiptId, { ...receipt, status: "complete" });
     return true;
+  }
+
+  async markAbandonedGuestsForDeletion(cutoff: string, now: string, limit: number): Promise<string[]> {
+    const receipts: string[] = [];
+    for (const account of this.accounts.values()) {
+      if (receipts.length >= limit) break;
+      if (account.email !== "" || account.deletionState !== "active") continue;
+      if (Date.parse(this.createdAt.get(account.id) ?? new Date(NOW).toISOString()) >= Date.parse(cutoff)) continue;
+      const sessions = [...this.sessions.values()].filter((session) => session.id === account.id);
+      const live = sessions.some(
+        (session) =>
+          !this.revokedSessions.has(session.sessionId) &&
+          Date.parse(session.expiresAt) > Date.parse(now) &&
+          Date.parse(session.absoluteExpiresAt) > Date.parse(now),
+      );
+      const recent = sessions.some((session) => Math.min(Date.parse(session.expiresAt), Date.parse(session.absoluteExpiresAt)) >= Date.parse(cutoff));
+      if (live || recent) continue;
+      account.deletionState = "deleting";
+      for (const session of sessions) this.revokedSessions.add(session.sessionId);
+      const receiptId = randomUUID();
+      this.receipts.set(receiptId, { receiptId, accountId: account.id, status: "pending" });
+      receipts.push(receiptId);
+    }
+    return receipts;
+  }
+
+  async pendingGuestDeletionReceipts(limit: number): Promise<string[]> {
+    return [...this.receipts.values()]
+      .filter((receipt) => receipt.status === "pending" && this.accounts.get(receipt.accountId)?.email === "")
+      .slice(0, limit)
+      .map((receipt) => receipt.receiptId);
   }
 
   async purgeRetention(): Promise<{ deleted: number; remainingExpired: number }> {
@@ -1089,4 +1128,46 @@ test("a guest can delete its account without reauthenticating", async () => {
   const deleted = await call(r, "/api/account", undefined, { method: "DELETE", ...bearerOptions(guest.bearer, guest.account.id) });
   assert.equal(deleted.status, 200);
   assert.equal((await call(r, "/api/auth/me", undefined, bearerOptions(guest.bearer, guest.account.id))).status, 401);
+});
+
+test("abandoned guests are deleted after 30 days through the ordinary deletion path; live, recent and real accounts stay", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const day = 24 * 60 * 60 * 1000;
+  const old = new Date(NOW - 60 * day).toISOString();
+  const abandoned = await startGuest(r, "203.0.113.20");
+  const live = await startGuest(r, "203.0.113.21");
+  const recent = await startGuest(r, "203.0.113.22");
+  const realAccount = await seedPasswordAccount(r, "real@example.test");
+  for (const id of [abandoned.account.id, live.account.id, recent.account.id, realAccount.account!.id]) r.store.createdAt.set(id, old);
+  const sessionOf = (bearer: string) => [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(bearer))!;
+  sessionOf(abandoned.bearer).expiresAt = new Date(NOW - 40 * day).toISOString();
+  sessionOf(recent.bearer).expiresAt = new Date(NOW - 10 * day).toISOString();
+  sessionOf(realAccount.bearer).expiresAt = new Date(NOW - 40 * day).toISOString();
+
+  const deletedData: string[] = [];
+  r.dependencies.deleteAccountData = async ({ accountId }) => {
+    deletedData.push(accountId);
+    return { complete: true };
+  };
+  const result = await purgeAbandonedGuests(r.env, r.dependencies);
+  assert.deepEqual(result, { deleted: 1, pending: 0 });
+  assert.deepEqual(deletedData, [abandoned.account.id], "private data goes first, through deleteAccountData");
+  assert.equal(await r.store.findAccountById(abandoned.account.id), null);
+  for (const kept of [live.account.id, recent.account.id, realAccount.account!.id])
+    assert.equal((await r.store.findAccountById(kept))?.deletionState, "active");
+});
+
+test("an abandoned guest whose private data couldn't be deleted is resumed on the next run", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r, "203.0.113.30");
+  r.store.createdAt.set(guest.account.id, new Date(NOW - 60 * 24 * 60 * 60 * 1000).toISOString());
+  [...r.store.sessions.values()].find((session) => session.tokenHash === sha256(guest.bearer))!.expiresAt = new Date(
+    NOW - 40 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  r.dependencies.deleteAccountData = async () => ({ complete: false });
+  assert.deepEqual(await purgeAbandonedGuests(r.env, r.dependencies), { deleted: 0, pending: 1 });
+  assert.equal((await r.store.findAccountById(guest.account.id))?.deletionState, "deleting");
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  assert.deepEqual(await purgeAbandonedGuests(r.env, r.dependencies), { deleted: 1, pending: 0 });
+  assert.equal(await r.store.findAccountById(guest.account.id), null);
 });

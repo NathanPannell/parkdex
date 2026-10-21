@@ -11,6 +11,7 @@ import {
   requireAccountMutation,
   resumeAccountDeletion,
   purgeAuthRetention,
+  purgeAbandonedGuests,
   type AuthDependencies,
   type AuthEnvironment,
 } from "./accounts/auth.js";
@@ -72,6 +73,8 @@ export interface WorkerDependencies {
   purgeArchivedFeedback?(env: WorkerEnvironment, cutoff: string): Promise<FeedbackPurgeResult>;
   /** Deletes founding photos kept for a manual review once they expire (worker/founding-reviews.ts). */
   purgeFoundingPhotos?(env: WorkerEnvironment, now: number): Promise<FoundingPurgeResult>;
+  /** Deletes guest accounts nobody can open any more (worker/accounts/auth.ts `purgeAbandonedGuests`). */
+  purgeAbandonedGuests?(env: WorkerEnvironment): Promise<{ deleted: number; pending: number }>;
   createAppConfigStore?(env: WorkerEnvironment): AppConfigStore;
   analytics?(env: WorkerEnvironment): AnalyticsSink | null;
   /** Catalogue lookups around a point (matching outlines, regions). */
@@ -362,9 +365,25 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
       : env.DATABASE_URL
         ? await purgeFoundingPhotosFromDatabase(env.DATABASE_URL, requestNow(dependencies))
         : { deleted: 0, remainingExpired: 0 };
+    // Abandoned guest accounts go through the ordinary deletion path, private photos included.
+    // A guest-cleanup failure never fails the purges above, which have already committed.
+    const guestResult = await (
+      dependencies.purgeAbandonedGuests
+        ? dependencies.purgeAbandonedGuests(env)
+        : env.DATABASE_URL && !dependencies.auth?.createStore
+          ? purgeAbandonedGuests(env, {
+              ...dependencies.auth,
+              deleteAccountData: (input) =>
+                deleteAccountData(input, env, { createStore: dependencies.progress?.createStore, fetch: dependencies.progress?.fetch }),
+            })
+          : Promise.resolve({ deleted: 0, pending: 0 })
+    ).catch(() => ({ deleted: 0, pending: 0, failed: true }));
     return json({
       ...interactionResult,
       authDeleted: authResult.deleted,
+      abandonedGuestsDeleted: guestResult.deleted,
+      abandonedGuestsPending: guestResult.pending,
+      ...("failed" in guestResult ? { abandonedGuestsFailed: true } : {}),
       remainingExpired: interactionResult.remainingExpired + authResult.remainingExpired,
       feedbackDeleted: feedbackResult.deleted,
       feedbackRemainingExpired: feedbackResult.remainingExpired,
