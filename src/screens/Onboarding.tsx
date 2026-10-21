@@ -10,6 +10,7 @@ import { DEMO_TOOLS } from "../lib/demo";
 import { GameError, handleProblem, normalizeHandle } from "../lib/game/client";
 import { useGame } from "../lib/game/GameProvider";
 import { readLocalHandle, saveLocalHandle } from "../lib/game/localHandle";
+import { allowGuestStart } from "../lib/accounts/guestStart";
 import { shake } from "../lib/motion";
 import { saveLastLocation } from "../lib/lastLocation";
 import { rememberWebLocation, WEB_CAN_TRACK } from "../lib/liveLocation";
@@ -243,7 +244,10 @@ export function Onboarding() {
           // A taken handle fills in the sheet later; a refused one shouldn't come back.
           if (taken) saveLocalHandle(handle);
         });
-      else saveLocalHandle(handle);
+      else {
+        saveLocalHandle(handle);
+        allowGuestStart();
+      }
     }
     sfx.chirp();
     dispatch({ type: "onboarded" });

@@ -11,6 +11,8 @@ export type AccountProfile = {
   emailVerified: boolean;
   displayName: string | null;
   providers: string[];
+  /** A device-held account with no email yet; Google upgrades it in place. */
+  guest?: boolean;
 };
 
 export type AuthConfig = {
@@ -223,6 +225,12 @@ export async function registerAccount(input: { email: string; password: string; 
   return acceptSession(response);
 }
 
+/** Opens a guest account for a player who picked a @handle but hasn't signed in. */
+export async function startGuestAccount(): Promise<AccountProfile> {
+  const response = await requestJson<AuthSessionResponse>("/api/auth/guest", { method: "POST", body: "{}" });
+  return acceptSession(response);
+}
+
 export async function loginAccount(input: { email: string; password: string }): Promise<AccountProfile> {
   const response = await requestJson<AuthSessionResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(input) });
   return acceptSession(response);
@@ -231,7 +239,18 @@ export async function loginAccount(input: { email: string; password: string }): 
 export async function renewSession(expectedAccountId: string): Promise<SessionRenewalResponse> {
   const response = await requestJson<SessionRenewalResponse>("/api/auth/sessions/renew", { method: "POST", body: "{}" }, true, expectedAccountId);
   if (typeof response.renewed !== "boolean") throw new Error("The account service returned an invalid renewal response.");
-  if (!response.renewed) return response;
+  if (!response.renewed) {
+    // A guest upgraded by Google keeps its session but the server shortens it; the phone still
+    // holds the guest expiry, so it takes the server's answer.
+    if (isNative && response.expiresAt !== undefined) {
+      const local = await readLocalNativeSession();
+      const serverExpiry = typeof response.expiresAt === "number" ? response.expiresAt : Date.parse(response.expiresAt);
+      if (local && Number.isFinite(serverExpiry) && serverExpiry > Date.now() && Math.abs(local.expiresAt - serverExpiry) > 60_000) {
+        await persistNativeSession({ sessionToken: local.token, expiresAt: response.expiresAt });
+      }
+    }
+    return response;
+  }
   if (!response.expiresAt) throw new Error("The account service did not return a renewed session expiry.");
   if (isNative) {
     if (!response.sessionToken) throw new Error("The account service did not return a secure native session.");

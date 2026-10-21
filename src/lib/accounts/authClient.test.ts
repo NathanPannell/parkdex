@@ -6,6 +6,7 @@ const nativeMocks = vi.hoisted(() => ({
   responses: [] as Response[],
   calls: [] as { input: RequestInfo | URL; headers: Headers; tokenAtCall: string; redirect?: RequestRedirect }[],
   persist: vi.fn(),
+  localExpiresAt: 0,
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -30,6 +31,11 @@ vi.mock("./nativeIdentity", () => ({
     return response;
   }),
   persistNativeSession: nativeMocks.persist,
+  readNativeSession: vi.fn(async () => ({
+    token: nativeMocks.activeToken,
+    expiresAt: nativeMocks.localExpiresAt,
+    apiOrigin: "https://staging.web.parkdex.app",
+  })),
 }));
 
 import { assertSecureAccountRequest, getCurrentAccount, renewSession } from "./authClient";
@@ -94,13 +100,26 @@ describe("native auth session renewal", () => {
   });
 
   it("treats a not-due renewal as a no-op and keeps the existing session", async () => {
-    nativeMocks.responses.push(jsonResponse({ renewed: false, expiresAt: Date.now() + 20 * 24 * 60 * 60 * 1000 }));
+    const expiresAt = Date.now() + 20 * 24 * 60 * 60 * 1000;
+    nativeMocks.localExpiresAt = expiresAt;
+    nativeMocks.responses.push(jsonResponse({ renewed: false, expiresAt }));
 
     const result = await renewSession("account-a");
 
     expect(result.renewed).toBe(false);
     expect(nativeMocks.persist).not.toHaveBeenCalled();
     expect(nativeMocks.activeToken).toBe("old-token");
+  });
+
+  it("takes the server's shorter expiry after a guest is upgraded, keeping the same token", async () => {
+    nativeMocks.persist.mockClear();
+    nativeMocks.localExpiresAt = Date.now() + 360 * 24 * 60 * 60 * 1000;
+    const serverExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    nativeMocks.responses.push(jsonResponse({ renewed: false, expiresAt: serverExpiry }));
+
+    await renewSession("account-a");
+
+    expect(nativeMocks.persist).toHaveBeenCalledWith({ sessionToken: "old-token", expiresAt: serverExpiry });
   });
 });
 

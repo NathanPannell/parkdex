@@ -163,6 +163,8 @@ export function Account({ onBack }: { onBack: () => void }) {
   const googleAvailable = auth.isNative ? nativeGoogleAvailable : webGoogleAvailable;
   const emailAvailable = !!auth.config?.emailEnabled && (!auth.isNative || isAndroidNativeIdentityAvailable());
   const canRequestEmail = !!auth.config?.emailDeliveryEnabled;
+  // A guest account lives on this phone until Google backs it up; it has no email or password.
+  const guest = !!account?.guest;
   const hasPassword = !!account?.providers.includes("email");
   const hasGoogle = !!account?.providers.includes("google");
   const canGoogleReauth = hasGoogle && googleAvailable;
@@ -310,7 +312,7 @@ export function Account({ onBack }: { onBack: () => void }) {
   };
 
   const confirmDeletion = async () => {
-    if (Date.now() - deleteVerifiedAt > 5 * 60 * 1000) {
+    if (!guest && Date.now() - deleteVerifiedAt > 5 * 60 * 1000) {
       setDeleteStep("confirm");
       setDeleteError("Please verify your account again before continuing.");
       return;
@@ -324,7 +326,7 @@ export function Account({ onBack }: { onBack: () => void }) {
       setDeletePhrase("");
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Account deletion could not be completed.");
-      setDeleteStep("confirm");
+      setDeleteStep(guest ? "verified" : "confirm");
     } finally {
       setBusy(false);
     }
@@ -442,19 +444,36 @@ export function Account({ onBack }: { onBack: () => void }) {
 
         {signedIn && account && deleteStep === "closed" && (
           <>
-            <section className="account-card card account-profile">
-              <span className="account-profile__avatar" aria-hidden="true">
-                {(account.displayName || account.email || "P").trim().charAt(0).toUpperCase()}
-              </span>
-              <div className="account-profile__main">
-                <h2>{account.displayName || "Your Parkdex account"}</h2>
-                <p>{account.email}</p>
-                <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
-                  <Icon name={account.emailVerified ? "check" : "image"} size={14} />
-                  {account.emailVerified ? "Email verified" : "Email not verified"}
+            {guest ? (
+              <section className="account-card card account-guest" aria-labelledby="account-guest-title">
+                <span className="eyebrow">Guest account</span>
+                <h2 id="account-guest-title">Saved on this phone only</h2>
+                <p>Back it up with Google to keep your @handle, flag and points if you lose or change this phone.</p>
+                {googleAvailable ? (
+                  renderGoogleButton("link", googleResetKey, busy, onLinkGoogleCredential, onGoogleError)
+                ) : (
+                  <p className="account-help">Google backup isn't available in this build.</p>
+                )}
+                <button className="account-text-button" disabled={busy} onClick={() => void run(auth.signOut)}>
+                  Already have a Parkdex account? Sign in instead
+                </button>
+                <p className="account-help">This guest account can't be opened again after you switch.</p>
+              </section>
+            ) : (
+              <section className="account-card card account-profile">
+                <span className="account-profile__avatar" aria-hidden="true">
+                  {(account.displayName || account.email || "P").trim().charAt(0).toUpperCase()}
                 </span>
-              </div>
-            </section>
+                <div className="account-profile__main">
+                  <h2>{account.displayName || "Your Parkdex account"}</h2>
+                  <p>{account.email}</p>
+                  <span className={`account-verified ${account.emailVerified ? "is-verified" : ""}`}>
+                    <Icon name={account.emailVerified ? "check" : "image"} size={14} />
+                    {account.emailVerified ? "Email verified" : "Email not verified"}
+                  </span>
+                </div>
+              </section>
+            )}
 
             <GameIdentityCard />
 
@@ -489,12 +508,13 @@ export function Account({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
               <p className="account-help">
-                Your @handle, flag and points are saved to your Parkdex account, so they follow you to any phone. Photos and parks you collected before the flag
-                game are kept here too.
+                {guest
+                  ? "Your @handle, flag and points are saved to this guest account. Only this phone can open it until you back it up with Google."
+                  : "Your @handle, flag and points are saved to your Parkdex account, so they follow you to any phone. Photos and parks you collected before the flag game are kept here too."}
               </p>
             </section>
 
-            {(!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
+            {!guest && (!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
               <section className="account-card card account-section" aria-labelledby="account-signin-title">
                 <span className="eyebrow" id="account-signin-title">
                   Sign-in &amp; security
@@ -570,9 +590,13 @@ export function Account({ onBack }: { onBack: () => void }) {
 
             <section className="account-signout">
               <button className="btn btn--paper btn--block" disabled={busy} onClick={() => void run(auth.signOut)}>
-                Sign out on this device
+                {guest ? "Leave this guest account" : "Sign out on this device"}
               </button>
-              <p>Signing out hides this account’s saved progress on this phone until you sign in again. Your flags keep flying.</p>
+              <p>
+                {guest
+                  ? "A guest account can't be opened again once you leave it. Back it up with Google first to keep it."
+                  : "Signing out hides this account’s saved progress on this phone until you sign in again. Your flags keep flying."}
+              </p>
             </section>
 
             <section className="account-delete">
@@ -580,11 +604,13 @@ export function Account({ onBack }: { onBack: () => void }) {
                 className="account-delete__open"
                 disabled={busy}
                 onClick={() => {
-                  setDeleteStep("confirm");
+                  // A guest has nothing to verify with: its session on this phone is the account.
+                  setDeleteStep(guest ? "verified" : "confirm");
+                  setDeleteVerifiedAt(guest ? Date.now() : 0);
                   setDeleteError(null);
                 }}
               >
-                Delete Parkdex account
+                {guest ? "Delete guest account" : "Delete Parkdex account"}
               </button>
             </section>
           </>
@@ -645,7 +671,11 @@ export function Account({ onBack }: { onBack: () => void }) {
             ) : (
               <>
                 <h2>One last check</h2>
-                <p>Type DELETE to delete this account for good. This works for five minutes after you verify.</p>
+                <p>
+                  {guest
+                    ? "Type DELETE to delete this guest account, its @handle, flag and points for good."
+                    : "Type DELETE to delete this account for good. This works for five minutes after you verify."}
+                </p>
                 <label className="fb-field">
                   <span className="fb-label">Type DELETE to confirm</span>
                   <input className="fb-input" value={deletePhrase} onChange={(event) => setDeletePhrase(event.target.value)} autoComplete="off" />
@@ -662,7 +692,7 @@ export function Account({ onBack }: { onBack: () => void }) {
                   </button>
                   <button
                     className="btn btn--sun btn--sm"
-                    disabled={busy || deletePhrase !== "DELETE" || Date.now() - deleteVerifiedAt > 5 * 60 * 1000}
+                    disabled={busy || deletePhrase !== "DELETE" || (!guest && Date.now() - deleteVerifiedAt > 5 * 60 * 1000)}
                     onClick={() => void confirmDeletion()}
                   >
                     Delete account

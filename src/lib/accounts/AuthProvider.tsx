@@ -35,6 +35,7 @@ import {
   isValidGoogleWebClientId,
   linkGoogleAccount,
   loginAccount,
+  startGuestAccount,
   logoutAccount,
   reauthenticateGoogle,
   reauthenticatePassword,
@@ -51,6 +52,7 @@ import {
 import { listenForNativeAuthLinks, NativeSessionOriginMismatchError, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
 import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 import { shouldReopenAccount, SignInGate } from "./signInGate";
+import { clearLocalHandle } from "../game/localHandle";
 
 const LAST_ACCOUNT_KEY = "kip-account-last-id";
 
@@ -87,6 +89,8 @@ type AuthContextValue = AuthState & {
   signUp: (input: { email: string; password: string; displayName: string }) => Promise<AccountProfile>;
   signIn: (input: { email: string; password: string }) => Promise<AccountProfile>;
   signInGoogle: (idToken: string, nonce: string) => Promise<AccountProfile>;
+  /** A guest account for a player with a @handle and no sign-in yet (`lib/accounts/guestStart.ts`). */
+  startGuest: () => Promise<AccountProfile>;
   linkGoogle: (idToken: string, nonce: string) => Promise<void>;
   signOut: () => Promise<void>;
   sendVerification: () => Promise<void>;
@@ -133,6 +137,19 @@ function rememberAccount(accountId: string | null) {
   } catch {
     // The current session remains usable when local browser storage is unavailable.
   }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When the phone asks the server to renew its session. An account's 30-day session renews in its
+ * last week. A guest's year-long session renews once it is a month old, since it is the guest's
+ * only credential. A non-guest holding more than a month is an upgraded guest whose expiry the
+ * server shortened, so it asks to learn the new one.
+ */
+export function nativeSessionNeedsRenewal(remainingMs: number, guest: boolean): boolean {
+  if (guest) return remainingMs < 335 * DAY_MS;
+  return remainingMs < 7 * DAY_MS || remainingMs > 31 * DAY_MS;
 }
 
 function isUnauthorized(error: unknown) {
@@ -330,7 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          const nativeNeedsRenewal = !!localSession && localSession.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000;
+          const nativeNeedsRenewal = !!localSession && nativeSessionNeedsRenewal(localSession.expiresAt - Date.now(), account.guest === true);
           const webNeedsRenewal = !isNative && Date.now() - lastRenewalAt.current >= 12 * 60 * 60 * 1000;
           if (nativeNeedsRenewal || webNeedsRenewal) {
             try {
@@ -449,6 +466,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (idToken: string, nonce: string) => interactiveSignIn(() => completeGoogleSignIn(idToken, nonce, isNative ? "native" : "web")),
     [interactiveSignIn, isNative],
   );
+  const startGuest = useCallback(() => interactiveSignIn(() => startGuestAccount()), [interactiveSignIn]);
   const linkGoogle = useCallback(
     async (idToken: string, nonce: string) => {
       const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
@@ -457,7 +475,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const account = await linkGoogleAccount(idToken, nonce, isNative ? "native" : "web", accountId);
       if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
         throw new Error("The signed-in account changed. Retry Google linking.");
-      setState((current) => ({ ...current, account, notice: { kind: "success", message: "Google is now linked to this account." } }));
+      const wasGuest = stateRef.current.account?.guest === true;
+      setState((current) => ({
+        ...current,
+        account,
+        notice: { kind: "success", message: wasGuest ? "Backed up with Google. Sign in with it on any phone." : "Google is now linked to this account." },
+      }));
     },
     [isNative],
   );
@@ -470,6 +493,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     abortProgressRequests(syncAbortControllers.current);
     syncRerunRequested.current.clear();
     await logoutAccount(accountId);
+    // A handle still waiting on the device would open a new guest account straight away.
+    clearLocalHandle();
     if (authOperationGeneration.current !== operation || sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId) return;
     let localCleanupFailed = false;
     if (isNative) {
@@ -909,6 +934,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signIn,
     signInGoogle,
+    startGuest,
     linkGoogle,
     signOut,
     sendVerification,

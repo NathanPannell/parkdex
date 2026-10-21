@@ -97,6 +97,12 @@ const SESSION_SLIDING_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_MS = 90 * 24 * 60 * 60 * 1000;
 const SESSION_RENEW_BEFORE_MS = 7 * 24 * 60 * 60 * 1000;
 const REAUTH_LIFETIME_MS = 5 * 60 * 1000;
+// A guest's session is its only credential, so it lasts a year from the last open instead of 30 days,
+// renews whenever it is a month old, and is not capped at 90 days. Google sign-in shortens it to an
+// ordinary account's limits when it upgrades the guest.
+const GUEST_SESSION_SLIDING_MS = 365 * 24 * 60 * 60 * 1000;
+const GUEST_SESSION_ABSOLUTE_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+const GUEST_RENEW_BEFORE_MS = GUEST_SESSION_SLIDING_MS - 30 * 24 * 60 * 60 * 1000;
 const AUTH_AUDIT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const AUTH_RATE_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const AUTH_RETENTION_BATCH_LIMIT = 5_000;
@@ -349,7 +355,7 @@ function dummyPasswordHash(): Promise<string> {
   return dummyHashPromise;
 }
 
-function sessionMaterial(transport: StoredTransport, now: number, dependencies: AuthDependencies): SessionMaterial {
+function sessionMaterial(transport: StoredTransport, now: number, dependencies: AuthDependencies, guest = false): SessionMaterial {
   const token = bytesToken();
   const csrfToken = transport === "web" ? bytesToken() : null;
   return {
@@ -360,8 +366,8 @@ function sessionMaterial(transport: StoredTransport, now: number, dependencies: 
       tokenHash: sha256(token),
       csrfHash: csrfToken ? sha256(csrfToken) : null,
       transport,
-      expiresAt: new Date(now + SESSION_SLIDING_MS).toISOString(),
-      absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_MS).toISOString(),
+      expiresAt: new Date(now + (guest ? GUEST_SESSION_SLIDING_MS : SESSION_SLIDING_MS)).toISOString(),
+      absoluteExpiresAt: new Date(now + (guest ? GUEST_SESSION_ABSOLUTE_MS : SESSION_ABSOLUTE_MS)).toISOString(),
     },
   };
 }
@@ -695,6 +701,7 @@ function methodForAuthRoute(path: string): string | null {
   const methods: Record<string, string> = {
     "/api/auth/config": "GET",
     "/api/auth/register": "POST",
+    "/api/auth/guest": "POST",
     "/api/auth/login": "POST",
     "/api/auth/me": "GET",
     "/api/auth/sessions/renew": "POST",
@@ -803,6 +810,22 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, transport, 201, now);
   }
 
+  if (path === "/api/auth/guest") {
+    // A guest account for a player who picked a @handle but hasn't signed in: no email, no password.
+    const transport = transportHint(request);
+    if (transport === "web") assertTrustedOrigin(request, env, true);
+    const body = await readJson(request);
+    exactKeys(body, new Set(), []);
+    // Phones on one carrier often share an address, so this matches registration's per-address limit.
+    const ipScope = await reserveIpLimit(env, store, request, "guest_ip", 20, 60 * 60 * 1000);
+    await reserveLimit(env, store, "guest_global", "global", 300, 15 * 60 * 1000);
+    const session = sessionMaterial(transport, now, dependencies, true);
+    const result = await store.createGuestAccount(uuidValue(dependencies), session.record);
+    if (!result) throw new HttpError(503, "service_unavailable", "Guest play is unavailable right now.");
+    await store.recordSecurityEvent("guest_created", ipScope, "succeeded").catch(() => undefined);
+    return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, transport, 201, now);
+  }
+
   if (path === "/api/auth/login") {
     const transport = transportHint(request);
     if (transport === "web") assertTrustedOrigin(request, env, true);
@@ -840,6 +863,7 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
         emailVerified: account.emailVerified,
         displayName: account.displayName,
         providers: account.providers,
+        guest: account.guest === true,
       }),
     );
   }
@@ -851,12 +875,14 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     else assertTrustedOrigin(request, env, false);
     assertExpectedAccount(request, lookup.context.accountId);
     const expiry = Date.parse(lookup.stored.expiresAt);
-    if (!Number.isFinite(expiry) || expiry - now > SESSION_RENEW_BEFORE_MS) {
+    const guest = lookup.stored.guest === true;
+    const renewBefore = guest ? GUEST_RENEW_BEFORE_MS : SESSION_RENEW_BEFORE_MS;
+    if (!Number.isFinite(expiry) || expiry - now > renewBefore) {
       return jsonResponse({ renewed: false, expiresAt: lookup.stored.expiresAt });
     }
     const transport = lookup.stored.transport;
-    const material = sessionMaterial(transport, now, dependencies);
-    const expiresAt = await store.rotateSession(lookup.stored.sessionId, lookup.stored.tokenHash, material.record, nowIso);
+    const material = sessionMaterial(transport, now, dependencies, guest);
+    const expiresAt = await store.rotateSession(lookup.stored.sessionId, lookup.stored.tokenHash, material.record, nowIso, renewBefore);
     if (!expiresAt) throw new HttpError(401, "session_expired", "Your session has expired. Sign in again.");
     if (transport === "native") return jsonResponse({ renewed: true, sessionToken: material.token, expiresAt });
     if (!material.csrfToken) throw new Error("web renewal is missing a CSRF token");
@@ -888,7 +914,7 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     assertExpectedAccount(request, lookup.context.accountId);
     await reserveIpLimit(env, store, request, "verification_request_ip", 10, 15 * 60 * 1000);
     const account = await store.findAccountById(lookup.context.accountId);
-    if (account && account.deletionState === "active" && !account.emailVerified) {
+    if (account && account.deletionState === "active" && !account.emailVerified && account.guest !== true) {
       const accountScope = await reserveLimit(env, store, "verification_request", account.id, 3, 15 * 60 * 1000);
       const token = bytesToken();
       const created = await store.issueActionToken(account.id, "verification", sha256(token), new Date(now + VERIFICATION_LIFETIME_MS).toISOString());
@@ -996,7 +1022,8 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
       if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
       else assertTrustedOrigin(request, env, false);
       assertExpectedAccount(request, lookup.context.accountId);
-      if (purpose === "link") await requireFreshSession(lookup, now);
+      // A guest upgrading to Google has nothing to reauthenticate with; its session is its only credential.
+      if (purpose === "link" && lookup.stored.guest !== true) await requireFreshSession(lookup, now);
       accountId = lookup.context.accountId;
       sessionId = lookup.context.sessionId;
     }
@@ -1131,7 +1158,7 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
     else assertTrustedOrigin(request, env, false);
     assertExpectedAccount(request, lookup.context.accountId);
-    await requireFreshSession(lookup, now);
+    if (lookup.stored.guest !== true) await requireFreshSession(lookup, now);
     if (!dependencies.deleteAccountData) throw new HttpError(503, "service_unavailable", "Account deletion is unavailable.");
     const receiptId = uuidValue(dependencies);
     const receipt = await store.beginDeletion(lookup.context.accountId, lookup.context.sessionId, lookup.stored.tokenHash, receiptId, nowIso);
@@ -1153,6 +1180,7 @@ function accountSummaryFromCredentials(account: AccountCredentials): AccountSumm
     emailVerified: account.emailVerified,
     displayName: account.displayName,
     providers: account.providers,
+    guest: account.guest === true,
   };
 }
 
