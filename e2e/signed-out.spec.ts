@@ -40,7 +40,9 @@ test("search finds a park and opens its page", async ({ page }) => {
   await page.getByRole("button", { name: /^Elk Falls Park\./ }).click();
   await expect(page.getByRole("heading", { name: "Elk Falls Park", level: 2 })).toBeVisible();
   await expect(page.getByText("Provincial Park · North Island")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Flag" })).toContainText("No flag yet");
+  await expect(page.getByRole("region", { name: "Flag" })).toContainText("Nobody's park yet");
+  // Away from the park, the one big button gets you there.
+  await expect(page.getByRole("link", { name: /Get directions|Find it on the map/ })).toBeVisible();
   // Founding happens inside a park, so a park far away shows only its founder line.
   // The founder line waits for the park summary from the API, whose first answer can be slow on a cold server.
   await expect(page.getByText("No founder yet")).toBeVisible({ timeout: API_TIMEOUT });

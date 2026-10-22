@@ -19,7 +19,6 @@ import {
   founderCapture,
   founderLine,
   foundPark,
-  dexCropFromCover,
   FounderError,
   isFreshFix,
   MAX_FOUND_ACCURACY_M,
@@ -43,10 +42,7 @@ import { useGame } from "../../lib/game/GameProvider";
 import type { Boundary, LngLat } from "../../lib/geo";
 import { currentFix } from "../../lib/native";
 import type { Park } from "../../lib/parks";
-import type { CapturedPhoto, EncodedPhoto } from "../../lib/photoEncode";
-import { useContent } from "../../lib/content/provider";
-import { useSaveDexPhoto } from "../../lib/dex/useDex";
-import { useToast } from "../../components/Toast";
+import type { EncodedPhoto } from "../../lib/photoEncode";
 import { captureProductEvent } from "../../lib/productAnalytics";
 import { FoundCelebration } from "./FoundCelebration";
 import "../../found-park.css";
@@ -144,11 +140,6 @@ function AboveNav({ children }: { children: ReactNode }) {
 export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onSignIn, onClose, onFounded }: Props) {
   const auth = useAuth();
   const game = useGame();
-  const content = useContent();
-  const saveDexPhoto = useSaveDexPhoto();
-  const toast = useToast();
-  // The photo the player took, so an approved founder photo also goes in their Dex: one photo, two jobs.
-  const captured = useRef<CapturedPhoto | null>(null);
   const [accountId] = useState(() => auth.ownerAccountId);
   const [step, setStep] = useState<Step>({ kind: "locating" });
   const [fix, setFix] = useState<DeviceFix | null>(null);
@@ -410,15 +401,8 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
         sfx.claim();
         captureProductEvent("found_park_completed", { source: "osm" in target ? "osm" : "catalogue", visit: result.visit?.outcome ?? null });
         setStep({ kind: "founded", result });
+        // The photo is the park's public cover now, which is what My Dex shows for it too.
         onFounded(result.park.id);
-        // A park that was new a moment ago may not be in the catalogue yet; then only the cover is kept.
-        const dexPark = content?.parkById.get(result.park.id);
-        const shot = captured.current;
-        if (dexPark && shot) {
-          // The Dex shows photos at 3:4, so its copy is re-framed from the cover's wide crop.
-          const crop = dexCropFromCover(shot.crop, shot.original.width, shot.original.height);
-          void saveDexPhoto(dexPark, { ...shot, crop }).catch(() => toast("Your photo couldn't be added to your Dex. Add it from the park page.", "kip"));
-        }
         return;
       }
       const flags = checkFlags(result);
@@ -655,7 +639,6 @@ export function FoundPark({ mapRef, park, boundary, user, hasFix, onLocated, onS
               onClose={() => setStep({ kind: "results" })}
               onUse={(picture) => {
                 // Moderation and the public cover use the player's crop, not the whole photo.
-                captured.current = picture;
                 setPhoto(picture.cropped);
                 void check(picture.cropped, choice.target);
               }}

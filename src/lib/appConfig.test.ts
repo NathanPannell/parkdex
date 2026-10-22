@@ -92,14 +92,14 @@ afterEach(() => {
 
 describe("app config", () => {
   it("lists the same feature flags as the server", () => {
-    // rankProgression is retired in the app (#175); the server still lists it for installed builds.
-    expect([...Object.keys(FEATURE_FLAG_DEFAULTS), "rankProgression"].sort()).toEqual([...FEATURE_FLAGS].sort());
+    // rankProgression (#175) and crews (docs/crews.md) are retired in the app; the server still lists them for installed builds.
+    expect([...Object.keys(FEATURE_FLAG_DEFAULTS), "rankProgression", "crews"].sort()).toEqual([...FEATURE_FLAGS].sort());
   });
 
   it("uses built-in defaults before the first check-in", async () => {
     const config = await initAppConfig();
     expect(config).toMatchObject({ platform: "android", build: 42, contentChannel: null, fetchedAt: null });
-    expect(activeAppConfig().flags.crews).toBe(false);
+    expect(activeAppConfig().flags.badges).toBe(false);
     expect(contentChannelOverride()).toBeNull();
   });
 
@@ -108,7 +108,7 @@ describe("app config", () => {
     await initAppConfig();
     expect(isFeatureEnabled("badges")).toBe(false);
     // A build row without the flag keeps the default: badges stay off.
-    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true } })));
+    await checkInAppConfig(respond(answer({ flags: { friends: true } })));
     expect(isFeatureEnabled("badges")).toBe(false);
     const Shelf = () => createElement("span", null, useFeatureFlag("badges") ? "shelf" : "none");
     expect(renderToStaticMarkup(createElement(Shelf))).toBe("<span>none</span>");
@@ -157,15 +157,15 @@ describe("app config", () => {
     mocks.storage.set(
       "parkdex.app-config.v1",
       JSON.stringify({
-        config: answer({ build: 0, contentChannel: "main", flags: { crews: true } }),
+        config: answer({ build: 0, contentChannel: "main", flags: { badges: true } }),
         fetchedAt: "2026-09-01T00:00:00.000Z",
       }),
     );
 
     const initial = await initAppConfig();
     expect(initial).toMatchObject({ platform: "android", build: 0, contentChannel: null, fetchedAt: null });
-    expect(initial.flags.crews).toBe(false);
-    const fetcher = respond(answer({ contentChannel: "main", flags: { crews: true }, update: "available" }));
+    expect(initial.flags.badges).toBe(false);
+    const fetcher = respond(answer({ contentChannel: "main", flags: { badges: true }, update: "available" }));
     vi.stubGlobal("fetch", fetcher);
 
     startAppConfigCheckIns();
@@ -185,11 +185,11 @@ describe("app config", () => {
     expect(String(vi.mocked(fetcher).mock.calls[0]?.[0])).toContain("platform=android&build=42");
     expect(currentUpdateStatus()).toBe("available");
     // Flags apply as soon as the answer arrives; the content channel waits for the next launch.
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: true } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { badges: true } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(42);
 
     await initAppConfig();
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { crews: true } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: "main", flags: { badges: true } });
     expect(contentChannelOverride()).toBe("main");
   });
 
@@ -202,13 +202,13 @@ describe("app config", () => {
     mocks.storage.set(
       "parkdex.app-config.v1",
       JSON.stringify({
-        config: answer({ build: cacheBuild, contentChannel: "main", flags: { crews: true }, update: "required" }),
+        config: answer({ build: cacheBuild, contentChannel: "main", flags: { badges: true }, update: "required" }),
         fetchedAt: "2026-09-01T00:00:00.000Z",
       }),
     );
 
     const initial = await initAppConfig();
-    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { crews: false } });
+    expect(initial).toMatchObject({ build: 0, contentChannel: null, fetchedAt: null, flags: { badges: false } });
     expect(currentUpdateStatus()).toBe("none");
 
     const fetcher = vi.fn(async () => {
@@ -229,22 +229,22 @@ describe("app config", () => {
     await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
 
     expect(currentUpdateStatus()).toBe(expectedUpdate);
-    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { crews: false } });
+    expect(activeAppConfig()).toMatchObject({ build: 42, contentChannel: null, flags: { badges: false } });
     expect(JSON.parse(mocks.storage.get("parkdex.app-config.v1") ?? "null").config.build).toBe(cacheBuild);
   });
 
   it("applies a check-in's flags at once and its content channel on the next launch", async () => {
     await initAppConfig();
-    const fetcher = respond(answer({ contentChannel: "main", flags: { crews: true } }));
+    const fetcher = respond(answer({ contentChannel: "main", flags: { badges: true } }));
     const fresh = await checkInAppConfig(fetcher);
-    expect(fresh?.flags.crews).toBe(true);
+    expect(fresh?.flags.badges).toBe(true);
     expect(String(vi.mocked(fetcher).mock.calls[0][0])).toBe("https://web.parkdex.app/api/app-config?platform=android&build=42&env=staging");
-    expect(activeAppConfig().flags.crews).toBe(true);
+    expect(activeAppConfig().flags.badges).toBe(true);
     expect(activeAppConfig().contentChannel).toBeNull();
     expect(contentChannelOverride()).toBeNull();
 
     await initAppConfig();
-    expect(activeAppConfig().flags.crews).toBe(true);
+    expect(activeAppConfig().flags.badges).toBe(true);
     // This test build is a staging build, so a main answer is a switch.
     expect(contentChannelOverride()).toBe("main");
   });
@@ -259,15 +259,15 @@ describe("app config", () => {
     const Future = () => createElement("span", null, String(useRemoteFlag("futureThing")));
     expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>no tab</span>");
 
-    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    await checkInAppConfig(respond(answer({ flags: { friends: true, badges: true, futureThing: true } })));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(isFeatureEnabled("friends")).toBe(true);
-    expect(isFeatureEnabled("crews")).toBe(true);
+    expect(isFeatureEnabled("badges")).toBe(true);
     expect(renderToStaticMarkup(createElement(Friends))).toBe("<span>Friends tab</span>");
     expect(renderToStaticMarkup(createElement(Future))).toBe("<span>true</span>");
 
     // The same answer again changes nothing, so nothing re-renders.
-    await checkInAppConfig(respond(answer({ flags: { friends: true, crews: true, futureThing: true } })));
+    await checkInAppConfig(respond(answer({ flags: { friends: true, badges: true, futureThing: true } })));
     expect(listener).toHaveBeenCalledTimes(1);
 
     // And the operator can turn it off again mid-session.
@@ -284,11 +284,11 @@ describe("app config", () => {
 
   it("ignores a saved answer for a different build", async () => {
     await initAppConfig();
-    await checkInAppConfig(respond(answer({ flags: { crews: true } })));
+    await checkInAppConfig(respond(answer({ flags: { badges: true } })));
     mocks.build = "43";
     await initAppConfig();
     expect(activeAppConfig().fetchedAt).toBeNull();
-    expect(activeAppConfig().flags.crews).toBe(false);
+    expect(activeAppConfig().flags.badges).toBe(false);
   });
 
   it("keeps the previous answer when the server fails or answers badly", async () => {
@@ -351,9 +351,9 @@ describe("app config", () => {
     expect(parseRemoteAppConfig(answer({ contentChannel: "production" }), { platform: "android", build: 42 })).toBeNull();
     expect(parseRemoteAppConfig(answer({ apiPointer: "main" }), { platform: "android", build: 42 })).toBeNull();
     await initAppConfig();
-    const fresh = await checkInAppConfig(respond(answer({ flags: { crews: true, futureThing: true, "bad key": true } })));
-    expect(fresh?.flags).toEqual({ parkProposals: true, friends: false, crews: true, badges: false });
-    expect(fresh?.remoteFlags).toEqual({ crews: true, futureThing: true });
+    const fresh = await checkInAppConfig(respond(answer({ flags: { badges: true, futureThing: true, "bad key": true } })));
+    expect(fresh?.flags).toEqual({ parkProposals: true, friends: false, badges: true });
+    expect(fresh?.remoteFlags).toEqual({ badges: true, futureThing: true });
     await initAppConfig();
     expect(remoteFlag("futureThing")).toBe(true);
     expect(remoteFlag("missing")).toBeUndefined();

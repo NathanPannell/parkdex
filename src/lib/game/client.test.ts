@@ -13,10 +13,8 @@ const {
   fetchFlags,
   fetchGameLeaderboard,
   fetchGameMe,
-  fetchParkCrew,
   handleProblem,
   isOfflineError,
-  joinCrew,
   markTakeoversSeen,
   savePatches,
   normalizeHandle,
@@ -410,24 +408,7 @@ describe("public reads", () => {
   });
 });
 
-describe("crews (#170, #171)", () => {
-  const crew = {
-    parkId: "beacon-hill",
-    leader: { handle: "tom", flagSeed: "t1" },
-    members: [
-      { handle: "tom", flagSeed: "t1", joinedAt: "2026-10-13T17:00:00.000Z", leader: true },
-      { handle: "sara", flagSeed: "s1", joinedAt: "2026-10-13T17:12:00.000Z", leader: false },
-      { handle: 7 },
-    ],
-    size: 2,
-    cap: 8,
-    flagSince: "2026-10-13T17:00:00.000Z",
-    protectedUntil: "2026-10-13T18:00:00.000Z",
-    member: true,
-    code: "K7QX2M",
-    codeExpiresAt: "2026-10-13T18:00:00.000Z",
-  };
-
+describe("the protected hour (#170)", () => {
   it("reads logged and joined outcomes and the protected hour, which every build gets", async () => {
     fetchAuthenticated.mockResolvedValueOnce(
       reply(200, {
@@ -496,72 +477,5 @@ describe("crews (#170, #171)", () => {
     const me = await fetchGameMe(ACCOUNT);
     expect(me.parks[0].crew).toEqual({ size: 2, leader: false, protectedUntil: "2026-10-13T18:00:00.000Z" });
     expect(me.loggedToday).toEqual(["b"]);
-  });
-
-  it("reads a park's crew, with the code only when the server sends it", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew, serverTime: "2026-10-13T17:30:00Z" }));
-    const answer = await fetchParkCrew(ACCOUNT, "beacon-hill");
-    expect(answer.crew).toMatchObject({ leader: { handle: "tom" }, size: 2, cap: 8, member: true, code: "K7QX2M" });
-    expect(answer.crew?.members.map((member) => member.handle)).toEqual(["tom", "sara"]);
-    expect(fetchAuthenticated.mock.calls[0][0]).toBe("/api/game/parks/beacon-hill/crew");
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew: null, serverTime: "2026-10-13T17:30:00Z" }));
-    await expect(fetchParkCrew(ACCOUNT, "beacon-hill")).resolves.toMatchObject({ crew: null });
-  });
-
-  it("reads each crew member's badge patches, none from an older server (#175)", async () => {
-    const members = [
-      { handle: "tom", flagSeed: "s1", joinedAt: "2026-10-13T17:00:00Z", leader: true, patches: ["hold-7", "nope!", "crew-1", "parks-1", "founder"] },
-      { handle: "sara", flagSeed: "s2", joinedAt: "2026-10-13T17:10:00Z", leader: false },
-    ];
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { parkId: "beacon-hill", crew: { ...crew, members }, serverTime: "2026-10-13T17:30:00Z" }));
-    const answer = await fetchParkCrew(ACCOUNT, "beacon-hill");
-    expect(answer.crew?.members.map((member) => member.patches)).toEqual([["hold-7", "crew-1", "parks-1"], []]);
-  });
-
-  it("joins a crew, and reads a second scan as already a member", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(
-      reply(200, {
-        status: "joined",
-        visit: {
-          visitId: "j1",
-          parkId: "beacon-hill",
-          outcome: "joined",
-          pointsEarned: 2,
-          pointsBreakdown: { base: 2, days: 0 },
-          previousHolder: null,
-          flagSince: "2026-10-13T17:00:00.000Z",
-          protected: null,
-        },
-        crew,
-      }),
-    );
-    const joined = await joinCrew(ACCOUNT, { visitId: "j1", code: "K7QX2M" });
-    expect(joined).toMatchObject({ status: "joined", visit: { outcome: "joined", pointsEarned: 2 }, crew: { size: 2 } });
-    const [path, init] = fetchAuthenticated.mock.calls[0];
-    expect(path).toBe("/api/game/crews/join");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ visitId: "j1", code: "K7QX2M" });
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "already_member", visit: null, crew }));
-    await expect(joinCrew(ACCOUNT, { visitId: "j2", code: "K7QX2M" })).resolves.toMatchObject({ status: "already_member", visit: null });
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "joined", visit: null, crew }));
-    await expect(joinCrew(ACCOUNT, { visitId: "j3", code: "K7QX2M" })).rejects.toMatchObject({ code: "unavailable" });
-  });
-
-  it("names every refusal of a join", async () => {
-    const refusals: [number, string][] = [
-      [400, "invalid_code"],
-      [404, "code_not_found"],
-      [410, "code_expired"],
-      [409, "crew_full"],
-      [409, "already_today"],
-      [409, "handle_required"],
-      [404, "park_not_found"],
-      [410, "account_deleting"],
-      [409, "visit_id_reused"],
-    ];
-    for (const [status, code] of refusals) {
-      fetchAuthenticated.mockResolvedValueOnce(reply(status, { error: { code, message: "x" }, code, message: "x" }));
-      await expect(joinCrew(ACCOUNT, { visitId: "j", code: "K7QX2M" })).rejects.toMatchObject({ code, status });
-    }
   });
 });

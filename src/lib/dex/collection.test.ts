@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Park } from "../parks";
-import { buildCollection, coverPhoto, mergeVisits, tileImage, victoriaDay, visiblePhotos, type DexPhoto, type ServerDexPark } from "./collection";
+import { buildCollection, mergeVisits, tileImage, victoriaDay, type ServerDexPark } from "./collection";
 import { readCollapsed, readOnlyMine, storedOnlyMine, writeCollapsed, writeOnlyMine } from "./prefs";
 import { compareProvinces, provinceFor } from "./regions";
 
@@ -24,10 +24,6 @@ function park(id: string, region: string, name = id): Park {
 
 function server(parkId: string, days: string[], hidden = false): ServerDexPark {
   return { parkId, days, firstVisitAt: `${days[0]}T18:00:00.000Z`, lastVisitAt: `${days[days.length - 1]}T18:00:00.000Z`, hidden };
-}
-
-function photo(claimId: string, parkId: string, claimedAt: string, extra: Partial<DexPhoto> = {}): DexPhoto {
-  return { claimId, parkId, claimedAt, blob: new Blob([claimId]), crop: null, coverAt: null, removed: false, ...extra };
 }
 
 class MemoryStorage {
@@ -90,7 +86,7 @@ describe("buildCollection", () => {
   );
 
   it("shows only visited parks by default, grouped by province then region, hiding empty regions", () => {
-    const collection = buildCollection({ parks: CATALOGUE, visits, photos: [], onlyMine: readOnlyMine(new MemoryStorage()) });
+    const collection = buildCollection({ parks: CATALOGUE, visits, covers: new Map(), onlyMine: readOnlyMine(new MemoryStorage()) });
     expect(collection.provinces.map((province) => province.name)).toEqual(["British Columbia", "Nova Scotia", "Other"]);
     const bc = collection.provinces[0];
     expect(bc.regions.map((region) => [region.name, region.visited, region.total, region.tiles.map((tile) => tile.park.id)])).toEqual([
@@ -103,7 +99,7 @@ describe("buildCollection", () => {
   });
 
   it("shows every park with the switch off, visited first, unvisited as their own tiles", () => {
-    const collection = buildCollection({ parks: CATALOGUE, visits, photos: [], onlyMine: false });
+    const collection = buildCollection({ parks: CATALOGUE, visits, covers: new Map(), onlyMine: false });
     const capital = collection.provinces[0].regions.find((region) => region.name === "Capital Region")!;
     expect(capital.tiles.map((tile) => [tile.park.id, !!tile.visit])).toEqual([
       ["a", true],
@@ -122,7 +118,7 @@ describe("buildCollection", () => {
     const collection = buildCollection({
       parks: [...CATALOGUE, park("s", "Kootenays", "Stale")],
       visits: new Map([...withHidden, ["s", { ...withHidden.get("a")!, parkId: "s", hidden: true }]]),
-      photos: [],
+      covers: new Map(),
       onlyMine: true,
     });
     const kootenays = collection.provinces[0].regions.find((region) => region.name === "Kootenays")!;
@@ -138,35 +134,20 @@ describe("buildCollection", () => {
     ).toBe(false);
   });
 
-  it("puts several photos per park on its tile and picks the cover", () => {
-    const photos = [
-      photo("p1", "a", "2026-06-01T18:00:00.000Z"),
-      photo("p2", "a", "2026-06-03T18:00:00.000Z"),
-      photo("p3", "a", "2026-06-04T18:00:00.000Z", { removed: true }),
-      photo("p4", "b", "2026-06-04T18:00:00.000Z"),
-    ];
-    const collection = buildCollection({ parks: CATALOGUE, visits, photos, onlyMine: false });
+  it("shows each park's official photo, its founder's cover, and the badge without one", () => {
+    const covers = new Map([
+      ["a", "https://web.parkdex.app/api/parks/a/cover/1.jpg"],
+      ["b", "https://web.parkdex.app/api/parks/b/cover/2.jpg"],
+    ]);
+    const collection = buildCollection({ parks: CATALOGUE, visits, covers, onlyMine: false });
     const capital = collection.provinces[0].regions[0];
     const alder = capital.tiles.find((tile) => tile.park.id === "a")!;
-    expect(alder.photos.map((item) => item.claimId)).toEqual(["p2", "p1"]);
-    expect(alder.cover?.claimId).toBe("p2");
-    expect(tileImage(alder)).toEqual({ kind: "photo", photo: alder.photos[0] });
-    // An unvisited park never shows a stray photo.
-    expect(tileImage(capital.tiles.find((tile) => tile.park.id === "b")!)).toEqual({ kind: "badge" });
-  });
-});
-
-describe("cover selection", () => {
-  it("uses the latest chosen cover, else the newest photo, and never a removed one", () => {
-    const old = photo("old", "a", "2026-06-01T18:00:00.000Z", { coverAt: "2026-06-05T10:00:00.000Z" });
-    const newer = photo("newer", "a", "2026-06-03T18:00:00.000Z", { coverAt: "2026-06-04T10:00:00.000Z" });
-    const newest = photo("newest", "a", "2026-06-06T18:00:00.000Z");
-    expect(coverPhoto([newest, newer, old])?.claimId).toBe("old");
-    expect(coverPhoto([newest, newer])?.claimId).toBe("newer");
-    expect(coverPhoto([photo("1", "a", "2026-06-01T18:00:00.000Z"), newest])?.claimId).toBe("newest");
-    expect(coverPhoto([{ ...old, removed: true }, newest])?.claimId).toBe("newest");
-    expect(coverPhoto([{ ...old, removed: true }])).toBeNull();
-    expect(visiblePhotos([old, newest, newer]).map((item) => item.claimId)).toEqual(["newest", "newer", "old"]);
+    expect(alder.cover).toBe("https://web.parkdex.app/api/parks/a/cover/1.jpg");
+    expect(tileImage(alder)).toEqual({ kind: "cover", url: "https://web.parkdex.app/api/parks/a/cover/1.jpg" });
+    // The official photo is the park's own, so an unvisited park shows it too.
+    expect(tileImage(capital.tiles.find((tile) => tile.park.id === "b")!)).toEqual({ kind: "cover", url: "https://web.parkdex.app/api/parks/b/cover/2.jpg" });
+    const kootenays = collection.provinces[0].regions.find((region) => region.name === "Kootenays")!;
+    expect(kootenays.tiles.every((tile) => tileImage(tile).kind === "badge")).toBe(true);
     expect(tileImage({ cover: null })).toEqual({ kind: "badge" });
   });
 });

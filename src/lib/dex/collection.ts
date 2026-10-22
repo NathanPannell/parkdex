@@ -1,28 +1,17 @@
 import type { Park } from "../parks";
-import type { PhotoCrop } from "../photoCrop";
 import { compareProvinces, OTHER_PROVINCE, provinceFor } from "./regions";
 
 /**
- * My Dex (#174): the parks a player has visited, grouped by province and region, with their own
- * photos as covers. Everything here is pure, so the screen only joins data and draws it.
+ * My Dex (#174): the parks a player has visited, grouped by province and region. Each park shows
+ * its official photo, the founder's public cover (docs/park-founders.md), never photos players
+ * keep for themselves. Everything here is pure, so the screen only joins data and draws it.
  */
 
 /** One park's visits as the server lists them (`GET /api/game/dex`). */
 export type ServerDexPark = { parkId: string; days: string[]; firstVisitAt: string; lastVisitAt: string; hidden: boolean };
 
-/** A claim saved on this device: an old claim, or a photo taken at a park. */
+/** A claim saved on this device: an old claim, or a photo taken at a park before photos were retired. */
 export type LocalDexClaim = { claimId: string; parkId: string; claimedAt: string; parkSnapshot: Park | null };
-
-/** A photo saved on this device, with the player's display choices. */
-export type DexPhoto = {
-  claimId: string;
-  parkId: string;
-  claimedAt: string;
-  blob: Blob;
-  crop: PhotoCrop | null;
-  coverAt: string | null;
-  removed: boolean;
-};
 
 /** Everything My Dex knows about one visited park. */
 export type DexVisit = {
@@ -36,14 +25,13 @@ export type DexVisit = {
   snapshot: Park | null;
 };
 
-export type DexTileImage = { kind: "photo"; photo: DexPhoto } | { kind: "badge" };
+export type DexTileImage = { kind: "cover"; url: string } | { kind: "badge" };
 
 export type DexTile = {
   park: Park;
   visit: DexVisit | null;
-  /** The photo shown on the tile, or null for the badge frame. */
-  cover: DexPhoto | null;
-  photos: DexPhoto[];
+  /** The park's official photo (its founder's cover), or null for the badge frame. */
+  cover: string | null;
 };
 
 export type DexRegion = {
@@ -98,28 +86,17 @@ export function mergeVisits(server: readonly ServerDexPark[], claims: readonly L
   return visits;
 }
 
-/** Photos the player has not removed, newest first. */
-export function visiblePhotos(photos: readonly DexPhoto[]): DexPhoto[] {
-  return photos.filter((photo) => !photo.removed).sort((a, b) => Date.parse(b.claimedAt) - Date.parse(a.claimedAt) || b.claimId.localeCompare(a.claimId));
-}
-
-/** The cover: the photo most recently chosen as cover, otherwise the newest photo. */
-export function coverPhoto(photos: readonly DexPhoto[]): DexPhoto | null {
-  const shown = visiblePhotos(photos);
-  const chosen = shown.filter((photo) => photo.coverAt).sort((a, b) => Date.parse(b.coverAt!) - Date.parse(a.coverAt!))[0];
-  return chosen ?? shown[0] ?? null;
-}
-
-/** What a tile shows: the player's cover photo, or the park's badge frame without one. */
+/** What a tile shows: the park's official photo, or its badge frame without one. */
 export function tileImage(tile: Pick<DexTile, "cover">): DexTileImage {
-  return tile.cover ? { kind: "photo", photo: tile.cover } : { kind: "badge" };
+  return tile.cover ? { kind: "cover", url: tile.cover } : { kind: "badge" };
 }
 
 export type BuildCollectionInput = {
   /** Every park the catalogue shows, which leaves hidden parks out already. */
   parks: readonly Park[];
   visits: ReadonlyMap<string, DexVisit>;
-  photos: readonly DexPhoto[];
+  /** Each founded park's cover photo URL, from the flags board. */
+  covers: ReadonlyMap<string, string>;
   /** On: only visited parks, and empty regions are hidden. Off: every park. */
   onlyMine: boolean;
 };
@@ -129,9 +106,7 @@ export type BuildCollectionInput = {
  * a visited park that is hidden or no longer in the catalogue still shows from its saved
  * snapshot but counts in no total. Visited parks come first, latest visit first.
  */
-export function buildCollection({ parks, visits, photos, onlyMine }: BuildCollectionInput): DexCollection {
-  const photosByPark = new Map<string, DexPhoto[]>();
-  for (const photo of photos) photosByPark.set(photo.parkId, [...(photosByPark.get(photo.parkId) ?? []), photo]);
+export function buildCollection({ parks, visits, covers, onlyMine }: BuildCollectionInput): DexCollection {
   const regions = new Map<string, DexRegion>();
   const regionFor = (park: Park) => {
     const province = provinceFor(park.region);
@@ -144,10 +119,7 @@ export function buildCollection({ parks, visits, photos, onlyMine }: BuildCollec
     }
     return region;
   };
-  const tileFor = (park: Park, visit: DexVisit | null): DexTile => {
-    const parkPhotos = visit ? visiblePhotos(photosByPark.get(park.id) ?? []) : [];
-    return { park, visit, cover: coverPhoto(parkPhotos), photos: parkPhotos };
-  };
+  const tileFor = (park: Park, visit: DexVisit | null): DexTile => ({ park, visit, cover: covers.get(park.id) ?? null });
 
   const listed = new Set<string>();
   for (const park of parks) {

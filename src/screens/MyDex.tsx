@@ -1,8 +1,7 @@
 import { motion } from "motion/react";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Badge } from "../components/Badge";
 import { BadgeShelf } from "../components/BadgeShelf";
-import { CroppedPhoto } from "../components/DexPhoto";
+import { ParkCover } from "../components/ParkCover";
 import { Icon } from "../components/Icon";
 import { Bubble, Kip } from "../components/Kip";
 import { sfx } from "../lib/feedback";
@@ -10,6 +9,8 @@ import { useContent } from "../lib/content/provider";
 import { buildCollection, tileImage, visitCountLabel, visitedLabel, type DexRegion, type DexTile } from "../lib/dex/collection";
 import { dexStartSegment, openDexOn, readCollapsed, readOnlyMine, storedOnlyMine, writeCollapsed, writeOnlyMine, type DexSegment } from "../lib/dex/prefs";
 import { useDex } from "../lib/dex/useDex";
+import { coverImageUrl } from "../lib/founders";
+import { useGame } from "../lib/game/GameProvider";
 import { press, tabPage } from "../lib/motion";
 import { useStore } from "../lib/store";
 import { DexParkSheet } from "./DexParkSheet";
@@ -24,8 +25,8 @@ const SEGMENTS: Array<{ id: DexSegment; label: string }> = [
 ];
 
 /**
- * My Dex (#174): the "Your parks" tab. Collection shows the parks you visited, by province and
- * region, with your own photos; Your flags is the flag list that was this tab before.
+ * My Dex (#174): the "Your parks" tab. Collection is the log of parks you visited, by province and
+ * region, each with its official photo; Your flags is the flag list that was this tab before.
  */
 export function MyDex() {
   const [segment, setSegment] = useState<DexSegment>(dexStartSegment);
@@ -66,7 +67,17 @@ export function MyDex() {
 export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?: ReactNode }) {
   const { dispatch } = useStore();
   const content = useContent();
+  const game = useGame();
   const dex = useDex(true);
+  // Each park's official photo is its founder's cover, which the flags board already carries.
+  const covers = useMemo(() => {
+    const urls = new Map<string, string>();
+    for (const founder of game.flags?.founders.values() ?? []) {
+      const url = coverImageUrl(founder.coverUrl);
+      if (url) urls.set(founder.parkId, url);
+    }
+    return urls;
+  }, [game.flags]);
   // Null until the player flips the switch; until then it follows whether they have any visits.
   const [chosenOnlyMine, setChosenOnlyMine] = useState(() => storedOnlyMine());
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -74,8 +85,8 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
 
   const onlyMine = chosenOnlyMine ?? readOnlyMine(null, dex.visits.size > 0);
   const collection = useMemo(
-    () => buildCollection({ parks: content?.parks ?? [], visits: dex.visits, photos: dex.photos, onlyMine }),
-    [content?.parks, dex.visits, dex.photos, onlyMine],
+    () => buildCollection({ parks: content?.parks ?? [], visits: dex.visits, covers, onlyMine }),
+    [content?.parks, dex.visits, covers, onlyMine],
   );
   const loading = dex.status === "loading" && dex.visits.size === 0;
 
@@ -192,10 +203,6 @@ export function DexCollection({ toolbar, shelf }: { toolbar?: ReactNode; shelf?:
       <DexParkSheet
         tile={tile}
         onClose={() => setOpenPark(null)}
-        onSetCover={dex.setCover}
-        onRecrop={dex.recrop}
-        onRemove={dex.remove}
-        onSaved={dex.reload}
         onShowOnMap={(parkId) => {
           setOpenPark(null);
           dispatch({ type: "focus", id: parkId });
@@ -273,12 +280,7 @@ const TileView = memo(function TileView({ tile, onOpen }: { tile: DexTile; onOpe
         aria-label={`${tile.park.name}, ${visited ? visitCountLabel(tile.visit!.days.length) : "not visited yet"}`}
       >
         <span className="dex-tile__art">
-          {image.kind === "photo" ? (
-            <CroppedPhoto blob={image.photo.blob} crop={image.photo.crop} alt="" />
-          ) : (
-            <Badge park={tile.park} size={104} state={visited ? "earned" : "silhouette"} remoteArt={false} />
-          )}
-          {tile.photos.length > 1 && <span className="dex-tile__more">{tile.photos.length}</span>}
+          <ParkCover park={tile.park} url={image.kind === "cover" ? image.url : null} badgeSize={104} visited={visited} />
         </span>
         <span className="dex-tile__name">{name}</span>
         <span className="dex-tile__visits">{visited ? visitCountLabel(tile.visit!.days.length) : "Not visited"}</span>

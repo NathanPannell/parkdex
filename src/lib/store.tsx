@@ -17,10 +17,10 @@ export type Screen = "splash" | "onboarding" | "map" | "camera" | "claim" | "acc
 
 /**
  * What a signed-out player was doing when the app sent them to sign in. Once they are signed
- * in, the map picks it up again: the handle sheet if they need one, then the visit, the crew
- * join or founding they asked for.
+ * in, the map picks it up again: the handle sheet if they need one, then the visit or founding
+ * they asked for.
  */
-export type Resume = { kind: "visit"; parkId: string } | { kind: "join"; parkId: string; code: string } | { kind: "found"; parkId: string | null };
+export type Resume = { kind: "visit"; parkId: string } | { kind: "found"; parkId: string | null };
 
 // Where the feedback sheet was opened from, captured so reports carry app context.
 export type FeedbackOrigin = { screen: Screen; parkId: string | null };
