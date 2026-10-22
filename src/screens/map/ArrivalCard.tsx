@@ -4,7 +4,7 @@ import { Bubble, Kip } from "../../components/Kip";
 import { Rays } from "../../components/Motion";
 import type { Park } from "../../lib/parks";
 import { takeLabel, type ParkHolder } from "../../lib/game/visit";
-import { formatClockTime, formatMinutesLeft, loggedVisitLine, type CrewPhase } from "../../lib/game/crew";
+import { formatClockTime, formatMinutesLeft, loggedVisitLine, type ProtectionPhase } from "../../lib/game/protection";
 import { handleFit } from "../../lib/game/handleFit";
 
 export function ArrivalCard({
@@ -13,10 +13,9 @@ export function ArrivalCard({
   flagDays,
   visitLabel,
   visited = false,
-  crew = { kind: "none" },
+  protection = { kind: "none" },
   now = Date.now(),
   onCheckIn,
-  onScanCrew,
   onDismiss,
 }: {
   park: Park;
@@ -25,21 +24,18 @@ export function ArrivalCard({
   visitLabel: string;
   /** Already visited today: another visit would not count, so there is nothing to press. */
   visited?: boolean;
-  /** The player's crew phase here (#171); `none` unless the crews flag is on. */
-  crew?: CrewPhase;
+  /** Someone else's protected hour here (#170): a visit is only logged until it ends. */
+  protection?: ProtectionPhase;
   now?: number;
   onCheckIn: () => void;
-  onScanCrew?: () => void;
   onDismiss: () => void;
 }) {
   const flown = flagDays === 1 ? "1 day" : `${flagDays} days`;
-  const outsider = crew.kind === "outsider" && !visited ? crew : null;
+  const outsider = protection.kind === "outsider" && !visited ? protection : null;
   const message = outsider
     ? outsider.logged
       ? loggedVisitLine(outsider.until)
-      : onScanCrew
-        ? `@${outsider.leader}'s crew flag is protected for ${formatMinutesLeft(outsider.until, now)}. Scan their crew code to join, or log your visit.`
-        : `@${outsider.leader}'s flag is protected for ${formatMinutesLeft(outsider.until, now)}. Log your visit now, and take it after ${formatClockTime(outsider.until)}.`
+      : `@${outsider.holder}'s flag just went up. It's protected for ${formatMinutesLeft(outsider.until, now)}: log your visit now, take it after ${formatClockTime(outsider.until)}.`
     : visited
       ? holder.kind === "mine"
         ? "Your flag is flying here. You visited today, so come back tomorrow to check in again."
@@ -98,16 +94,17 @@ export function ArrivalCard({
         <p>{message}</p>
         <AnimatePresence>
           {outsider ? (
-            <motion.div key="crew" className="arrival__crew" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
-              {onScanCrew && (
-                <button className="btn btn--block btn--glow" onClick={onScanCrew}>
-                  <Icon name="qr" /> Scan crew code
-                </button>
-              )}
-              <button className="btn btn--block btn--paper" onClick={onCheckIn} disabled={outsider.logged}>
-                <Icon name="flag" /> {outsider.logged ? "Visit logged" : visitLabel}
-              </button>
-            </motion.div>
+            <motion.button
+              key="log"
+              className="btn btn--block btn--paper"
+              onClick={onCheckIn}
+              disabled={outsider.logged}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", delay: 0.4 }}
+            >
+              <Icon name="flag" /> {outsider.logged ? "Visit logged" : visitLabel}
+            </motion.button>
           ) : visited ? (
             <motion.p className="arrival__visited" role="status" initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.4 }}>
               <Icon name="check" size={18} stroke={3} /> {visitLabel}

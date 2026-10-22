@@ -13,9 +13,6 @@ import { FRIEND_LINK_PREFIX } from "./lib/friends/links";
 import { FRIEND_CODE_LENGTH, normalizeSocialCode } from "./lib/social/codes";
 import { listenForAppLinks, type AppLinkRoutes } from "./lib/social/links";
 import { AddFriendSheet } from "./screens/AddFriendSheet";
-import { CrewProvider, useCrew } from "./lib/game/CrewProvider";
-import { CREW_CODE_LENGTH, CREW_LINK_PREFIX, crewLinkPark } from "./lib/game/crew";
-import { CrewSheets } from "./screens/CrewSheets";
 import { HandleSheet } from "./screens/HandleSheet";
 import "./game-ui.css";
 import "./account.css";
@@ -45,6 +42,9 @@ import { MyDex } from "./screens/MyDex";
 import { Splash } from "./screens/Splash";
 import { startGuestForLocalHandle } from "./lib/accounts/guestStart";
 
+// Crew links (`/crew/CODE`, #171) from before crews were retired (docs/crews.md).
+const RETIRED_CREW_LINK_PREFIX = "/crew/";
+
 export function App() {
   const updateStatus = useSyncExternalStore(subscribeUpdateStatus, currentUpdateStatus, currentUpdateStatus);
   // On the web a sideways screen is covered by the portrait panel. The app stays mounted behind it.
@@ -55,16 +55,14 @@ export function App() {
       <AuthProvider>
         <GameProvider>
           <FriendsProvider>
-            <CrewProvider>
-              <StoreProvider>
-                <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
-                  <ContentProvider>
-                    <Stage />
-                  </ContentProvider>
-                </div>
-                <UpdateGate status={updateStatus} />
-              </StoreProvider>
-            </CrewProvider>
+            <StoreProvider>
+              <div inert={covered} aria-hidden={covered} style={{ display: "contents" }}>
+                <ContentProvider>
+                  <Stage />
+                </ContentProvider>
+              </div>
+              <UpdateGate status={updateStatus} />
+            </StoreProvider>
           </FriendsProvider>
         </GameProvider>
       </AuthProvider>
@@ -154,7 +152,6 @@ function Screens() {
   const auth = useAuth();
   const game = useGame();
   const friends = useFriends();
-  const crew = useCrew();
   const [locationRetry, setLocationRetry] = useState(0);
   const { screen, onboarded } = state;
   // A link to open once the app is past the splash and onboarding.
@@ -162,17 +159,21 @@ function Screens() {
   const linkTries = useRef(0);
   const openIncoming = useRef(friends.openIncoming);
   openIncoming.current = friends.openIncoming;
-  const offerJoin = useRef(crew.offerJoin);
-  offerJoin.current = crew.offerJoin;
 
   // A @handle picked at onboarding plays as a guest account until Google upgrades it.
   useEffect(() => {
     if (onboarded) void startGuestForLocalHandle(auth);
   }, [auth, auth.phase, auth.config, onboarded]);
 
-  // App Links and web paths into the app (src/lib/social/links.ts): friend links (#64) and crew links (#171).
+  // App Links and web paths into the app (src/lib/social/links.ts): friend links (#64), and the
+  // crew links (#171) that installed builds still register, which only open the map now.
   useEffect(() => {
-    const routes: AppLinkRoutes = {};
+    const routes: AppLinkRoutes = {
+      [RETIRED_CREW_LINK_PREFIX]: () => {
+        toastRef.current("Crews are over. Take parks on your own now.", "kip");
+        linkTarget.current = "map";
+      },
+    };
     if (friends.enabled) {
       routes[FRIEND_LINK_PREFIX] = (value) => {
         const code = normalizeSocialCode(value, FRIEND_CODE_LENGTH);
@@ -181,18 +182,8 @@ function Screens() {
         linkTarget.current = "leaderboard";
       };
     }
-    if (crew.enabled) {
-      // A crew link opens the map with its join card, which runs the sign-in, handle and in-park checks.
-      routes[CREW_LINK_PREFIX] = (value, url) => {
-        const code = normalizeSocialCode(value, CREW_CODE_LENGTH);
-        if (!code) return;
-        offerJoin.current({ code, parkId: crewLinkPark(url), source: "link" });
-        linkTarget.current = "map";
-      };
-    }
-    if (!Object.keys(routes).length) return;
     return listenForAppLinks(routes);
-  }, [friends.enabled, crew.enabled]);
+  }, [friends.enabled]);
 
   // Onboarding can finish with its own move to the map, so keep the target until it shows.
   useEffect(() => {
@@ -213,7 +204,7 @@ function Screens() {
     if (state.startupReady && auth.pendingAction) dispatch({ type: "go", screen: "account" });
   }, [auth.pendingAction, dispatch, state.startupReady]);
 
-  // Signed in for a visit, a crew join or founding: go straight back to the map, which carries on (MapScreen).
+  // Signed in for a visit or founding: go straight back to the map, which carries on (MapScreen).
   useEffect(() => {
     if (state.resume && screen === "account" && auth.phase === "authenticated" && onboarded) dispatch({ type: "go", screen: "map" });
   }, [auth.phase, dispatch, onboarded, screen, state.resume]);
@@ -338,7 +329,6 @@ function Screens() {
       <AnimatePresence>{state.feedback && <FeedbackSheet key="feedback" origin={state.feedback} />}</AnimatePresence>
       <FoundingDecisionSheet decision={decisions.current} onDismiss={decisions.dismiss} />
       <TakeoverMessages allowed={messagesAllowed && !decisions.current} held={messagesHeld} />
-      {crew.enabled && <CrewSheets />}
       {friends.enabled && <AddFriendSheet />}
       <AnimatePresence>{game.handleRequest && game.accountId && <HandleSheet key="handle" />}</AnimatePresence>
       {/* Tips wait while a park's page is open, so nothing sits on top of its buttons. */}

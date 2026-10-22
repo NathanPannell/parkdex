@@ -16,8 +16,7 @@ import {
   type SetPatchesResult,
   type VisitRecord,
 } from "./game-store.js";
-import { FOUNDING_DECISIONS_LIMIT, flagSeedFor, validateJoinBody, validatePatchesBody, visitEvents, type GameEvent } from "./game.js";
-import { normalizeCrewCode } from "./crewCodes.js";
+import { FOUNDING_DECISIONS_LIMIT, flagSeedFor, validatePatchesBody, visitEvents, type GameEvent } from "./game.js";
 import { normalizeRoute } from "./requestContext.js";
 
 const origin = "https://kip.example.test";
@@ -90,8 +89,6 @@ const crew: CrewRecord = {
   code: CODE,
   codeExpiresAt: "2026-10-08T17:30:00.000Z",
 };
-// The crew as the API sends it: every member has patches (#175), [] when they wear none.
-const apiCrewShape = { ...crew, members: crew.members.map((member) => ({ ...member, patches: member.patches ?? [] })) };
 const joinedVisit: VisitRecord = {
   ...tookVisit,
   outcome: "joined",
@@ -260,8 +257,6 @@ test("authenticated game routes require an account and public routes do not", as
     ["PUT", "/api/game/handle", { handle: "newname" }],
     ["POST", "/api/game/visits", { visitId: VISIT, parkId: PARK }],
     ["POST", "/api/game/takeovers/seen", { at: new Date(NOW).toISOString() }],
-    ["POST", "/api/game/crews/join", { visitId: VISIT, code: CODE }],
-    ["GET", `/api/game/parks/${PARK}/crew`],
   ] as const) {
     const response = await call(method, path, body, "none");
     assert.equal(response.status, 401, path);
@@ -271,6 +266,9 @@ test("authenticated game routes require an account and public routes do not", as
   assert.equal(store.joinCalls.length + store.crewCalls.length, 0);
   assert.equal((await call("GET", "/api/game/flags", undefined, "none")).status, 200);
   assert.equal((await call("GET", "/api/game/leaderboard", undefined, "none")).status, 200);
+  // Crews are retired (docs/crews.md): their routes answer everyone the same, without an account.
+  assert.equal((await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE }, "none")).status, 410);
+  assert.equal((await call("GET", `/api/game/parks/${PARK}/crew`, undefined, "none")).status, 200);
 });
 
 test("cookie writes need the CSRF token", async () => {
@@ -729,100 +727,25 @@ test("stored crew outcomes and protected details parse (#170)", () => {
   assert.throws(() => visitFromJson({ ...stored, outcome: "stolen" }));
 });
 
-test("crew codes are normalised to the friend code alphabet", () => {
-  assert.equal(normalizeCrewCode("k7q-x2m"), CODE);
-  assert.equal(normalizeCrewCode(" K7Q X2M "), CODE);
-  for (const bad of ["K7QX2", "K7QX2MM", "K7QX2O", "K7QX21", "K7QXIM", "K7QXLM", "", "x".repeat(65)]) assert.equal(normalizeCrewCode(bad), null, bad);
-  assert.deepEqual(validateJoinBody({ visitId: VISIT.toUpperCase(), code: "k7qx2m" }), { visitId: VISIT, code: CODE });
-});
-
-test("join bodies are strictly validated before the store is touched", async () => {
-  const { call, store } = setup();
-  for (const body of [
-    {},
-    { visitId: VISIT },
-    { code: CODE },
-    { visitId: VISIT, code: CODE, parkId: PARK },
-    { visitId: "nope", code: CODE },
-    { visitId: VISIT, code: "ABC" },
-    { visitId: VISIT, code: 123456 },
-    [VISIT, CODE],
-  ]) {
-    const response = await call("POST", "/api/game/crews/join", body);
-    assert.equal(response.status, 400, JSON.stringify(body));
-  }
-  const badCode = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: "OOOOOO" });
-  assert.equal(await code(badCode), "invalid_code");
-  assert.equal(store.joinCalls.length, 0);
-  assert.equal((await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE }, "cookie-no-csrf")).status, 403);
-  assert.equal(store.joinCalls.length, 0);
-});
-
-test("joining a crew uses the server clock, returns the visit and crew, and records crew_joined", async () => {
-  const { call, store, events } = setup();
-  const response = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: "k7q-x2m" });
-  assert.equal(response.status, 200);
-  const body = (await response.json()) as Record<string, unknown>;
-  assert.deepEqual(Object.keys(body), ["status", "visit", "crew", "newBadges"]);
-  assert.equal(body.status, "joined");
-  assert.deepEqual(body.visit, {
-    visitId: VISIT,
-    parkId: PARK,
-    outcome: "joined",
-    pointsEarned: 2,
-    pointsBreakdown: { base: 2, days: 0 },
-    previousHolder: null,
-    flagSince: "2026-10-08T16:30:00.000Z",
-    protected: null,
-  });
-  assert.deepEqual(body.crew, apiCrewShape);
-  assert.deepEqual(store.joinCalls, [{ accountId: ACCOUNT, code: CODE, visitId: VISIT, now: new Date(NOW).toISOString() }]);
-  assert.deepEqual(events, [{ name: "crew_joined", accountId: ACCOUNT, parkId: PARK, pointsEarned: 2, crewSize: 2 }]);
-
-  store.joinResult = { status: "replayed", visit: joinedVisit, crew };
-  const replay = (await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json()) as Record<string, unknown>;
-  assert.equal(replay.status, "joined", "a replay answers like the first join");
-  store.joinResult = { status: "already_member", crew };
-  const member = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE });
-  assert.equal(member.status, 200);
-  assert.deepEqual(await member.json(), { status: "already_member", visit: null, crew: apiCrewShape });
-  assert.equal(events.length, 1, "replays and existing members record nothing");
-});
-
-test("join refusals map to the documented errors", async () => {
-  const cases: Array<[JoinCrewResult, number, string]> = [
-    [{ status: "code_not_found" }, 404, "code_not_found"],
-    [{ status: "code_expired" }, 410, "code_expired"],
-    [{ status: "crew_full" }, 409, "crew_full"],
-    [{ status: "already_today" }, 409, "already_today"],
-    [{ status: "handle_required" }, 409, "handle_required"],
-    [{ status: "account_unavailable" }, 410, "account_deleting"],
-    [{ status: "park_not_found" }, 404, "park_not_found"],
-    [{ status: "conflict" }, 409, "visit_id_reused"],
-  ];
-  for (const [result, status, errorCode] of cases) {
+test("crew joins are retired: every join gets the final code_expired, and the store is never touched", async () => {
+  for (const body of [{ visitId: VISIT, code: CODE }, { visitId: VISIT, code: "k7q-x2m" }, {}, [VISIT, CODE]]) {
     const { call, store, events } = setup();
-    store.joinResult = result;
-    const response = await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE });
-    assert.equal(response.status, status, result.status);
-    assert.equal(await code(response), errorCode);
+    const response = await call("POST", "/api/game/crews/join", body);
+    assert.equal(response.status, 410, JSON.stringify(body));
+    // Installed builds treat code_expired as final, with their own message and no retry.
+    assert.equal(await code(response), "code_expired");
+    assert.equal(store.joinCalls.length, 0);
     assert.equal(events.length, 0);
   }
 });
 
-test("park crew details show the code to members only and record crew_code_shown", async () => {
+test("park crew reads are retired: no crew, so no crew code to share, and nothing recorded", async () => {
   const { call, store, events } = setup();
   const response = await call("GET", `/api/game/parks/${PARK}/crew`);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { parkId: PARK, crew: apiCrewShape, serverTime: new Date(NOW).toISOString() });
-  assert.deepEqual(store.crewCalls, [{ parkId: PARK, accountId: ACCOUNT, now: new Date(NOW).toISOString() }]);
-  assert.deepEqual(events, [{ name: "crew_code_shown", accountId: ACCOUNT, parkId: PARK, crewSize: 2 }]);
-
-  store.crew = { ...crew, member: false, code: null, codeExpiresAt: null };
-  assert.equal(((await (await call("GET", `/api/game/parks/${PARK}/crew`)).json()) as { crew: CrewRecord }).crew.code, null);
-  store.crew = null;
-  assert.deepEqual(await (await call("GET", `/api/game/parks/${PARK}/crew`)).json(), { parkId: PARK, crew: null, serverTime: new Date(NOW).toISOString() });
-  assert.equal(events.length, 1, "only a response with a code counts as shown");
+  assert.deepEqual(await response.json(), { parkId: PARK, crew: null, serverTime: new Date(NOW).toISOString() });
+  assert.equal(store.crewCalls.length, 0);
+  assert.equal(events.length, 0);
   assert.equal((await call("GET", "/api/game/parks/Bad%20Park/crew")).status, 400);
 });
 
@@ -869,7 +792,7 @@ test("GET /api/game/dex answers 503 where the store cannot list a Dex", async ()
   assert.equal(response.status, 503);
 });
 
-test("visits, joins and me announce new badges and record badge_unlocked; replays record nothing (#175)", async () => {
+test("visits and me announce new badges and record badge_unlocked; replays record nothing (#175)", async () => {
   const { call, store, events } = setup();
   const unlocked = [
     { id: "parks-1", unlockedAt: new Date(NOW).toISOString() },
@@ -890,17 +813,6 @@ test("visits, joins and me announce new badges and record badge_unlocked; replay
   const replay = (await (await call("POST", "/api/game/visits", { visitId: VISIT, parkId: PARK })).json()) as Record<string, unknown>;
   assert.deepEqual(replay.newBadges, unlocked, "a replay announces the same badges");
   assert.equal(events.length, 3, "and records nothing");
-
-  store.joinResult = { status: "joined", visit: joinedVisit, crew, badges: [{ id: "crew-1", unlockedAt: new Date(NOW).toISOString() }] };
-  const joined = (await (await call("POST", "/api/game/crews/join", { visitId: VISIT, code: CODE })).json()) as Record<string, unknown>;
-  assert.deepEqual(joined.newBadges, [{ id: "crew-1", unlockedAt: new Date(NOW).toISOString() }]);
-  assert.deepEqual(
-    events.slice(3).map((event) => [event.name, event.badgeId]),
-    [
-      ["crew_joined", undefined],
-      ["badge_unlocked", "crew-1"],
-    ],
-  );
 
   store.awarded = [{ id: "hold-7", unlockedAt: new Date(NOW).toISOString() }];
   const me = (await (await call("GET", "/api/game/me")).json()) as Record<string, unknown>;

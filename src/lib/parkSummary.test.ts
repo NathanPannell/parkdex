@@ -91,14 +91,14 @@ describe("summaryCover", () => {
 
 describe("the park page's visit line", () => {
   it("puts every known count on one line", () => {
-    expect(visitsLine({ total: "12", last30Days: "3", mine: "2" }, true)).toBe("12 visits · 3 in the last 30 days · 2 yours");
-    expect(visitsLine({ total: "1", last30Days: "1", mine: "1" }, true)).toBe("1 visit · 1 in the last 30 days · 1 yours");
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "2" }, true)).toBe("12 visits · 3 in 30 days · 2 yours");
+    expect(visitsLine({ total: "1", last30Days: "1", mine: "1" }, true)).toBe("1 visit · 1 in 30 days · 1 yours");
   });
 
   it("leaves out what is unknown or doesn't apply", () => {
-    expect(visitsLine({ total: "12", last30Days: "3", mine: "Sign in" }, false)).toBe("12 visits · 3 in the last 30 days");
+    expect(visitsLine({ total: "12", last30Days: "3", mine: "Sign in" }, false)).toBe("12 visits · 3 in 30 days");
     expect(visitsLine({ total: "0", last30Days: "0", mine: "0" }, true)).toBe("0 visits");
-    expect(visitsLine({ total: "4", last30Days: "1", mine: "0" }, true)).toBe("4 visits · 1 in the last 30 days");
+    expect(visitsLine({ total: "4", last30Days: "1", mine: "0" }, true)).toBe("4 visits · 1 in 30 days");
     expect(visitsLine({ total: "–", last30Days: "–", mine: "–" }, true)).toBeNull();
   });
 });

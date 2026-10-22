@@ -607,7 +607,7 @@ button.game-row:active {
 
 /* ---------- Park sheet: who holds the park ---------- */
 
-/* One status block: the flag holder, then the crew during and after the protected hour. */
+/* One status block: whose park it is, and what taking it is worth. */
 .park-status {
   margin-top: 14px;
   padding: 10px 14px;
@@ -843,32 +843,12 @@ button.game-row:active {
   white-space: nowrap;
 }
 
-/* Crew, friend offer and new badge, as one row of small chips under the sentence. */
+/* New badges, as one row of small chips under the sentence. */
 .plant__extras {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-}
-
-.plant__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 2px solid rgba(255, 248, 236, 0.45);
-  border-radius: 99px;
-  background: rgba(255, 248, 236, 0.1);
-  color: var(--paper);
-  font-weight: 800;
-  font-size: 14px;
-}
-
-.plant__chip--button {
-  border-color: var(--ink);
-  background: var(--paper);
-  color: var(--ink);
 }
 
 .badge-unlock--compact {
@@ -936,38 +916,4 @@ button.game-row:active {
   font-family: var(--display);
   font-size: 18px;
   line-height: 1.1;
-}
-
-/* The leader's crew code on the plant result: a small QR and one line, so friends can join at once. */
-.plant__crew {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 14px 10px 10px;
-  border: 2px solid rgba(255, 248, 236, 0.45);
-  border-radius: var(--r-md);
-  background: rgba(255, 248, 236, 0.08);
-  text-align: left;
-}
-
-.plant__crew .qr-code {
-  flex: none;
-  padding: 6px;
-  border-radius: 12px;
-  background: var(--paper);
-}
-
-.plant__crew-text {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  color: var(--paper);
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.plant__crew-text strong {
-  font-family: var(--display);
-  font-size: 17px;
 }

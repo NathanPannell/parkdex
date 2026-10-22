@@ -1,5 +1,14 @@
 # Crew flags
 
+> **Retired (2026-10-22).** Parkdex is now for individual walkers taking parks from each other ([PRODUCT.md](../PRODUCT.md)), so crews are gone:
+>
+> - **App.** The app has no crew UI at all: no crew panel, crew code, scanner join, join card, crew pennants on map pins, or "add crewmates" chip. A `/crew/CODE` link opens the map with "Crews are over. Take parks on your own now." The app no longer reads the `crews` flag.
+> - **Server.** `POST /api/game/crews/join` answers every request with 410 `code_expired`, which installed builds (up to vc18's built-in bundle) already show as a final "can't take new people" message with no retry. `GET /api/game/parks/:parkId/crew` answers `crew: null`, so those builds never show a code to share. Neither route reads or writes the database, and neither records `crew_joined` or `crew_code_shown` any more.
+> - **Kept.** The protected hour stays on every flag: outsiders' visits in a flag's first hour are logged (+1) and the park can be taken after it. Existing crew rows, holdings, scores and the `crew-1` and `crew-10` badges are untouched; members keep holding their parks until the flag is taken or falls. The store methods and SQL (`kip_game.join_crew`, `flag_crews`) stay as they are, and the migrations are unchanged. `POST /api/friends/crewmate` still works for 24 hours after a crew's flag went up, so it now finds nobody.
+> - **Installed builds.** vc18's built-in bundle shows crew UI while its build row has `crews` on. Turn it off on the operator dashboard's Builds page to hide it before the over-the-air bundle arrives.
+>
+> The rest of this page is the original contract, kept for the data it describes.
+
 Friends who arrive at a park together hold it as a **crew** instead of taking the flag from each other (#170 server, #171 app, part of #168). The rules were decided with the operator on 2026-10-12.
 
 ## Rules

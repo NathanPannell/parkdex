@@ -1,9 +1,10 @@
 import type { GameMe, HeldPark, ParkFlag, VisitResult } from "./client";
-import { formatClockTime, type CrewPhase } from "./crew";
+import { formatClockTime, type ProtectionPhase } from "./protection";
 
 /**
- * Who holds a park, from the player's point of view. A crew member (#170) holds it too: their
- * park is `mine` with `member` set, while the flag itself is the leader's.
+ * Who holds a park, from the player's point of view. Someone who joined a flag before crews
+ * were retired (#170, docs/crews.md) holds it too: their park is `mine` with `member` set,
+ * while the flag itself is the planter's.
  */
 export type ParkHolder = { kind: "empty" } | { kind: "mine"; flag: ParkFlag; member?: boolean } | { kind: "other"; flag: ParkFlag } | { kind: "unknown" };
 
@@ -17,7 +18,7 @@ export function parkHolder(
   const flag = flags.get(parkId);
   if (!flag) return { kind: "empty" };
   if (myHandle && flag.handle === myHandle) return { kind: "mine", flag };
-  // `/me` lists parks held as a crew member next to the player's own.
+  // `/me` lists parks held with someone else next to the player's own.
   if (myHandle && heldParks?.some((park) => park.parkId === parkId)) return { kind: "mine", flag, member: true };
   return { kind: "other", flag };
 }
@@ -46,25 +47,21 @@ export function hasVisitedToday(me: GameMe | null | undefined, parkId: string, n
 
 export const VISITED_TODAY_LABEL = "Visited today, back tomorrow";
 
-/** `crew` is the player's crew phase at the park; it is `none` unless the `crews` flag is on (#171). */
-export function visitLabel(signedIn: boolean, holder: ParkHolder, visited = false, crew: CrewPhase = { kind: "none" }): string {
+/** `protection` is the park's protected hour as the player sees it (#170). */
+export function visitLabel(signedIn: boolean, holder: ParkHolder, visited = false, protection: ProtectionPhase = { kind: "none" }): string {
   // During someone's protected hour a visit can only be logged (#170), so don't promise a flag.
-  if (!signedIn) return crew.kind === "outsider" ? "Sign in to log your visit" : "Sign in to plant your flag";
+  if (!signedIn) return protection.kind === "outsider" ? "Sign in to log your visit" : "Sign in to plant your flag";
   if (visited) return VISITED_TODAY_LABEL;
-  if (crew.kind === "outsider") return crew.logged ? `Logged, take it after ${formatClockTime(crew.until)}` : "Log your visit · +1";
-  if (holder.kind === "mine") return holder.member ? "Visit your crew's flag" : "Visit your flag";
+  if (protection.kind === "outsider") return protection.logged ? `Logged, take it after ${formatClockTime(protection.until)}` : "Log your visit · +1";
+  if (holder.kind === "mine") return "Visit your flag";
   if (holder.kind === "other") return `Take it from @${holder.flag.handle}`;
   return "Plant your flag";
 }
 
-/**
- * The short label on the bottom bar's button while standing in a park. With crews (#171):
- * "Join" once a crew code for this park was scanned, "Log" for outsiders during the hour.
- */
-export function visitShortLabel(holder: ParkHolder, visited = false, crew: CrewPhase = { kind: "none" }, joinReady = false): string {
-  if (joinReady) return "Join";
+/** The short label on the bottom bar's button while standing in a park: "Log" for outsiders during the hour. */
+export function visitShortLabel(holder: ParkHolder, visited = false, protection: ProtectionPhase = { kind: "none" }): string {
   if (visited) return "Tomorrow";
-  if (crew.kind === "outsider") return crew.logged ? "Later" : "Log";
+  if (protection.kind === "outsider") return protection.logged ? "Later" : "Log";
   return holder.kind === "mine" ? "Visit" : holder.kind === "other" ? "Take!" : "Plant!";
 }
 
@@ -108,7 +105,7 @@ export function plantCheer(result: Pick<VisitResult, "outcome" | "pointsBreakdow
     case "held":
       return `Still flying! +${base}`;
     case "joined":
-      return `KLEEP! You're in the crew! +${base}`;
+      return `KLEEP! You hold it together! +${base}`;
     case "logged":
       return `Visit logged! +${base}`;
     case "already_today":
@@ -129,9 +126,10 @@ export function visitHeadline(result: VisitResult, parkName: string): VisitHeadl
     case "held":
       return { title: "Your flag is still flying", detail: `${parkName} is still yours.` };
     case "joined":
-      return { title: "You joined the crew", detail: `You hold ${parkName} together now. ${HOURLY_POINTS_COPY}` };
+      // Only an answer to a crew join from before crews were retired (docs/crews.md).
+      return { title: "You joined the flag", detail: `You hold ${parkName} together now. ${HOURLY_POINTS_COPY}` };
     case "logged":
-      // Every build reads this, whatever the crews flag says: a visit during someone else's protected hour.
+      // A visit during someone else's protected hour.
       return {
         title: "Visit logged",
         detail: result.protected

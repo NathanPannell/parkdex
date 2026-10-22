@@ -372,11 +372,11 @@ describe("flag visits", () => {
 describe("signing in for an action", () => {
   it("remembers what the player was doing and where Account was opened from", () => {
     const onMap = { ...readyState, screen: "map" as const, selectedId: "a-park" };
-    const signingIn = reducer(onMap, { type: "signInFor", resume: { kind: "join", parkId: "a-park", code: "K7QX2M" } });
+    const signingIn = reducer(onMap, { type: "signInFor", resume: { kind: "visit", parkId: "a-park" } });
     expect(signingIn.screen).toBe("account");
     expect(signingIn.accountFrom).toBe("map");
     expect(signingIn.selectedId).toBeNull();
-    expect(signingIn.resume).toEqual({ kind: "join", parkId: "a-park", code: "K7QX2M" });
+    expect(signingIn.resume).toEqual({ kind: "visit", parkId: "a-park" });
     expect(reducer(signingIn, { type: "resume", resume: null }).resume).toBeNull();
   });
 

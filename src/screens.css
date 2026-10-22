@@ -1159,89 +1159,49 @@
 }
 
 /*
- * The park page's levels of action: one main button pinned at the bottom (.park-sheet__cta),
- * secondary actions as cards with an icon, a title, one hint and a reward tag (.park-action),
- * and plain info lines and text links for everything else.
+ * The park page's levels of action (DESIGN.md): big, full-width buttons for the things to do
+ * (the pinned main button and "Become the founder"), then one quiet line of facts and a text link.
  */
 .park-sheet__chips {
   margin: 10px 0 0;
 }
 
-.park-action {
-  display: flex;
-  align-items: center;
+/* A button you can't miss: taller and bigger than the app's usual one. */
+.btn--xl {
+  height: 68px;
+  padding: 0 22px;
   gap: 12px;
-  width: 100%;
-  margin-top: 12px;
-  padding: 10px 14px 10px 10px;
-  border: 2px solid var(--ink);
-  border-radius: var(--r-md);
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  box-shadow: var(--pop);
-  cursor: pointer;
+  font-size: 21px;
 }
 
-/* translate, not transform: Motion owns the inline transform while the card animates in. */
-button.park-action:active {
-  translate: 0 3px;
-  box-shadow: 0 1px 0 var(--ink);
+.btn--xl svg {
+  width: 26px;
+  height: 26px;
 }
 
-.park-action--status {
-  border-style: dashed;
-  box-shadow: none;
-  cursor: default;
+.park-sheet__found {
+  margin-top: 14px;
 }
 
-.park-action__icon {
-  flex: none;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background: var(--kip);
-  color: var(--paper);
-}
-
-.park-action--status .park-action__icon {
-  background: var(--paper-2);
-  color: var(--ink-soft);
-}
-
-.park-action__text {
-  display: grid;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.park-action__text strong {
-  font-family: var(--display);
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.park-action__text em {
-  font-style: normal;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.park-action__points {
-  flex: none;
-  padding: 4px 10px;
+.park-sheet__points {
+  padding: 3px 10px;
   border: 2px solid var(--ink);
   border-radius: 99px;
-  background: var(--sun);
-  font-family: var(--display);
-  font-size: 15px;
+  background: var(--paper);
+  font-size: 17px;
+}
+
+.park-sheet__pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border: 2px dashed rgba(20, 35, 28, 0.35);
+  border-radius: var(--r-md);
+  font-size: 16px;
   font-weight: 800;
+  color: var(--ink-2);
 }
 
 /* Plain facts under the flag card: the founder and the visit counts, one line each. */
@@ -1341,6 +1301,11 @@ button.park-action:active {
   white-space: normal;
   line-height: 1.1;
   font-size: clamp(15px, (100cqi - 91px) / (var(--handle-chars, 1) * 0.6), 19px);
+}
+
+/* The park page's main button is the big one, and its text grows to match. */
+.park-sheet__cta > .btn--xl:only-child {
+  font-size: clamp(15px, (100cqi - 99px) / (var(--handle-chars, 1) * 0.6), 21px);
 }
 
 @keyframes glow {
@@ -2385,22 +2350,6 @@ button.park-action:active {
   resize: none;
   line-height: 1.4;
   min-height: 118px;
-}
-
-.fb-attach {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 52px;
-  border: 2.5px dashed var(--ink-soft);
-  border-radius: 16px;
-  font-weight: 800;
-  color: var(--ink-2);
-}
-
-.fb-attach:active {
-  background: var(--paper-2);
 }
 
 .fb-shot {

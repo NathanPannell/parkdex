@@ -30,9 +30,9 @@ A signed-in player with a handle, standing in a park, takes a photo. When the ph
 
 - The park sheet's "Become the founder" card, shown only while the player stands inside a park with no founder.
 - "Become a founder" in the map menu, for any park the player stands in.
-- The visit result: in a park with no founder (and no photo waiting for review), the photo button reads "First photo · +24" instead of "Add a photo". It closes the result and starts founding for that park.
+- The visit result: in a park with no founder (and no photo waiting for review), it offers "Park photo · +24". It closes the result and starts founding for that park.
 
-A founder photo approved straight away also goes into the player's Dex for that park, re-framed to the Dex's 3:4 shape, so one photo does both jobs. A photo that goes to a person for review, is refused, or loses to another founder is not saved to the Dex; the park page's "Add a photo" still works.
+This is the only photo anyone takes in Parkdex ([PRODUCT.md](../PRODUCT.md)). The approved photo is the park's official photo everywhere: the park page and My Dex, for every player. It is no longer copied into the founder's own Dex as a private photo (that copy, from #222, was retired with personal photos on 2026-10-22).
 
 ## Player copy
 

@@ -15,7 +15,6 @@ import { buzz, sfx } from "../../lib/feedback";
 import { arrivalPoint, distanceKm, isUsableGpsAccuracy, ringBounds, type LngLat } from "../../lib/geo";
 import { useGame } from "../../lib/game/GameProvider";
 import { useVisit } from "../../lib/game/useVisit";
-import { useCrew } from "../../lib/game/CrewProvider";
 import { flagAgeDays, flagAgeMs } from "../../lib/game/flag";
 import { formatPoints, nextVisitStep } from "../../lib/game/visit";
 import { readLastLocation, saveLastLocation } from "../../lib/lastLocation";
@@ -79,7 +78,6 @@ export function MapScreen() {
 
   const game = useGame();
   const visit = useVisit();
-  const crew = useCrew();
   const runtime = useContentRuntime();
   const { user, selectedId, located } = state;
   // Every park in the catalogue can carry a flag, with or without badge art.
@@ -334,20 +332,16 @@ export function MapScreen() {
     }
   }
 
-  // Back from signing in for a visit, a crew join or founding: carry on where the player was.
+  // Back from signing in for a visit or founding: carry on where the player was.
   // Wait for the player's game state, so a missing handle opens the handle sheet first.
   const resume = state.resume;
   const resumeReady = !!resume && state.screen === "map" && visit.signedIn && !!content && (!!game.me || game.status === "offline" || game.status === "error");
   useEffect(() => {
     if (!resumeReady || !resume) return;
     dispatch({ type: "resume", resume: null });
-    // Visits and joins only go ahead from inside their park: the server doesn't check location.
-    // A join from elsewhere goes back to its card, which says to get inside first.
+    // Visits only go ahead from inside their park: the server doesn't check location.
     if (resume.kind === "visit") {
       if (here?.id === resume.parkId) checkIn(resume.parkId);
-    } else if (resume.kind === "join") {
-      if (here?.id === resume.parkId) visit.startJoin(resume.parkId, resume.code);
-      else crew.offerJoin({ code: resume.code, parkId: resume.parkId, source: "link" });
     } else startFounding(resume.parkId);
     // Runs once per resume; the handlers read the latest state themselves.
   }, [resumeReady]);
@@ -746,10 +740,9 @@ export function MapScreen() {
             flagDays={flagDays(here.id)}
             visitLabel={visit.labelFor(here.id)}
             visited={visit.visitedToday(here.id)}
-            crew={visit.crewOf(here.id)}
+            protection={visit.protectionOf(here.id)}
             now={game.serverNow()}
             onCheckIn={() => checkIn(here.id)}
-            onScanCrew={crew.enabled ? () => crew.openScanner(here.id) : undefined}
             onDismiss={() => setDismissedArrival(here.id)}
           />
         )}

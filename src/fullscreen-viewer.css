@@ -141,13 +141,3 @@
 .viewer-open {
   cursor: zoom-in;
 }
-
-.fullscreen-viewer__cover-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  font-weight: 800;
-  font-size: 14px;
-  color: var(--sun);
-}
