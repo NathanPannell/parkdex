@@ -1,5 +1,5 @@
 import { motion, type PanInfo } from "motion/react";
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { Badge } from "../../components/Badge";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { FlagPin } from "../../components/Flag";
@@ -114,6 +114,14 @@ export function ParkSheet({
   // Someone else's protected hour (#170): a visit is only logged until it ends.
   const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
   const phase = protectionPhase({ flag, myHandle: game.me?.player?.handle ?? null, me: signedIn ? game.me : null, now: game.serverNow() });
+  // Draw the page again the moment the hour ends, so "take it after 3:42 pm" turns into the take button.
+  const [, setHourEnded] = useState(0);
+  const protectedUntil = phase.kind === "outsider" ? phase.until : null;
+  useEffect(() => {
+    if (!protectedUntil) return;
+    const timer = setTimeout(() => setHourEnded((count) => count + 1), Math.max(0, Date.parse(protectedUntil) - game.serverNow()) + 500);
+    return () => clearTimeout(timer);
+  }, [protectedUntil, game]);
   const holderLine = flagStatus(holder, flagDays, phase, inside);
   // The button reads "Visited today, back tomorrow" exactly when today's visit is spent.
   const restingToday = visitLabel === VISITED_TODAY_LABEL;
@@ -336,12 +344,12 @@ function flagStatus(holder: ParkHolder, days: number, protection: ProtectionPhas
   const age = days < 1 ? "today" : days === 1 ? "for 1 day" : `for ${days} days`;
   switch (holder.kind) {
     case "mine":
-      return { title: "Your park", detail: days < 1 ? "You took it today" : `Yours ${age}` };
+      return { title: "Your park", detail: days < 1 ? "Your flag went up today" : `Yours ${age}` };
     case "other":
       // Someone else's protected hour (#170): it can't be taken until it ends.
       return {
         title: `@${holder.flag.handle}`,
-        detail: protection.kind === "outsider" ? `New flag · free at ${formatClockTime(protection.until)}` : days < 1 ? "Took it today" : `Has held it ${age}`,
+        detail: protection.kind === "outsider" ? `New flag · free at ${formatClockTime(protection.until)}` : days < 1 ? "Flag up today" : `Has held it ${age}`,
       };
     case "empty":
       return { title: "Nobody's park yet", detail: inside ? "Plant your flag to make it yours." : "Walk in and make it yours." };

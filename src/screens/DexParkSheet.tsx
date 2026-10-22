@@ -23,11 +23,13 @@ function dateLabel(at: string): string {
  */
 export function DexParkSheet({ tile, onClose, onShowOnMap }: Props) {
   const [viewing, setViewing] = useState(false);
+  // A cover that can't load (offline) shows the badge, and then there is nothing to open full screen.
+  const [failedCover, setFailedCover] = useState<string | null>(null);
   useBackHandler(onClose, !!tile && !viewing);
 
   const park = tile?.park;
   const visit = tile?.visit ?? null;
-  const cover = tile?.cover ?? null;
+  const cover = tile?.cover && tile.cover !== failedCover ? tile.cover : null;
 
   return (
     <AboveNav>
@@ -64,7 +66,14 @@ export function DexParkSheet({ tile, onClose, onShowOnMap }: Props) {
                       onClick={() => setViewing(true)}
                       aria-label={`Show the photo of ${park.name} full screen`}
                     >
-                      <ParkCover park={park} url={cover} badgeSize={170} visited={!!visit} alt={`${park.name}, photographed by its founder`} />
+                      <ParkCover
+                        park={park}
+                        url={cover}
+                        badgeSize={170}
+                        visited={!!visit}
+                        alt={`${park.name}, photographed by its founder`}
+                        onFail={setFailedCover}
+                      />
                     </button>
                   ) : (
                     <ParkCover park={park} url={null} badgeSize={170} visited={!!visit} />
