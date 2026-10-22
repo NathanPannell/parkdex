@@ -11,46 +11,19 @@ import { captureProductEvent } from "./productAnalytics";
  * re-teach it means bumping its version.
  */
 
-export type KipTipId = "crew-leader" | "crew-outsider" | "crew-joined" | "points" | "photo-crop" | "dex" | "badge-first" | "install-web";
+export type KipTipId = "points" | "dex" | "badge-first" | "install-web";
 
 export type KipTipPage = { title: string; body: string; pose: KipPose };
 export type KipTip = { id: KipTipId; version: number; pages: readonly [KipTipPage] | readonly [KipTipPage, KipTipPage] };
 
 export const KIP_TIPS: { readonly [Id in KipTipId]: KipTip & { id: Id } } = {
-  "crew-leader": {
-    id: "crew-leader",
-    version: 1,
-    pages: [
-      { pose: "cheer", title: "Your flag is protected", body: "Your flag is safe for an hour. Nobody can take it." },
-      { pose: "point", title: "Bring your crew", body: "Friends with you? Show them the crew code. They scan it and hold this park with you." },
-    ],
-  },
-  "crew-outsider": {
-    id: "crew-outsider",
-    version: 1,
-    pages: [
-      { pose: "think", title: "This flag is protected", body: "This flag was just planted, so it's protected for an hour. You can still log your visit." },
-      { pose: "point", title: "Take it later", body: "Come back after the hour to take it, or ask the crew for their code." },
-    ],
-  },
-  "crew-joined": {
-    id: "crew-joined",
-    version: 1,
-    pages: [
-      { pose: "cheer", title: "You're in the crew!", body: "You all hold this park now. If anyone takes it, the whole crew loses it, so keep visiting." },
-    ],
-  },
   points: {
     id: "points",
-    version: 1,
+    version: 2,
     pages: [
       { pose: "talk", title: "Points by the hour", body: "Your flag earns 1 point every hour it flies. Planting, taking and visiting add a little extra." },
+      { pose: "point", title: "Take it back", body: "Another walker took your park? Walk back in and take it. A new flag is safe for its first hour." },
     ],
-  },
-  "photo-crop": {
-    id: "photo-crop",
-    version: 1,
-    pages: [{ pose: "camera", title: "Frame your shot", body: "Drag and pinch to frame your photo. This photo goes in your Dex." }],
   },
   dex: {
     id: "dex",

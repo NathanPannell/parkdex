@@ -66,8 +66,8 @@ export type GameMe = {
 export type BadgeUnlock = { id: string; unlockedAt: string };
 
 /**
- * `joined` and `logged` come from crews (#170) and reach every build, whatever the `crews` flag
- * says: joining a crew, and a visit during someone else's protected hour.
+ * `joined` and `logged` come from crews (#170): joining a crew, which is retired (docs/crews.md),
+ * and a visit during someone else's protected hour.
  */
 export type VisitOutcome = "planted" | "took" | "held" | "joined" | "logged" | "already_today";
 /** pointsEarned in parts: the outcome's base points and a take's day bonus (additive, #169). */
@@ -93,24 +93,6 @@ export type FlagCrew = { size: number; memberSeeds: string[]; protectedUntil: st
 /** `crew` (#170) and `patches`, the holder's badges drawn on their flag (#175), are additive; older servers send neither. */
 export type ParkFlag = { parkId: string; handle: string; flagSeed: string; since: string; crew?: FlagCrew | null; patches?: string[] };
 
-/** `patches` are the member's badges, drawn on their flag (additive, #175). */
-export type CrewMember = { handle: string; flagSeed: string; joinedAt: string; leader: boolean; patches?: string[] };
-/** A crew as the signed-in player sees it (#170). `code` is set only for members during the protected hour. */
-export type Crew = {
-  parkId: string;
-  leader: GamePlayer;
-  /** The leader first, then by when they joined. */
-  members: CrewMember[];
-  size: number;
-  cap: number;
-  flagSince: string;
-  protectedUntil: string | null;
-  member: boolean;
-  code: string | null;
-  codeExpiresAt: string | null;
-};
-export type ParkCrewResponse = { parkId: string; crew: Crew | null; serverTime: string };
-export type JoinCrewResult = { status: "joined"; visit: VisitResult; crew: Crew } | { status: "already_member"; visit: null; crew: Crew };
 /** A founded park and its cover photo, sent with the flags (additive to the #76 contract, #126). */
 export type ParkFounder = { parkId: string; handle: string | null; coverUrl: string | null };
 export type FlagsResponse = { flags: ParkFlag[]; founders: ParkFounder[]; serverTime: string };
@@ -132,11 +114,6 @@ export type GameErrorCode =
   // Badge patches (#175).
   | "badge_locked"
   | "invalid_patches"
-  // Crew joins (#170).
-  | "invalid_code"
-  | "code_not_found"
-  | "code_expired"
-  | "crew_full"
   | "already_today";
 
 const KNOWN_CODES = new Set<GameErrorCode>([
@@ -151,10 +128,6 @@ const KNOWN_CODES = new Set<GameErrorCode>([
   "unavailable",
   "offline",
   "account_deleting",
-  "invalid_code",
-  "code_not_found",
-  "code_expired",
-  "crew_full",
   "already_today",
   "badge_locked",
   "invalid_patches",
@@ -368,47 +341,6 @@ function parseFlagCrew(value: unknown): FlagCrew | null {
   return { size: Math.max(1, count(row.size), memberSeeds.length + 1), memberSeeds, protectedUntil: instant(row.protectedUntil) };
 }
 
-export function parseCrew(value: unknown): Crew | null {
-  const row = record(value);
-  const parkId = text(row?.parkId);
-  const leader = parsePlayer(row?.leader);
-  const flagSince = instant(row?.flagSince);
-  if (!row || !parkId || !leader || !flagSince) return null;
-  const members = list(row.members, (member): CrewMember | null => {
-    const player = parsePlayer(member);
-    const joinedAt = instant(member.joinedAt);
-    return player && joinedAt ? { ...player, joinedAt, leader: member.leader === true, patches: badgeIds(member.patches).slice(0, 3) } : null;
-  });
-  return {
-    parkId,
-    leader,
-    members,
-    size: Math.max(1, count(row.size), members.length),
-    cap: count(row.cap) || 8,
-    flagSince,
-    protectedUntil: instant(row.protectedUntil),
-    member: row.member === true,
-    code: text(row.code),
-    codeExpiresAt: instant(row.codeExpiresAt),
-  };
-}
-
-export function parseParkCrew(body: unknown, parkId: string): ParkCrewResponse {
-  const row = record(body) ?? {};
-  return { parkId: text(row.parkId) ?? parkId, crew: parseCrew(row.crew), serverTime: text(row.serverTime) ?? new Date().toISOString() };
-}
-
-export function parseJoinCrew(body: unknown): JoinCrewResult {
-  const row = record(body);
-  const crew = parseCrew(row?.crew);
-  if (row && crew && row.status === "already_member") return { status: "already_member", visit: null, crew };
-  if (row && crew && row.status === "joined") {
-    const visit = parseVisit(row);
-    if (visit.outcome === "joined") return { status: "joined", visit, crew };
-  }
-  throw new GameError("unavailable", 200, "Parkdex sent an answer this version cannot read.");
-}
-
 export function parseFlags(body: unknown): FlagsResponse {
   const row = record(body) ?? {};
   return {
@@ -474,10 +406,6 @@ const MESSAGES: Record<GameErrorCode, string> = {
   unavailable: "Parkdex is unavailable right now. Try again shortly.",
   offline: "You need a connection for this.",
   account_deleting: "This account is being deleted.",
-  invalid_code: "Crew codes are 6 letters and numbers.",
-  code_not_found: "No crew has that code. Check it and try again.",
-  code_expired: "That crew's protected hour is over, so it can't take new people.",
-  crew_full: "That crew is full. Crews have up to 8 people.",
   already_today: "You already had your flag turn at this park today. Come back tomorrow.",
 };
 
@@ -542,19 +470,6 @@ export async function sendVisit(accountId: string, visit: { visitId: string; par
 export async function savePatches(accountId: string, patches: string[]): Promise<string[]> {
   const body = record(await request(authenticated(accountId), "/api/game/me/patches", { method: "PUT", body: JSON.stringify({ patches }) }));
   return badgeIds(body?.patches).slice(0, 3);
-}
-
-/**
- * The crew at a park (#170). Members get the code, which the server records as shown, so call
- * this when the park page or the code sheet opens, never on a map refresh.
- */
-export async function fetchParkCrew(accountId: string, parkId: string): Promise<ParkCrewResponse> {
-  return parseParkCrew(await request(authenticated(accountId), `/api/game/parks/${encodeURIComponent(parkId)}/crew`), parkId);
-}
-
-/** Joins the crew whose code this is (#170). Resending the same visit ID returns the same answer. */
-export async function joinCrew(accountId: string, join: { visitId: string; code: string }): Promise<JoinCrewResult> {
-  return parseJoinCrew(await request(authenticated(accountId), "/api/game/crews/join", { method: "POST", body: JSON.stringify(join) }));
 }
 
 export async function markTakeoversSeen(accountId: string, at: string): Promise<void> {

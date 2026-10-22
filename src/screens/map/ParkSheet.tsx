@@ -1,7 +1,6 @@
 import { motion, type PanInfo } from "motion/react";
 import { useState, type KeyboardEvent } from "react";
 import { Badge } from "../../components/Badge";
-import { AddDexPhoto } from "../../components/DexPhoto";
 import { EarnedBadge } from "../../components/EarnedBadge";
 import { FlagPin } from "../../components/Flag";
 import { FullscreenViewer } from "../../components/FullscreenViewer";
@@ -11,7 +10,7 @@ import { estimateTrip, formatTrip } from "../../lib/drive";
 import { distanceKm, formatDistance, type LngLat } from "../../lib/geo";
 import { isNative } from "../../lib/native";
 import { CATEGORY_LABEL, isLive, LANDSCAPE_TINT, landscapeLabel, landscapeOf, PALETTES, type Park } from "../../lib/parks";
-import { takeLabel, takePoints, VISITED_TODAY_LABEL, type ParkHolder } from "../../lib/game/visit";
+import { takePoints, VISITED_TODAY_LABEL, type ParkHolder } from "../../lib/game/visit";
 import { handleFit } from "../../lib/game/handleFit";
 import type { Claim } from "../../lib/store";
 import { useContent } from "../../lib/content/provider";
@@ -19,13 +18,9 @@ import { recordDirectionsOpened } from "../../lib/interactions";
 import { founderCta, summaryCover, summaryStats, useParkSummary, visitsLine } from "../../lib/parkSummary";
 import { useGame } from "../../lib/game/GameProvider";
 import { hasPendingReview } from "../../lib/foundingReviews";
-import { crewMatchesFlag, crewPhase, isProtectedPhase } from "../../lib/game/crew";
-import { useCrew } from "../../lib/game/CrewProvider";
-import { useParkCrew, useServerClock } from "../../lib/game/useParkCrew";
+import { formatClockTime, protectionPhase, type ProtectionPhase } from "../../lib/game/protection";
 import { buzz } from "../../lib/feedback";
-import { startPhotoCapture } from "../../lib/captureMode";
 import { PARK_COVER_ASPECT } from "../../lib/photoCrop";
-import { CrewPanel } from "./CrewPanel";
 import "../../found-park.css";
 
 type Props = {
@@ -106,9 +101,6 @@ export function ParkSheet({
         },
       }
     : {};
-  // "Add another photo" for parks you have visited (#174), from a claim here or visits on the server.
-  const visited = !!claim || (summary.summary?.visits.mine ?? 0) > 0 || !!game.me?.visitedToday?.includes(park.id);
-  const [adding, setAdding] = useState(false);
   // Tapping "Visited today, back tomorrow" only nudges the button: it already says why.
   const [nudged, setNudged] = useState(false);
   const founder = founderCta(summary, insideForFounding, canFound, hasPendingReview(game.me, park.id));
@@ -119,27 +111,14 @@ export function ParkSheet({
   const landscape = landscapeOf(park);
   const tint = LANDSCAPE_TINT[landscape];
   const live = isLive(park);
-  // Crews (#171), behind the crews flag: the protected hour, the code and the crew list.
-  const crewUi = useCrew();
+  // Someone else's protected hour (#170): a visit is only logged until it ends.
   const flag = holder.kind === "mine" || holder.kind === "other" ? holder.flag : null;
-  const myHandle = game.me?.player?.handle ?? null;
-  const crewInput = { enabled: crewUi.enabled && signedIn, flag, myHandle, me: game.me };
-  const firstPhase = crewPhase({ ...crewInput, now: game.serverNow() });
-  // Members and the leader see the crew list (and outsiders after the hour), so read it once as the page opens.
-  const parkCrew = useParkCrew(park.id, firstPhase.kind === "leader" || firstPhase.kind === "member" || firstPhase.kind === "closed");
-  const crew = crewMatchesFlag(parkCrew.crew, flag) ? parkCrew.crew : null;
-  const now = useServerClock(isProtectedPhase(firstPhase));
-  const phase = crewPhase({ ...crewInput, crew, now });
-  // With crews on, the crew panel under the holder says the flag is protected, so the holder line doesn't.
-  const crewPanelShown = crewUi.enabled && signedIn && !!flag && phase.kind !== "none";
-  const holderLine = flagStatus(holder, flagDays, phase.kind === "outsider", crewPanelShown, inside);
+  const phase = protectionPhase({ flag, myHandle: game.me?.player?.handle ?? null, me: signedIn ? game.me : null, now: game.serverNow() });
+  const holderLine = flagStatus(holder, flagDays, phase, inside);
   // The button reads "Visited today, back tomorrow" exactly when today's visit is spent.
   const restingToday = visitLabel === VISITED_TODAY_LABEL;
-  // Right after planting, the leader's (or a member's) obvious next step is showing friends the code.
-  const codeIsNext = crewUi.enabled && signedIn && inside && restingToday && (phase.kind === "leader" || phase.kind === "member");
-  const visits = visitsLine(stats, signedIn);
-  // One camera action at a time: founding saves its photo to the Dex too.
-  const offersPhoto = visited && founder.kind !== "found";
+  // Who founded it and how busy it is, on one quiet line.
+  const facts = [stats.founder, visitsLine(stats, signedIn)].filter(Boolean).join(" · ");
   const pal = live ? PALETTES[park.biome] : { skyTop: "#E9DFCB", skyBottom: "#F7F0E2" };
   const openDirections = () => {
     if (content && !accessUnknown)
@@ -150,8 +129,14 @@ export function ParkSheet({
   // Outside the park, the main button opens Google Maps: driving directions when a road route
   // is known, otherwise the park's location.
   const directions = (
-    <a className="btn btn--block" href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)} target="_blank" rel="noreferrer" onClick={openDirections}>
-      <Icon name={accessUnknown ? "pin" : "car"} /> {accessUnknown ? "Show in Google Maps" : "Directions"}
+    <a
+      className="btn btn--block btn--xl"
+      href={accessUnknown ? parkLocationUrl(park) : directionsUrl(park)}
+      target="_blank"
+      rel="noreferrer"
+      onClick={openDirections}
+    >
+      <Icon name={accessUnknown ? "pin" : "car"} /> {accessUnknown ? "Find it on the map" : "Get directions"}
     </a>
   );
   const badge = claim ? (
@@ -175,7 +160,7 @@ export function ParkSheet({
       dragConstraints={{ top: 0, bottom: 0 }}
       dragElastic={{ top: 0.05, bottom: 0.7 }}
       onDragEnd={onDragEnd}
-      // The holder line is "@handle" or "@handle's crew"; it and the take button fit that line.
+      // The holder line is "@handle"; it and the take button fit that line.
       style={handleFit(holderLine.title.startsWith("@") ? holderLine.title.slice(1) : null)}
     >
       {/* The page scrolls under a finger, so the strip at the top is where the sheet drags down. */}
@@ -240,7 +225,7 @@ export function ParkSheet({
             </li>
           </motion.ul>
 
-          {/* 2. The game: who holds the flag, what taking it is worth, and the crew during its protected hour. */}
+          {/* 2. Whose park it is, and what taking it is worth. */}
           <motion.section variants={item} className={`park-status is-${holder.kind}`} aria-label="Flag">
             <div className="park-sheet__holder">
               <FlagPin
@@ -267,87 +252,38 @@ export function ParkSheet({
                 </motion.span>
               )}
             </div>
-            {crewPanelShown && flag && (
-              <CrewPanel
-                phase={phase}
-                flag={flag}
-                crew={crew}
-                now={now}
-                myHandle={myHandle}
-                showCode={!codeIsNext}
-                onShowCode={() => crewUi.openCodeSheet(park.id)}
-              />
-            )}
           </motion.section>
 
-          {/* 3. The founder: who took its cover photo, or the chance to be the one. */}
+          {/* 3. The one photo anyone takes: the park's own, which makes you its founder. */}
           {founder.kind === "found" ? (
             <motion.button
               variants={item}
-              className="park-action"
+              className="btn btn--block btn--sun btn--xl park-sheet__found"
               onClick={onFound}
               aria-label={`Become the founder of ${park.name}, plus ${founder.points} points`}
             >
-              <span className="park-action__icon">
-                <Icon name="camera" size={20} />
-              </span>
-              <span className="park-action__text">
-                <strong>Become the founder</strong>
-                <em>Its first photo becomes the cover and goes in your Dex.</em>
-              </span>
-              <span className="park-action__points">+{founder.points}</span>
+              <Icon name="camera" size={24} /> Become the founder
+              <span className="park-sheet__points">+{founder.points}</span>
             </motion.button>
           ) : founder.kind === "pending" ? (
-            <motion.div variants={item} className="park-action park-action--status" role="status">
-              <span className="park-action__icon">
-                <Icon name="image" size={18} />
-              </span>
-              <span className="park-action__text">
-                <strong>{founder.text}</strong>
-                <em>We'll let you know when it's checked.</em>
-              </span>
-            </motion.div>
-          ) : (
-            <motion.p variants={item} className={`park-sheet__line${stats.pending ? " is-pending" : ""}`} aria-busy={stats.pending}>
-              <Icon name="flagPlus" size={18} /> {stats.founder}
+            <motion.p variants={item} className="park-sheet__pending" role="status">
+              <Icon name="image" size={18} /> {founder.text}
             </motion.p>
-          )}
+          ) : null}
 
-          {/* 4. How busy it is, in one line. */}
-          {visits && (
-            <motion.p variants={item} className="park-sheet__line">
-              <Icon name="flag" size={18} /> {visits}
-            </motion.p>
-          )}
+          {/* 4. Who founded it and how busy it is, in one quiet line. */}
+          <motion.p variants={item} className={`park-sheet__line${stats.pending ? " is-pending" : ""}`} aria-busy={stats.pending}>
+            <Icon name="flagPlus" size={18} /> {facts}
+          </motion.p>
           {stats.note && (
             <motion.p variants={item} className="park-summary__note">
               {stats.note}
             </motion.p>
           )}
 
-          {/* 5. Smaller things: your own photo, and telling us when something is off. */}
-          {offersPhoto && (
-            <motion.button
-              variants={item}
-              className="park-action"
-              onClick={() => {
-                startPhotoCapture();
-                setAdding(true);
-              }}
-            >
-              <span className="park-action__icon">
-                <Icon name="camera" size={20} />
-              </span>
-              <span className="park-action__text">
-                <strong>Add a photo</strong>
-                <em>Keep one for your Dex.</em>
-              </span>
-              <Icon name="next" size={18} />
-            </motion.button>
-          )}
           <motion.div variants={item} className="park-sheet__links">
             <button className="fb-link park-sheet__report" onClick={onFeedback}>
-              <Icon name="chat" size={16} /> Something wrong with this park?
+              <Icon name="chat" size={16} /> Report a problem
             </button>
             {onDemoTeleport && (
               <button className="fb-link" onClick={onDemoTeleport}>
@@ -358,31 +294,17 @@ export function ParkSheet({
         </motion.div>
       </div>
 
-      {/* One main button, always the next thing to do here. */}
+      {/* One big button, always the next thing to do here. */}
       <motion.div className="park-sheet__cta" initial={{ y: 80 }} animate={{ y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.2 }}>
-        {inside && !restingToday && phase.kind === "outsider" && crewUi.enabled && signedIn ? (
-          // Someone else's protected hour: joining their crew is the way in, logging the visit the fallback.
-          <>
-            <button className="btn btn--block btn--glow" onClick={() => crewUi.openScanner(park.id)}>
-              <Icon name="qr" /> Join crew
-            </button>
-            <button className="btn btn--paper park-sheet__log" onClick={onCheckIn} disabled={phase.logged}>
-              {phase.logged ? "Logged" : "Log visit"}
-            </button>
-          </>
-        ) : inside && !restingToday && phase.kind === "outsider" ? (
-          // Without crews the protected hour still holds: logging the visit is all there is to do.
-          <button className="btn btn--block btn--glow" onClick={onCheckIn} disabled={phase.logged}>
+        {inside && !restingToday && phase.kind === "outsider" ? (
+          // Someone else's protected hour: logging the visit is all there is to do until it ends.
+          <button className="btn btn--block btn--xl btn--glow" onClick={onCheckIn} disabled={phase.logged}>
             <Icon name="flag" /> {visitLabel}
-          </button>
-        ) : codeIsNext ? (
-          <button className="btn btn--block btn--sun" onClick={() => crewUi.openCodeSheet(park.id)}>
-            <Icon name="qr" /> Show crew code
           </button>
         ) : inside && restingToday ? (
           // Today's visit is spent: a quiet, clearly disabled button. A tap only nudges it.
           <button
-            className={`btn btn--block btn--rest${nudged ? " is-nudged" : ""}`}
+            className={`btn btn--block btn--xl btn--rest${nudged ? " is-nudged" : ""}`}
             aria-disabled="true"
             onClick={() => {
               buzz(20);
@@ -393,14 +315,13 @@ export function ParkSheet({
             <Icon name="check" /> {visitLabel}
           </button>
         ) : inside ? (
-          <button className="btn btn--block btn--glow" onClick={onCheckIn}>
+          <button className="btn btn--block btn--xl btn--glow" onClick={onCheckIn}>
             <Icon name="flag" /> {visitLabel}
           </button>
         ) : (
           directions
         )}
       </motion.div>
-      <AddDexPhoto park={park} open={adding} onClose={() => setAdding(false)} />
       <FullscreenViewer
         slides={showCover ? [{ key: "cover", src: cover, alt: `${park.name}, photographed by its founder` }] : []}
         index={viewingCover ? 0 : null}
@@ -411,24 +332,20 @@ export function ParkSheet({
   );
 }
 
-function flagStatus(holder: ParkHolder, days: number, protectedNow = false, crewExplains = false, inside = false): { title: string; detail: string } {
-  const flown = days === 1 ? "1 day" : `${days} days`;
+function flagStatus(holder: ParkHolder, days: number, protection: ProtectionPhase, inside: boolean): { title: string; detail: string } {
+  const age = days < 1 ? "today" : days === 1 ? "for 1 day" : `for ${days} days`;
   switch (holder.kind) {
     case "mine":
-      if (holder.member)
-        return { title: `@${holder.flag.handle}'s crew`, detail: `You hold it together. ${days < 1 ? "Planted today" : `Flying for ${flown}`}` };
-      return { title: "Your flag", detail: days < 1 ? "Planted today" : `Flying for ${flown}` };
+      return { title: "Your park", detail: days < 1 ? "You took it today" : `Yours ${age}` };
     case "other":
-      // During someone else's protected hour the flag can't be taken yet (#171); the crew panel says so when it shows.
+      // Someone else's protected hour (#170): it can't be taken until it ends.
       return {
         title: `@${holder.flag.handle}`,
-        detail: protectedNow
-          ? `${days < 1 ? "Planted today" : `Flying for ${flown}`}${crewExplains ? "" : ". Protected for now."}`
-          : `${days < 1 ? "Planted today" : `Flying for ${flown}`}. ${takeLabel(days)}.`,
+        detail: protection.kind === "outsider" ? `New flag · free at ${formatClockTime(protection.until)}` : days < 1 ? "Took it today" : `Has held it ${age}`,
       };
     case "empty":
-      return { title: "No flag yet", detail: inside ? "Be the first to plant yours here." : "Get inside the boundary to plant yours." };
+      return { title: "Nobody's park yet", detail: inside ? "Plant your flag to make it yours." : "Walk in and make it yours." };
     case "unknown":
-      return { title: "Flag unknown", detail: "Connect to the internet to see who holds this park." };
+      return { title: "Flag unknown", detail: "Go online to see whose park it is." };
   }
 }

@@ -27,8 +27,6 @@ export const FEATURE_FLAG_DEFAULTS = Object.freeze({
   parkProposals: true,
   /** Friends by QR code and the weekly friends board (#64). Off until the operator turns it on. */
   friends: false,
-  /** Crew flags (#170, #171): the protected hour, crew codes and joining. Off until the operator turns it on. */
-  crews: false,
   /**
    * Badges (#175): the badge shelf in My Dex, unlocks on visit results, Kip's badge tip and the
    * patches sewn on flags. Off until the operator turns it on; the server keeps recording

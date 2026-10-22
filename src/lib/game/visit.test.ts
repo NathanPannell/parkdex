@@ -34,7 +34,7 @@ describe("park holder", () => {
 
   it("labels the visit button for each case", () => {
     expect(visitLabel(false, { kind: "empty" })).toBe("Sign in to plant your flag");
-    expect(visitLabel(false, { kind: "empty" }, false, { kind: "outsider", until: "2026-10-13T18:00:00.000Z", leader: "tom", logged: false })).toBe(
+    expect(visitLabel(false, { kind: "empty" }, false, { kind: "outsider", until: "2026-10-13T18:00:00.000Z", holder: "tom", logged: false })).toBe(
       "Sign in to log your visit",
     );
     expect(visitLabel(true, { kind: "empty" })).toBe("Plant your flag");
@@ -105,7 +105,7 @@ describe("visit results", () => {
     expect(visitHeadline({ ...base, outcome: "already_today" }, "Blueberry").title).toBe("Already visited today");
   });
 
-  it("explains a logged visit during someone else's protected hour, whatever the crews flag says", () => {
+  it("explains a logged visit during someone else's protected hour", () => {
     // 3:42 pm on this device's clock, so the test reads the same in every time zone.
     const until = new Date(2026, 9, 13, 15, 42).toISOString();
     const logged = visitHeadline(
@@ -121,33 +121,32 @@ describe("visit results", () => {
     expect(logged).toEqual({ title: "Visit logged", detail: "This flag was just planted. Come back after 3:42 pm to take it." });
     expect(visitHeadline({ ...base, outcome: "logged", pointsEarned: 1 }, "Blueberry").detail).toBe("Your visit counts. The flag stays where it is.");
     expect(visitHeadline({ ...base, outcome: "joined", pointsEarned: 2 }, "Blueberry")).toEqual({
-      title: "You joined the crew",
+      title: "You joined the flag",
       detail: "You hold Blueberry together now. One point for every hour your flag flies.",
     });
   });
 });
 
-describe("crews", () => {
+describe("the protected hour", () => {
   const until = new Date(2026, 9, 13, 15, 42).toISOString();
 
-  it("treats a park held as a crew member as the player's own", () => {
+  it("treats a park held with someone else, from before crews were retired, as the player's own", () => {
     const held = [{ parkId: "blueberry" }];
     expect(parkHolder("blueberry", flags, "robin", held)).toMatchObject({ kind: "mine", member: true, flag: { handle: "sam" } });
     expect(parkHolder("beacon", flags, "robin", held)).toEqual({ kind: "mine", flag: flags.get("beacon") });
     expect(parkHolder("blueberry", flags, null, held)).toMatchObject({ kind: "other" });
-    expect(visitLabel(true, parkHolder("blueberry", flags, "robin", held))).toBe("Visit your crew's flag");
+    expect(visitLabel(true, parkHolder("blueberry", flags, "robin", held))).toBe("Visit your flag");
   });
 
-  it("labels outsiders during the protected hour, and a scanned code", () => {
-    const outsider = { kind: "outsider" as const, until, leader: "sam", logged: false };
+  it("labels walkers during someone else's protected hour", () => {
+    const outsider = { kind: "outsider" as const, until, holder: "sam", logged: false };
     const other = parkHolder("blueberry", flags, "robin");
     expect(visitLabel(true, other, false, outsider)).toBe("Log your visit · +1");
     expect(visitLabel(true, other, false, { ...outsider, logged: true })).toBe("Logged, take it after 3:42 pm");
     expect(visitShortLabel(other, false, outsider)).toBe("Log");
     expect(visitShortLabel(other, false, { ...outsider, logged: true })).toBe("Later");
-    expect(visitShortLabel(other, false, outsider, true)).toBe("Join");
-    expect(visitShortLabel(other, true, { kind: "none" }, true)).toBe("Join");
-    // With the crews flag off the phase is always none, and labels stay as they were.
+    expect(visitShortLabel(other, true, outsider)).toBe("Tomorrow");
+    // After the hour the labels are the usual ones.
     expect(visitLabel(true, other, false, { kind: "none" })).toBe("Take it from @sam");
     expect(visitShortLabel(other, false, { kind: "none" })).toBe("Take!");
   });
@@ -179,7 +178,7 @@ describe("points", () => {
     expect(plantCheer(visit("planted", 6))).toBe("KLEEP! Flag's up! +6");
     expect(plantCheer(visit("held", 1))).toBe("Still flying! +1");
     expect(plantCheer(visit("already_today", 0))).toBe("See you tomorrow!");
-    expect(plantCheer(visit("joined", 2))).toBe("KLEEP! You're in the crew! +2");
+    expect(plantCheer(visit("joined", 2))).toBe("KLEEP! You hold it together! +2");
     expect(plantCheer(visit("logged", 1))).toBe("Visit logged! +1");
   });
 });

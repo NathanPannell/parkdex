@@ -8,7 +8,7 @@ vi.mock("../accounts/authClient", () => ({
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true } }));
 vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn(), getLaunchUrl: vi.fn() } }));
 
-const { FriendsError, fetchFriendsBoard, isFinalAddError, parseBoard, removeFriend, resetFriendCode, sendCrewmate, sendFriendCode } = await import("./client");
+const { FriendsError, fetchFriendsBoard, isFinalAddError, parseBoard, removeFriend, resetFriendCode, sendFriendCode } = await import("./client");
 const { dropFriendCode, flushOutbox, OUTBOX_LIMIT, queueFriendCode, readCachedBoard, readOutbox, writeCachedBoard } = await import("./outbox");
 const { friendCodeFromText, friendLink } = await import("./links");
 const { sinceLabel, weekLabel } = await import("./format");
@@ -81,22 +81,6 @@ describe("friends client", () => {
     await expect(sendFriendCode(ACCOUNT, "ABCD2345")).rejects.toMatchObject({ code: "unauthenticated" });
     fetchAuthenticated.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     await expect(sendFriendCode(ACCOUNT, "ABCD2345")).rejects.toMatchObject({ code: "offline" });
-  });
-
-  it("adds a crewmate by handle and maps its errors", async () => {
-    fetchAuthenticated.mockResolvedValueOnce(reply(200, { status: "already_friends", friend: { handle: "sam", flagSeed: "0123456789abcdef" } }));
-    await expect(sendCrewmate(ACCOUNT, "sam")).resolves.toEqual({ status: "already_friends", friend: { handle: "sam", flagSeed: "0123456789abcdef" } });
-    const [path, init] = fetchAuthenticated.mock.calls[0];
-    expect(path).toBe("/api/friends/crewmate");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ handle: "sam" });
-    fetchAuthenticated.mockResolvedValueOnce(reply(404, { error: { code: "crewmate_not_found", message: "x" }, code: "crewmate_not_found" }));
-    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({
-      code: "crewmate_not_found",
-      message: "Add crewmates here within a day of your crew. After that, use their friend code.",
-    });
-    fetchAuthenticated.mockResolvedValueOnce(reply(409, { code: "own_handle" }));
-    await expect(sendCrewmate(ACCOUNT, "sam")).rejects.toMatchObject({ code: "own_handle" });
   });
 
   it("removes friends by handle and replaces the code", async () => {

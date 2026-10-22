@@ -23,8 +23,8 @@ import "../onboarding.css";
 /**
  * Two slides, each with one job. The first says what Parkdex is and asks for location, the
  * second says what you play for and takes a @handle. The handle stays on this device until the
- * player signs in, then becomes the account's (`lib/game/localHandle.ts`). Founding, crews and
- * how flags fall are explained where they first come up.
+ * player signs in, then becomes the account's (`lib/game/localHandle.ts`). Founding, the
+ * protected hour and how flags fall are explained where they first come up.
  */
 type SlideVisual = "go" | "take";
 const SLIDES: { visual: SlideVisual; title: [string, string]; line: string; tint: string }[] = [

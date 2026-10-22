@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { App } from "@capacitor/app";
 import { Icon } from "../components/Icon";
 import { Kip } from "../components/Kip";
@@ -15,9 +15,7 @@ import {
   FeedbackScreenshotError,
   loadFeedbackScreenshot,
   loadFeedbackSubmissionAttempt,
-  prepareFeedbackScreenshot,
   resetFeedbackSubmissionAttempt,
-  saveFeedbackScreenshot,
   type SavedFeedbackScreenshot,
 } from "../lib/feedbackDraft";
 import {
@@ -117,7 +115,6 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
   const retryAttemptExistsRef = useRef(false);
   const resetQueueRef = useRef<Promise<void>>(Promise.resolve());
   const resetCountRef = useRef(0);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isNative) return;
@@ -251,32 +248,6 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
       setSendError("");
     }
     setDraft((current) => ({ ...current, ...patch }));
-  };
-
-  const pickShot = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || sendingRef.current || shotLoading) return;
-
-    if (status === "failed") {
-      setStatus("editing");
-      setSendError("");
-    }
-    setShotError(null);
-    setShotProcessing(true);
-    try {
-      // File type and size are checked before the image is decoded or read.
-      const blob = await prepareFeedbackScreenshot(file);
-      await saveFeedbackScreenshot({ blob, name: file.name || "Screenshot", generation: draftGeneration });
-      retryAttemptExistsRef.current = false;
-      setRetryContext(null);
-      setStorageError("");
-      setShot({ blob, name: file.name || "Screenshot", generation: draftGeneration, url: feedbackScreenshotUrl(blob) });
-    } catch (error) {
-      setShotError(feedbackScreenshotErrorMessage(error));
-    } finally {
-      setShotProcessing(false);
-    }
   };
 
   const removeShot = async () => {
@@ -456,19 +427,11 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                   />
                 </label>
 
-                <div className="fb-field">
-                  <span className="fb-label">
-                    Screenshot <em>Optional</em>
-                  </span>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    hidden
-                    onChange={pickShot}
-                    disabled={isEditingLocked || shotProcessing}
-                  />
-                  {shot ? (
+                {/* Photos are retired (PRODUCT.md): nothing new can be attached. A screenshot saved with a
+                    draft from an older version still shows, and can be sent or removed. */}
+                {shot && (
+                  <div className="fb-field">
+                    <span className="fb-label">Screenshot</span>
                     <div className="fb-shot card">
                       <img src={shot.url} alt="Attached screenshot" />
                       <span className="fb-shot__name">{shot.name}</span>
@@ -482,18 +445,13 @@ export function FeedbackSheet({ origin }: { origin: FeedbackOrigin }) {
                         <Icon name="close" size={16} stroke={3} />
                       </button>
                     </div>
-                  ) : (
-                    <button type="button" className="fb-attach" onClick={() => fileRef.current?.click()} disabled={isEditingLocked || shotProcessing}>
-                      <Icon name="image" size={20} />{" "}
-                      {shotProcessing ? "Preparing screenshot…" : shotLoading ? "Loading saved screenshot…" : "Attach a screenshot"}
-                    </button>
-                  )}
-                  {shotError && (
-                    <span className="fb-error-text" role="alert">
-                      {shotError}
-                    </span>
-                  )}
-                </div>
+                    {shotError && (
+                      <span className="fb-error-text" role="alert">
+                        {shotError}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <label className="fb-field">
                   <span className="fb-label">

@@ -58,8 +58,8 @@ describe("Kip's Tips", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("has all eight tips, each with one or two pages of short, sentence-case copy", () => {
-    expect(KIP_TIP_IDS).toEqual(["crew-leader", "crew-outsider", "crew-joined", "points", "photo-crop", "dex", "badge-first", "install-web"]);
+  it("has all four tips, each with one or two pages of short, sentence-case copy", () => {
+    expect(KIP_TIP_IDS).toEqual(["points", "dex", "badge-first", "install-web"]);
     for (const id of KIP_TIP_IDS) {
       const tip = KIP_TIPS[id];
       expect(tip.id).toBe(id);
@@ -83,7 +83,7 @@ describe("Kip's Tips", () => {
     vi.stubGlobal("localStorage", storage);
     expect(isKipTipSeen("points")).toBe(false);
     markKipTipSeen("points");
-    expect(Object.keys(JSON.parse(storage.values.get("parkdex-kip-tips-seen-v1")!))).toEqual(["points@1"]);
+    expect(Object.keys(JSON.parse(storage.values.get("parkdex-kip-tips-seen-v1")!))).toEqual(["points@2"]);
     resetKipTipsForTests();
     expect(isKipTipSeen("points")).toBe(true);
     expect(isKipTipSeen("dex")).toBe(false);
@@ -121,24 +121,24 @@ describe("Kip's Tips", () => {
 
   it("Skip marks a tip as seen and records tip_skipped", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    requestKipTip("crew-leader");
+    requestKipTip("points");
     const token = showCurrent();
-    expect(capture).toHaveBeenCalledWith("tip_shown", { tip_id: "crew-leader", tip_version: 1 });
+    expect(capture).toHaveBeenCalledWith("tip_shown", { tip_id: "points", tip_version: 2 });
     closeKipTip(token, "skip", 0);
     expect(currentKipTip()).toBeNull();
     resetKipTipsForTests();
-    expect(isKipTipSeen("crew-leader")).toBe(true);
-    expect(capture).toHaveBeenCalledWith("tip_skipped", { tip_id: "crew-leader", tip_version: 1, page: 1, pages: 2, via: "skip" });
+    expect(isKipTipSeen("points")).toBe(true);
+    expect(capture).toHaveBeenCalledWith("tip_skipped", { tip_id: "points", tip_version: 2, page: 1, pages: 2, via: "skip" });
   });
 
   it("Got it records tip_completed, and tip_shown is sent once per showing", () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    requestKipTip("crew-outsider");
+    requestKipTip("points");
     const token = showCurrent();
     noteKipTipShown(token);
     closeKipTip(token, "done", 1);
     expect(capture.mock.calls.filter(([name]) => name === "tip_shown")).toHaveLength(1);
-    expect(capture).toHaveBeenCalledWith("tip_completed", { tip_id: "crew-outsider", tip_version: 1, page: 2, pages: 2 });
+    expect(capture).toHaveBeenCalledWith("tip_completed", { tip_id: "points", tip_version: 2, page: 2, pages: 2 });
     expect(capture.mock.calls.some(([name]) => name === "tip_skipped")).toBe(false);
   });
 
