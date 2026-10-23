@@ -2,7 +2,8 @@
 // Runs `cap sync <platform>` with the over-the-air update channel baked into the native config.
 // npm scripts cannot set environment variables portably on Windows, so this wrapper does it.
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const PLATFORMS = ["android", "ios"];
 const CHANNELS = ["staging", "production"];
@@ -16,7 +17,8 @@ export function parseCapSyncArgs(args) {
   return { platform, channel };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node resolves symlinks and junctions for the module URL but not for argv[1], so compare real paths.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const parsed = parseCapSyncArgs(process.argv.slice(2));
   if (!parsed) {
     console.error(USAGE);

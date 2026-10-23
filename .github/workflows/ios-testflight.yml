@@ -113,8 +113,6 @@ jobs:
       MARKETING_VERSION_INPUT: ${{ needs.preflight.outputs.marketing_version }}
       # Unique and rising for every run and re-run of this workflow (CFBundleVersion allows dots).
       BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
-      ARCHIVE_PATH: ${{ runner.temp }}/Parkdex.xcarchive
-      EXPORT_PATH: ${{ runner.temp }}/export
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,6 +125,12 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # The runner context is not available in job-level env, so the paths are set here.
+      - name: Archive and export paths
+        run: |
+          echo "ARCHIVE_PATH=$RUNNER_TEMP/Parkdex.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_PATH=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
 
       - name: Production or staging web build, synced into iOS
         run: |

@@ -78,7 +78,7 @@ Pick the commit and the channel. `production` uses `build:field:production` (the
 
 The build number is `<run number>.<attempt>`, so every run uploads a higher one. The marketing version is the project's `MARKETING_VERSION` (1.0.0) unless the run sets one. Raise it after a version is approved for the App Store. The run summary shows the version, build and commit. App Store Connect then processes the build, usually within 30 minutes, and TestFlight offers it to the internal group.
 
-The project sets `ITSAppUsesNonExemptEncryption` to false (HTTPS only), so builds skip the export compliance question.
+The project sets `ITSAppUsesNonExemptEncryption` to false, so builds skip the export compliance question. Parkdex encrypts only through HTTPS. The SQLite plugin links SQLCipher, but the app opens every database with `no-encryption`. If the app ever encrypts its database, change the key and answer the export compliance questions again.
 
 ## Before App Review
 

@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/.wrangler/",
       "coverage/",
       "android/",
+      "ios/",
       "public/",
       "operator/public/",
       "art-source/",

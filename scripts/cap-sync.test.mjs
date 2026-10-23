@@ -15,7 +15,17 @@ test("takes exactly one platform and one channel", () => {
 });
 
 test("refuses anything else, so no other text reaches the shell", () => {
-  for (const args of [[], ["staging"], ["production"], ["ios"], ["staging", "android"], ["web", "staging"], ["ios", "main"], ["ios", "staging", "extra"], ["ios", "staging && calc"]]) {
+  for (const args of [
+    [],
+    ["staging"],
+    ["production"],
+    ["ios"],
+    ["staging", "android"],
+    ["web", "staging"],
+    ["ios", "main"],
+    ["ios", "staging", "extra"],
+    ["ios", "staging && calc"],
+  ]) {
     assert.equal(parseCapSyncArgs(args), null, JSON.stringify(args));
   }
 });

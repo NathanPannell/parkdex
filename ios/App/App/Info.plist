@@ -56,7 +56,8 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-	<!-- HTTPS through the system TLS stack only, which is exempt from export documentation. -->
+	<!-- Parkdex encrypts only through HTTPS (the system TLS stack). SQLCipher is linked by the SQLite
+	     plugin but every database opens with "no-encryption". Revisit if that changes (docs/ios.md). -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<!-- Every purpose string the plugins' binaries reference. App Store upload fails without them. -->
