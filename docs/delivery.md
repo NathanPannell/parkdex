@@ -25,6 +25,7 @@ Every job must pass on the PR's head commit. Nothing in PR CI talks to Neon, Ver
 | E2E | Playwright, headless, against the production web build (`vite preview`) and the real API on a fresh Postgres 18 database (`e2e/api-server.ts`): onboarding, the map's nearby parks, search and a park page, My Dex, the leaderboard and settings, all signed out. The trace and report upload on failure. |
 | Operator dashboard | Its typecheck, tests (six PostgreSQL suites on fresh databases) and build. |
 | Android debug build | `npm run android:sync` and `gradlew assembleDebug`. It needs no signing secrets. |
+| iOS changes, iOS simulator build | On `macos-26`, only when the PR touches `ios/` or the Capacitor and package config: `npm run ios:sync`, a check that the committed `ios/` project matches `cap sync`, and an unsigned `xcodebuild build` for the simulator. Otherwise the build job is skipped, which counts as passing. See `docs/ios.md`. |
 | Security | `npm audit --audit-level=high` for the app and the dashboard, gitleaks over the whole history and the working tree (`.gitleaks.toml`), and a check that the only committed env files are the two Vite mode files with `VITE_` keys. |
 
 Coverage floors are in `vitest.config.ts` (app) and the `test` script in `package.json` (API worker suite). Raise them as tests are added; never lower them. A worker test (`worker/idle.test.ts`) asserts that an idle API and its health check send no SQL.

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+        <string>Parkdex</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+    <key>UISceneConfigurations</key>
+    <dict>
+      <key>UIWindowSceneSessionRoleApplication</key>
+      <array>
+        <dict>
+            <key>UISceneConfigurationName</key>
+            <string>Default Configuration</string>
+            <key>UISceneDelegateClassName</key>
+            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+            <key>UISceneStoryboardFile</key>
+            <string>Main</string>
+        </dict>
+      </array>
+    </dict>
+	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<!-- Portrait only, like the Android activity. The app targets iPhone (TARGETED_DEVICE_FAMILY = 1). -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<!-- Parkdex encrypts only through HTTPS (the system TLS stack). SQLCipher is linked by the SQLite
+	     plugin but every database opens with "no-encryption". Revisit if that changes (docs/ios.md). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Every purpose string the plugins' binaries reference. App Store upload fails without them. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Parkdex uses the camera to take the photo of a park you found and to scan a friend's Parkdex code.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Parkdex never reads your photo library. iOS asks only if you choose a photo from it.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Parkdex saves a badge image to your photos when you choose Save Image from the share sheet.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Parkdex uses your location while the app is open to show you on the map and to check you're in a park when you plant your flag.</string>
+	<!-- Required because the location library can run in the background. Parkdex only asks for when-in-use, so iOS never shows this one. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Parkdex uses your location while the app is open to show you on the map and to check you're in a park when you plant your flag.</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>

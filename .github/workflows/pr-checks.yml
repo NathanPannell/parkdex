@@ -257,6 +257,83 @@ jobs:
         working-directory: android
         run: bash gradlew assembleDebug --no-daemon
 
+  # macOS minutes cost ten times Linux ones, so the iOS build runs only when a PR touches
+  # something that can break the native project. The answer comes from the PR's file list.
+  ios-changes:
+    name: iOS changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      build: ${{ steps.files.outputs.build }}
+    steps:
+      - name: Look for iOS-relevant files in the PR
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')"
+          count="$(printf '%s\n' "$files" | grep -c . || true)"
+          # The API lists at most 3,000 files; build when the list may be cut short.
+          if [ "$count" -ge 3000 ] || printf '%s\n' "$files" | grep -qE '^(ios/|package(-lock)?\.json$|capacitor\.config\.ts$|scripts/cap-sync\.mjs$|scripts/check-content-package\.mjs$|\.github/workflows/(pr-checks|ios-testflight)\.yml$)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=iOS simulator build skipped::No file under ios/ or the Capacitor and package config changed."
+          fi
+
+  # The unsigned iOS simulator build, so the Xcode project cannot break silently. It needs no
+  # Apple account or secrets. TestFlight builds run in ios-testflight.yml.
+  ios:
+    name: iOS simulator build
+    needs: ios-changes
+    if: needs.ios-changes.outputs.build == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run ios:sync
+
+      - name: The committed iOS project matches cap sync
+        run: |
+          if [ -n "$(git status --porcelain -- ios)" ]; then
+            git status --short -- ios
+            git diff -- ios
+            echo "::error::cap sync changed the committed iOS project. Run npm run ios:sync and commit the result."
+            exit 1
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: ios/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/App/CapApp-SPM/Package.swift', 'package-lock.json') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: xcodebuild for the iOS simulator, unsigned
+        run: |
+          xcodebuild -version
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/DerivedData \
+            -clonedSourcePackagesDirPath ios/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO
+
   security:
     name: Security (audit, secrets, env files)
     runs-on: ubuntu-latest

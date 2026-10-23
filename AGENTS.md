@@ -25,6 +25,7 @@ A Capacitor 8 Android app (React 19, Vite, TypeScript) for collecting parks on V
 | `operator/` | The operator dashboard, a separate Vite app with its own `package.json`. |
 | `scripts/` | Delivery, content publishing, imports, map and art tooling, plus their Python and Node tests. `kip-delivery.py` is the release harness. |
 | `android/` | Capacitor Android project, including custom native sign-in (`NativeIdentityPlugin.java`). |
+| `ios/` | Capacitor iOS project (Swift Package Manager), built only on GitHub Actions macOS runners. See `docs/ios.md`. |
 | `art-source/`, `public/` | Source art and the files the app ships. |
 | `deployment.json` | Release configuration: Neon branches, Vercel projects, migration allowlists, content sync and private photo settings. |
 | `docs/` | Feature contracts and runbooks. `docs/delivery.md` is the full delivery runbook. |
@@ -41,6 +42,7 @@ npm run build
 npm run e2e                 # Playwright against the built app and a local API; build first
 npm run android:apk         # debug APK (app.parkdex.debug)
 npm run android:aab:production
+npm run ios:sync            # staging field build synced into ios/; ios:sync:production for production (docs/ios.md)
 npm run local:api           # real API on 127.0.0.1:8787 against loopback PostgreSQL; see docs/local-stack.md
 node scripts/publish-app-bundle.mjs --channel staging --min-native-build <n>   # over-the-air web bundle, dry run (docs/ota-updates.md)
 ```
@@ -80,9 +82,10 @@ Private repositories on the free plan have about 2,000 Actions minutes a month. 
 
 | Workflow | Trigger | Approx. minutes |
 | --- | --- | --- |
-| `pr-checks.yml` | Every push to a PR into `staging` or `main`, drafts included (marking a PR ready does not rerun it). Six parallel jobs of 1 to 3 minutes; a newer push cancels the older run. | 13 per push |
+| `pr-checks.yml` | Every push to a PR into `staging` or `main`, drafts included (marking a PR ready does not rerun it). Six parallel jobs of 1 to 3 minutes; a newer push cancels the older run. The iOS simulator build runs on macOS only when a PR touches `ios/` or the Capacitor and package config, and then adds about 100. | 13 per push |
 | `deploy-staging.yml` | Push to `staging`. Runs checks and migrations, then queues Vercel and the photo Worker. | 4 |
 | `deploy-production.yml` | Push to `main`. Same as staging, against Neon `main`. | 4 |
+| `ios-testflight.yml` | By hand only (Run workflow, or an `ios-testflight/<channel>/<label>` tag). macOS minutes count ten times. | about 150 |
 
 The PR checks are the most expensive run, so run them locally first and push when they pass rather than pushing to see. Do not add workflows that poll providers or wait for deployments; agents do that locally. Do not re-run workflows to retry a flaky step; diagnose and fix it.
 

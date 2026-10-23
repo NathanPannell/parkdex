@@ -5,7 +5,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * Over-the-air web bundles come from our own endpoint (`/api/updates`), never Capgo cloud.
  * The channel is baked into each native build when `scripts/cap-sync.mjs` runs `cap sync`:
  * staging field and debug builds use `staging`, `android:aab:production` uses `production`.
- * A sync without a channel turns automatic checks off.
+ * A sync without a channel turns automatic checks off. So does an iOS sync: `/api/updates` only
+ * serves Android version codes, so iOS builds keep the plugin with checks off (docs/ios.md).
  */
 const UPDATE_HOSTS = {
   staging: "https://staging.web.parkdex.app",
@@ -20,7 +21,9 @@ function updateChannel(): UpdateChannel | null {
   throw new Error("PARKDEX_UPDATE_CHANNEL must be staging or production");
 }
 
-const channel = updateChannel();
+// iOS builds take a channel like Android ones but never check for bundles yet.
+const updatesEnabled = process.env.PARKDEX_NATIVE_PLATFORM?.trim() !== "ios";
+const channel = updatesEnabled ? updateChannel() : null;
 // Local QA can point a debug build at a local API; release builds always use the channel's host.
 const updateUrl = process.env.PARKDEX_UPDATE_URL?.trim() || (channel ? `${UPDATE_HOSTS[channel]}/api/updates` : "");
 
