@@ -18,3 +18,4 @@ App/App/config.xml
 *.dSYM.zip
 *.p8
 App/export
+SourcePackages
