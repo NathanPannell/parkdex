@@ -51,7 +51,7 @@ For signed-in QA without a hosted environment, run `npm run local:api` and then 
 
 ### Checks (run before every push)
 
-`python scripts/kip-delivery.py ci-checks` runs the release checks that the PR checks, the staging deploy and the production deploy all run:
+`python scripts/kip-delivery.py ci-checks` runs the release checks that the PR checks (PRs into `main` only), the staging deploy and the production deploy all run:
 
 - install, typecheck, tests and build
 - delivery tests
@@ -64,15 +64,15 @@ It needs a disposable loopback PostgreSQL 18 database whose name starts with `ki
 
 The PR checks also run `npm run format:check`, `npm run lint`, `ruff format --check .` and `ruff check .` (`pip install -r scripts/requirements-lint.txt`), `npm run e2e` after `npm run build` (same `PG*` variables; it creates its own database), the operator dashboard's typecheck, tests and build, the Android debug build, `npm audit --audit-level=high` and gitleaks. `docs/delivery.md` lists each job.
 
-Run them before every push. If any part cannot run locally, say exactly which part and why in the PR. Never report it as passed.
+Run them before every push. For a PR into `staging`, where `PR checks` does not run, this local run of every job is the merge gate. If any part cannot run locally, say exactly which part and why in the PR. Never report it as passed.
 
 ## Branches and pull requests
 
 - `staging` is the integration branch. Branch from `origin/staging` as `feat/`, `fix/`, `chore/` or `ci/<short-name>` and target `staging`.
 - `main` is production. It changes only through a PR from `staging` to `main`, and only when production is requested.
 - One issue per PR. Each agent works in its own worktree under the workspace `.claude/worktrees/`. Do not switch branches in a shared checkout.
-- Open PRs as drafts. `PR checks` runs on every push, drafts included. Mark ready once every job is green on the head commit and the diff has been reviewed.
-- **Merge rule:** do not merge until every `PR checks` job is green on the current head commit. The repository is on the GitHub free plan, so GitHub cannot enforce this. Every agent must follow it. A run for an older commit does not count. Squash-merge.
+- Open PRs as drafts. `PR checks` runs on every push to a PR into `main`, drafts included; it does not run for PRs into `staging`. Mark ready once every job is green on the head commit (run locally for a PR into `staging`) and the diff has been reviewed.
+- **Merge rule:** do not merge until every `PR checks` job is green on the current head commit: in GitHub for a PR into `main`, locally for a PR into `staging`. The repository is on the GitHub free plan, so GitHub cannot enforce this. Every agent must follow it. A run for an older commit does not count. Squash-merge.
 - Merge one PR at a time. After a merge, any other ready PR rebases or merges `staging` and reruns its checks.
 - Keep before-and-after cropped screenshots for UI changes in the PR thread.
 
@@ -82,7 +82,7 @@ Private repositories on the free plan have about 2,000 Actions minutes a month. 
 
 | Workflow | Trigger | Approx. minutes |
 | --- | --- | --- |
-| `pr-checks.yml` | Every push to a PR into `staging` or `main`, drafts included (marking a PR ready does not rerun it). Six parallel jobs of 1 to 3 minutes; a newer push cancels the older run. The iOS simulator build runs on macOS only when a PR touches `ios/` or the Capacitor and package config, and then adds about 100. | 13 per push |
+| `pr-checks.yml` | Every push to a PR into `main`, drafts included (marking a PR ready does not rerun it). Six parallel jobs of 1 to 3 minutes; a newer push cancels the older run. The iOS simulator build runs on macOS only when a PR touches `ios/` or the Capacitor and package config, and then adds about 100. | 13 per push |
 | `deploy-staging.yml` | Push to `staging`. Runs checks and migrations, then queues Vercel and the photo Worker. | 4 |
 | `deploy-production.yml` | Push to `main`. Same as staging, against Neon `main`. | 4 |
 | `ios-testflight.yml` | By hand only (Run workflow, or an `ios-testflight/<channel>/<label>` tag). macOS minutes count ten times. | about 150 |
@@ -93,10 +93,10 @@ The PR checks are the most expensive run, so run them locally first and push whe
 
 Full steps are in `docs/delivery.md`. In short:
 
-There are no PR preview deployments; CI is the gate.
+There are no PR preview deployments. GitHub CI runs only for PRs into `main`; for PRs into `staging`, every `PR checks` job run locally is the gate.
 
-1. **Draft PR.** Open a draft PR against `staging`. `PR checks` runs on every push.
-2. **CI gate.** Fix every failing job; never weaken a check to get green. Review the diff, then mark the PR ready once every job is green on the head commit.
+1. **Draft PR.** Open a draft PR against `staging`. `PR checks` does not run there; run every job locally (see "Checks").
+2. **Check gate.** Fix every failing job; never weaken a check to get green. Review the diff, then mark the PR ready once every job is green locally on the head commit.
 3. **Merge.** Squash-merge into `staging`. `deploy-staging.yml` runs the release checks, applies migrations and dispatches without waiting.
 4. **Staging.** Find the READY Vercel deployment for the merge SHA, then run `assign-staging --apply` and `verify-staging`. Report "ready in staging" only after the affected journeys pass at `staging.web.parkdex.app`.
 5. **Production.** Only when requested: open a PR from `staging` to `main`. After the merge, run `assign-main --apply` and `verify-main`, then verify the journeys at `web.parkdex.app`.
