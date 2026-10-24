@@ -51,7 +51,7 @@ For signed-in QA without a hosted environment, run `npm run local:api` and then 
 
 ### Checks (run before every push)
 
-`python scripts/kip-delivery.py ci-checks` runs the release checks that the PR checks, the staging deploy and the production deploy all run:
+`python scripts/kip-delivery.py ci-checks` runs the release checks that the PR checks (PRs into `main` only), the staging deploy and the production deploy all run. It is the gate for PRs into `staging`, where no PR checks run:
 
 - install, typecheck, tests and build
 - delivery tests
