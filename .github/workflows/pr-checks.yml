@@ -1,8 +1,8 @@
 name: PR checks
 
 # The merge gate for the staging to main release PR. CI runs only for main (owner's decision,
-# 2026-10-24); PRs into staging are gated by `python scripts/kip-delivery.py ci-checks` run locally,
-# and the staging deploy workflow runs it again before deploying. It runs on draft
+# 2026-10-24); PRs into staging are gated by running every job below locally, and the staging
+# deploy workflow reruns the release checks before deploying. It runs on draft
 # PRs too: merge only when every job is green on the PR's head commit. There are no preview
 # deployments; nothing here calls the Neon, Vercel or Cloudflare APIs or uses a secret. The e2e
 # browser reads the public content CDN (kip-assets.parkdex.app) without credentials.

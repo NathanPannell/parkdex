@@ -6,10 +6,10 @@ The Neon project is small-cloud-35890217. Its production database is the root `m
 
 ## How a change ships
 
-There are no PR preview deployments. GitHub PR checks run only for PRs into `main` (owner's decision, 2026-10-24); for PRs into `staging` the local `ci-checks` run is the gate, and staging is the first hosted environment a change reaches.
+There are no PR preview deployments. GitHub PR checks run only for PRs into `main` (owner's decision, 2026-10-24); for PRs into `staging` running every PR-checks job locally is the gate, and staging is the first hosted environment a change reaches.
 
 1. Branch from the latest `origin/staging` and open a draft PR against `staging`.
-2. Run `python scripts/kip-delivery.py ci-checks` locally on the PR's head commit and merge only when it passes. (`.github/workflows/pr-checks.yml` runs only on PRs into `main`; see "PR checks" below.)
+2. Run every job in "PR checks" below locally on the PR's head commit, and merge only when all of them pass. (`.github/workflows/pr-checks.yml` runs in GitHub only on PRs into `main`.)
 3. Squash-merge into `staging`. `.github/workflows/deploy-staging.yml` reruns the release checks, applies migrations to the Neon staging branch and dispatches Vercel and the private photo Worker for the merge SHA.
 4. Find the READY Vercel deployment for the merge SHA, then run `assign-staging` and `verify-staging` (see "Staging release" below). Check the affected journeys at `staging.web.parkdex.app`.
 5. Production is a separate PR from `staging` to `main`, made only when production is requested.
