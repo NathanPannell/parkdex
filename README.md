@@ -67,6 +67,12 @@ A clean build takes about 2.5 minutes; incremental rebuilds about 35 seconds.
 
 Set `sdk.dir` in `android/local.properties` to your Android SDK path before the first build.
 
+## iOS
+
+The iOS project in `ios/` is edited on Windows and compiled only on GitHub Actions macOS runners.
+`npm run ios:sync` syncs the field bundle into it. Builds reach an iPhone through TestFlight: see
+[docs/ios.md](docs/ios.md) for the one-time Apple setup and how to cut a build.
+
 ## How check-in works
 
 The app watches GPS with high accuracy. A visitor counts as inside a park when they are within

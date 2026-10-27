@@ -1,6 +1,6 @@
 # Over-the-air web bundle updates
 
-Android builds can take a new web bundle (JavaScript, CSS and bundled assets) without a Play release. Native code, plugins and permissions still need Play. Web pages at `web.parkdex.app` never load the updater.
+Android builds can take a new web bundle (JavaScript, CSS and bundled assets) without a Play release. Native code, plugins and permissions still need Play. Web pages at `web.parkdex.app` never load the updater. iOS builds include the plugin with checks off, because the endpoint only serves Android version codes ([ios.md](ios.md)).
 
 ## How it works
 
