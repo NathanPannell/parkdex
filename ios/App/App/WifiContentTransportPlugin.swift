@@ -8,7 +8,8 @@ import UIKit
 ///
 /// - Only the approved API hosts and the content CDN, over HTTPS on port 443, never redirected.
 /// - Detailed map chunks (`map/island/*.bin`) use Wi-Fi only unless the request allows any network;
-///   everything else may use any network.
+///   everything else may use any network. Unlike Android, a chunk is refused at once without Wi-Fi
+///   instead of waiting 15 seconds for it, and iOS keeps it off mobile data if Wi-Fi drops mid-way.
 /// - Account backup only reaches the claim and photo routes, with a bearer session, the native
 ///   transport marker and the route's content type and size limits.
 /// - Responses are size-limited, cookies are never sent or stored, and requests stop when Parkdex
@@ -360,12 +361,12 @@ public class WifiContentTransportPlugin: CAPPlugin, CAPBridgedPlugin, URLSession
         matches(url.path, "(^|/)map/island/[^/]+\\.bin$")
     }
 
-    private static func httpsComponents(_ value: String, _ failure: String) throws -> (URLComponents, String) {
+    private static func httpsComponents(_ value: String, _ failure: String, portFailure: String) throws -> (URLComponents, String) {
         guard let components = URLComponents(string: value), components.scheme?.lowercased() == "https",
               let host = components.host?.lowercased(), !host.isEmpty,
               components.user == nil, components.password == nil, components.fragment == nil
         else { throw TransportError(message: failure) }
-        if let port = components.port, port != 443 { throw TransportError(message: failure.replacingOccurrences(of: "an approved HTTPS URL", with: "no custom port")) }
+        if let port = components.port, port != 443 { throw TransportError(message: portFailure) }
         return (components, host)
     }
 
@@ -383,7 +384,8 @@ public class WifiContentTransportPlugin: CAPPlugin, CAPBridgedPlugin, URLSession
     }
 
     static func validateContentUrl(_ value: String, apiOrigin: String?, cdnOrigin: String?) throws -> URL {
-        let (components, host) = try httpsComponents(value, "Content downloads require an approved HTTPS URL")
+        let (components, host) = try httpsComponents(
+            value, "Content downloads require an approved HTTPS URL", portFailure: "Content downloads cannot use a custom port")
         let origin = "https://" + host
         let approved = (origin == canonicalApprovedOrigin(apiOrigin, api: true) && approvedApiHosts.contains(host))
             || (origin == canonicalApprovedOrigin(cdnOrigin, api: false) && host == "kip-assets.parkdex.app")
@@ -392,7 +394,8 @@ public class WifiContentTransportPlugin: CAPPlugin, CAPBridgedPlugin, URLSession
     }
 
     static func validateAccountBackupUrl(_ value: String, apiOrigin: String?, method: String) throws -> URL {
-        let (components, host) = try httpsComponents(value, "Account backup requires an approved HTTPS URL")
+        let (components, host) = try httpsComponents(
+            value, "Account backup requires an approved HTTPS URL", portFailure: "Account backup cannot use a custom port")
         guard let approved = canonicalApprovedOrigin(apiOrigin, api: true), "https://" + host == approved else {
             throw TransportError(message: "The account backup origin is not approved")
         }

@@ -116,7 +116,8 @@ public class NativeIdentityPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticat
         request.httpBody = form.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B").data(using: .utf8)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
-        URLSession(configuration: configuration).dataTask(with: request) { data, response, _ in
+        let session = URLSession(configuration: configuration)
+        session.dataTask(with: request) { data, response, _ in
             guard let http = response as? HTTPURLResponse, http.statusCode == 200, let data = data,
                   let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let idToken = (body["id_token"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !idToken.isEmpty
@@ -126,6 +127,8 @@ public class NativeIdentityPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticat
             }
             call.resolve(["idToken": idToken])
         }.resume()
+        // Releases the session once this one exchange finishes.
+        session.finishTasksAndInvalidate()
     }
 
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
@@ -198,8 +201,9 @@ public class NativeIdentityPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticat
     // MARK: Session
 
     @objc func setSession(_ call: CAPPluginCall) {
+        // Epoch milliseconds; anything past year 33658 is not a real expiry and would overflow Int64.
         guard let token = call.getString("token"), let apiOrigin = call.getString("apiOrigin"),
-              let expiresAt = call.getDouble("expiresAt"), expiresAt.isFinite
+              let expiresAt = call.getDouble("expiresAt"), expiresAt.isFinite, expiresAt > 0, expiresAt < 1e15
         else {
             call.reject("A valid native session is required.")
             return
@@ -222,11 +226,14 @@ public class NativeIdentityPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticat
     @objc func getSession(_ call: CAPPluginCall) {
         storageQueue.async {
             do {
-                guard let session = try self.store.read() else {
+                switch try self.store.read() {
+                case .none:
                     call.resolve()
-                    return
+                case .requiresReauth:
+                    call.resolve(["requiresReauth": true])
+                case .session(let session):
+                    call.resolve(["token": session.token, "expiresAt": Double(session.expiresAt), "apiOrigin": session.apiOrigin])
                 }
-                call.resolve(["token": session.token, "expiresAt": Double(session.expiresAt), "apiOrigin": session.apiOrigin])
             } catch {
                 call.reject("Unable to read the secure native session.")
             }

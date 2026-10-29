@@ -86,6 +86,7 @@ Private repositories on the free plan have about 2,000 Actions minutes a month. 
 | `deploy-staging.yml` | Push to `staging`. Runs checks and migrations, then queues Vercel and the photo Worker. | 4 |
 | `deploy-production.yml` | Push to `main`. Same as staging, against Neon `main`. | 4 |
 | `ios-testflight.yml` | By hand only (Run workflow, or an `ios-testflight/<channel>/<label>` tag). macOS minutes count ten times. | about 150 |
+| `ios-simulator.yml` | By hand only (an `ios-simulator/<label>` tag). Simulator build, a launch on a 6.9-inch simulator, and the TestFlight archive and entitlement signing, without an Apple account. | about 140 |
 
 The PR checks are the most expensive run, so run them locally first and push when they pass rather than pushing to see. Do not add workflows that poll providers or wait for deployments; agents do that locally. Do not re-run workflows to retry a flaky step; diagnose and fix it.
 

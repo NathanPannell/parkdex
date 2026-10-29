@@ -12,7 +12,7 @@ name: iOS TestFlight
 # unsigned and then ad-hoc signed with ios/App/App/App.entitlements (scripts/ios-sign-archive.sh),
 # because export keeps only the entitlements of the archived signature. The export signs it with the
 # team's cloud-managed distribution certificate through the App Store Connect API key; the IPA's
-# entitlements are checked, then the same export uploads it. Without the four secrets the run stops
+# entitlements are checked, then a second export uploads it. Without the four secrets the run stops
 # with a notice. ios-simulator.yml rehearses the archive and signing without an Apple account.
 on:
   workflow_dispatch:

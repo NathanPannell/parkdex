@@ -130,7 +130,7 @@ These cannot run on a simulator or in CI:
 - Deleting an Apple account: the receipt completes, and Settings > Apple ID > Sign-In & Security > Sign in with Apple no longer lists Parkdex (only with the server key from step 4).
 - The saved session after a restart, and that deleting and reinstalling the app starts signed out.
 - Friend links and account email links opening the app (universal links need the signed app and the live `apple-app-site-association`).
-- Content downloads and photo backup over Wi-Fi and mobile data, and detailed map chunks waiting for Wi-Fi.
+- Content downloads and photo backup over Wi-Fi and mobile data, and detailed map chunks being refused on mobile data (iOS refuses them at once rather than waiting for Wi-Fi as Android does).
 - Location permission and planting a flag inside a park; the camera for park photos and friend codes.
 
 ## App Review
