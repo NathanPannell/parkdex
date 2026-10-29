@@ -279,7 +279,7 @@ jobs:
           files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')"
           count="$(printf '%s\n' "$files" | grep -c . || true)"
           # The API lists at most 3,000 files; build when the list may be cut short.
-          if [ "$count" -ge 3000 ] || printf '%s\n' "$files" | grep -qE '^(ios/|package(-lock)?\.json$|capacitor\.config\.ts$|scripts/cap-sync\.mjs$|scripts/check-content-package\.mjs$|\.github/workflows/(pr-checks|ios-testflight)\.yml$)'; then
+          if [ "$count" -ge 3000 ] || printf '%s\n' "$files" | grep -qE '^(ios/|package(-lock)?\.json$|capacitor\.config\.ts$|scripts/cap-sync\.mjs$|scripts/check-content-package\.mjs$|scripts/ios-[a-z-]+\.sh$|\.github/workflows/(pr-checks|ios-testflight|ios-simulator)\.yml$)'; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"

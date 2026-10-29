@@ -35,7 +35,8 @@
     "format": "prettier --write \"{src,worker,api,cloudflare,tools,operator/src,operator/server,operator/scripts}/**/*.{ts,tsx,mjs,js,css}\" \"scripts/*.{mjs,ts}\" \"*.{ts,mjs}\" \"operator/*.ts\" \"e2e/**/*.ts\"",
     "format:check": "prettier --check \"{src,worker,api,cloudflare,tools,operator/src,operator/server,operator/scripts}/**/*.{ts,tsx,mjs,js,css}\" \"scripts/*.{mjs,ts}\" \"*.{ts,mjs}\" \"operator/*.ts\" \"e2e/**/*.ts\"",
     "lint": "eslint --max-warnings=0 .",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "ios:screenshots": "playwright test -c playwright.screenshots.config.ts"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "8.1.1",

@@ -36,6 +36,7 @@ vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: () => mocks.native, getPlatform: () => "android" },
 }));
 vi.mock("../content/transport", () => ({
+  hasNativeContentTransport: () => true,
   getContentConnectivity: mocks.getConnectivity,
   subscribeContentConnectivity: mocks.subscribe,
   nativeAccountBackupRequest: mocks.accountRequest,

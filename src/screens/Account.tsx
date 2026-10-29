@@ -6,7 +6,13 @@ import { Kip } from "../components/Kip";
 import { useAuth, type BackupPhase } from "../lib/accounts/AuthProvider";
 import { backupHeadline } from "../lib/accounts/backupPresentation";
 import { isValidGoogleWebClientId } from "../lib/accounts/authClient";
-import { isAndroidNativeIdentityAvailable, requestNativeGoogleIdToken } from "../lib/accounts/nativeIdentity";
+import {
+  isAppleSignInAvailable,
+  isNativeIdentityAvailable,
+  requestNativeAppleCredential,
+  requestNativeGoogleIdToken,
+  type AppleCredential,
+} from "../lib/accounts/nativeIdentity";
 import { useStore } from "../lib/store";
 
 const GOOGLE_SCRIPT = "https://accounts.google.com/gsi/client";
@@ -152,22 +158,29 @@ export function Account({ onBack }: { onBack: () => void }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletionReceipt, setDeletionReceipt] = useState<{ receiptId: string; status: "complete" | "pending" } | null>(null);
   const [googleDeleteResetKey] = useState(0);
+  const [appleLinkStep, setAppleLinkStep] = useState<"closed" | "verify" | "link">("closed");
+  const [appleLinkPassword, setAppleLinkPassword] = useState("");
 
   const account = auth.account;
   const signedIn = auth.phase === "authenticated" && !!account;
   const offlineAccount = auth.phase === "offline-account";
   const accountId = account?.id;
   const nativeClientId = auth.config?.googleWebClientId ?? null;
-  const nativeGoogleAvailable = !!auth.config?.googleNativeEnabled && isAndroidNativeIdentityAvailable() && isValidGoogleWebClientId(nativeClientId);
+  const nativeGoogleAvailable = !!auth.config?.googleNativeEnabled && isNativeIdentityAvailable() && isValidGoogleWebClientId(nativeClientId);
   const webGoogleAvailable = !!auth.googleWebClientId;
   const googleAvailable = auth.isNative ? nativeGoogleAvailable : webGoogleAvailable;
-  const emailAvailable = !!auth.config?.emailEnabled && (!auth.isNative || isAndroidNativeIdentityAvailable());
+  const emailAvailable = !!auth.config?.emailEnabled && (!auth.isNative || isNativeIdentityAvailable());
+  // Sign in with Apple appears wherever Google does in the iOS app (App Store guideline 4.8).
+  const appleAvailable = !!auth.config?.appleEnabled && isAppleSignInAvailable();
+  const backupProviders = appleAvailable ? (googleAvailable ? "Apple or Google" : "Apple") : "Google";
   const canRequestEmail = !!auth.config?.emailDeliveryEnabled;
   // A guest account lives on this phone until Google backs it up; it has no email or password.
   const guest = !!account?.guest;
   const hasPassword = !!account?.providers.includes("email");
   const hasGoogle = !!account?.providers.includes("google");
   const canGoogleReauth = hasGoogle && googleAvailable;
+  const hasApple = !!account?.providers.includes("apple");
+  const canAppleReauth = hasApple && appleAvailable;
   const canPasswordReauth = hasPassword;
   const backupTimestamp = formatBackupTimestamp(auth.backup.updatedAt);
   const lastSyncedTimestamp = formatBackupTimestamp(auth.backup.lastSyncedAt);
@@ -176,6 +189,8 @@ export function Account({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     setGoogleLinkStep("closed");
     setGoogleLinkPassword("");
+    setAppleLinkStep("closed");
+    setAppleLinkPassword("");
     setDeleteStep("closed");
     setDeletePassword("");
     setDeletePhrase("");
@@ -279,6 +294,96 @@ export function Account({ onBack }: { onBack: () => void }) {
   );
 
   const onDeleteGoogleError = useCallback((message: string) => setDeleteError(message), []);
+
+  const startApple = async (purpose: "sign_in" | "reauth" | "link", onCredential: (credential: AppleCredential, nonce: string) => Promise<void>) => {
+    if (!appleAvailable) throw new Error("Sign in with Apple is not available in this app.");
+    const challenge = await auth.appleChallenge(purpose);
+    if (expiresAtMs(challenge.expiresAt) <= Date.now()) throw new Error("Sign in with Apple expired. Try again.");
+    const credential = await requestNativeAppleCredential({ nonce: challenge.nonce });
+    await onCredential(credential, challenge.nonce);
+  };
+
+  const onAppleCredential = useCallback(
+    async (credential: AppleCredential, nonce: string) => {
+      await auth.signInApple(credential, nonce);
+    },
+    [auth.signInApple],
+  );
+
+  const onLinkAppleCredential = useCallback(
+    async (credential: AppleCredential, nonce: string) => {
+      await auth.linkApple(credential, nonce);
+      setAppleLinkStep("closed");
+      setAppleLinkPassword("");
+      setFormError(null);
+    },
+    [auth.linkApple],
+  );
+
+  // Linking Apple needs a fresh verification; a Google-only account verifies with Google.
+  const onAppleLinkGoogleReauth = useCallback(
+    async (idToken: string, nonce: string) => {
+      await auth.reauthGoogle(idToken, nonce);
+      setAppleLinkStep("link");
+    },
+    [auth.reauthGoogle],
+  );
+
+  const onDeleteReauthApple = useCallback(
+    async (credential: AppleCredential, nonce: string) => {
+      await auth.reauthApple(credential, nonce);
+      setDeleteVerifiedAt(Date.now());
+      setDeleteStep("verified");
+      setDeleteError(null);
+    },
+    [auth.reauthApple],
+  );
+
+  const submitAppleLinkReauth = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setFormError(null);
+    try {
+      await auth.reauthPassword(appleLinkPassword);
+      setAppleLinkPassword("");
+      setAppleLinkStep("link");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Account verification could not be completed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Apple's button style: black, the Apple logo and Apple's own wording, as large as the Google button. */
+  const renderAppleButton = (
+    purpose: "sign_in" | "reauth" | "link",
+    disabled: boolean,
+    onCredential: (credential: AppleCredential, nonce: string) => Promise<void>,
+    onError?: (message: string) => void,
+  ) => {
+    if (!appleAvailable) return null;
+    const label = purpose === "sign_in" ? "Sign in with Apple" : "Continue with Apple";
+    return (
+      <button
+        className="btn btn--block account-apple"
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        onClick={() =>
+          void (onError
+            ? startApple(purpose, onCredential).catch((error: unknown) =>
+                onError(error instanceof Error ? error.message : "Sign in with Apple could not be completed."),
+              )
+            : run(() => startApple(purpose, onCredential)))
+        }
+      >
+        <span className="account-apple__logo" aria-hidden="true">
+          {"\uF8FF"}
+        </span>
+        {label}
+      </button>
+    );
+  };
 
   const submitDeleteReauth = async (event: FormEvent) => {
     event.preventDefault();
@@ -448,12 +553,10 @@ export function Account({ onBack }: { onBack: () => void }) {
               <section className="account-card card account-guest" aria-labelledby="account-guest-title">
                 <span className="eyebrow">Guest account</span>
                 <h2 id="account-guest-title">Saved on this phone only</h2>
-                <p>Back it up with Google to keep your @handle, flag and points if you lose or change this phone.</p>
-                {googleAvailable ? (
-                  renderGoogleButton("link", googleResetKey, busy, onLinkGoogleCredential, onGoogleError)
-                ) : (
-                  <p className="account-help">Google backup isn't available in this build.</p>
-                )}
+                <p>Back it up with {backupProviders} to keep your @handle, flag and points if you lose or change this phone.</p>
+                {renderAppleButton("link", busy, onLinkAppleCredential)}
+                {googleAvailable && renderGoogleButton("link", googleResetKey, busy, onLinkGoogleCredential, onGoogleError)}
+                {!googleAvailable && !appleAvailable && <p className="account-help">Google backup isn't available in this build.</p>}
                 <button className="account-text-button" disabled={busy} onClick={() => void run(auth.signOut)}>
                   Already have a Parkdex account? Sign in instead
                 </button>
@@ -509,12 +612,12 @@ export function Account({ onBack }: { onBack: () => void }) {
               </div>
               <p className="account-help">
                 {guest
-                  ? "Your @handle, flag and points are saved to this guest account. Only this phone can open it until you back it up with Google."
+                  ? `Your @handle, flag and points are saved to this guest account. Only this phone can open it until you back it up with ${backupProviders}.`
                   : "Your @handle, flag and points are saved to your Parkdex account, so they follow you to any phone. Photos and parks you collected before the flag game are kept here too."}
               </p>
             </section>
 
-            {!guest && (!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable)) && (
+            {!guest && (!account.emailVerified || (hasPassword && !hasGoogle && googleAvailable) || (!hasApple && appleAvailable)) && (
               <section className="account-card card account-section" aria-labelledby="account-signin-title">
                 <span className="eyebrow" id="account-signin-title">
                   Sign-in &amp; security
@@ -585,6 +688,68 @@ export function Account({ onBack }: { onBack: () => void }) {
                     )}
                   </div>
                 )}
+                {!hasApple && appleAvailable && (hasPassword || canGoogleReauth) && (
+                  <div className="account-google-link">
+                    {appleLinkStep === "closed" ? (
+                      <div className="account-profile__verify">
+                        <p>Add Sign in with Apple as another way to sign in.</p>
+                        <button
+                          className="btn btn--paper btn--sm"
+                          disabled={busy}
+                          onClick={() => {
+                            setFormError(null);
+                            setAppleLinkStep("verify");
+                          }}
+                        >
+                          Link Apple
+                        </button>
+                      </div>
+                    ) : appleLinkStep === "verify" ? (
+                      hasPassword ? (
+                        <form className="account-form" onSubmit={(event) => void submitAppleLinkReauth(event)}>
+                          <p>Verify your password before linking Apple to this account.</p>
+                          <label className="fb-field">
+                            <span className="fb-label">Current password</span>
+                            <input
+                              className="fb-input"
+                              type="password"
+                              autoComplete="current-password"
+                              minLength={12}
+                              maxLength={128}
+                              required
+                              value={appleLinkPassword}
+                              onChange={(event) => setAppleLinkPassword(event.target.value)}
+                            />
+                          </label>
+                          <div className="account-delete-panel__actions">
+                            <button className="btn btn--paper btn--sm" type="button" onClick={() => setAppleLinkStep("closed")}>
+                              Cancel
+                            </button>
+                            <button className="btn btn--sun btn--sm" disabled={busy}>
+                              {busy ? "Checking…" : "Verify and continue"}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div>
+                          <p>Verify with Google before linking Apple to this account.</p>
+                          {renderGoogleButton("reauth", googleResetKey, busy, onAppleLinkGoogleReauth, onGoogleError)}
+                          <button className="account-text-button" onClick={() => setAppleLinkStep("closed")}>
+                            Cancel linking
+                          </button>
+                        </div>
+                      )
+                    ) : (
+                      <div>
+                        <p>Continue with Apple to link it to this account.</p>
+                        {renderAppleButton("link", busy, onLinkAppleCredential)}
+                        <button className="account-text-button" onClick={() => setAppleLinkStep("closed")}>
+                          Cancel linking
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
             )}
 
@@ -594,7 +759,7 @@ export function Account({ onBack }: { onBack: () => void }) {
               </button>
               <p>
                 {guest
-                  ? "A guest account can't be opened again once you leave it. Back it up with Google first to keep it."
+                  ? `A guest account can't be opened again once you leave it. Back it up with ${backupProviders} first to keep it.`
                   : "Signing out hides this account’s saved progress on this phone until you sign in again. Your flags keep flying."}
               </p>
             </section>
@@ -651,7 +816,10 @@ export function Account({ onBack }: { onBack: () => void }) {
                     {renderGoogleButton("reauth", googleDeleteResetKey, busy, onDeleteReauthCredential, onDeleteGoogleError)}
                   </div>
                 )}
-                {!canPasswordReauth && !canGoogleReauth && (
+                {canAppleReauth && (
+                  <div className="account-delete-panel__google">{renderAppleButton("reauth", busy, onDeleteReauthApple, onDeleteGoogleError)}</div>
+                )}
+                {!canPasswordReauth && !canGoogleReauth && !canAppleReauth && (
                   <p className="account-help">
                     No reauthentication method is available in this environment. Reconnect or use the provider linked to this account.
                   </p>
@@ -777,13 +945,14 @@ export function Account({ onBack }: { onBack: () => void }) {
                         : "Sign in to plant your flag, keep your points and climb the leaderboard."}
                     </p>
                   </div>
+                  {renderAppleButton("sign_in", busy, onAppleCredential)}
                   {googleAvailable && renderGoogleButton("sign_in", googleResetKey, busy, onGoogleCredential, onGoogleError)}
-                  {googleAvailable && emailAvailable && (
+                  {(googleAvailable || appleAvailable) && emailAvailable && (
                     <div className="account-or">
                       <span>or use email</span>
                     </div>
                   )}
-                  {auth.config && !googleAvailable && <p className="account-help">Google sign-in is not configured for this app yet.</p>}
+                  {auth.config && !googleAvailable && !appleAvailable && <p className="account-help">Google sign-in is not configured for this app yet.</p>}
                   <form className="account-form" onSubmit={(event) => void handleAuthSubmit(event)}>
                     {mode === "sign_up" && (
                       <label className="fb-field">

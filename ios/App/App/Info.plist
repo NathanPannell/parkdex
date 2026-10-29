@@ -64,7 +64,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Parkdex uses the camera to take the photo of a park you found and to scan a friend's Parkdex code.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Parkdex never reads your photo library. iOS asks only if you choose a photo from it.</string>
+	<string>Parkdex takes park photos with the camera and never browses your photo library. If you ever pick a photo, Parkdex uses only that photo, as the picture of a park you found.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Parkdex saves a badge image to your photos when you choose Save Image from the share sheet.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
