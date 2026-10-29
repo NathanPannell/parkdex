@@ -771,23 +771,26 @@ async function keepAppleRefreshToken(
  * down, or the key not being configured yet, never blocks deletion; the outcome is recorded instead.
  */
 async function revokeAppleTokens(accountId: string, env: AuthEnvironment, store: AccountAuthStore, dependencies: AuthDependencies): Promise<void> {
-  let ciphertexts: string[];
+  let tokens: Array<{ subject: string; ciphertext: string }>;
   try {
-    ciphertexts = await store.appleRefreshTokens(accountId);
+    tokens = await store.appleRefreshTokens(accountId);
   } catch {
     await store.recordSecurityEvent("apple_revoke", null, "lookup_failed").catch(() => undefined);
     return;
   }
-  if (!ciphertexts.length) return;
-  if (!appleRevocationConfigured(env)) {
-    await store.recordSecurityEvent("apple_revoke", null, "not_configured").catch(() => undefined);
-    return;
-  }
+  if (!tokens.length) return;
+  const configured = appleRevocationConfigured(env);
   const now = nowValue(dependencies);
-  for (const ciphertext of ciphertexts) {
+  for (const { subject, ciphertext } of tokens) {
+    // The scope is the same keyed hash sign-in events use, so an operator can match a failure to its Apple ID.
+    const scopeHash = await eventScope(env, "apple_subject", subject).catch(() => null);
+    if (!configured) {
+      await store.recordSecurityEvent("apple_revoke", scopeHash, "not_configured").catch(() => undefined);
+      continue;
+    }
     const token = decryptAppleRefreshToken(ciphertext, env);
     const revoked = token ? await revokeAppleRefreshToken(token, env, now, dependencies.fetch) : false;
-    await store.recordSecurityEvent("apple_revoke", null, token ? (revoked ? "revoked" : "failed") : "unreadable").catch(() => undefined);
+    await store.recordSecurityEvent("apple_revoke", scopeHash, token ? (revoked ? "revoked" : "failed") : "unreadable").catch(() => undefined);
   }
 }
 
@@ -1251,7 +1254,9 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     const identityToken = stringField(body.identityToken, 12 * 1024, "Apple identity token");
     const nonce = stringField(body.nonce, 128, "nonce");
     if (!TOKEN_PATTERN.test(nonce)) throw new HttpError(400, "invalid_request", "Invalid Sign in with Apple challenge.");
-    const authorizationCode = body.authorizationCode === undefined ? null : stringField(body.authorizationCode, 1024, "Apple authorization code");
+    // Apple's credential has no code in rare cases; a bridge may then send null.
+    const authorizationCode =
+      body.authorizationCode === undefined || body.authorizationCode === null ? null : stringField(body.authorizationCode, 1024, "Apple authorization code");
     const displayName = appleDisplayName(body.givenName, body.familyName);
     await reserveIpLimit(env, store, request, "apple_callback_ip", 50, 15 * 60 * 1000);
     const nonceScope = sha256(nonce);

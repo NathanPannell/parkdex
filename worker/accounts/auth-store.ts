@@ -143,7 +143,7 @@ export interface AccountAuthStore {
   /** Keeps the encrypted refresh token that revokes this Apple identity when the account is deleted. */
   saveAppleRefreshToken(input: { subject: string; accountId: string; ciphertext: string; now: string }): Promise<boolean>;
   /** Encrypted refresh tokens of the account's Apple identities, read before its rows are deleted. */
-  appleRefreshTokens(accountId: string): Promise<string[]>;
+  appleRefreshTokens(accountId: string): Promise<Array<{ subject: string; ciphertext: string }>>;
   confirmPasswordReauthentication(accountId: string, sessionId: string, tokenHash: string, now: string): Promise<boolean>;
   beginDeletion(accountId: string, sessionId: string, tokenHash: string, receiptId: string, now: string): Promise<string | null>;
   findDeletionReceipt(receiptId: string): Promise<DeletionReceipt | null>;
@@ -257,7 +257,7 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             SELECT pg_advisory_xact_lock(hashtextextended('kip-${provider}-sub:' || $1, 0))
           ),
           email_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || COALESCE($2::text, ''), 0)) FROM subject_lock
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2::text, 0)) FROM subject_lock
           ),
           existing_identity AS MATERIALIZED (
             SELECT a.id, a.deletion_state, ${ACCOUNT_COLUMNS}
@@ -384,7 +384,7 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
             SELECT pg_advisory_xact_lock(hashtextextended('kip-${provider}-sub:' || $1, 0))
           ),
           email_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || COALESCE($2::text, ''), 0)) FROM subject_lock
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2::text, 0)) FROM subject_lock
           ),
           target AS MATERIALIZED (
             SELECT a.id, a.deletion_state, (a.normalized_email IS NULL) AS guest FROM kip_account.accounts a
@@ -806,11 +806,13 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
     async appleRefreshTokens(accountId) {
       const rows = await query(
         `
-        SELECT refresh_token_ciphertext FROM kip_account.apple_identities
+        SELECT subject, refresh_token_ciphertext FROM kip_account.apple_identities
         WHERE account_id = $1::uuid AND refresh_token_ciphertext IS NOT NULL`,
         [accountId],
       );
-      return rows.map((row) => stringValue(row.refresh_token_ciphertext)).filter(Boolean);
+      return rows
+        .map((row) => ({ subject: stringValue(row.subject), ciphertext: stringValue(row.refresh_token_ciphertext) }))
+        .filter((row) => row.subject && row.ciphertext);
     },
 
     async confirmPasswordReauthentication(accountId, sessionId, tokenHash, now) {

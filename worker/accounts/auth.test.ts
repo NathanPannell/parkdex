@@ -291,8 +291,10 @@ class MemoryAuthStore implements AccountAuthStore {
     return true;
   }
 
-  async appleRefreshTokens(accountId: string): Promise<string[]> {
-    return [...this.appleSubjects].filter(([, owner]) => owner === accountId).flatMap(([subject]) => this.appleTokens.get(subject) ?? []);
+  async appleRefreshTokens(accountId: string): Promise<Array<{ subject: string; ciphertext: string }>> {
+    return [...this.appleSubjects]
+      .filter(([subject, owner]) => owner === accountId && this.appleTokens.has(subject))
+      .map(([subject]) => ({ subject, ciphertext: this.appleTokens.get(subject)! }));
   }
 
   private async identitySignIn(provider: IdentityProvider, input: GoogleSignInInput): Promise<GoogleSignInResult> {
@@ -1466,8 +1468,26 @@ test("with the Sign in with Apple key, codes become encrypted refresh tokens tha
   assert.ok(
     verify("sha256", Buffer.from(`${header}.${payload}`), { key: APPLE_KEY.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")),
   );
-  assert.ok(r.store.events.some((event) => event.eventType === "apple_revoke" && event.outcome === "revoked"));
+  const revokedEvent = r.store.events.find((event) => event.eventType === "apple_revoke" && event.outcome === "revoked");
+  assert.match(revokedEvent?.scopeHash ?? "", /^[0-9a-f]{64}$/u, "the revocation event names the Apple identity by its keyed hash");
   assert.equal(await r.store.findAccountById(options.accountId), null);
+});
+
+test("a missing authorization code, sent as null, still signs in", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", ...APPLE_KEY_ENV });
+  const calls = fakeAppleEndpoints(r);
+  const { nonce } = await responseJson(await call(r, "/api/auth/apple/challenge", { purpose: "sign_in" }, IOS_APP_REQUEST));
+  const token = `apple-null-code-${randomUUID()}`;
+  r.appleTokens.set(token, { sub: "apple-null-code", email: "null@privaterelay.appleid.com", isPrivateEmail: true, nonce });
+  const response = await call(
+    r,
+    "/api/auth/apple/native",
+    { identityToken: token, nonce, authorizationCode: null, givenName: null, familyName: null },
+    IOS_APP_REQUEST,
+  );
+  assert.equal(response.status, 200);
+  assert.equal((await responseJson(response)).account.displayName, null);
+  assert.equal(calls.length, 0);
 });
 
 test("Apple being unreachable never blocks sign-in", async () => {

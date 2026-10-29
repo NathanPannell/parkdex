@@ -221,10 +221,14 @@ try {
 
   assert.equal(await store.saveAppleRefreshToken({ subject: appleInput.subject, accountId: appleAccountId, ciphertext: "v1.iv.ct.tag", now: now() }), true);
   assert.equal(await store.saveAppleRefreshToken({ subject: appleInput.subject, accountId: randomUUID(), ciphertext: "v1.x.y.z", now: now() }), false);
-  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), ["v1.iv.ct.tag"]);
+  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), [{ subject: appleInput.subject, ciphertext: "v1.iv.ct.tag" }]);
   const appleReceipt = randomUUID();
   assert.equal(await store.beginDeletion(appleAccountId, appleSession.id, appleSession.tokenHash, appleReceipt, now()), appleReceipt);
-  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), ["v1.iv.ct.tag"], "tokens stay readable while the deletion is pending");
+  assert.deepEqual(
+    await store.appleRefreshTokens(appleAccountId),
+    [{ subject: appleInput.subject, ciphertext: "v1.iv.ct.tag" }],
+    "tokens stay readable while the deletion is pending",
+  );
   assert.equal(await store.completeDeletion(appleReceipt, now()), true);
   assert.deepEqual(await store.appleRefreshTokens(appleAccountId), []);
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM kip_account.apple_identities WHERE subject = $1", [appleInput.subject])).rows[0].n, 0);
