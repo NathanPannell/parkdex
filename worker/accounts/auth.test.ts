@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, verify } from "node:crypto";
 import { test } from "node:test";
 import {
   handleAuthRequest,
@@ -20,13 +20,18 @@ import type {
   GoogleLinkResult,
   GoogleSignInInput,
   GoogleSignInResult,
+  IdentityLinkInput,
+  IdentityProvider,
+  IdentityReauthInput,
   SessionInsert,
   StoredSession,
 } from "./auth-store.ts";
+import { AppleTokenError, decryptAppleRefreshToken, type AppleIdentityClaims } from "./apple.ts";
 
 const API_ORIGIN = "https://kip.example.test";
 const GOOGLE_CLIENT_ID = "123456789-test.apps.googleusercontent.com";
 const GOOGLE_NATIVE_CLIENT_ID = "987654321-native.apps.googleusercontent.com";
+const GOOGLE_IOS_CLIENT_ID = "555555555-ios.apps.googleusercontent.com";
 const NATIVE_APP_ORIGIN = "https://localhost";
 const NOW = Date.parse("2026-09-27T12:00:00.000Z");
 const AUTH_SECRET = "consumer-session-secret-long-enough-for-tests";
@@ -57,6 +62,9 @@ class MemoryAuthStore implements AccountAuthStore {
   readonly actionTokens = new Map<string, { accountId: string; purpose: "verification" | "password_reset"; expiresAt: string; usedAt: string | null }>();
   readonly challenges = new Map<string, { input: GoogleChallengeInput; consumedAt: string | null }>();
   readonly googleSubjects = new Map<string, string>();
+  readonly appleSubjects = new Map<string, string>();
+  /** Encrypted Apple refresh tokens by subject. */
+  readonly appleTokens = new Map<string, string>();
   readonly receipts = new Map<string, DeletionReceipt>();
   readonly events: Array<{ eventType: string; scopeHash: string | null; outcome: string }> = [];
   readonly rates = new Map<string, number>();
@@ -241,6 +249,7 @@ class MemoryAuthStore implements AccountAuthStore {
     if (!challenge || challenge.consumedAt || Date.parse(challenge.input.expiresAt) <= Date.parse(now)) return null;
     challenge.consumedAt = now;
     return {
+      provider: challenge.input.provider ?? "google",
       purpose: challenge.input.purpose,
       transport: challenge.input.transport,
       accountId: challenge.input.accountId,
@@ -248,25 +257,66 @@ class MemoryAuthStore implements AccountAuthStore {
     };
   }
 
-  async completeGoogleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult> {
+  subjects(provider: IdentityProvider): Map<string, string> {
+    return provider === "apple" ? this.appleSubjects : this.googleSubjects;
+  }
+
+  completeGoogleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult> {
+    return this.identitySignIn("google", input);
+  }
+
+  completeAppleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult> {
+    return this.identitySignIn("apple", input);
+  }
+
+  completeGoogleReauthentication(input: IdentityReauthInput): Promise<boolean> {
+    return this.identityReauthentication("google", input);
+  }
+
+  completeAppleReauthentication(input: IdentityReauthInput): Promise<boolean> {
+    return this.identityReauthentication("apple", input);
+  }
+
+  completeGoogleLink(input: IdentityLinkInput): Promise<GoogleLinkResult> {
+    return this.identityLink("google", input);
+  }
+
+  completeAppleLink(input: IdentityLinkInput): Promise<GoogleLinkResult> {
+    return this.identityLink("apple", input);
+  }
+
+  async saveAppleRefreshToken(input: { subject: string; accountId: string; ciphertext: string }): Promise<boolean> {
+    if (this.appleSubjects.get(input.subject) !== input.accountId) return false;
+    this.appleTokens.set(input.subject, input.ciphertext);
+    return true;
+  }
+
+  async appleRefreshTokens(accountId: string): Promise<Array<{ subject: string; ciphertext: string }>> {
+    return [...this.appleSubjects]
+      .filter(([subject, owner]) => owner === accountId && this.appleTokens.has(subject))
+      .map(([subject]) => ({ subject, ciphertext: this.appleTokens.get(subject)! }));
+  }
+
+  private async identitySignIn(provider: IdentityProvider, input: GoogleSignInInput): Promise<GoogleSignInResult> {
     let account: AccountCredentials | undefined;
-    const linkedId = this.googleSubjects.get(input.subject);
+    const linkedId = this.subjects(provider).get(input.subject);
     if (linkedId) account = this.accounts.get(linkedId);
     if (account && account.deletionState !== "active") return { status: "account_unavailable" };
     if (!account) {
-      const emailOwner = await this.findAccountByEmail(input.email);
+      const emailOwner = input.email ? await this.findAccountByEmail(input.email) : null;
       if (emailOwner) return { status: "email_conflict" };
+      if (!input.email) return { status: "email_required" };
       account = {
         id: input.accountId,
         email: input.email,
         emailVerified: true,
         displayName: input.displayName,
-        providers: ["google"],
+        providers: [provider],
         passwordHash: null,
         deletionState: "active",
       };
       this.accounts.set(account.id, account);
-      this.googleSubjects.set(input.subject, account.id);
+      this.subjects(provider).set(input.subject, account.id);
     }
     const stored = this.addSession(account, input.session);
     return {
@@ -278,22 +328,15 @@ class MemoryAuthStore implements AccountAuthStore {
     };
   }
 
-  async completeGoogleReauthentication(input: { subject: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<boolean> {
-    if (this.googleSubjects.get(input.subject) !== input.accountId) return false;
+  private async identityReauthentication(provider: IdentityProvider, input: IdentityReauthInput): Promise<boolean> {
+    if (this.subjects(provider).get(input.subject) !== input.accountId) return false;
     const session = this.sessions.get(input.sessionId);
     if (!session || session.tokenHash !== input.tokenHash || session.id !== input.accountId || this.revokedSessions.has(input.sessionId)) return false;
     session.reauthenticatedAt = input.now;
     return true;
   }
 
-  async completeGoogleLink(input: {
-    subject: string;
-    email: string;
-    accountId: string;
-    sessionId: string;
-    tokenHash: string;
-    now: string;
-  }): Promise<GoogleLinkResult> {
+  private async identityLink(provider: IdentityProvider, input: IdentityLinkInput): Promise<GoogleLinkResult> {
     const session = this.sessions.get(input.sessionId);
     const account = this.accounts.get(input.accountId);
     if (
@@ -306,13 +349,14 @@ class MemoryAuthStore implements AccountAuthStore {
       (account.email !== "" && (!session.reauthenticatedAt || Date.parse(session.reauthenticatedAt) < Date.parse(input.now) - 5 * 60 * 1000))
     )
       return "retry";
-    const subjectOwner = this.googleSubjects.get(input.subject);
+    const subjectOwner = this.subjects(provider).get(input.subject);
     if (subjectOwner) return subjectOwner === input.accountId ? "ok" : "subject_conflict";
-    const emailOwner = await this.findAccountByEmail(input.email);
+    const emailOwner = input.email ? await this.findAccountByEmail(input.email) : null;
     if (emailOwner && emailOwner.id !== input.accountId) return "email_conflict";
-    this.googleSubjects.set(input.subject, input.accountId);
-    account.providers = [...new Set([...account.providers, "google" as const])];
-    if (account.email === "") {
+    if (account.email === "" && !input.email) return "email_required";
+    this.subjects(provider).set(input.subject, input.accountId);
+    account.providers = [...new Set([...account.providers, provider])];
+    if (account.email === "" && input.email) {
       account.email = input.email;
       account.emailVerified = true;
       for (const stored of this.sessions.values()) {
@@ -357,6 +401,11 @@ class MemoryAuthStore implements AccountAuthStore {
     if (!receipt) return false;
     for (const session of [...this.sessions.values()]) if (session.id === receipt.accountId) this.sessions.delete(session.sessionId);
     for (const [subject, accountId] of this.googleSubjects) if (accountId === receipt.accountId) this.googleSubjects.delete(subject);
+    for (const [subject, accountId] of this.appleSubjects) {
+      if (accountId !== receipt.accountId) continue;
+      this.appleSubjects.delete(subject);
+      this.appleTokens.delete(subject);
+    }
     for (const [tokenHash, token] of this.actionTokens) if (token.accountId === receipt.accountId) this.actionTokens.delete(tokenHash);
     this.accounts.delete(receipt.accountId);
     this.receipts.set(receiptId, { ...receipt, status: "complete" });
@@ -421,6 +470,9 @@ interface TestRig {
   emails: Array<{ to: string; subject: string; html: string; text: string }>;
   googleTokens: Map<string, GoogleIdentityClaims>;
   googleAudiences: Array<readonly string[]>;
+  /** Identity tokens the fake Apple verifier accepts, with the claims it returns. */
+  appleTokens: Map<string, AppleIdentityClaims>;
+  appleAudiences: string[];
 }
 
 function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
@@ -428,6 +480,8 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
   const emails: TestRig["emails"] = [];
   const googleTokens = new Map<string, GoogleIdentityClaims>();
   const googleAudiences: Array<readonly string[]> = [];
+  const appleTokens = new Map<string, AppleIdentityClaims>();
+  const appleAudiences: string[] = [];
   const env: AuthEnvironment = {
     DATABASE_URL: "memory://auth-test",
     AUTH_SESSION_SECRET: AUTH_SECRET,
@@ -449,6 +503,12 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
       if (!claims) throw new Error("unknown test token");
       return claims;
     },
+    verifyAppleIdentityToken: async (token, options) => {
+      appleAudiences.push(options.audience);
+      const claims = appleTokens.get(token);
+      if (!claims || claims.nonce !== options.nonce) throw new AppleTokenError();
+      return claims;
+    },
     sendEmail: async (message) => {
       emails.push(message);
     },
@@ -456,7 +516,7 @@ function rig(overrides: Partial<AuthEnvironment> = {}): TestRig {
       void promise;
     },
   };
-  return { store, env, dependencies, emails, googleTokens, googleAudiences };
+  return { store, env, dependencies, emails, googleTokens, googleAudiences, appleTokens, appleAudiences };
 }
 
 function request(
@@ -882,6 +942,7 @@ async function configFor(r: TestRig, options: Parameters<typeof request>[2]): Pr
 }
 
 const NATIVE_APP_REQUEST = { native: true, origin: NATIVE_APP_ORIGIN } as const;
+const IOS_APP_REQUEST = { native: true, origin: "capacitor://localhost" } as const;
 
 test("auth config hands installed apps the native Google client and web pages the web client", async () => {
   const withoutKey = rig();
@@ -900,8 +961,19 @@ test("auth config hands installed apps the native Google client and web pages th
   assert.equal(native.googleNativeEnabled, true);
   assert.equal(native.googleEnabled, true);
   assert.equal(native.capabilities.native.google, true);
-  const iosShell = await configFor(withKey, { native: true, origin: "capacitor://localhost" });
-  assert.equal(iosShell.googleWebClientId, GOOGLE_NATIVE_CLIENT_ID);
+  // The iOS app signs in with the iOS client, never the Android one; without it iOS shows no Google button.
+  const iosShell = await configFor(withKey, IOS_APP_REQUEST);
+  assert.equal(iosShell.googleWebClientId, null);
+  assert.equal(iosShell.googleNativeEnabled, false);
+  assert.equal(iosShell.appleEnabled, true);
+  assert.equal(iosShell.capabilities.native.apple, true);
+  const withIos = await configFor(rig({ GOOGLE_NATIVE_CLIENT_ID, GOOGLE_IOS_CLIENT_ID }), IOS_APP_REQUEST);
+  assert.equal(withIos.googleWebClientId, GOOGLE_IOS_CLIENT_ID);
+  assert.equal(withIos.googleNativeEnabled, true);
+  // Android and web requests never see the iOS client or Sign in with Apple.
+  assert.equal(native.appleEnabled, false);
+  assert.equal(web.appleEnabled, false);
+  assert.equal((await configFor(rig({ GOOGLE_IOS_CLIENT_ID }), NATIVE_APP_REQUEST)).googleWebClientId, GOOGLE_CLIENT_ID);
 
   // The transport header alone, or the WebView origin alone, is not a native app request.
   assert.equal((await configFor(withKey, { native: true })).googleWebClientId, GOOGLE_CLIENT_ID);
@@ -1170,4 +1242,265 @@ test("an abandoned guest whose private data couldn't be deleted is resumed on th
   r.dependencies.deleteAccountData = async () => ({ complete: true });
   assert.deepEqual(await purgeAbandonedGuests(r.env, r.dependencies), { deleted: 1, pending: 0 });
   assert.equal(await r.store.findAccountById(guest.account.id), null);
+});
+
+async function appleCall(
+  r: TestRig,
+  purpose: "sign_in" | "reauth" | "link",
+  claims: { sub: string; email: string | null },
+  options: { bearer?: string; accountId?: string; extra?: Record<string, string> } = {},
+): Promise<Response> {
+  const auth = options.bearer ? { authorization: `Bearer ${options.bearer}`, accountId: options.accountId } : {};
+  const challengeResponse = await call(r, "/api/auth/apple/challenge", { purpose }, { ...IOS_APP_REQUEST, ...auth });
+  if (challengeResponse.status !== 200) return challengeResponse;
+  const { nonce } = await responseJson(challengeResponse);
+  const token = `apple-test-${randomUUID()}`;
+  r.appleTokens.set(token, { sub: claims.sub, email: claims.email, isPrivateEmail: claims.email?.endsWith("@privaterelay.appleid.com") ?? false, nonce });
+  return call(r, "/api/auth/apple/native", { identityToken: token, nonce, ...options.extra }, { ...IOS_APP_REQUEST, ...auth });
+}
+
+const APPLE_KEY = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const APPLE_KEY_ENV = {
+  APPLE_TEAM_ID: "TEAM123456",
+  APPLE_SIGN_IN_KEY_ID: "KEYID12345",
+  APPLE_SIGN_IN_PRIVATE_KEY: APPLE_KEY.privateKey.export({ format: "pem", type: "pkcs8" }).toString(),
+} satisfies Partial<AuthEnvironment>;
+
+/** Answers Apple's token and revoke endpoints and records what was sent to them. */
+function fakeAppleEndpoints(r: TestRig) {
+  const calls: Array<{ url: string; body: URLSearchParams }> = [];
+  r.dependencies.fetch = async (input, init) => {
+    const url = String(input);
+    const body = new URLSearchParams(String(init?.body ?? ""));
+    calls.push({ url, body });
+    if (url === "https://appleid.apple.com/auth/token") {
+      return Response.json({ access_token: "apple-access", refresh_token: `apple-refresh-for-${body.get("code")}`, id_token: "unused" });
+    }
+    if (url === "https://appleid.apple.com/auth/revoke") return new Response(null, { status: 200 });
+    return new Response(null, { status: 404 });
+  };
+  return calls;
+}
+
+test("Sign in with Apple creates an account from a relay email and finds it again by subject without one", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const first = await appleCall(
+    r,
+    "sign_in",
+    { sub: "apple-subject-1", email: "abc123@privaterelay.appleid.com" },
+    { extra: { givenName: "Robin", familyName: "Park" } },
+  );
+  assert.equal(first.status, 200);
+  const body = await responseJson(first);
+  assert.equal(body.account.email, "abc123@privaterelay.appleid.com");
+  assert.equal(body.account.displayName, "Robin Park");
+  assert.deepEqual(body.account.providers, ["apple"]);
+  assert.equal(body.account.guest, false);
+  assert.equal(typeof body.sessionToken, "string");
+  assert.deepEqual(r.appleAudiences, ["app.parkdex"]);
+
+  // Apple sends the name only once and may omit the email later; the subject finds the account.
+  const again = await appleCall(r, "sign_in", { sub: "apple-subject-1", email: null });
+  assert.equal(again.status, 200);
+  assert.equal((await responseJson(again)).account.id, body.account.id);
+  assert.equal(r.store.accounts.size, 1);
+});
+
+test("a new Apple identity without an email is refused instead of becoming a guest", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const response = await appleCall(r, "sign_in", { sub: "apple-no-email", email: null });
+  assert.equal(response.status, 400);
+  assert.equal((await responseJson(response)).code, "apple_email_required");
+  assert.equal(r.store.accounts.size, 0);
+});
+
+test("Sign in with Apple never auto-links by email and is offered only to the native app", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  await seedPasswordAccount(r, "shared@example.test");
+  const conflict = await appleCall(r, "sign_in", { sub: "apple-shared", email: "shared@example.test" });
+  assert.equal(conflict.status, 409);
+  assert.match((await responseJson(conflict)).message, /link Apple/u);
+
+  const web = await call(r, "/api/auth/apple/challenge", { purpose: "sign_in" });
+  assert.equal(web.status, 400);
+});
+
+test("Apple and Google nonces cannot be spent on the other provider", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const apple = await responseJson(await call(r, "/api/auth/apple/challenge", { purpose: "sign_in" }, IOS_APP_REQUEST));
+  const googleToken = `google-cross-${randomUUID()}`;
+  r.googleTokens.set(googleToken, {
+    sub: "cross",
+    email: "cross@example.test",
+    email_verified: true,
+    iss: "https://accounts.google.com",
+    aud: GOOGLE_CLIENT_ID,
+    exp: Math.floor(NOW / 1000) + 3_000,
+    iat: Math.floor(NOW / 1000),
+    nonce: apple.nonce,
+  });
+  assert.equal((await call(r, "/api/auth/google/native", { idToken: googleToken, nonce: apple.nonce }, IOS_APP_REQUEST)).status, 401);
+
+  const google = await responseJson(await call(r, "/api/auth/google/challenge", { purpose: "sign_in" }, IOS_APP_REQUEST));
+  const appleToken = `apple-cross-${randomUUID()}`;
+  r.appleTokens.set(appleToken, { sub: "cross", email: "cross@example.test", isPrivateEmail: false, nonce: google.nonce });
+  const crossed = await call(r, "/api/auth/apple/native", { identityToken: appleToken, nonce: google.nonce }, IOS_APP_REQUEST);
+  assert.equal(crossed.status, 401);
+  assert.equal(r.store.accounts.size, 0);
+});
+
+test("an invalid Apple identity token is rejected", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const { nonce } = await responseJson(await call(r, "/api/auth/apple/challenge", { purpose: "sign_in" }, IOS_APP_REQUEST));
+  const response = await call(r, "/api/auth/apple/native", { identityToken: "not-a-token", nonce }, IOS_APP_REQUEST);
+  assert.equal(response.status, 401);
+  assert.equal((await responseJson(response)).code, "invalid_apple_token");
+});
+
+test("Apple upgrades a guest in place, and a password account links Apple after reauthenticating", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  const upgraded = await appleCall(
+    r,
+    "link",
+    { sub: "apple-guest", email: "guest@privaterelay.appleid.com" },
+    { bearer: guest.bearer, accountId: guest.account.id },
+  );
+  assert.equal(upgraded.status, 200);
+  const account = (await responseJson(upgraded)).account;
+  assert.equal(account.id, guest.account.id);
+  assert.equal(account.email, "guest@privaterelay.appleid.com");
+  assert.equal(account.guest, false);
+  assert.deepEqual(account.providers, ["apple"]);
+
+  const seeded = await seedPasswordAccount(r, "linker@example.test");
+  const options = { bearer: seeded.bearer, accountId: seeded.account!.id };
+  assert.equal((await appleCall(r, "link", { sub: "apple-linker", email: "linker@privaterelay.appleid.com" }, options)).status, 403);
+  const reauth = await call(r, "/api/auth/reauth/password", { password: "correct horse battery" }, bearerOptions(seeded.bearer, seeded.account!.id));
+  assert.equal(reauth.status, 200);
+  const linked = await appleCall(r, "link", { sub: "apple-linker", email: "linker@privaterelay.appleid.com" }, options);
+  assert.equal(linked.status, 200);
+  const after = (await responseJson(linked)).account;
+  assert.equal(after.email, "linker@example.test");
+  assert.deepEqual([...after.providers].sort(), ["apple", "email"]);
+  // The linked Apple ID now signs in to the same account, and cannot move to another one.
+  assert.equal((await responseJson(await appleCall(r, "sign_in", { sub: "apple-linker", email: null }))).account.id, seeded.account!.id);
+  const guest2 = await startGuest(r, "203.0.113.99");
+  const moved = await appleCall(r, "link", { sub: "apple-linker", email: null }, { bearer: guest2.bearer, accountId: guest2.account.id });
+  assert.equal(moved.status, 409);
+});
+
+test("a guest cannot become an account through Apple without an email", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const guest = await startGuest(r);
+  const response = await appleCall(r, "link", { sub: "apple-guest-no-email", email: null }, { bearer: guest.bearer, accountId: guest.account.id });
+  assert.equal(response.status, 400);
+  assert.equal((await r.store.findAccountById(guest.account.id))?.email, "");
+});
+
+test("deleting an Apple account without the Sign in with Apple key still deletes it and skips revocation", async () => {
+  const r = rig({ EMAIL_MODE: "disabled" });
+  const calls = fakeAppleEndpoints(r);
+  const signedIn = await responseJson(
+    await appleCall(r, "sign_in", { sub: "apple-nokey", email: "nokey@privaterelay.appleid.com" }, { extra: { authorizationCode: "code-1" } }),
+  );
+  assert.equal(calls.length, 0, "no key means no code exchange");
+  assert.equal(r.store.appleTokens.size, 0);
+  const options = { bearer: signedIn.sessionToken as string, accountId: signedIn.account.id as string };
+  const reauth = await appleCall(r, "reauth", { sub: "apple-nokey", email: null }, options);
+  assert.equal(reauth.status, 200);
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  const deleted = await call(r, "/api/account", undefined, { method: "DELETE", ...bearerOptions(options.bearer, options.accountId) });
+  assert.equal(deleted.status, 200);
+  assert.equal(await r.store.findAccountById(options.accountId), null);
+  assert.equal(calls.length, 0);
+});
+
+test("a token kept before the key was removed is not revoked, and deletion records why", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", ...APPLE_KEY_ENV });
+  fakeAppleEndpoints(r);
+  const signedIn = await responseJson(
+    await appleCall(r, "sign_in", { sub: "apple-removed", email: "removed@privaterelay.appleid.com" }, { extra: { authorizationCode: "code-1" } }),
+  );
+  assert.equal(r.store.appleTokens.size, 1);
+  const options = { bearer: signedIn.sessionToken as string, accountId: signedIn.account.id as string };
+  assert.equal((await appleCall(r, "reauth", { sub: "apple-removed", email: null }, options)).status, 200);
+  r.env.APPLE_SIGN_IN_PRIVATE_KEY = undefined;
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  const deleted = await call(r, "/api/account", undefined, { method: "DELETE", ...bearerOptions(options.bearer, options.accountId) });
+  assert.equal(deleted.status, 200);
+  assert.ok(r.store.events.some((event) => event.eventType === "apple_revoke" && event.outcome === "not_configured"));
+});
+
+test("with the Sign in with Apple key, codes become encrypted refresh tokens that deletion revokes", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", ...APPLE_KEY_ENV });
+  const calls = fakeAppleEndpoints(r);
+  const signedIn = await responseJson(
+    await appleCall(r, "sign_in", { sub: "apple-key", email: "key@privaterelay.appleid.com" }, { extra: { authorizationCode: "code-1" } }),
+  );
+  assert.equal(calls[0]?.url, "https://appleid.apple.com/auth/token");
+  assert.equal(calls[0]?.body.get("client_id"), "app.parkdex");
+  assert.equal(calls[0]?.body.get("grant_type"), "authorization_code");
+  assert.equal(calls[0]?.body.get("code"), "code-1");
+  const stored = r.store.appleTokens.get("apple-key");
+  assert.ok(stored && !stored.includes("apple-refresh"), "the refresh token is stored encrypted");
+  assert.equal(decryptAppleRefreshToken(stored, r.env), "apple-refresh-for-code-1");
+
+  // Reauthenticating before deletion replaces it with a fresh token.
+  const options = { bearer: signedIn.sessionToken as string, accountId: signedIn.account.id as string };
+  assert.equal((await appleCall(r, "reauth", { sub: "apple-key", email: null }, { ...options, extra: { authorizationCode: "code-2" } })).status, 200);
+  assert.equal(decryptAppleRefreshToken(r.store.appleTokens.get("apple-key")!, r.env), "apple-refresh-for-code-2");
+
+  r.dependencies.deleteAccountData = async () => ({ complete: true });
+  const deleted = await call(r, "/api/account", undefined, { method: "DELETE", ...bearerOptions(options.bearer, options.accountId) });
+  assert.equal(deleted.status, 200);
+  const revoke = calls.find((entry) => entry.url === "https://appleid.apple.com/auth/revoke");
+  assert.equal(revoke?.body.get("token"), "apple-refresh-for-code-2");
+  assert.equal(revoke?.body.get("token_type_hint"), "refresh_token");
+  assert.equal(revoke?.body.get("client_id"), "app.parkdex");
+  // The client secret is an ES256 JWT from the team, signed with the configured key.
+  const [header, payload, signature] = (revoke?.body.get("client_secret") ?? "").split(".");
+  assert.deepEqual(JSON.parse(Buffer.from(header, "base64url").toString()), { alg: "ES256", kid: "KEYID12345" });
+  const claims = JSON.parse(Buffer.from(payload, "base64url").toString());
+  assert.equal(claims.iss, "TEAM123456");
+  assert.equal(claims.sub, "app.parkdex");
+  assert.equal(claims.aud, "https://appleid.apple.com");
+  assert.ok(
+    verify("sha256", Buffer.from(`${header}.${payload}`), { key: APPLE_KEY.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url")),
+  );
+  const revokedEvent = r.store.events.find((event) => event.eventType === "apple_revoke" && event.outcome === "revoked");
+  assert.match(revokedEvent?.scopeHash ?? "", /^[0-9a-f]{64}$/u, "the revocation event names the Apple identity by its keyed hash");
+  assert.equal(await r.store.findAccountById(options.accountId), null);
+});
+
+test("a missing authorization code, sent as null, still signs in", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", ...APPLE_KEY_ENV });
+  const calls = fakeAppleEndpoints(r);
+  const { nonce } = await responseJson(await call(r, "/api/auth/apple/challenge", { purpose: "sign_in" }, IOS_APP_REQUEST));
+  const token = `apple-null-code-${randomUUID()}`;
+  r.appleTokens.set(token, { sub: "apple-null-code", email: "null@privaterelay.appleid.com", isPrivateEmail: true, nonce });
+  const response = await call(
+    r,
+    "/api/auth/apple/native",
+    { identityToken: token, nonce, authorizationCode: null, givenName: null, familyName: null },
+    IOS_APP_REQUEST,
+  );
+  assert.equal(response.status, 200);
+  assert.equal((await responseJson(response)).account.displayName, null);
+  assert.equal(calls.length, 0);
+});
+
+test("Apple being unreachable never blocks sign-in", async () => {
+  const r = rig({ EMAIL_MODE: "disabled", ...APPLE_KEY_ENV });
+  r.dependencies.fetch = async () => {
+    throw new Error("offline");
+  };
+  const signedIn = await appleCall(
+    r,
+    "sign_in",
+    { sub: "apple-offline", email: "offline@privaterelay.appleid.com" },
+    { extra: { authorizationCode: "code-1" } },
+  );
+  assert.equal(signedIn.status, 200);
+  assert.ok(r.store.events.some((event) => event.eventType === "apple_token" && event.outcome === "exchange_failed"));
 });

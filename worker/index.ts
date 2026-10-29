@@ -15,6 +15,7 @@ import {
   type AuthDependencies,
   type AuthEnvironment,
 } from "./accounts/auth.js";
+import { appleAppSiteAssociation } from "./accounts/apple.js";
 import { deleteAccountData, handleProgressRequest, type ProgressDependencies, type ProgressEnv } from "./accounts/progress.js";
 import { createNeonAppConfigStore, handleAppConfigRequest, type AppConfigStore } from "./appConfig.js";
 import { createNeonOsmSearchLimiter, handleParkProposalRequest } from "./parkProposals.js";
@@ -338,6 +339,12 @@ async function routeApi(request: Request, env: WorkerEnvironment, dependencies: 
   const url = new URL(request.url);
   const path = url.pathname;
   if (path === "/api/health" && request.method === "GET") return json({ ok: true, releaseSha: env.RELEASE_SHA ?? null });
+  // Served at /.well-known/apple-app-site-association (vercel.json). Apple fetches it without
+  // redirects; until APPLE_TEAM_ID is configured there is nothing to associate.
+  if (path === "/api/apple-app-site-association" && request.method === "GET") {
+    const association = appleAppSiteAssociation(env);
+    return association ? json(association) : json({ error: "Not found." }, 404);
+  }
   const updateResponse = await handleAppUpdateRequest(request, {
     json,
     fetch: (input, init) => (dependencies.fetch ?? globalThis.fetch)(input, init),

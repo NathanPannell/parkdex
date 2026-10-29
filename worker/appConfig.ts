@@ -9,9 +9,11 @@ import { HttpError } from "./validation.js";
  *   environment it was built for (sent as `env`; builds 8 and earlier send none, so production).
  * - The API pointer and feature flags are set per build. Build 0 is the default for every build
  *   of a platform; a specific build overrides it, flag by flag.
+ * - Update rules hold Android version codes, so they apply to Android only. iOS builds (whose build is
+ *   the TestFlight run number) never get an update prompt until the App Store has rules of its own.
  */
 
-export const APP_CONFIG_PLATFORMS = ["android", "web"] as const;
+export const APP_CONFIG_PLATFORMS = ["android", "ios", "web"] as const;
 export type AppConfigPlatform = (typeof APP_CONFIG_PLATFORMS)[number];
 
 export const API_POINTERS = ["production", "staging"] as const;
@@ -279,9 +281,10 @@ export function updateEnvironment(rows: BuildConfigRecord[], platform: AppConfig
 /** The build's own row wins over the platform default, flag by flag; update rules come from its environment. */
 export function resolveAppConfig(platform: AppConfigPlatform, build: number, rows: BuildConfigRecord[], rules: UpdateRules): AppConfigResponse {
   const { fallback, exact, apiPointer } = pointerFor(rows, platform, build);
+  const rulesApply = platform !== "ios";
   // Build 0 is an unversioned web or development build, which never needs a store update.
   const update =
-    build === DEFAULT_BUILD
+    build === DEFAULT_BUILD || !rulesApply
       ? "none"
       : rules.minimumBuild !== null && build < rules.minimumBuild
         ? "required"
@@ -296,8 +299,8 @@ export function resolveAppConfig(platform: AppConfigPlatform, build: number, row
     contentChannel: apiPointer === "production" ? "main" : apiPointer === "staging" ? "staging" : null,
     flags: { ...fallback?.flags, ...exact?.flags },
     environment: rules.environment,
-    minimumBuild: rules.minimumBuild,
-    latestBuild: rules.latestBuild,
+    minimumBuild: rulesApply ? rules.minimumBuild : null,
+    latestBuild: rulesApply ? rules.latestBuild : null,
     update,
     source: exact ? "build" : fallback ? "default" : "none",
   };
