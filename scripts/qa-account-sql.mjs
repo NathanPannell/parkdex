@@ -30,12 +30,14 @@ try {
   log("Neon transaction batch adapter", "PASS");
   await applyMigration(fileURLToPath(new URL("../database/migrations/accounts_001_init.sql", import.meta.url)));
   await applyMigration(fileURLToPath(new URL("../database/migrations/accounts_002_guests.sql", import.meta.url)));
+  await applyMigration(fileURLToPath(new URL("../database/migrations/accounts_003_apple.sql", import.meta.url)));
   // This runner is restricted by qa-postgres-adapter to a dedicated loopback QA
   // database. Clear prior runs before asserting exact retention backlog counts.
   // CASCADE also clears progress claims when that optional migration was applied.
   await pool.query(`TRUNCATE TABLE
     kip_account.accounts,
     kip_account.google_identities,
+    kip_account.apple_identities,
     kip_account.sessions,
     kip_account.action_tokens,
     kip_account.google_challenges,
@@ -121,6 +123,125 @@ try {
   });
   assert.equal(noAutoLink.status, "email_conflict");
   log("Google subject reuse, no email auto-link", "PASS");
+
+  // Sign in with Apple: same shape as Google, its own identity table, an optional email.
+  const appleEmail = `apple-${suffix}@privaterelay.appleid.com`;
+  const appleAccountId = randomUUID();
+  const appleInput = {
+    subject: `apple-${suffix}`,
+    email: appleEmail,
+    displayName: "Apple QA",
+    accountId: appleAccountId,
+    session: session("native"),
+    now: now(),
+  };
+  const freshApple = await store.completeAppleSignIn(appleInput);
+  assert.equal(freshApple.status, "ok");
+  assert.equal(freshApple.account.id, appleAccountId);
+  assert.deepEqual(freshApple.account.providers, ["apple"]);
+  assert.equal(freshApple.account.guest, false);
+  const repeatApple = await store.completeAppleSignIn({ ...appleInput, email: null, accountId: randomUUID(), session: session("native") });
+  assert.equal(repeatApple.status, "ok", "a later sign-in without an email finds the account by subject");
+  assert.equal(repeatApple.account.id, appleAccountId);
+  const noEmail = await store.completeAppleSignIn({
+    ...appleInput,
+    subject: `apple-none-${suffix}`,
+    email: null,
+    accountId: randomUUID(),
+    session: session("native"),
+  });
+  assert.equal(noEmail.status, "email_required");
+  assert.equal(
+    (await pool.query("SELECT count(*)::int AS n FROM kip_account.accounts WHERE normalized_email IS NULL AND display_name = 'Apple QA'")).rows[0].n,
+    0,
+  );
+  const appleCollision = await store.completeAppleSignIn({
+    ...appleInput,
+    subject: `apple-collide-${suffix}`,
+    email,
+    accountId: randomUUID(),
+    session: session("native"),
+  });
+  assert.equal(appleCollision.status, "email_conflict");
+  // A Google subject equal to an Apple subject is a different identity.
+  const sameSubjectGoogle = await store.completeGoogleSignIn({
+    ...appleInput,
+    email: `apple-google-${suffix}@example.test`,
+    accountId: randomUUID(),
+    session: session("native"),
+  });
+  assert.equal(sameSubjectGoogle.status, "ok");
+  assert.notEqual(sameSubjectGoogle.account.id, appleAccountId);
+  log("first Apple sign-in, subject reuse, email required, no auto-link", "PASS");
+
+  const appleSession = appleInput.session;
+  assert.equal(
+    await store.completeAppleReauthentication({
+      subject: appleInput.subject,
+      accountId: appleAccountId,
+      sessionId: appleSession.id,
+      tokenHash: appleSession.tokenHash,
+      now: now(),
+    }),
+    true,
+  );
+  assert.equal(
+    await store.completeAppleReauthentication({
+      subject: `apple-other-${suffix}`,
+      accountId: appleAccountId,
+      sessionId: appleSession.id,
+      tokenHash: appleSession.tokenHash,
+      now: now(),
+    }),
+    false,
+  );
+  assert.equal(
+    await store.completeGoogleReauthentication({
+      subject: appleInput.subject,
+      accountId: appleAccountId,
+      sessionId: appleSession.id,
+      tokenHash: appleSession.tokenHash,
+      now: now(),
+    }),
+    false,
+    "an Apple subject never reauthenticates through Google",
+  );
+  const appleLinksGoogle = await store.completeGoogleLink({
+    subject: `apple-then-google-${suffix}`,
+    email: `apple-then-google-${suffix}@example.test`,
+    accountId: appleAccountId,
+    sessionId: appleSession.id,
+    tokenHash: appleSession.tokenHash,
+    now: now(),
+  });
+  assert.equal(appleLinksGoogle, "ok");
+  assert.deepEqual((await store.findAccountById(appleAccountId))?.providers, ["apple", "google"]);
+  assert.equal((await store.findAccountById(appleAccountId))?.email, appleEmail, "linking Google keeps the account email");
+  log("Apple reauthentication and Apple account linking Google", "PASS");
+
+  assert.equal(await store.saveAppleRefreshToken({ subject: appleInput.subject, accountId: appleAccountId, ciphertext: "v1.iv.ct.tag", now: now() }), true);
+  assert.equal(await store.saveAppleRefreshToken({ subject: appleInput.subject, accountId: randomUUID(), ciphertext: "v1.x.y.z", now: now() }), false);
+  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), ["v1.iv.ct.tag"]);
+  const appleReceipt = randomUUID();
+  assert.equal(await store.beginDeletion(appleAccountId, appleSession.id, appleSession.tokenHash, appleReceipt, now()), appleReceipt);
+  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), ["v1.iv.ct.tag"], "tokens stay readable while the deletion is pending");
+  assert.equal(await store.completeDeletion(appleReceipt, now()), true);
+  assert.deepEqual(await store.appleRefreshTokens(appleAccountId), []);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM kip_account.apple_identities WHERE subject = $1", [appleInput.subject])).rows[0].n, 0);
+  log("Apple refresh token kept until the account is deleted", "PASS");
+
+  const appleChallenge = hash(randomBytes(32));
+  await store.createGoogleChallenge({
+    provider: "apple",
+    nonceHash: appleChallenge,
+    purpose: "sign_in",
+    transport: "native",
+    accountId: null,
+    sessionId: null,
+    expiresAt: new Date(Date.now() + 300e3).toISOString(),
+  });
+  assert.equal((await store.consumeGoogleChallenge(appleChallenge, now()))?.provider, "apple");
+  log("Apple challenge records its provider", "PASS");
 
   const googleOnlyResetHash = hash(randomBytes(32));
   assert.equal(await store.issueActionToken(googleAccountId, "password_reset", googleOnlyResetHash, new Date(Date.now() + 3600e3).toISOString()), false);
@@ -313,6 +434,24 @@ try {
   assert.ok(shortened.rows[0].absolute_expires_at.getTime() <= Date.now() + 91 * 86400e3, "an upgraded guest's session is capped like an account's");
   assert.ok(shortened.rows[0].expires_at.getTime() <= Date.now() + 31 * 86400e3);
   log("guest upgraded in place by Google", "PASS");
+
+  const appleGuestId = randomUUID();
+  const appleGuestSession = session("native");
+  await store.createGuestAccount(appleGuestId, appleGuestSession);
+  const appleGuestLink = {
+    subject: `apple-guest-${suffix}`,
+    accountId: appleGuestId,
+    sessionId: appleGuestSession.id,
+    tokenHash: appleGuestSession.tokenHash,
+    now: now(),
+  };
+  assert.equal(await store.completeAppleLink({ ...appleGuestLink, email: null }), "email_required", "a guest needs an email to become an account");
+  assert.equal((await store.findAccountById(appleGuestId))?.guest, true);
+  assert.equal(await store.completeAppleLink({ ...appleGuestLink, email: `apple-guest-${suffix}@privaterelay.appleid.com` }), "ok");
+  const appleGuest = await store.findAccountById(appleGuestId);
+  assert.equal(appleGuest?.guest, false);
+  assert.deepEqual(appleGuest?.providers, ["apple"]);
+  log("guest upgraded in place by Apple, never without an email", "PASS");
 
   const doomedGuestId = randomUUID();
   const doomedSession = session("native");

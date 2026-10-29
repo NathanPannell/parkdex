@@ -6,6 +6,18 @@ import { HttpError } from "../validation.js";
 import { getClientAddress, requestOriginAllowed } from "../security.js";
 import { setRequestAccount } from "../requestContext.js";
 import {
+  AppleTokenError,
+  appleClientId,
+  appleDisplayName,
+  appleRevocationConfigured,
+  decryptAppleRefreshToken,
+  encryptAppleRefreshToken,
+  exchangeAppleAuthorizationCode,
+  revokeAppleRefreshToken,
+  verifyAppleIdentityToken,
+  type AppleIdentityClaims,
+} from "./apple.js";
+import {
   createNeonAccountAuthStore,
   type AccountAuthStore,
   type AccountCredentials,
@@ -13,6 +25,7 @@ import {
   type AuthTransport,
   type GoogleChallengeInput,
   type GoogleSignInResult,
+  type IdentityProvider,
   type SessionInsert,
   type StoredSession,
   type StoredTransport,
@@ -31,6 +44,17 @@ export interface AuthEnvironment {
    * from the project that owns those fingerprints. ID tokens for either client are accepted.
    */
   GOOGLE_NATIVE_CLIENT_ID?: string;
+  /**
+   * The iOS OAuth client (type iOS, bundle ID app.parkdex). The iOS app signs in to Google with it
+   * through ASWebAuthenticationSession, so its ID tokens carry it as `aud`. Optional: without it iOS
+   * builds show no Google button.
+   */
+  GOOGLE_IOS_CLIENT_ID?: string;
+  /** Sign in with Apple. Verification needs none of these; revocation on deletion needs all three. */
+  APPLE_CLIENT_ID?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_SIGN_IN_KEY_ID?: string;
+  APPLE_SIGN_IN_PRIVATE_KEY?: string;
   PUBLIC_APP_URL?: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -64,6 +88,7 @@ export interface AuthDependencies {
   hashPassword?(password: string): Promise<string>;
   verifyPassword?(passwordHash: string, password: string): Promise<boolean>;
   verifyGoogleIdToken?(idToken: string, audiences: readonly string[]): Promise<GoogleIdentityClaims>;
+  verifyAppleIdentityToken?(identityToken: string, options: { audience: string; nonce: string; now: number }): Promise<AppleIdentityClaims>;
   sendEmail?(message: { to: string; subject: string; html: string; text: string }, env: AuthEnvironment): Promise<void>;
   fetch?(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   waitUntil?(promise: Promise<unknown>): void;
@@ -90,6 +115,7 @@ export const ACCOUNT_CSRF_COOKIE = CSRF_COOKIE;
 const TRANSPORT_HEADER = "x-kip-auth-transport";
 // Origins of the Capacitor WebView (Android uses https://localhost, iOS capacitor://localhost).
 const NATIVE_APP_ORIGINS = new Set(["https://localhost", "capacitor://localhost"]);
+const IOS_APP_ORIGIN = "capacitor://localhost";
 const RESET_LIFETIME_MS = 60 * 60 * 1000;
 const VERIFICATION_LIFETIME_MS = 60 * 60 * 1000;
 const GOOGLE_CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
@@ -117,6 +143,7 @@ const EMAIL_PASSWORD_FIELDS = new Set(["email", "password"]);
 const EMAIL_FIELD = new Set(["email"]);
 const GOOGLE_CHALLENGE_FIELDS = new Set(["purpose"]);
 const GOOGLE_TOKEN_FIELDS = new Set(["idToken", "nonce"]);
+const APPLE_TOKEN_FIELDS = new Set(["identityToken", "nonce", "authorizationCode", "givenName", "familyName"]);
 const REAUTH_FIELDS = new Set(["password"]);
 const INVALID_LOGIN_MESSAGE = "Email or password is incorrect.";
 let dummyHashPromise: Promise<string> | undefined;
@@ -196,11 +223,14 @@ function nativeGoogleClientId(env: AuthEnvironment): string | null {
   return validGoogleClientId(env.GOOGLE_NATIVE_CLIENT_ID) ? env.GOOGLE_NATIVE_CLIENT_ID : null;
 }
 
+function iosGoogleClientId(env: AuthEnvironment): string | null {
+  return validGoogleClientId(env.GOOGLE_IOS_CLIENT_ID) ? env.GOOGLE_IOS_CLIENT_ID : null;
+}
+
 /** Every client ID whose ID tokens this deployment accepts. Google sign-in requires the web client. */
 function googleAudiences(env: AuthEnvironment): string[] {
   if (!validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID)) return [];
-  const native = nativeGoogleClientId(env);
-  return native && native !== env.GOOGLE_WEB_CLIENT_ID ? [env.GOOGLE_WEB_CLIENT_ID, native] : [env.GOOGLE_WEB_CLIENT_ID];
+  return [...new Set([env.GOOGLE_WEB_CLIENT_ID, nativeGoogleClientId(env), iosGoogleClientId(env)].filter((id): id is string => Boolean(id)))];
 }
 
 /**
@@ -212,6 +242,11 @@ function nativeAppRequest(request: Request): boolean {
   const origin = request.headers.get("origin");
   const transport = request.headers.get(TRANSPORT_HEADER)?.toLowerCase();
   return transport === "native" && origin !== null && NATIVE_APP_ORIGINS.has(origin);
+}
+
+/** The iOS WebView's origin, which Android never uses. */
+function iosAppRequest(request: Request): boolean {
+  return nativeAppRequest(request) && request.headers.get("origin") === IOS_APP_ORIGIN;
 }
 
 function emailLinkBase(env: AuthEnvironment): URL | null {
@@ -685,6 +720,77 @@ async function googleClaims(
   return { ...claims, email };
 }
 
+async function appleClaims(
+  identityToken: string,
+  nonce: string,
+  env: AuthEnvironment,
+  now: number,
+  dependencies: AuthDependencies,
+): Promise<AppleIdentityClaims> {
+  const options = { audience: appleClientId(env), nonce, now };
+  try {
+    return dependencies.verifyAppleIdentityToken
+      ? await dependencies.verifyAppleIdentityToken(identityToken, options)
+      : await verifyAppleIdentityToken(identityToken, { ...options, fetch: dependencies.fetch });
+  } catch (error) {
+    if (error instanceof AppleTokenError || !(error instanceof HttpError)) {
+      throw new HttpError(401, "invalid_apple_token", "Sign in with Apple could not be verified.");
+    }
+    throw error;
+  }
+}
+
+/**
+ * Trades the one-time authorization code for a refresh token and keeps it encrypted, so deleting the
+ * account can revoke Sign in with Apple. Never fails the sign-in: without the Apple key, or when
+ * Apple is unreachable, the identity simply keeps its previous token (or none).
+ */
+async function keepAppleRefreshToken(
+  subject: string,
+  accountId: string,
+  authorizationCode: string | null,
+  env: AuthEnvironment,
+  store: AccountAuthStore,
+  now: number,
+  dependencies: AuthDependencies,
+): Promise<void> {
+  if (!authorizationCode || !appleRevocationConfigured(env)) return;
+  const scopeHash = await eventScope(env, "apple_subject", subject).catch(() => null);
+  const refreshToken = await exchangeAppleAuthorizationCode(authorizationCode, env, now, dependencies.fetch);
+  if (!refreshToken) {
+    await store.recordSecurityEvent("apple_token", scopeHash, "exchange_failed").catch(() => undefined);
+    return;
+  }
+  await store
+    .saveAppleRefreshToken({ subject, accountId, ciphertext: encryptAppleRefreshToken(refreshToken, env), now: new Date(now).toISOString() })
+    .catch(() => undefined);
+}
+
+/**
+ * Revokes every Apple token the account kept, before its rows are deleted. Best effort: Apple being
+ * down, or the key not being configured yet, never blocks deletion; the outcome is recorded instead.
+ */
+async function revokeAppleTokens(accountId: string, env: AuthEnvironment, store: AccountAuthStore, dependencies: AuthDependencies): Promise<void> {
+  let ciphertexts: string[];
+  try {
+    ciphertexts = await store.appleRefreshTokens(accountId);
+  } catch {
+    await store.recordSecurityEvent("apple_revoke", null, "lookup_failed").catch(() => undefined);
+    return;
+  }
+  if (!ciphertexts.length) return;
+  if (!appleRevocationConfigured(env)) {
+    await store.recordSecurityEvent("apple_revoke", null, "not_configured").catch(() => undefined);
+    return;
+  }
+  const now = nowValue(dependencies);
+  for (const ciphertext of ciphertexts) {
+    const token = decryptAppleRefreshToken(ciphertext, env);
+    const revoked = token ? await revokeAppleRefreshToken(token, env, now, dependencies.fetch) : false;
+    await store.recordSecurityEvent("apple_revoke", null, token ? (revoked ? "revoked" : "failed") : "unreadable").catch(() => undefined);
+  }
+}
+
 function googleName(claims: GoogleIdentityClaims): string | null {
   if (typeof claims.name !== "string") return null;
   const name = claims.name.trim();
@@ -713,6 +819,8 @@ function methodForAuthRoute(path: string): string | null {
     "/api/auth/google/challenge": "POST",
     "/api/auth/google": "POST",
     "/api/auth/google/native": "POST",
+    "/api/auth/apple/challenge": "POST",
+    "/api/auth/apple/native": "POST",
     "/api/auth/reauth/password": "POST",
     "/api/account": "DELETE",
   };
@@ -744,8 +852,12 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     const enabled = authAvailable(env);
     const originAllowed = !origin || requestOriginAllowed(request, env);
     const webClientId = enabled && originAllowed && validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID) ? env.GOOGLE_WEB_CLIENT_ID : null;
-    // Installed Android builds read googleWebClientId as their Credential Manager server client ID.
-    const clientId = webClientId && nativeAppRequest(request) ? (nativeGoogleClientId(env) ?? webClientId) : webClientId;
+    // Installed Android builds read googleWebClientId as their Credential Manager server client ID,
+    // and iOS builds as the OAuth client they sign in with, which must be the iOS client.
+    const ios = iosAppRequest(request);
+    const clientId = !webClientId ? null : ios ? iosGoogleClientId(env) : nativeAppRequest(request) ? (nativeGoogleClientId(env) ?? webClientId) : webClientId;
+    // Sign in with Apple is offered by the iOS app only; verifying its tokens needs no secret.
+    const appleEnabled = enabled && ios;
     const googleNativeEnabled = Boolean(clientId);
     const googleWebEnabled = Boolean(clientId && originAllowed);
     const emailEnabled = enabled;
@@ -757,9 +869,10 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
       googleWebEnabled,
       googleNativeEnabled,
       googleWebClientId: googleWebEnabled ? clientId : null,
+      appleEnabled,
       capabilities: {
         web: { email: emailEnabled, google: googleWebEnabled },
-        native: { email: emailEnabled, google: googleNativeEnabled },
+        native: { email: emailEnabled, google: googleNativeEnabled, apple: appleEnabled },
       },
     });
   }
@@ -1002,18 +1115,23 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     return noContent(clearAuthCookies().map((cookie) => ["set-cookie", cookie]));
   }
 
-  if (path === "/api/auth/google/challenge") {
-    if (!validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID)) throw new HttpError(503, "service_unavailable", "Google sign-in is unavailable.");
+  if (path === "/api/auth/google/challenge" || path === "/api/auth/apple/challenge") {
+    const provider: IdentityProvider = path === "/api/auth/apple/challenge" ? "apple" : "google";
+    const providerName = provider === "apple" ? "Sign in with Apple" : "Google sign-in";
+    if (provider === "google" && !validGoogleClientId(env.GOOGLE_WEB_CLIENT_ID))
+      throw new HttpError(503, "service_unavailable", "Google sign-in is unavailable.");
     const transport = transportHint(request);
+    // Sign in with Apple exists only in the iOS app, which always uses the native transport.
+    if (provider === "apple" && transport !== "native") throw new HttpError(400, "invalid_request", "Sign in with Apple is available in the iOS app.");
     if (transport === "web") assertTrustedOrigin(request, env, true);
     const body = await readJson(request);
     exactKeys(body, GOOGLE_CHALLENGE_FIELDS, ["purpose"]);
     if (body.purpose !== "sign_in" && body.purpose !== "reauth" && body.purpose !== "link") {
-      throw new HttpError(400, "invalid_request", "Invalid Google sign-in purpose.");
+      throw new HttpError(400, "invalid_request", `Invalid ${providerName} purpose.`);
     }
     const purpose = body.purpose;
-    const globalScope = await reserveLimit(env, store, "google_challenge", "global", 1000, 15 * 60 * 1000);
-    await reserveIpLimit(env, store, request, "google_challenge_ip", 40, 15 * 60 * 1000);
+    const globalScope = await reserveLimit(env, store, `${provider}_challenge`, "global", 1000, 15 * 60 * 1000);
+    await reserveIpLimit(env, store, request, `${provider}_challenge_ip`, 40, 15 * 60 * 1000);
     let accountId: string | null = null;
     let sessionId: string | null = null;
     if (purpose !== "sign_in") {
@@ -1022,13 +1140,14 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
       if (lookup.context.transport === "cookie") assertCookieCsrf(request, env, lookup.stored);
       else assertTrustedOrigin(request, env, false);
       assertExpectedAccount(request, lookup.context.accountId);
-      // A guest upgrading to Google has nothing to reauthenticate with; its session is its only credential.
+      // A guest upgrading to Google or Apple has nothing to reauthenticate with; its session is its only credential.
       if (purpose === "link" && lookup.stored.guest !== true) await requireFreshSession(lookup, now);
       accountId = lookup.context.accountId;
       sessionId = lookup.context.sessionId;
     }
     const nonce = bytesToken();
     const challenge: GoogleChallengeInput = {
+      provider,
       nonceHash: sha256(nonce),
       purpose,
       transport,
@@ -1037,7 +1156,7 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
       expiresAt: new Date(now + GOOGLE_CHALLENGE_LIFETIME_MS).toISOString(),
     };
     await store.createGoogleChallenge(challenge);
-    await store.recordSecurityEvent("google_challenge", globalScope, "created").catch(() => undefined);
+    await store.recordSecurityEvent(`${provider}_challenge`, globalScope, "created").catch(() => undefined);
     return jsonResponse({ nonce, expiresAt: challenge.expiresAt });
   }
 
@@ -1054,7 +1173,7 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
     await reserveIpLimit(env, store, request, "google_callback_ip", 50, 15 * 60 * 1000);
     const nonceScope = sha256(nonce);
     const challenge = await store.consumeGoogleChallenge(nonceScope, nowIso);
-    if (!challenge || challenge.transport !== routeTransport) {
+    if (!challenge || challenge.transport !== routeTransport || challenge.provider !== "google") {
       await store.recordSecurityEvent("google_callback", await eventScope(env, "google_callback", nonceScope), "invalid_challenge").catch(() => undefined);
       throw new HttpError(401, "invalid_google_challenge", "Google sign-in could not be verified.");
     }
@@ -1121,6 +1240,101 @@ async function routeAuth(request: Request, env: AuthEnvironment, dependencies: A
       throw new HttpError(409, "account_conflict", "This Google account is linked to another Parkdex account.");
     }
     if (linkResult !== "ok") throw new HttpError(403, "reauthentication_required", "Please reauthenticate before linking Google.");
+    const account = await store.findAccountById(lookup.context.accountId);
+    if (!account || account.deletionState !== "active") throw new HttpError(401, "authentication_required", "Authentication required.");
+    return jsonResponse({ account: accountSummaryFromCredentials(account) });
+  }
+
+  if (path === "/api/auth/apple/native") {
+    const body = await readJson(request, 24 * 1024);
+    exactKeys(body, APPLE_TOKEN_FIELDS, ["identityToken", "nonce"]);
+    const identityToken = stringField(body.identityToken, 12 * 1024, "Apple identity token");
+    const nonce = stringField(body.nonce, 128, "nonce");
+    if (!TOKEN_PATTERN.test(nonce)) throw new HttpError(400, "invalid_request", "Invalid Sign in with Apple challenge.");
+    const authorizationCode = body.authorizationCode === undefined ? null : stringField(body.authorizationCode, 1024, "Apple authorization code");
+    const displayName = appleDisplayName(body.givenName, body.familyName);
+    await reserveIpLimit(env, store, request, "apple_callback_ip", 50, 15 * 60 * 1000);
+    const nonceScope = sha256(nonce);
+    const challenge = await store.consumeGoogleChallenge(nonceScope, nowIso);
+    if (!challenge || challenge.transport !== "native" || challenge.provider !== "apple") {
+      await store.recordSecurityEvent("apple_callback", await eventScope(env, "apple_callback", nonceScope), "invalid_challenge").catch(() => undefined);
+      throw new HttpError(401, "invalid_apple_challenge", "Sign in with Apple could not be verified.");
+    }
+    const claims = await appleClaims(identityToken, nonce, env, now, dependencies);
+    const scopeHash = await eventScope(env, "apple_subject", claims.sub);
+
+    if (challenge.purpose === "sign_in") {
+      const session = sessionMaterial("native", now, dependencies);
+      const result = await store.completeAppleSignIn({
+        subject: claims.sub,
+        email: claims.email,
+        displayName,
+        accountId: uuidValue(dependencies),
+        session: session.record,
+        now: nowIso,
+      });
+      if (result.status === "email_conflict") {
+        await store.recordSecurityEvent("apple_callback", scopeHash, "email_collision").catch(() => undefined);
+        throw new HttpError(
+          409,
+          "account_conflict",
+          "An account already uses this email. Sign in to that account, with Google or your password, and link Apple from Account & backup.",
+        );
+      }
+      if (result.status === "email_required") {
+        throw new HttpError(400, "apple_email_required", "Sign in with Apple did not share an email. Try again and choose Share My Email or Hide My Email.");
+      }
+      if (result.status !== "ok") throw new HttpError(409, "account_conflict", "Sign in with Apple could not be completed.");
+      await keepAppleRefreshToken(claims.sub, result.account.id, authorizationCode, env, store, now, dependencies);
+      await store.recordSecurityEvent("apple_callback", scopeHash, "succeeded").catch(() => undefined);
+      return sessionResponse(result.account, session.token, session.csrfToken, result.expiresAt, "native", 200, now);
+    }
+
+    const lookup = await lookupSession(request, env, dependencies);
+    if (
+      !lookup ||
+      lookup.context.transport !== "bearer" ||
+      lookup.context.accountId !== challenge.accountId ||
+      lookup.context.sessionId !== challenge.sessionId
+    ) {
+      throw new HttpError(401, "authentication_required", "Authentication required.");
+    }
+    assertTrustedOrigin(request, env, false);
+    assertExpectedAccount(request, lookup.context.accountId);
+    if (challenge.purpose === "reauth") {
+      const confirmed = await store.completeAppleReauthentication({
+        subject: claims.sub,
+        accountId: lookup.context.accountId,
+        sessionId: lookup.context.sessionId,
+        tokenHash: lookup.stored.tokenHash,
+        now: nowIso,
+      });
+      if (!confirmed) throw new HttpError(403, "reauthentication_failed", "Sign in with Apple could not reauthenticate this account.");
+      const account = await store.findAccountById(lookup.context.accountId);
+      if (!account || account.deletionState !== "active") throw new HttpError(401, "authentication_required", "Authentication required.");
+      // A fresh code before deletion means the account's Apple token can be revoked even if none was kept yet.
+      await keepAppleRefreshToken(claims.sub, account.id, authorizationCode, env, store, now, dependencies);
+      await store.recordSecurityEvent("apple_reauth", scopeHash, "succeeded").catch(() => undefined);
+      return jsonResponse({ account: accountSummaryFromCredentials(account), reauthenticatedUntil: new Date(now + REAUTH_LIFETIME_MS).toISOString() });
+    }
+
+    const linkResult = await store.completeAppleLink({
+      subject: claims.sub,
+      email: claims.email,
+      accountId: lookup.context.accountId,
+      sessionId: lookup.context.sessionId,
+      tokenHash: lookup.stored.tokenHash,
+      now: nowIso,
+    });
+    if (linkResult === "email_conflict" || linkResult === "subject_conflict") {
+      await store.recordSecurityEvent("apple_link", scopeHash, linkResult).catch(() => undefined);
+      throw new HttpError(409, "account_conflict", "This Apple ID is linked to another Parkdex account.");
+    }
+    if (linkResult === "email_required") {
+      throw new HttpError(400, "apple_email_required", "Sign in with Apple did not share an email. Try again and choose Share My Email or Hide My Email.");
+    }
+    if (linkResult !== "ok") throw new HttpError(403, "reauthentication_required", "Please reauthenticate before linking Apple.");
+    await keepAppleRefreshToken(claims.sub, lookup.context.accountId, authorizationCode, env, store, now, dependencies);
     const account = await store.findAccountById(lookup.context.accountId);
     if (!account || account.deletionState !== "active") throw new HttpError(401, "authentication_required", "Authentication required.");
     return jsonResponse({ account: accountSummaryFromCredentials(account) });
@@ -1202,6 +1416,7 @@ export async function resumeAccountDeletion(
     result = { complete: false };
   }
   if (!result.complete) return { receiptId, status: "pending", complete: false };
+  await revokeAppleTokens(receipt.accountId, env, store, dependencies);
   const complete = await store.completeDeletion(receiptId, new Date(nowValue(dependencies)).toISOString());
   return { receiptId, status: complete ? "complete" : "pending", complete };
 }

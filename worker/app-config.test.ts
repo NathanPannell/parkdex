@@ -179,7 +179,7 @@ test("any well-formed flag is stored and sent, and malformed ones are refused", 
 
 test("the public check-in rejects malformed builds and platforms", async () => {
   const { worker, env } = setup();
-  for (const query of ["platform=android&build=-1", "platform=android&build=4.2", "platform=ios&build=1", "platform=android"]) {
+  for (const query of ["platform=android&build=-1", "platform=android&build=4.2", "platform=windows&build=1", "platform=android"]) {
     const response = await worker.fetch(request(`/api/app-config?${query}`), env as never);
     assert.equal(response.status, 400, query);
   }
@@ -190,6 +190,31 @@ test("the public check-in is readable from the Android web view origin", async (
   const response = await worker.fetch(request("/api/app-config?platform=android&build=1", { origin: "https://localhost" }), env as never);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "https://localhost");
+});
+
+test("iOS builds read the iOS default row and never get an update prompt from Android's rules", async () => {
+  const { worker, env, store } = setup();
+  await store.upsert("ios", 0, { label: "iOS default", apiPointer: null, flags: { friends: true, crews: false, badges: false }, notes: "" });
+  await store.upsert("android", 0, { label: "", apiPointer: null, flags: { friends: false }, notes: "" });
+  await store.setUpdateRules("production", 19, 19);
+  const response = await worker.fetch(request("/api/app-config?platform=ios&build=7&env=production", { origin: "capacitor://localhost" }), env as never);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), "capacitor://localhost");
+  const body = (await response.json()) as Record<string, unknown>;
+  assert.equal(body.platform, "ios");
+  assert.equal(body.build, 7);
+  assert.deepEqual(body.flags, { friends: true, crews: false, badges: false });
+  assert.equal(body.source, "default");
+  assert.equal(body.update, "none");
+  assert.equal(body.minimumBuild, null);
+  assert.equal(body.latestBuild, null);
+  assert.equal(body.apiPointer, null);
+
+  const android = (await (await worker.fetch(request("/api/app-config?platform=android&build=7&env=production"), env as never)).json()) as Record<
+    string,
+    unknown
+  >;
+  assert.equal(android.update, "required");
 });
 
 test("the app no longer edits build configuration; the operator dashboard does", async () => {

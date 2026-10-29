@@ -30,6 +30,7 @@ VERCEL_API = "https://api.vercel.com"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ID_RE = re.compile(r"^[0-9]+$")
 GOOGLE_CLIENT_ID_PATTERN = re.compile(r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com")
+APPLE_ID_PATTERN = re.compile(r"[A-Z0-9]{10}")
 SECRET_VALUES: list[str] = []
 JOURNAL_LOCK = threading.RLock()
 
@@ -1068,8 +1069,23 @@ def require_account_runtime(config: dict, bundle: dict, candidate_root: Path, *,
         raise DeliveryError(f"{environment.capitalize()} accounts require a configured Google Web OAuth client.")
     if "GOOGLE_NATIVE_CLIENT_ID" in bundle and not GOOGLE_CLIENT_ID_PATTERN.fullmatch(bundle["GOOGLE_NATIVE_CLIENT_ID"]):
         raise DeliveryError("GOOGLE_NATIVE_CLIENT_ID must be a Google OAuth client ID.")
+    if "GOOGLE_IOS_CLIENT_ID" in bundle and not GOOGLE_CLIENT_ID_PATTERN.fullmatch(bundle["GOOGLE_IOS_CLIENT_ID"]):
+        raise DeliveryError("GOOGLE_IOS_CLIENT_ID must be a Google OAuth client ID.")
+    require_apple_runtime(bundle)
     if not bundle.get("AUTH_EMAIL_FROM") and not bundle.get("EMAIL_FROM"):
         raise DeliveryError(f"{environment.capitalize()} accounts require an authentication email sender.")
+
+
+def require_apple_runtime(bundle: dict) -> None:
+    """The Apple team ID serves apple-app-site-association; with the key it also revokes Sign in with Apple."""
+    for key in ("APPLE_TEAM_ID", "APPLE_SIGN_IN_KEY_ID"):
+        if key in bundle and not APPLE_ID_PATTERN.fullmatch(bundle[key]):
+            raise DeliveryError(f"{key} must be the 10-character Apple identifier.")
+    if "APPLE_SIGN_IN_PRIVATE_KEY" in bundle and "-----BEGIN PRIVATE KEY-----" not in bundle["APPLE_SIGN_IN_PRIVATE_KEY"]:
+        raise DeliveryError("APPLE_SIGN_IN_PRIVATE_KEY must be the whole .p8 file, BEGIN and END lines included.")
+    revocation = [key for key in ("APPLE_SIGN_IN_KEY_ID", "APPLE_SIGN_IN_PRIVATE_KEY") if key in bundle]
+    if revocation and ("APPLE_TEAM_ID" not in bundle or len(revocation) != 2):
+        raise DeliveryError("Sign in with Apple revocation needs APPLE_TEAM_ID, APPLE_SIGN_IN_KEY_ID and APPLE_SIGN_IN_PRIVATE_KEY together.")
 
 
 def photo_provider():

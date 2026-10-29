@@ -1,4 +1,4 @@
-export type Platform = "android" | "web";
+export type Platform = "android" | "ios" | "web";
 export type ApiPointer = "production" | "staging";
 
 export type BuildConfig = {

@@ -1,12 +1,14 @@
 import { database } from "../db.js";
 
-export type AccountProvider = "email" | "google";
+export type AccountProvider = "email" | "google" | "apple";
+/** Providers whose identities sign in, reauthenticate and link the same way. */
+export type IdentityProvider = "google" | "apple";
 export type AuthTransport = "cookie" | "bearer";
 export type StoredTransport = "web" | "native";
 
 export interface AccountSummary {
   id: string;
-  /** Empty for a guest account until Google upgrades it. */
+  /** Empty for a guest account until Google or Apple upgrades it. */
   email: string;
   emailVerified: boolean;
   displayName: string | null;
@@ -50,6 +52,8 @@ export interface CreateAccountInput {
 }
 
 export interface GoogleChallengeInput {
+  /** Which provider's token may consume the nonce; Google when omitted. */
+  provider?: IdentityProvider;
   nonceHash: string;
   purpose: "sign_in" | "reauth" | "link";
   transport: StoredTransport;
@@ -59,6 +63,7 @@ export interface GoogleChallengeInput {
 }
 
 export interface GoogleChallengeRecord {
+  provider: IdentityProvider;
   purpose: "sign_in" | "reauth" | "link";
   transport: StoredTransport;
   accountId: string | null;
@@ -67,7 +72,8 @@ export interface GoogleChallengeRecord {
 
 export interface GoogleSignInInput {
   subject: string;
-  email: string;
+  /** Apple may share no email; a new Apple account then cannot be created (`email_required`). */
+  email: string | null;
   displayName: string | null;
   accountId: string;
   session: SessionInsert;
@@ -76,9 +82,26 @@ export interface GoogleSignInInput {
 
 export type GoogleSignInResult =
   | { status: "ok"; account: AccountSummary; sessionId: string; expiresAt: string; absoluteExpiresAt: string }
-  | { status: "email_conflict" | "account_unavailable" | "retry" };
+  | { status: "email_conflict" | "email_required" | "account_unavailable" | "retry" };
 
-export type GoogleLinkResult = "ok" | "email_conflict" | "subject_conflict" | "retry";
+export type GoogleLinkResult = "ok" | "email_conflict" | "email_required" | "subject_conflict" | "retry";
+
+export interface IdentityLinkInput {
+  subject: string;
+  email: string | null;
+  accountId: string;
+  sessionId: string;
+  tokenHash: string;
+  now: string;
+}
+
+export interface IdentityReauthInput {
+  subject: string;
+  accountId: string;
+  sessionId: string;
+  tokenHash: string;
+  now: string;
+}
 
 export interface DeletionReceipt {
   receiptId: string;
@@ -113,14 +136,14 @@ export interface AccountAuthStore {
   consumeGoogleChallenge(nonceHash: string, now: string): Promise<GoogleChallengeRecord | null>;
   completeGoogleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult>;
   completeGoogleReauthentication(input: { subject: string; accountId: string; sessionId: string; tokenHash: string; now: string }): Promise<boolean>;
-  completeGoogleLink(input: {
-    subject: string;
-    email: string;
-    accountId: string;
-    sessionId: string;
-    tokenHash: string;
-    now: string;
-  }): Promise<GoogleLinkResult>;
+  completeGoogleLink(input: IdentityLinkInput): Promise<GoogleLinkResult>;
+  completeAppleSignIn(input: GoogleSignInInput): Promise<GoogleSignInResult>;
+  completeAppleReauthentication(input: IdentityReauthInput): Promise<boolean>;
+  completeAppleLink(input: IdentityLinkInput): Promise<GoogleLinkResult>;
+  /** Keeps the encrypted refresh token that revokes this Apple identity when the account is deleted. */
+  saveAppleRefreshToken(input: { subject: string; accountId: string; ciphertext: string; now: string }): Promise<boolean>;
+  /** Encrypted refresh tokens of the account's Apple identities, read before its rows are deleted. */
+  appleRefreshTokens(accountId: string): Promise<string[]>;
   confirmPasswordReauthentication(accountId: string, sessionId: string, tokenHash: string, now: string): Promise<boolean>;
   beginDeletion(accountId: string, sessionId: string, tokenHash: string, receiptId: string, now: string): Promise<string | null>;
   findDeletionReceipt(receiptId: string): Promise<DeletionReceipt | null>;
@@ -150,6 +173,8 @@ const ACCOUNT_COLUMNS = `
       SELECT 'email'::text AS provider WHERE a.password_hash IS NOT NULL
       UNION
       SELECT g.provider FROM kip_account.google_identities g WHERE g.account_id = a.id
+      UNION
+      SELECT ap.provider FROM kip_account.apple_identities ap WHERE ap.account_id = a.id
     ) p
   ), '[]'::json) AS providers`;
 
@@ -171,7 +196,9 @@ function accountSummary(row: Row): AccountSummary {
       rawProviders = [];
     }
   }
-  const providers = Array.isArray(rawProviders) ? rawProviders.filter((value): value is AccountProvider => value === "email" || value === "google") : [];
+  const providers = Array.isArray(rawProviders)
+    ? rawProviders.filter((value): value is AccountProvider => value === "email" || value === "google" || value === "apple")
+    : [];
   return {
     id: stringValue(row.account_id ?? row.id),
     email: stringValue(row.email),
@@ -181,6 +208,11 @@ function accountSummary(row: Row): AccountSummary {
     guest: row.guest === true,
   };
 }
+
+const IDENTITY_TABLES: Record<IdentityProvider, string> = {
+  google: "kip_account.google_identities",
+  apple: "kip_account.apple_identities",
+};
 
 function credentials(row: Row): AccountCredentials {
   return {
@@ -202,6 +234,216 @@ function createdSession(row: Row): { account: AccountSummary; sessionId: string;
 export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStore {
   const sql = database(databaseUrl);
   const query = async (text: string, params: unknown[] = []): Promise<Row[]> => (await sql.query(text, params)) as unknown as Row[];
+
+  async function identitySignIn(provider: IdentityProvider, input: GoogleSignInInput): Promise<GoogleSignInResult> {
+    const identities = IDENTITY_TABLES[provider];
+    const params = [
+      input.subject,
+      input.email,
+      input.accountId,
+      input.displayName,
+      input.session.id,
+      input.session.tokenHash,
+      input.session.csrfHash,
+      input.session.transport,
+      input.session.expiresAt,
+      input.session.absoluteExpiresAt,
+      input.now,
+    ];
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const rows = await query(
+        `
+          WITH subject_lock AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-${provider}-sub:' || $1, 0))
+          ),
+          email_lock AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || COALESCE($2::text, ''), 0)) FROM subject_lock
+          ),
+          existing_identity AS MATERIALIZED (
+            SELECT a.id, a.deletion_state, ${ACCOUNT_COLUMNS}
+            FROM ${identities} g
+            JOIN kip_account.accounts a ON a.id = g.account_id
+            WHERE g.provider = '${provider}' AND g.subject = $1
+              AND EXISTS (SELECT 1 FROM email_lock)
+          ),
+          email_collision AS MATERIALIZED (
+            SELECT a.id FROM kip_account.accounts a
+            WHERE a.normalized_email = $2 AND NOT EXISTS (SELECT 1 FROM existing_identity)
+              AND EXISTS (SELECT 1 FROM email_lock)
+          ),
+          created_account AS (
+            INSERT INTO kip_account.accounts (id, normalized_email, display_name, email_verified_at)
+            SELECT $3::uuid, $2, $4, $11::timestamptz
+            WHERE NOT EXISTS (SELECT 1 FROM existing_identity)
+              AND NOT EXISTS (SELECT 1 FROM email_collision)
+              -- A new account needs an email; without one it would look like a guest.
+              AND $2::text IS NOT NULL
+            ON CONFLICT (normalized_email) DO NOTHING
+            RETURNING id, normalized_email, display_name, email_verified_at
+          ),
+          created_identity AS (
+            INSERT INTO ${identities} (provider, subject, account_id)
+            SELECT '${provider}', $1, id FROM created_account
+            ON CONFLICT (provider, subject) DO NOTHING
+            RETURNING account_id
+          ),
+          resolved AS MATERIALIZED (
+            SELECT e.id FROM existing_identity e WHERE e.deletion_state = 'active'
+            UNION ALL
+            SELECT account_id AS id FROM created_identity
+          ),
+          created_session AS (
+            INSERT INTO kip_account.sessions (
+              id, account_id, token_hash, csrf_hash, transport, expires_at, absolute_expires_at
+            )
+            SELECT $5::uuid, r.id, $6, $7, $8, $9::timestamptz, $10::timestamptz
+            FROM resolved r
+            RETURNING id AS session_id, account_id, expires_at, absolute_expires_at
+          ),
+          account_data AS (
+            SELECT e.account_id, e.email, e.email_verified, e.display_name, e.providers,
+              s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
+            FROM existing_identity e JOIN created_session s ON s.account_id = e.id
+            WHERE e.deletion_state = 'active'
+            UNION ALL
+            SELECT c.id::text AS account_id, c.normalized_email AS email,
+              (c.email_verified_at IS NOT NULL) AS email_verified, c.display_name,
+              json_build_array('${provider}') AS providers,
+              s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
+            FROM created_account c
+            JOIN created_identity g ON g.account_id = c.id
+            JOIN created_session s ON s.account_id = c.id
+          )
+          SELECT CASE
+            WHEN EXISTS (SELECT 1 FROM account_data) THEN 'ok'
+            WHEN EXISTS (SELECT 1 FROM existing_identity) THEN 'account_unavailable'
+            WHEN EXISTS (SELECT 1 FROM email_collision) THEN 'email_conflict'
+            WHEN $2::text IS NULL THEN 'email_required'
+            WHEN EXISTS (SELECT 1 FROM created_account) AND NOT EXISTS (SELECT 1 FROM created_identity) THEN 'retry'
+            ELSE 'retry'
+          END AS status,
+          (SELECT to_jsonb(account_data) FROM account_data LIMIT 1) AS result`,
+        params,
+      );
+      const row = rows[0];
+      if (!row) return { status: "retry" };
+      const status = stringValue(row.status);
+      if (status === "ok" && row.result && typeof row.result === "object") {
+        const result = row.result as Row;
+        const summary = accountSummary(result);
+        return {
+          status: "ok",
+          account: summary,
+          sessionId: stringValue(result.session_id),
+          expiresAt: stringValue(result.expires_at),
+          absoluteExpiresAt: stringValue(result.absolute_expires_at),
+        };
+      }
+      if (status !== "retry") return { status: status as "email_conflict" | "email_required" | "account_unavailable" };
+      await query(
+        `
+          DELETE FROM kip_account.accounts a
+          WHERE a.id = $1::uuid AND a.password_hash IS NULL
+            AND NOT EXISTS (SELECT 1 FROM kip_account.google_identities g WHERE g.account_id = a.id)
+            AND NOT EXISTS (SELECT 1 FROM kip_account.apple_identities ap WHERE ap.account_id = a.id)
+            AND NOT EXISTS (SELECT 1 FROM kip_account.sessions s WHERE s.account_id = a.id)`,
+        [input.accountId],
+      );
+    }
+    return { status: "retry" };
+  }
+
+  async function identityReauthentication(provider: IdentityProvider, input: IdentityReauthInput): Promise<boolean> {
+    const identities = IDENTITY_TABLES[provider];
+    const rows = await query(
+      `
+        WITH identity AS MATERIALIZED (
+          SELECT a.id FROM ${identities} g
+          JOIN kip_account.accounts a ON a.id = g.account_id
+          WHERE g.provider = '${provider}' AND g.subject = $1 AND a.id = $2::uuid AND a.deletion_state = 'active'
+        ), updated AS (
+          UPDATE kip_account.sessions s SET reauthenticated_at = $5::timestamptz
+          FROM identity i, kip_account.accounts a
+          WHERE s.id = $3::uuid AND s.token_hash = $4 AND s.account_id = i.id AND a.id = s.account_id
+            AND a.deletion_state = 'active' AND s.revoked_at IS NULL AND s.expires_at > $5::timestamptz
+            AND s.absolute_expires_at > $5::timestamptz
+          RETURNING s.id
+        )
+        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`,
+      [input.subject, input.accountId, input.sessionId, input.tokenHash, input.now],
+    );
+    return rows[0]?.confirmed === true;
+  }
+
+  async function identityLink(provider: IdentityProvider, input: IdentityLinkInput): Promise<GoogleLinkResult> {
+    const identities = IDENTITY_TABLES[provider];
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const rows = await query(
+        `
+          WITH subject_lock AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-${provider}-sub:' || $1, 0))
+          ),
+          email_lock AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || COALESCE($2::text, ''), 0)) FROM subject_lock
+          ),
+          target AS MATERIALIZED (
+            SELECT a.id, a.deletion_state, (a.normalized_email IS NULL) AS guest FROM kip_account.accounts a
+            JOIN kip_account.sessions s ON s.account_id = a.id
+            WHERE a.id = $3::uuid AND s.id = $4::uuid AND s.token_hash = $5
+              AND a.deletion_state = 'active' AND s.revoked_at IS NULL
+              AND s.expires_at > $6::timestamptz AND s.absolute_expires_at > $6::timestamptz
+              -- A guest has nothing to reauthenticate with: its session is its only credential.
+              AND (a.normalized_email IS NULL OR s.reauthenticated_at >= $6::timestamptz - interval '5 minutes')
+              AND EXISTS (SELECT 1 FROM email_lock)
+          ),
+          existing_subject AS MATERIALIZED (
+            SELECT account_id FROM ${identities}
+            WHERE provider = '${provider}' AND subject = $1
+          ),
+          email_owner AS MATERIALIZED (
+            SELECT id FROM kip_account.accounts WHERE normalized_email = $2
+          ),
+          inserted AS (
+            INSERT INTO ${identities} (provider, subject, account_id)
+            SELECT '${provider}', $1, t.id FROM target t
+            WHERE NOT EXISTS (SELECT 1 FROM existing_subject)
+              AND (NOT EXISTS (SELECT 1 FROM email_owner) OR EXISTS (SELECT 1 FROM email_owner WHERE id = t.id))
+              -- A guest becomes a real account by taking the provider's email, so it needs one.
+              AND (NOT t.guest OR $2::text IS NOT NULL)
+            ON CONFLICT (provider, subject) DO NOTHING
+            RETURNING account_id
+          ),
+          -- Upgrading a guest in place: it takes the provider's email, and its long guest sessions
+          -- shorten to an ordinary account's limits.
+          upgraded AS (
+            UPDATE kip_account.accounts a SET normalized_email = $2, email_verified_at = $6::timestamptz, updated_at = $6::timestamptz
+            FROM target t
+            WHERE a.id = t.id AND t.guest AND EXISTS (SELECT 1 FROM inserted)
+            RETURNING a.id
+          ),
+          shortened AS (
+            UPDATE kip_account.sessions s SET
+              absolute_expires_at = LEAST(s.absolute_expires_at, $6::timestamptz + interval '90 days'),
+              expires_at = LEAST(s.expires_at, $6::timestamptz + interval '30 days')
+            WHERE s.account_id IN (SELECT id FROM upgraded) AND s.revoked_at IS NULL
+            RETURNING s.id
+          )
+          SELECT CASE
+            WHEN NOT EXISTS (SELECT 1 FROM target) THEN 'retry'
+            WHEN EXISTS (SELECT 1 FROM existing_subject WHERE account_id = $3::uuid) THEN 'ok'
+            WHEN EXISTS (SELECT 1 FROM existing_subject) THEN 'subject_conflict'
+            WHEN EXISTS (SELECT 1 FROM email_owner WHERE id <> $3::uuid) THEN 'email_conflict'
+            WHEN $2::text IS NULL AND EXISTS (SELECT 1 FROM target WHERE guest) THEN 'email_required'
+            WHEN EXISTS (SELECT 1 FROM inserted) THEN 'ok'
+            ELSE 'retry'
+          END AS status`,
+        [input.subject, input.email, input.accountId, input.sessionId, input.tokenHash, input.now],
+      );
+      const status = stringValue(rows[0]?.status);
+      if (status !== "retry") return status as GoogleLinkResult;
+    }
+    return "retry";
+  }
 
   return {
     async reserveRateLimit(action, scopeHash, limit, windowMs) {
@@ -518,9 +760,9 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
     async createGoogleChallenge(input) {
       await query(
         `
-        INSERT INTO kip_account.google_challenges (nonce_hash, purpose, transport, account_id, session_id, expires_at)
-        VALUES ($1, $2, $3, $4::uuid, $5::uuid, $6::timestamptz)`,
-        [input.nonceHash, input.purpose, input.transport, input.accountId, input.sessionId, input.expiresAt],
+        INSERT INTO kip_account.google_challenges (nonce_hash, purpose, transport, account_id, session_id, expires_at, provider)
+        VALUES ($1, $2, $3, $4::uuid, $5::uuid, $6::timestamptz, $7)`,
+        [input.nonceHash, input.purpose, input.transport, input.accountId, input.sessionId, input.expiresAt, input.provider ?? "google"],
       );
     },
 
@@ -529,12 +771,13 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
         `
         UPDATE kip_account.google_challenges SET consumed_at = $2::timestamptz
         WHERE nonce_hash = $1 AND consumed_at IS NULL AND expires_at > $2::timestamptz
-        RETURNING purpose, transport, account_id::text AS account_id, session_id::text AS session_id`,
+        RETURNING provider, purpose, transport, account_id::text AS account_id, session_id::text AS session_id`,
         [nonceHash, now],
       );
       if (!rows[0]) return null;
       const row = rows[0];
       return {
+        provider: row.provider === "apple" ? "apple" : "google",
         purpose: row.purpose as GoogleChallengeRecord["purpose"],
         transport: row.transport === "native" ? "native" : "web",
         accountId: nullableString(row.account_id),
@@ -542,204 +785,32 @@ export function createNeonAccountAuthStore(databaseUrl: string): AccountAuthStor
       };
     },
 
-    async completeGoogleSignIn(input) {
-      const params = [
-        input.subject,
-        input.email,
-        input.accountId,
-        input.displayName,
-        input.session.id,
-        input.session.tokenHash,
-        input.session.csrfHash,
-        input.session.transport,
-        input.session.expiresAt,
-        input.session.absoluteExpiresAt,
-        input.now,
-      ];
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const rows = await query(
-          `
-          WITH subject_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-google-sub:' || $1, 0))
-          ),
-          email_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2, 0)) FROM subject_lock
-          ),
-          existing_identity AS MATERIALIZED (
-            SELECT a.id, a.deletion_state, ${ACCOUNT_COLUMNS}
-            FROM kip_account.google_identities g
-            JOIN kip_account.accounts a ON a.id = g.account_id
-            WHERE g.provider = 'google' AND g.subject = $1
-              AND EXISTS (SELECT 1 FROM email_lock)
-          ),
-          email_collision AS MATERIALIZED (
-            SELECT a.id FROM kip_account.accounts a
-            WHERE a.normalized_email = $2 AND NOT EXISTS (SELECT 1 FROM existing_identity)
-              AND EXISTS (SELECT 1 FROM email_lock)
-          ),
-          created_account AS (
-            INSERT INTO kip_account.accounts (id, normalized_email, display_name, email_verified_at)
-            SELECT $3::uuid, $2, $4, $11::timestamptz
-            WHERE NOT EXISTS (SELECT 1 FROM existing_identity)
-              AND NOT EXISTS (SELECT 1 FROM email_collision)
-            ON CONFLICT (normalized_email) DO NOTHING
-            RETURNING id, normalized_email, display_name, email_verified_at
-          ),
-          created_identity AS (
-            INSERT INTO kip_account.google_identities (provider, subject, account_id)
-            SELECT 'google', $1, id FROM created_account
-            ON CONFLICT (provider, subject) DO NOTHING
-            RETURNING account_id
-          ),
-          resolved AS MATERIALIZED (
-            SELECT e.id FROM existing_identity e WHERE e.deletion_state = 'active'
-            UNION ALL
-            SELECT account_id AS id FROM created_identity
-          ),
-          created_session AS (
-            INSERT INTO kip_account.sessions (
-              id, account_id, token_hash, csrf_hash, transport, expires_at, absolute_expires_at
-            )
-            SELECT $5::uuid, r.id, $6, $7, $8, $9::timestamptz, $10::timestamptz
-            FROM resolved r
-            RETURNING id AS session_id, account_id, expires_at, absolute_expires_at
-          ),
-          account_data AS (
-            SELECT e.account_id, e.email, e.email_verified, e.display_name, e.providers,
-              s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
-            FROM existing_identity e JOIN created_session s ON s.account_id = e.id
-            WHERE e.deletion_state = 'active'
-            UNION ALL
-            SELECT c.id::text AS account_id, c.normalized_email AS email,
-              (c.email_verified_at IS NOT NULL) AS email_verified, c.display_name,
-              json_build_array('google') AS providers,
-              s.session_id::text AS session_id, s.expires_at, s.absolute_expires_at
-            FROM created_account c
-            JOIN created_identity g ON g.account_id = c.id
-            JOIN created_session s ON s.account_id = c.id
-          )
-          SELECT CASE
-            WHEN EXISTS (SELECT 1 FROM account_data) THEN 'ok'
-            WHEN EXISTS (SELECT 1 FROM existing_identity) THEN 'account_unavailable'
-            WHEN EXISTS (SELECT 1 FROM email_collision) THEN 'email_conflict'
-            WHEN EXISTS (SELECT 1 FROM created_account) AND NOT EXISTS (SELECT 1 FROM created_identity) THEN 'retry'
-            ELSE 'retry'
-          END AS status,
-          (SELECT to_jsonb(account_data) FROM account_data LIMIT 1) AS result`,
-          params,
-        );
-        const row = rows[0];
-        if (!row) return { status: "retry" };
-        const status = stringValue(row.status);
-        if (status === "ok" && row.result && typeof row.result === "object") {
-          const result = row.result as Row;
-          const summary = accountSummary(result);
-          return {
-            status: "ok",
-            account: summary,
-            sessionId: stringValue(result.session_id),
-            expiresAt: stringValue(result.expires_at),
-            absoluteExpiresAt: stringValue(result.absolute_expires_at),
-          };
-        }
-        if (status !== "retry") return { status: status as "email_conflict" | "account_unavailable" };
-        await query(
-          `
-          DELETE FROM kip_account.accounts a
-          WHERE a.id = $1::uuid AND a.password_hash IS NULL
-            AND NOT EXISTS (SELECT 1 FROM kip_account.google_identities g WHERE g.account_id = a.id)
-            AND NOT EXISTS (SELECT 1 FROM kip_account.sessions s WHERE s.account_id = a.id)`,
-          [input.accountId],
-        );
-      }
-      return { status: "retry" };
-    },
+    completeGoogleSignIn: (input) => identitySignIn("google", input),
+    completeGoogleReauthentication: (input) => identityReauthentication("google", input),
+    completeGoogleLink: (input) => identityLink("google", input),
+    completeAppleSignIn: (input) => identitySignIn("apple", input),
+    completeAppleReauthentication: (input) => identityReauthentication("apple", input),
+    completeAppleLink: (input) => identityLink("apple", input),
 
-    async completeGoogleReauthentication(input) {
+    async saveAppleRefreshToken(input) {
       const rows = await query(
         `
-        WITH identity AS MATERIALIZED (
-          SELECT a.id FROM kip_account.google_identities g
-          JOIN kip_account.accounts a ON a.id = g.account_id
-          WHERE g.provider = 'google' AND g.subject = $1 AND a.id = $2::uuid AND a.deletion_state = 'active'
-        ), updated AS (
-          UPDATE kip_account.sessions s SET reauthenticated_at = $5::timestamptz
-          FROM identity i, kip_account.accounts a
-          WHERE s.id = $3::uuid AND s.token_hash = $4 AND s.account_id = i.id AND a.id = s.account_id
-            AND a.deletion_state = 'active' AND s.revoked_at IS NULL AND s.expires_at > $5::timestamptz
-            AND s.absolute_expires_at > $5::timestamptz
-          RETURNING s.id
-        )
-        SELECT EXISTS(SELECT 1 FROM updated) AS confirmed`,
-        [input.subject, input.accountId, input.sessionId, input.tokenHash, input.now],
+        UPDATE kip_account.apple_identities SET refresh_token_ciphertext = $3, refresh_token_updated_at = $4::timestamptz
+        WHERE provider = 'apple' AND subject = $1 AND account_id = $2::uuid
+        RETURNING subject`,
+        [input.subject, input.accountId, input.ciphertext, input.now],
       );
-      return rows[0]?.confirmed === true;
+      return rows.length > 0;
     },
 
-    async completeGoogleLink(input) {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const rows = await query(
-          `
-          WITH subject_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-google-sub:' || $1, 0))
-          ),
-          email_lock AS MATERIALIZED (
-            SELECT pg_advisory_xact_lock(hashtextextended('kip-account-email:' || $2, 0)) FROM subject_lock
-          ),
-          target AS MATERIALIZED (
-            SELECT a.id, a.deletion_state, (a.normalized_email IS NULL) AS guest FROM kip_account.accounts a
-            JOIN kip_account.sessions s ON s.account_id = a.id
-            WHERE a.id = $3::uuid AND s.id = $4::uuid AND s.token_hash = $5
-              AND a.deletion_state = 'active' AND s.revoked_at IS NULL
-              AND s.expires_at > $6::timestamptz AND s.absolute_expires_at > $6::timestamptz
-              -- A guest has nothing to reauthenticate with: its session is its only credential.
-              AND (a.normalized_email IS NULL OR s.reauthenticated_at >= $6::timestamptz - interval '5 minutes')
-              AND EXISTS (SELECT 1 FROM email_lock)
-          ),
-          existing_subject AS MATERIALIZED (
-            SELECT account_id FROM kip_account.google_identities
-            WHERE provider = 'google' AND subject = $1
-          ),
-          email_owner AS MATERIALIZED (
-            SELECT id FROM kip_account.accounts WHERE normalized_email = $2
-          ),
-          inserted AS (
-            INSERT INTO kip_account.google_identities (provider, subject, account_id)
-            SELECT 'google', $1, t.id FROM target t
-            WHERE NOT EXISTS (SELECT 1 FROM existing_subject)
-              AND (NOT EXISTS (SELECT 1 FROM email_owner) OR EXISTS (SELECT 1 FROM email_owner WHERE id = t.id))
-            ON CONFLICT (provider, subject) DO NOTHING
-            RETURNING account_id
-          ),
-          -- Upgrading a guest in place: it takes the Google email, and its long guest sessions
-          -- shorten to an ordinary account's limits.
-          upgraded AS (
-            UPDATE kip_account.accounts a SET normalized_email = $2, email_verified_at = $6::timestamptz, updated_at = $6::timestamptz
-            FROM target t
-            WHERE a.id = t.id AND t.guest AND EXISTS (SELECT 1 FROM inserted)
-            RETURNING a.id
-          ),
-          shortened AS (
-            UPDATE kip_account.sessions s SET
-              absolute_expires_at = LEAST(s.absolute_expires_at, $6::timestamptz + interval '90 days'),
-              expires_at = LEAST(s.expires_at, $6::timestamptz + interval '30 days')
-            WHERE s.account_id IN (SELECT id FROM upgraded) AND s.revoked_at IS NULL
-            RETURNING s.id
-          )
-          SELECT CASE
-            WHEN NOT EXISTS (SELECT 1 FROM target) THEN 'retry'
-            WHEN EXISTS (SELECT 1 FROM existing_subject WHERE account_id = $3::uuid) THEN 'ok'
-            WHEN EXISTS (SELECT 1 FROM existing_subject) THEN 'subject_conflict'
-            WHEN EXISTS (SELECT 1 FROM email_owner WHERE id <> $3::uuid) THEN 'email_conflict'
-            WHEN EXISTS (SELECT 1 FROM inserted) THEN 'ok'
-            ELSE 'retry'
-          END AS status`,
-          [input.subject, input.email, input.accountId, input.sessionId, input.tokenHash, input.now],
-        );
-        const status = stringValue(rows[0]?.status);
-        if (status !== "retry") return status as GoogleLinkResult;
-      }
-      return "retry";
+    async appleRefreshTokens(accountId) {
+      const rows = await query(
+        `
+        SELECT refresh_token_ciphertext FROM kip_account.apple_identities
+        WHERE account_id = $1::uuid AND refresh_token_ciphertext IS NOT NULL`,
+        [accountId],
+      );
+      return rows.map((row) => stringValue(row.refresh_token_ciphertext)).filter(Boolean);
     },
 
     async confirmPasswordReauthentication(accountId, sessionId, tokenHash, now) {

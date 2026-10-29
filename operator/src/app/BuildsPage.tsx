@@ -31,7 +31,7 @@ const POINTERS: { value: "" | ApiPointer; label: string; detail: string }[] = [
   { value: "staging", label: "Staging", detail: "staging.web.parkdex.app API, accounts and content" },
 ];
 
-const PLATFORMS: Record<Platform, string> = { android: "Android", web: "Web" };
+const PLATFORMS: Record<Platform, string> = { android: "Android", ios: "iOS", web: "Web" };
 const FLAG_NAME = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
 
 function emptyDraft(knownFlags: string[]): Draft {
@@ -133,7 +133,7 @@ const SERVER: Record<"production" | "staging" | "builtin", { name: string; detai
 const GLOSSARY: { term: string; text: string }[] = [
   {
     term: "Update rules",
-    text: 'Per environment. Builds below "force update below" see a blocking screen that sends them to the store; builds below "latest build" get a prompt they can dismiss. A build\'s environment is its API pointer, or the one it was built for.',
+    text: 'Per environment. Builds below "force update below" see a blocking screen that sends them to the store; builds below "latest build" get a prompt they can dismiss. A build\'s environment is its API pointer, or the one it was built for. Android only: iOS builds are TestFlight run numbers and never get an update prompt.',
   },
   {
     term: "API pointer",
@@ -341,7 +341,7 @@ export function BuildsPage() {
       <section className="rules-panel" aria-labelledby="rules-title">
         <div className="rules-panel__head">
           <h2 id="rules-title">Update rules</h2>
-          <p className="muted">Builds 8 and earlier count as production.</p>
+          <p className="muted">Android version codes only; iOS builds never get an update prompt. Builds 8 and earlier count as production.</p>
         </div>
         <div className="rule-row rule-row--header" aria-hidden="true">
           <span>Environment</span>

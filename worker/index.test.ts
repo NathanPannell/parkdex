@@ -532,6 +532,17 @@ test("the app no longer serves operator sign-in or report review routes", async 
   assert.equal((await responseBody(capOrigin)).releaseSha, "abc123");
 });
 
+test("apple-app-site-association is served once the Apple team ID is configured", async () => {
+  const worker = createFeedbackWorker({ createStore: () => new MemoryStore(() => Date.now()) });
+  const missing = await worker.fetch(makeRequest("/api/apple-app-site-association"), testEnvironment() as never);
+  assert.equal(missing.status, 404);
+  const response = await worker.fetch(makeRequest("/api/apple-app-site-association"), { ...testEnvironment(), APPLE_TEAM_ID: "TEAM123456" } as never);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^application\/json/u);
+  const body = (await responseBody(response)) as { applinks: { details: Array<{ appIDs: string[] }> } };
+  assert.deepEqual(body.applinks.details[0].appIDs, ["TEAM123456.app.parkdex"]);
+});
+
 test("simultaneous manual email retries claim each recipient once", async () => {
   const now = Date.now();
   const store = new MemoryStore(() => now);

@@ -50,7 +50,9 @@
     "database/migrations/founders_004_boundary_boxes.sql",
     "database/migrations/social_002_crewmates.sql",
     "database/migrations/social_003_recent_crewmates.sql",
-    "database/migrations/accounts_002_guests.sql"
+    "database/migrations/accounts_002_guests.sql",
+    "database/migrations/accounts_003_apple.sql",
+    "database/migrations/app_config_004_ios.sql"
   ],
   "contentSync": {
     "supportingMigrationPaths": [
@@ -92,7 +94,8 @@
   },
   "runtimeOptionalKeys": [
     "PARK_PROPOSAL_APPROVE_THRESHOLD", "OVERPASS_URLS", "OVERPASS_URL", "NOMINATIM_URL",
-    "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID", "GOOGLE_NATIVE_CLIENT_ID",
+    "AUTH_SESSION_SECRET", "AUTH_EMAIL_FROM", "GOOGLE_WEB_CLIENT_ID", "GOOGLE_NATIVE_CLIENT_ID", "GOOGLE_IOS_CLIENT_ID",
+    "APPLE_TEAM_ID", "APPLE_SIGN_IN_KEY_ID", "APPLE_SIGN_IN_PRIVATE_KEY",
     "KIP_PHOTO_SERVICE_URL", "KIP_PHOTO_SERVICE_TOKEN", "KIP_RETENTION_SECRET",
     "OPERATOR_DASHBOARD_URL", "OPENROUTER_API_KEY", "OPENROUTER_MODERATION_MODEL",
     "POSTHOG_PROJECT_KEY", "POSTHOG_HOST"

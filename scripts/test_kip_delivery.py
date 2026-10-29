@@ -118,6 +118,8 @@ class AccountReleaseGates(unittest.TestCase):
                 "social_002_crewmates.sql",
                 "social_003_recent_crewmates.sql",
                 "accounts_002_guests.sql",
+                "accounts_003_apple.sql",
+                "app_config_004_ios.sql",
             ],
         )
 
@@ -554,6 +556,30 @@ class AccountReleaseGates(unittest.TestCase):
         for invalid in ("", "android-client", "654321-android.apps.googleusercontent.com.evil.test"):
             with self.subTest(value=invalid), self.assertRaisesRegex(delivery.DeliveryError, "GOOGLE_NATIVE_CLIENT_ID"):
                 delivery.require_account_runtime(self.config, bundle | {"GOOGLE_NATIVE_CLIENT_ID": invalid}, self.root)
+        for invalid in ("", "ios-client"):
+            with self.subTest(value=invalid), self.assertRaisesRegex(delivery.DeliveryError, "GOOGLE_IOS_CLIENT_ID"):
+                delivery.require_account_runtime(self.config, bundle | {"GOOGLE_IOS_CLIENT_ID": invalid}, self.root)
+        delivery.require_account_runtime(self.config, bundle | {"GOOGLE_IOS_CLIENT_ID": "654321-ios.apps.googleusercontent.com"}, self.root)
+
+    def test_apple_runtime_keys_are_checked_and_revocation_keys_come_together(self):
+        self.account_files()
+        bundle = self.runtime()
+        key = "-----BEGIN PRIVATE KEY-----\nMIG\n-----END PRIVATE KEY-----\n"
+        delivery.require_account_runtime(self.config, bundle | {"APPLE_TEAM_ID": "ABCDE12345"}, self.root)
+        delivery.require_account_runtime(
+            self.config,
+            bundle | {"APPLE_TEAM_ID": "ABCDE12345", "APPLE_SIGN_IN_KEY_ID": "KEY1234567", "APPLE_SIGN_IN_PRIVATE_KEY": key},
+            self.root,
+        )
+        for invalid, message in (
+            ({"APPLE_TEAM_ID": "abc"}, "APPLE_TEAM_ID"),
+            ({"APPLE_TEAM_ID": "ABCDE12345", "APPLE_SIGN_IN_KEY_ID": "short", "APPLE_SIGN_IN_PRIVATE_KEY": key}, "APPLE_SIGN_IN_KEY_ID"),
+            ({"APPLE_TEAM_ID": "ABCDE12345", "APPLE_SIGN_IN_KEY_ID": "KEY1234567", "APPLE_SIGN_IN_PRIVATE_KEY": "not a key"}, "APPLE_SIGN_IN_PRIVATE_KEY"),
+            ({"APPLE_SIGN_IN_KEY_ID": "KEY1234567", "APPLE_SIGN_IN_PRIVATE_KEY": key}, "together"),
+            ({"APPLE_TEAM_ID": "ABCDE12345", "APPLE_SIGN_IN_KEY_ID": "KEY1234567"}, "together"),
+        ):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(delivery.DeliveryError, message):
+                delivery.require_account_runtime(self.config, bundle | invalid, self.root)
 
     def test_production_runtime_bundle_is_separate_and_uses_production_photo_worker(self):
         bundle = {
