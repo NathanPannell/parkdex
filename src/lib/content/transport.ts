@@ -59,6 +59,11 @@ type NativeContentTransport = {
 };
 
 const NativeTransport = registerPlugin<NativeContentTransport>("WifiContentTransport");
+
+/** Android and iOS both ship the WifiContentTransport plugin, with the same rules. */
+export function hasNativeContentTransport(platform = Capacitor.getPlatform()): boolean {
+  return platform === "android" || platform === "ios";
+}
 let nextRequestId = 0;
 
 // Native builds up to vc14 stop content requests on Activity pause, which a permission dialog
@@ -100,7 +105,7 @@ function readBrowserConnectivity(): ContentConnectivity {
 /** Report connectivity without treating an effective connection speed as a network type. */
 export async function getContentConnectivity(): Promise<ContentConnectivity> {
   if (!Capacitor.isNativePlatform()) return readBrowserConnectivity();
-  if (Capacitor.getPlatform() !== "android") return { connected: false, wifi: false, contentDownloadAllowed: false };
+  if (!hasNativeContentTransport()) return { connected: false, wifi: false, contentDownloadAllowed: false };
 
   const [networkResult, wifiResult] = await Promise.allSettled([Network.getStatus(), NativeTransport.getWifiStatus()]);
   const connected = networkResult.status === "fulfilled" && networkResult.value.connected === true;
@@ -112,7 +117,7 @@ export async function getContentConnectivity(): Promise<ContentConnectivity> {
 /** Subscribe to online state and the browser's physical network type, or native network changes. */
 export function subscribeContentConnectivity(listener: (connectivity: ContentConnectivity) => void): () => void {
   if (Capacitor.isNativePlatform()) {
-    if (Capacitor.getPlatform() !== "android") {
+    if (!hasNativeContentTransport()) {
       listener({ connected: false, wifi: false, contentDownloadAllowed: false });
       return () => {};
     }
@@ -179,7 +184,7 @@ export async function contentFetch(input: RequestInfo | URL, init?: ContentReque
   throwIfAborted(request.signal);
 
   if (Capacitor.isNativePlatform()) {
-    if (Capacitor.getPlatform() !== "android") {
+    if (!hasNativeContentTransport()) {
       throw new Error("Content transport is unavailable on this native platform");
     }
     return nativeFetch(request, url, apiOrigin, anyNetwork);

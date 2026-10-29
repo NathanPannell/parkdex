@@ -17,8 +17,20 @@ export interface ServerAccountSession {
   expiresAt: number | string;
 }
 
+/** What Sign in with Apple hands the app; the server verifies the token and may trade the code. */
+export interface AppleCredential {
+  identityToken: string;
+  authorizationCode?: string;
+  /** Apple shares the name only on the first sign-in on a device. */
+  givenName?: string;
+  familyName?: string;
+}
+
 interface NativeIdentityPlugin {
+  /** On iOS `serverClientId` is the iOS OAuth client, which the server names for iOS requests. */
   getGoogleIdToken(options: { serverClientId: string; nonce: string }): Promise<{ idToken: string }>;
+  /** iOS only. */
+  getAppleCredential(options: { nonce: string }): Promise<AppleCredential>;
   setSession(options: { token: string; expiresAt: number; apiOrigin: string }): Promise<void>;
   getSession(): Promise<{ token?: string; expiresAt?: number; apiOrigin?: string; requiresReauth?: boolean } | null | undefined>;
   clearSession(options?: { clearCredentialState?: boolean }): Promise<void>;
@@ -48,6 +60,16 @@ export function isAndroidNativeIdentityAvailable(): boolean {
   return Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("NativeIdentity");
 }
 
+/** Sign-in and the saved session: Android's plugin, or the iOS one every iOS build compiles in. */
+export function isNativeIdentityAvailable(): boolean {
+  return isAndroidNativeIdentityAvailable() || Capacitor.getPlatform() === "ios";
+}
+
+/** Sign in with Apple exists only in the iOS app (App Store guideline 4.8). */
+export function isAppleSignInAvailable(): boolean {
+  return Capacitor.getPlatform() === "ios";
+}
+
 /** A public OAuth web client ID may come from server config or a build-time public variable. */
 export function resolveGoogleWebClientId(explicitClientId?: string | null): string | null {
   const requested = (explicitClientId ?? "").trim();
@@ -56,7 +78,7 @@ export function resolveGoogleWebClientId(explicitClientId?: string | null): stri
 }
 
 export async function requestNativeGoogleIdToken(options: { nonce: string; serverClientId?: string | null }): Promise<string> {
-  assertAndroidNativeIdentityAvailable();
+  assertNativeIdentityAvailable();
   const nonce = options.nonce;
   const serverClientId = resolveGoogleWebClientId(options.serverClientId);
   if (!nonce || nonce !== nonce.trim() || nonce.length > 512) {
@@ -71,8 +93,25 @@ export async function requestNativeGoogleIdToken(options: { nonce: string; serve
   return result.idToken;
 }
 
+export async function requestNativeAppleCredential(options: { nonce: string }): Promise<AppleCredential> {
+  if (!isAppleSignInAvailable()) throw new Error("Sign in with Apple is available in the iOS app.");
+  const nonce = options.nonce;
+  if (!nonce || nonce !== nonce.trim() || nonce.length > 512) {
+    throw new Error("A valid server-issued Sign in with Apple nonce is required.");
+  }
+  const result = await NativeIdentity.getAppleCredential({ nonce });
+  if (typeof result?.identityToken !== "string" || !result.identityToken.trim()) {
+    throw new Error("Sign in with Apple did not return an identity token.");
+  }
+  const credential: AppleCredential = { identityToken: result.identityToken };
+  if (typeof result.authorizationCode === "string" && result.authorizationCode) credential.authorizationCode = result.authorizationCode;
+  if (typeof result.givenName === "string" && result.givenName.trim()) credential.givenName = result.givenName.trim().slice(0, 80);
+  if (typeof result.familyName === "string" && result.familyName.trim()) credential.familyName = result.familyName.trim().slice(0, 80);
+  return credential;
+}
+
 export async function persistNativeSession(session: ServerAccountSession): Promise<void> {
-  assertAndroidNativeIdentityAvailable();
+  assertNativeIdentityAvailable();
   if (typeof session.sessionToken !== "string" || !session.sessionToken.trim() || session.sessionToken !== session.sessionToken.trim()) {
     throw new Error("The server did not return a valid native session.");
   }
@@ -84,7 +123,7 @@ export async function persistNativeSession(session: ServerAccountSession): Promi
 }
 
 export async function readNativeSession(expectedApiOrigin = getAuthApiOrigin()): Promise<NativeAccountSession | null> {
-  assertAndroidNativeIdentityAvailable();
+  assertNativeIdentityAvailable();
   const stored = await NativeIdentity.getSession();
   if (!stored) {
     return null;
@@ -102,13 +141,13 @@ export async function readNativeSession(expectedApiOrigin = getAuthApiOrigin()):
 }
 
 export async function clearNativeSession(clearCredentialState = true): Promise<void> {
-  assertAndroidNativeIdentityAvailable();
+  assertNativeIdentityAvailable();
   await NativeIdentity.clearSession({ clearCredentialState });
 }
 
 /** Sends native auth requests without WebView cookies or caller-supplied bearer tokens. */
 export async function nativeAuthFetch(input: RequestInfo | URL, init: RequestInit = {}, fetcher: typeof fetch = globalThis.fetch): Promise<Response> {
-  assertAndroidNativeIdentityAvailable();
+  assertNativeIdentityAvailable();
   const apiOrigin = getAuthApiOrigin();
   const session = await readNativeSession(apiOrigin);
   const rawUrl = typeof Request !== "undefined" && input instanceof Request ? input.url : String(input);
@@ -132,9 +171,9 @@ export async function nativeAuthFetch(input: RequestInfo | URL, init: RequestIni
   });
 }
 
-/** Registers the Android App Links event and forwards a cold-start link exactly once. */
+/** Registers the Android App Links (or iOS universal links) event and forwards a cold-start link exactly once. */
 export async function listenForNativeAuthLinks(handler: AuthLinkHandler): Promise<() => Promise<void>> {
-  if (!isAndroidNativeIdentityAvailable()) return async () => {};
+  if (!isNativeIdentityAvailable()) return async () => {};
 
   const expectedOrigin = getAuthLinkOrigin();
   const forward = async (url: string | undefined) => {
@@ -268,8 +307,8 @@ function clearCurrentAuthFragment(): void {
   history.replaceState(history.state, "", `${current.pathname}${current.search}${current.hash}`);
 }
 
-function assertAndroidNativeIdentityAvailable(): void {
-  if (!isAndroidNativeIdentityAvailable()) {
-    throw new Error("Native account identity is available only in the Android app.");
+function assertNativeIdentityAvailable(): void {
+  if (!isNativeIdentityAvailable()) {
+    throw new Error("Native account identity is available only in the Parkdex app.");
   }
 }

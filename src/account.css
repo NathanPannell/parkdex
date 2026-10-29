@@ -337,6 +337,28 @@
   font-size: 16px;
 }
 
+/* Sign in with Apple (iOS only), in Apple's black style and at least as large as the Google button. */
+.account-apple {
+  height: 48px;
+  gap: 8px;
+  border-color: #000;
+  background: #000;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.account-apple + .account-google-native,
+.account-apple + .account-google {
+  margin-top: 10px;
+}
+
+.account-apple__logo {
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 19px;
+  line-height: 1;
+}
+
 .account-notice {
   position: relative;
   display: flex;

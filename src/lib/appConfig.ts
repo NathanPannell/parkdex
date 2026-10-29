@@ -36,7 +36,7 @@ export const FEATURE_FLAG_DEFAULTS = Object.freeze({
 });
 export type FeatureFlag = keyof typeof FEATURE_FLAG_DEFAULTS;
 export type FeatureFlags = Record<FeatureFlag, boolean>;
-export type AppPlatform = "android" | "web";
+export type AppPlatform = "android" | "ios" | "web";
 /** Whether this build must, or could, update from the store. */
 export type UpdateStatus = "required" | "available" | "none";
 
@@ -212,6 +212,23 @@ function androidBuildNumber(value: unknown): number | null {
   return Number.isSafeInteger(build) && build > 0 ? build : null;
 }
 
+/**
+ * An iOS build's number for the server: the TestFlight run number, which is the part of
+ * CFBundleVersion (`<run>.<attempt>`) before the dot. Local Xcode builds are build 1.
+ */
+export function iosBuildNumber(value: unknown): number | null {
+  if (typeof value === "number") return androidBuildNumber(value);
+  if (typeof value !== "string" || !/^\d+(\.\d+){0,2}$/.test(value.trim())) return null;
+  return androidBuildNumber(value.trim().split(".")[0]);
+}
+
+/** Native builds that check in with their own build number and may follow an API pointer. */
+function nativeAppPlatform(): "android" | "ios" | null {
+  if (!Capacitor.isNativePlatform()) return null;
+  const platform = Capacitor.getPlatform();
+  return platform === "android" || platform === "ios" ? platform : null;
+}
+
 async function withBuildInfoTimeout<T>(work: () => Promise<T>): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -227,20 +244,22 @@ async function withBuildInfoTimeout<T>(work: () => Promise<T>): Promise<T> {
 }
 
 async function readBuildInfo(): Promise<BuildInfo | null> {
-  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") return { platform: "web", build: 0 };
+  const platform = nativeAppPlatform();
+  if (!platform) return { platform: "web", build: 0 };
+  const parse = platform === "ios" ? iosBuildNumber : androidBuildNumber;
   try {
     const info = await withBuildInfoTimeout(() => App.getInfo());
-    const build = androidBuildNumber(info.build);
-    if (build !== null) return { platform: "android", build };
+    const build = parse(info.build);
+    if (build !== null) return { platform, build };
   } catch {
     // The app plugin can be unavailable during startup. Use the package-info plugin next.
   }
   try {
     const info = await withBuildInfoTimeout(() => getNativePackageInstallInfo());
-    const build = androidBuildNumber(info?.versionCode);
-    if (build !== null) return { platform: "android", build };
+    const build = parse(info?.versionCode);
+    if (build !== null) return { platform, build };
   } catch {
-    // Without a valid installed version code, avoid requesting Android build zero.
+    // Without a valid installed version code, avoid requesting build zero.
   }
   return null;
 }
@@ -292,7 +311,7 @@ export async function initAppConfig(): Promise<AppConfig> {
   const installation = loadInstallationId();
   buildInfo = await readBuildInfo();
   setNativeBuild(buildInfo?.platform === "android" ? buildInfo.build : null);
-  const defaultsInfo = buildInfo ?? { platform: "android" as const, build: 0 };
+  const defaultsInfo = buildInfo ?? { platform: nativeAppPlatform() ?? "android", build: 0 };
   const launch = buildInfo ? (readCache(buildInfo) ?? defaults(buildInfo)) : defaults(defaultsInfo);
   const previous = active;
   active = launch;
@@ -301,8 +320,9 @@ export async function initAppConfig(): Promise<AppConfig> {
   }
   // Only native production and staging builds switch servers; web pages always use their own host.
   const baked = bakedApiPointer();
-  const pointer = buildInfo?.platform === "android" && baked && active.apiPointer && active.apiPointer !== baked ? active.apiPointer : null;
-  if (buildInfo?.platform === "android" && baked) await signOutIfServerChanged(pointer ?? baked);
+  const native = buildInfo?.platform === "android" || buildInfo?.platform === "ios";
+  const pointer = native && baked && active.apiPointer && active.apiPointer !== baked ? active.apiPointer : null;
+  if (native && baked) await signOutIfServerChanged(pointer ?? baked);
   setApiPointerOverride(pointer);
   setContentChannelOverride(pointer === "production" ? "main" : pointer === "staging" ? "staging" : null);
   setUpdateStatus(active.platform === "android" ? active.update : "none");

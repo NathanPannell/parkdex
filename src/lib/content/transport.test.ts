@@ -432,12 +432,24 @@ describe("content transport", () => {
 
   it("does not report Wi-Fi on unsupported native platforms", async () => {
     mocks.capacitor.isNativePlatform.mockReturnValue(true);
-    mocks.capacitor.getPlatform.mockReturnValue("ios");
+    mocks.capacitor.getPlatform.mockReturnValue("electron");
 
     expect(await getContentConnectivity()).toEqual({ connected: false, wifi: false, contentDownloadAllowed: false });
     expect(await isContentWifiAvailable()).toBe(false);
     await expect(contentFetch(API_URL)).rejects.toThrow("unavailable on this native platform");
     expect(mocks.native.request).not.toHaveBeenCalled();
+  });
+
+  it("routes iOS content through the same native plugin as Android", async () => {
+    mocks.capacitor.isNativePlatform.mockReturnValue(true);
+    mocks.capacitor.getPlatform.mockReturnValue("ios");
+    mocks.network.getStatus.mockResolvedValue({ connected: true, connectionType: "wifi" });
+    mocks.native.getWifiStatus.mockResolvedValue({ wifi: true });
+
+    await expect(getContentConnectivity()).resolves.toEqual({ connected: true, wifi: true, contentDownloadAllowed: true });
+    await expect(contentFetch(API_URL)).resolves.toMatchObject({ status: 200 });
+    expect(mocks.native.request).toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("allows Android essential content on cellular without reporting Wi-Fi", async () => {

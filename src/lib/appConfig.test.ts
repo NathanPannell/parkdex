@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   native: false,
+  platform: "android",
   build: "42",
   storage: new Map<string, string>(),
   getInfo: vi.fn(async () => ({ build: mocks.build, version: "1.0.0", id: "app.parkdex", name: "Parkdex" })),
@@ -25,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@capacitor/core", () => ({
   Capacitor: {
     isNativePlatform: () => mocks.native,
-    getPlatform: () => (mocks.native ? "android" : "web"),
+    getPlatform: () => (mocks.native ? mocks.platform : "web"),
   },
 }));
 
@@ -48,6 +49,7 @@ import {
   currentUpdateStatus,
   FEATURE_FLAG_DEFAULTS,
   initAppConfig,
+  iosBuildNumber,
   isFeatureEnabled,
   parseRemoteAppConfig,
   remoteFlag,
@@ -70,6 +72,7 @@ function respond(body: unknown, status = 200): typeof fetch {
 
 beforeEach(() => {
   mocks.native = true;
+  mocks.platform = "android";
   mocks.build = "42";
   mocks.storage.clear();
   mocks.getInfo.mockReset();
@@ -337,6 +340,31 @@ describe("app config", () => {
     await checkInAppConfig(respond({ error: "offline" }, 503));
     await initAppConfig();
     expect(currentUpdateStatus()).toBe("required");
+  });
+
+  it("checks an iOS build in by its TestFlight run number and never prompts it to update", async () => {
+    mocks.platform = "ios";
+    mocks.build = "12.1";
+    await initAppConfig();
+    expect(activeAppConfig()).toMatchObject({ platform: "ios", build: 12 });
+    const fetcher = respond(answer({ platform: "ios", build: 12, update: "required", flags: { friends: true, badges: false } }));
+    await checkInAppConfig(fetcher);
+    const url = new URL(String(vi.mocked(fetcher).mock.calls[0][0]));
+    expect(url.searchParams.get("platform")).toBe("ios");
+    expect(url.searchParams.get("build")).toBe("12");
+    expect(isFeatureEnabled("friends")).toBe(true);
+    expect(currentUpdateStatus()).toBe("none");
+  });
+
+  it("reads the run number from an iOS CFBundleVersion and rejects anything else", () => {
+    expect(iosBuildNumber("12.1")).toBe(12);
+    expect(iosBuildNumber("7")).toBe(7);
+    expect(iosBuildNumber(30)).toBe(30);
+    expect(iosBuildNumber("1.0.0")).toBe(1);
+    expect(iosBuildNumber("0.1")).toBeNull();
+    expect(iosBuildNumber("12a")).toBeNull();
+    expect(iosBuildNumber("")).toBeNull();
+    expect(iosBuildNumber(undefined)).toBeNull();
   });
 
   it("never prompts a web page to update", async () => {

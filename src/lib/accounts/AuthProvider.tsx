@@ -23,9 +23,11 @@ import {
 import {
   AuthHttpError,
   clearLocalNativeSession,
+  completeAppleSignIn,
   completeGoogleSignIn,
   confirmEmailVerification,
   confirmPasswordReset,
+  createAppleChallenge,
   createGoogleChallenge,
   deleteCurrentAccount,
   fetchAuthConfig,
@@ -33,10 +35,12 @@ import {
   getCurrentAccount,
   isNativeAccountRuntime,
   isValidGoogleWebClientId,
+  linkAppleAccount,
   linkGoogleAccount,
   loginAccount,
   startGuestAccount,
   logoutAccount,
+  reauthenticateApple,
   reauthenticateGoogle,
   reauthenticatePassword,
   readLocalNativeSession,
@@ -49,7 +53,13 @@ import {
   type DeletionResponse,
   type GooglePurpose,
 } from "./authClient";
-import { listenForNativeAuthLinks, NativeSessionOriginMismatchError, parseNativeAuthLink, resolveGoogleWebClientId } from "./nativeIdentity";
+import {
+  listenForNativeAuthLinks,
+  NativeSessionOriginMismatchError,
+  parseNativeAuthLink,
+  resolveGoogleWebClientId,
+  type AppleCredential,
+} from "./nativeIdentity";
 import { getAccountBackupConnectivity, subscribeAccountBackupConnectivity, type AccountBackupConnectivity } from "./accountBackupConnectivity";
 import { shouldReopenAccount, SignInGate } from "./signInGate";
 import { clearLocalHandle } from "../game/localHandle";
@@ -102,6 +112,11 @@ type AuthContextValue = AuthState & {
   reauthPassword: (password: string) => Promise<void>;
   reauthGoogle: (idToken: string, nonce: string) => Promise<void>;
   googleChallenge: (purpose: GooglePurpose) => ReturnType<typeof createGoogleChallenge>;
+  /** Sign in with Apple, iOS only: the same three purposes as Google. */
+  signInApple: (credential: AppleCredential, nonce: string) => Promise<AccountProfile>;
+  linkApple: (credential: AppleCredential, nonce: string) => Promise<void>;
+  reauthApple: (credential: AppleCredential, nonce: string) => Promise<void>;
+  appleChallenge: (purpose: GooglePurpose) => ReturnType<typeof createAppleChallenge>;
   syncBackup: (options?: SyncBackupOptions) => Promise<ProgressSyncResult | null>;
   deleteAccount: () => Promise<DeletionResponse>;
 };
@@ -580,6 +595,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (purpose !== "sign_in" && !accountId) throw new Error("Sign in again before verifying this account.");
     return createGoogleChallenge(purpose, accountId);
   }, []);
+  const signInApple = useCallback(
+    (credential: AppleCredential, nonce: string) => interactiveSignIn(() => completeAppleSignIn(credential, nonce)),
+    [interactiveSignIn],
+  );
+  const linkApple = useCallback(async (credential: AppleCredential, nonce: string) => {
+    const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
+    if (!accountId) throw new Error("Sign in again before linking Apple.");
+    const generation = sessionGeneration.current;
+    const account = await linkAppleAccount(credential, nonce, accountId);
+    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      throw new Error("The signed-in account changed. Retry Apple linking.");
+    const wasGuest = stateRef.current.account?.guest === true;
+    setState((current) => ({
+      ...current,
+      account,
+      notice: { kind: "success", message: wasGuest ? "Backed up with Apple. Sign in with it on any iPhone." : "Apple is now linked to this account." },
+    }));
+  }, []);
+  const reauthApple = useCallback(async (credential: AppleCredential, nonce: string) => {
+    const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
+    if (!accountId) throw new Error("Sign in again before verifying this account.");
+    const generation = sessionGeneration.current;
+    await reauthenticateApple(credential, nonce, accountId);
+    if (sessionGeneration.current !== generation || stateRef.current.account?.id !== accountId)
+      throw new Error("The signed-in account changed. Verify it again before continuing.");
+  }, []);
+  const appleChallenge = useCallback((purpose: GooglePurpose) => {
+    const accountId = purpose === "sign_in" ? undefined : stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : undefined;
+    if (purpose !== "sign_in" && !accountId) throw new Error("Sign in again before verifying this account.");
+    return createAppleChallenge(purpose, accountId);
+  }, []);
 
   const syncBackup = useCallback((options: SyncBackupOptions = {}): Promise<ProgressSyncResult | null> => {
     const accountId = stateRef.current.phase === "authenticated" ? stateRef.current.account?.id : null;
@@ -946,6 +992,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reauthPassword,
     reauthGoogle,
     googleChallenge,
+    signInApple,
+    linkApple,
+    reauthApple,
+    appleChallenge,
     syncBackup,
     deleteAccount,
   };

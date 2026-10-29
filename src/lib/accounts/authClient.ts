@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { accountBackupFetch, assertAccountBackupRequest, isAccountBackupPath } from "./accountBackupTransport";
-import { nativeAuthFetch, persistNativeSession, type NativeAccountSession, type ServerAccountSession } from "./nativeIdentity";
+import { nativeAuthFetch, persistNativeSession, type AppleCredential, type NativeAccountSession, type ServerAccountSession } from "./nativeIdentity";
 import { hasUrlCredentials, isDevLoopbackHttp, KIP_STAGING_ORIGIN, resolveUserDataApiOrigin } from "../userDataDestination";
 import { apiEnvironment, apiUrl as pointedApiUrl } from "../apiPointer";
 import { withRequestContext } from "../requestContext";
@@ -22,9 +22,11 @@ export type AuthConfig = {
   googleWebEnabled: boolean;
   googleNativeEnabled: boolean;
   googleWebClientId: string | null;
+  /** Sign in with Apple; servers send it as true to the iOS app only. */
+  appleEnabled?: boolean;
   capabilities?: {
     web?: { email?: boolean; google?: boolean };
-    native?: { email?: boolean; google?: boolean };
+    native?: { email?: boolean; google?: boolean; apple?: boolean };
   };
 };
 
@@ -314,6 +316,52 @@ export async function linkGoogleAccount(idToken: string, nonce: string, transpor
     throw new Error("Google did not link to the signed-in account.");
   }
   return body.account;
+}
+
+/** Sign in with Apple exists only in the iOS app, so these always use the native transport. */
+export async function createAppleChallenge(purpose: GooglePurpose, expectedAccountId?: string): Promise<GoogleChallenge> {
+  return requestJson<GoogleChallenge>(
+    "/api/auth/apple/challenge",
+    { method: "POST", body: JSON.stringify({ purpose }) },
+    purpose !== "sign_in",
+    expectedAccountId,
+  );
+}
+
+function appleBody(credential: AppleCredential, nonce: string): string {
+  return JSON.stringify({ ...credential, nonce });
+}
+
+export async function completeAppleSignIn(credential: AppleCredential, nonce: string): Promise<AccountProfile> {
+  const response = await requestJson<AuthSessionResponse>("/api/auth/apple/native", {
+    method: "POST",
+    headers: { "X-Kip-Auth-Transport": "native" },
+    body: appleBody(credential, nonce),
+  });
+  return acceptSession(response);
+}
+
+export async function linkAppleAccount(credential: AppleCredential, nonce: string, expectedAccountId: string): Promise<AccountProfile> {
+  const body = await requestJson<{ account: AccountProfile }>(
+    "/api/auth/apple/native",
+    { method: "POST", headers: { "X-Kip-Auth-Transport": "native" }, body: appleBody(credential, nonce) },
+    true,
+    expectedAccountId,
+  );
+  if (!body.account || body.account.id.toLowerCase() !== expectedAccountId.toLowerCase()) {
+    throw new Error("Apple did not link to the signed-in account.");
+  }
+  return body.account;
+}
+
+export async function reauthenticateApple(credential: AppleCredential, nonce: string, expectedAccountId: string): Promise<void> {
+  const body = await requestJson<GoogleReauthResponse>(
+    "/api/auth/apple/native",
+    { method: "POST", headers: { "X-Kip-Auth-Transport": "native" }, body: appleBody(credential, nonce) },
+    true,
+    expectedAccountId,
+  );
+  if (!body.reauthenticatedUntil) throw new Error("Apple did not confirm recent account verification.");
 }
 
 export async function reauthenticatePassword(password: string, expectedAccountId: string): Promise<void> {

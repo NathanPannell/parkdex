@@ -1,5 +1,11 @@
 import { Capacitor } from "@capacitor/core";
-import { abortNativeAccountBackupRequest, getContentConnectivity, nativeAccountBackupRequest, subscribeContentConnectivity } from "../content/transport";
+import {
+  abortNativeAccountBackupRequest,
+  getContentConnectivity,
+  hasNativeContentTransport,
+  nativeAccountBackupRequest,
+  subscribeContentConnectivity,
+} from "../content/transport";
 import { isAccountBackupAvailable, mapAccountBackupConnectivity } from "./accountBackupConnectivity";
 import { isDevLoopbackHttp } from "../userDataDestination";
 
@@ -108,7 +114,7 @@ export async function accountBackupFetch(input: RequestInfo | URL, init: Request
   if (body.byteLength > maxRequestBytes) throw new RangeError("The account backup request exceeds its byte limit.");
 
   if (Capacitor.isNativePlatform()) {
-    if (Capacitor.getPlatform() !== "android") throw new Error("Native account backup is unavailable on this platform.");
+    if (!hasNativeContentTransport()) throw new Error("Native account backup is unavailable on this platform.");
     return nativeAccountBackupFetch(url, method, headers, body, approvedApiOrigin, callerSignal, maxRequestBytes);
   }
   return browserAccountBackupFetch(url, method, headers, body, approvedApiOrigin, callerSignal);
