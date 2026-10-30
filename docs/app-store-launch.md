@@ -39,7 +39,7 @@ All of these are **Nathan**'s: they need his Apple and Google accounts. Steps re
 
 ## R. Releases
 
-- [ ] **R1. Refresh the local Vercel token** (`VERCEL_TOKEN`, which the delivery harness reads; see `vercelTokenEnvironment` in `deployment.json`). **Nathan** (it is a credential), then **agent** checks it. Not blocked. It returned 403 during the #240 delivery, so `assign-staging` and `assign-main` fail until it is replaced.
+- [x] **R1. Refresh the local Vercel token** (`VERCEL_TOKEN`, which the delivery harness reads; see `vercelTokenEnvironment` in `deployment.json`). Replaced on 2026-10-30, scoped to the `nathanpannells-projects` team. `assign-staging` worked with it that day.
 - [ ] **R2. First staging TestFlight build:** tag `ios-testflight/staging/1` at `origin/staging` and push it (`docs/ios.md` > "First TestFlight build"). **Agent.** Blocked by A8, A9 (staging), A11 and R1. After A9, the staging API picks up the keys only with a fresh staging deploy and `assign-staging`, which needs R1. Before tagging, check that `https://staging.web.parkdex.app/.well-known/apple-app-site-association` names `<team id>.app.parkdex`.
 - [ ] **R3. Promote #239 and #240 to `main`** in a `staging` → `main` PR. **Agent**, and it **needs Nathan's yes** to open and to merge. Blocked by R1 (for `assign-main`). Set A9 (production) first, or the Apple keys reach production only with the release after it. The release seeds the production `ios/0` app config row through `app_config_004_ios.sql`, which a production build needs.
 - [ ] **R4. Production TestFlight build** (`ios-testflight/production/<label>`). **Agent.** Blocked by R3, A9 (production, set before R3) and R2, which proves the secrets, app record and signing work. This is the build that goes to App Review.
