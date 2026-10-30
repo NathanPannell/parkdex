@@ -14,7 +14,7 @@ Android has been live on Google Play (Canada) since 2026-10-28. iOS code is on `
 
 - The full checklist is [`docs/app-store-launch.md`](docs/app-store-launch.md). Tick items off there, not here.
 - [ ] Apple Developer Program enrollment (A1). **Nathan.** Everything else on the list waits on it.
-- [ ] Refresh the local `VERCEL_TOKEN` (R1). **Nathan.**
+- [x] Refresh the local `VERCEL_TOKEN` (R1). Done 2026-10-30.
 - [ ] First TestFlight build, then App Review.
 
 ## 2. Polish the App Store and Play Store pages
