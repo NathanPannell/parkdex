@@ -29,20 +29,20 @@ All of these are **Nathan**'s: they need his Apple and Google accounts. Steps re
   - `APP_STORE_CONNECT_KEY_ID`
   - `APP_STORE_CONNECT_API_KEY_P8`
   - `APPLE_TEAM_ID`
-- [ ] **A9. Add the four runtime keys** to both `KIP_STAGING_EXTRA_RUNTIME_JSON` and `KIP_PRODUCTION_EXTRA_RUNTIME_JSON` (step 9). **Nathan.** Blocked by A2, A4 and A10. Add the Sign in with Apple key before App Review: accounts deleted before it exists can't have their Apple tokens revoked later.
+- [ ] **A9. Add the four runtime keys** to both `KIP_STAGING_EXTRA_RUNTIME_JSON` and `KIP_PRODUCTION_EXTRA_RUNTIME_JSON` (step 9). **Nathan.** Blocked by A2, A4 and A10. The keys reach Vercel only on that branch's next deploy: a push to `staging` followed by `assign-staging`, and the R3 merge to `main`. So set the production keys before R3. Add the Sign in with Apple key before App Review: accounts deleted before it exists can't have their Apple tokens revoked later.
   - `APPLE_TEAM_ID`
   - `APPLE_SIGN_IN_KEY_ID`
   - `APPLE_SIGN_IN_PRIVATE_KEY`
   - `GOOGLE_IOS_CLIENT_ID`
 - [ ] **A10. Create the iOS Google OAuth client** (type iOS, bundle `app.parkdex`, in the project that holds the web client; step 10). **Nathan.** Not blocked: it needs no Apple account and can be done today.
-- [ ] **A11. Create the internal TestFlight group** and add your Apple ID (step 11). **Nathan.** Blocked by A6.
+- [ ] **A11. Create the internal TestFlight group** and add Nathan's Apple ID (step 11). **Nathan.** Blocked by A6.
 
 ## R. Releases
 
-- [ ] **R1. Refresh the local Vercel token** in the delivery loader. **Nathan** (it is a credential), then **agent** checks it. Not blocked. It returned 403 during the #240 delivery, so `assign-staging` and `assign-main` fail until it is replaced.
-- [ ] **R2. First staging TestFlight build:** tag `ios-testflight/staging/1` at `origin/staging` and push it (`docs/ios.md` > "First TestFlight build"). **Agent.** Blocked by A8, A9 (staging) and A11. Before tagging, check that `https://staging.web.parkdex.app/.well-known/apple-app-site-association` names `<team id>.app.parkdex`.
-- [ ] **R3. Promote #239 and #240 to `main`** in a `staging` → `main` PR. **Agent**, and it **needs Nathan's yes** to open and to merge. Blocked by R1 (for `assign-main`). The release seeds the production `ios/0` app config row through `app_config_004_ios.sql`, which a production build needs.
-- [ ] **R4. Production TestFlight build** (`ios-testflight/production/<label>`). **Agent.** Blocked by R3 and A9 (production). This is the build that goes to App Review.
+- [ ] **R1. Refresh the local Vercel token** (`VERCEL_TOKEN`, which the delivery harness reads; see `vercelTokenEnvironment` in `deployment.json`). **Nathan** (it is a credential), then **agent** checks it. Not blocked. It returned 403 during the #240 delivery, so `assign-staging` and `assign-main` fail until it is replaced.
+- [ ] **R2. First staging TestFlight build:** tag `ios-testflight/staging/1` at `origin/staging` and push it (`docs/ios.md` > "First TestFlight build"). **Agent.** Blocked by A8, A9 (staging), A11 and R1. After A9, the staging API picks up the keys only with a fresh staging deploy and `assign-staging`, which needs R1. Before tagging, check that `https://staging.web.parkdex.app/.well-known/apple-app-site-association` names `<team id>.app.parkdex`.
+- [ ] **R3. Promote #239 and #240 to `main`** in a `staging` → `main` PR. **Agent**, and it **needs Nathan's yes** to open and to merge. Blocked by R1 (for `assign-main`). Set A9 (production) first, or the Apple keys reach production only with the release after it. The release seeds the production `ios/0` app config row through `app_config_004_ios.sql`, which a production build needs.
+- [ ] **R4. Production TestFlight build** (`ios-testflight/production/<label>`). **Agent.** Blocked by R3, A9 (production, set before R3) and R2, which proves the secrets, app record and signing work. This is the build that goes to App Review.
 
 ## P. Privacy policy
 
@@ -63,7 +63,7 @@ All in App Store Connect > the app, blocked by A6. **Nathan** enters them; an **
 - [ ] **M4. Age rating questionnaire.** Answer it. User-generated content (handles, flags, photos, feedback) and location are the parts to answer carefully.
 - [ ] **M5. Price and availability.** Free. Canada only, matching Play.
 - [ ] **M6. App Privacy answers.** Enter the table from `docs/ios.md` > "App Privacy answers". It must match `ios/App/App/PrivacyInfo.xcprivacy`.
-- [ ] **M7. 6.9" screenshots.** Upload the five 1320 × 2868 PNGs from `npm run ios:screenshots` (`docs/ios.md` > "Screenshots"). A copy is in `C:\repo\parkdex-workspace\output\app-store-6.9-20261029\`. Regenerate them if the UI changes first (see section C).
+- [ ] **M7. 6.9" screenshots.** Upload the five 1320 × 2868 PNGs from `npm run ios:screenshots`, which writes them to `shots/app-store-6.9/` (`docs/ios.md` > "Screenshots"). A set from 2026-10-29 is already in the workspace `output/app-store-6.9-20261029/` folder. Regenerate them if the UI changes first (see section C).
 - [ ] **M8. URLs.**
   - Support: `https://parkdex.app/support/`
   - Privacy policy: `https://parkdex.app/privacy/` (blocked by P1 for the content)
@@ -91,5 +91,5 @@ Nathan plans these. They are not designed or built yet, and this file does not d
 
 ## S. Submit
 
-- [ ] **S1. Submit for review.** Attach the production build from R4 to version 1.0.0 and submit. **Nathan.** Blocked by R4, D1, P1, all of M and V1.
+- [ ] **S1. Submit for review.** Attach the production build from R4 to version 1.0.0 and submit. **Nathan.** Blocked by R4, D1, D2, P1, all of M and V1.
 - [ ] **S2. Release.** After approval, release manually or automatically. **Nathan.** Blocked by S1. Then raise `MARKETING_VERSION` for the next version (`docs/ios.md` > "First TestFlight build").
