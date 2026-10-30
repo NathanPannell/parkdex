@@ -25,16 +25,21 @@ foreach ($requiredPath in @($sdkDirectory, $keystoreFile, $credentialFile, $sync
 }
 
 # Refuse to sign staging web assets: the last sync must be `npm run android:sync:production`.
-$syncedChannel = (Get-Content -LiteralPath $syncedConfigFile -Raw | ConvertFrom-Json).plugins.CapacitorUpdater.defaultChannel
-if ($syncedChannel -ne 'production') {
-    throw "The synced web bundle is on channel '$syncedChannel'. Run npm run android:sync:production first."
+$syncedUpdater = (Get-Content -LiteralPath $syncedConfigFile -Raw | ConvertFrom-Json).plugins.CapacitorUpdater
+if ($syncedUpdater.defaultChannel -ne 'production') {
+    throw "The synced web bundle is on channel '$($syncedUpdater.defaultChannel)'. Run npm run android:sync:production first."
+}
+if ($syncedUpdater.updateUrl -ne "https://$productionHost/api/updates") {
+    throw "The synced web bundle checks for updates at '$($syncedUpdater.updateUrl)'. Clear PARKDEX_UPDATE_URL and run npm run android:sync:production again."
 }
 
 $environmentNames = @(
     'ANDROID_HOME',
     'ANDROID_SDK_ROOT',
     'PARKDEX_AUTH_LINK_HOST',
+    'ORG_GRADLE_PROJECT_PARKDEX_AUTH_LINK_HOST',
     'PARKDEX_CONTENT_API_HOST',
+    'ORG_GRADLE_PROJECT_PARKDEX_CONTENT_API_HOST',
     'PARKDEX_RELEASE_PROPERTIES_FILE',
     'PARKDEX_RELEASE_KEYSTORE_FILE',
     'PARKDEX_RELEASE_KEY_ALIAS',
@@ -71,7 +76,9 @@ try {
     [Environment]::SetEnvironmentVariable('ANDROID_SDK_ROOT', $sdkDirectory, 'Process')
     [Environment]::SetEnvironmentVariable('PARKDEX_AUTH_LINK_HOST', $productionHost, 'Process')
     # Cleared so a host or properties file left in the shell cannot reach the Play build.
+    [Environment]::SetEnvironmentVariable('ORG_GRADLE_PROJECT_PARKDEX_AUTH_LINK_HOST', $null, 'Process')
     [Environment]::SetEnvironmentVariable('PARKDEX_CONTENT_API_HOST', $null, 'Process')
+    [Environment]::SetEnvironmentVariable('ORG_GRADLE_PROJECT_PARKDEX_CONTENT_API_HOST', $null, 'Process')
     [Environment]::SetEnvironmentVariable('PARKDEX_RELEASE_PROPERTIES_FILE', $null, 'Process')
     [Environment]::SetEnvironmentVariable('PARKDEX_RELEASE_KEYSTORE_FILE', $keystoreFile, 'Process')
     [Environment]::SetEnvironmentVariable('PARKDEX_RELEASE_KEY_ALIAS', $credential.UserName, 'Process')
