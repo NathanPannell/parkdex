@@ -26,6 +26,7 @@ Players tap the pin button next to feedback on the map, drop a pin (or use their
 - `npm run android:aab` builds a staging build (`.env.field`): content and accounts on staging.
 - `npm run android:aab:production` builds a production build (`.env.production-field`): content and accounts on production.
 - Set `PARKDEX_ANDROID_VERSION_CODE` for each release; that number is the `build` the page refers to.
+- For a signed Play bundle on the operator's Windows machine, run `npm run android:sync:production`, then `powershell -ExecutionPolicy Bypass -File android\Build-SignedBundle.ps1 -VersionCode <n> -VersionName <name>`. It refuses a staging sync, loads the upload key and its saved password from `%USERPROFILE%\.codex\private\parkdex-android\play-upload-v1`, sets the signing variables and `PARKDEX_AUTH_LINK_HOST=web.parkdex.app` for that run only, pins `sdk.dir` in `android/local.properties`, and writes `android/app/build/outputs/bundle/release/app-release.aab`. Add the new version code's `kip_app_config.builds` row on the Builds page before the Play release goes out.
 - Web bundle updates between Play releases go over the air on the build's channel and never change its version code, so update rules still apply to the native build. See [ota-updates.md](ota-updates.md).
 
 ## Adding a flag
