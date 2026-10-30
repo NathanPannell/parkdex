@@ -25,10 +25,10 @@ A Capacitor 8 Android app (React 19, Vite, TypeScript) for collecting parks on V
 | `operator/` | The operator dashboard, a separate Vite app with its own `package.json`. |
 | `scripts/` | Delivery, content publishing, imports, map and art tooling, plus their Python and Node tests. `kip-delivery.py` is the release harness. |
 | `android/` | Capacitor Android project, including custom native sign-in (`NativeIdentityPlugin.java`). |
-| `ios/` | Capacitor iOS project (Swift Package Manager), built only on GitHub Actions macOS runners. See `docs/ios.md`. |
+| `ios/` | Capacitor iOS project (Swift Package Manager), built only on GitHub Actions macOS runners. See `docs/ios.md`; what is left before the App Store launch is in `docs/app-store-launch.md`. |
 | `art-source/`, `public/` | Source art and the files the app ships. |
 | `deployment.json` | Release configuration: Neon branches, Vercel projects, migration allowlists, content sync and private photo settings. |
-| `docs/` | Feature contracts and runbooks. `docs/delivery.md` is the full delivery runbook. |
+| `docs/` | Feature contracts and runbooks. `docs/delivery.md` is the full delivery runbook. `docs/app-store-launch.md` is the checklist of what is left before the iOS App Store launch. |
 
 ## Commands
 
