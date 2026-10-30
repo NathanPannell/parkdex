@@ -2,6 +2,8 @@
 
 Operating guide for coding agents in this repository. Keep it about how the repo works. Lessons from past incidents go in `docs/learnings/`, one file each, and are indexed at the end of this file.
 
+`GOALS.md` lists the current goals. A daily status routine reads it from `origin/staging`, so tick a goal off in the same PR as the work that finishes it.
+
 The app is **Parkdex**. **Kip** is its mascot. Use Parkdex in customer-facing copy. Identifiers that contain `kip` (repository, schemas, APIs, providers) stay as they are.
 
 ## What this is
